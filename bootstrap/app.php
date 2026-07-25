@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind Cloudflare + Traefik: trust the proxy's X-Forwarded-* headers,
+        // or Laravel generates http:// URLs and browsers block every POST as
+        // mixed content. The box's Docker network is private; '*' is safe here.
+        $middleware->trustProxies(at: '*');
+
         $middleware->redirectGuestsTo(fn (): string => route('workspace.login'));
 
         $middleware->web(append: [

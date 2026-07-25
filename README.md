@@ -25,7 +25,11 @@ API, user preferences, theming).
 - PHP **8.5**
 - Composer 2
 - Node **22** + npm
-- A database — defaults to SQLite for local dev; MySQL/Postgres work too
+- **PostgreSQL** — the workspace package ships a `pg_trgm` migration for fuzzy
+  task search, so Postgres is the supported database (the migration no-ops on
+  other drivers, and you lose command-palette search)
+- **Redis** — cache, sessions, and the queue
+- Docker (optional) — only to run the deployment image locally via `./dock.sh`
 
 ## Quick start
 
@@ -48,8 +52,8 @@ composer install
 cp .env.example .env
 php artisan key:generate
 
-# SQLite is the default — create the file if it doesn't exist:
-touch database/database.sqlite
+# Create the database, then set DB_* / REDIS_* in .env to match your setup:
+createdb pmopm
 
 php artisan migrate
 
@@ -113,3 +117,38 @@ GitHub Actions run on every push/PR:
 
 - `.github/workflows/lint.yml` — Pint + frontend lint/format
 - `.github/workflows/tests.yml` — Pest, type checks, and asset build across the PHP matrix
+
+## Docker & deployment
+
+`Dockerfile` is the real deployment artifact, built by Dokploy straight from a git
+clone. Three stages: Composer vendor → asset build (PHP + Node 22, because the
+wayfinder Vite plugin shells out to `php artisan wayfinder:generate` during
+`vite build`) → `serversideup/php:8.5-fpm-nginx` serving on port **8080**.
+`AUTORUN_ENABLED=true` makes the container run `migrate --force`, `storage:link`,
+and `optimize` at boot.
+
+Run that exact image locally against your own Postgres and Redis:
+
+```bash
+./dock.sh build          # build the image and start it on http://localhost:8101
+./dock.sh logs           # follow container logs
+./dock.sh artisan migrate:status
+./dock.sh shell
+./dock.sh down
+```
+
+`dock.sh` derives a container env from your `.env`, rewriting loopback hosts to
+`host.docker.internal`. The image bakes the source in at build time, so code
+changes need a rebuild — for day-to-day dev use `composer dev`.
+
+Deployed as three Dokploy applications off this one image:
+
+| Application | Command | Notes |
+| --- | --- | --- |
+| `pmopm-api` | (image default) | The only app with a domain; runs migrations via AUTORUN |
+| `pmopm-scheduler` | `php artisan schedule:work` | `workspace:prune-trashed` daily + `workspace:send-deadline-reminders` at `PM_REMINDERS_RUN_AT` |
+| `pmopm-queue` | `php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600` | |
+
+Both workers need `AUTORUN_ENABLED=false` (so they don't race the web app's
+migrations) and a disabled Swarm healthcheck (they don't run nginx). See
+`~/rayzen/DOKPLOY.md` §4 for the full playbook.

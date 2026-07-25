@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
             $table->string('theme')->default('system');
-            $table->json('font_override')->nullable();
+            $table->jsonb('font_override')->nullable();
             $table->boolean('email_notifications')->default(true);
             $table->timestamps();
         });
