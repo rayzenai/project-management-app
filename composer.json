@@ -1,13 +1,14 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "rayzenai/pmopm",
+    "name": "rayzenai/project-management-app",
     "type": "project",
-    "description": "PMOPM project management office application.",
+    "description": "Laravel + Inertia + Svelte host app for the rayzenai/project-management workspace package.",
     "keywords": [
         "laravel",
-        "framework",
+        "inertia",
+        "svelte",
         "project-management",
-        "pmopm"
+        "task-tracking"
     ],
     "license": "MIT",
     "require": {
