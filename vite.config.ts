@@ -30,7 +30,12 @@ export default defineConfig({
                 }),
             ],
         }),
-        inertia(),
+        // SSR is off: this app has two Inertia entries (resources/js/app.ts for the
+        // marketing pages, resources/js/workspace/app.ts for the workspace, whose
+        // pages live in the rayzenai/project-management package). The plugin supports
+        // only one SSR entry and falls back to app.ts, which cannot resolve the
+        // workspace pages — every workspace route logged a bogus "Page not found".
+        inertia({ ssr: false }),
         tailwindcss(),
         svelte(),
         wayfinder({

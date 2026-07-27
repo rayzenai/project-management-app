@@ -15,8 +15,13 @@ return [
     |
     */
 
+    // Disabled to match `inertia({ ssr: false })` in vite.config.ts. The workspace
+    // pages ship inside the rayzenai/project-management package and are mounted by a
+    // second Inertia entry (resources/js/workspace/app.ts); a single SSR entry cannot
+    // resolve both, so SSR has never rendered them. Left enabled, every request would
+    // still POST to a dead SSR endpoint and fall back after a failed round trip.
     'ssr' => [
-        'enabled' => true,
+        'enabled' => false,
         'url' => 'http://127.0.0.1:13714',
         // 'bundle' => base_path('bootstrap/ssr/ssr.mjs'),
 

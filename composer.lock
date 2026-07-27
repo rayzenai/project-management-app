@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c0f490137aa8a848a82d4ff448974d28",
+    "content-hash": "48bcf940dbe9b478dcd0d602339045f5",
     "packages": [
         {
             "name": "brick/math",
@@ -3553,16 +3553,16 @@
         },
         {
             "name": "rayzenai/project-management",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/rayzenai/project-management.git",
-                "reference": "7a5396aed32f7be62f9f026b17bbb9eddcb068e2"
+                "reference": "4b432ebd0195a53dc591bbfe0b34d684aa89691a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/rayzenai/project-management/zipball/7a5396aed32f7be62f9f026b17bbb9eddcb068e2",
-                "reference": "7a5396aed32f7be62f9f026b17bbb9eddcb068e2",
+                "url": "https://api.github.com/repos/rayzenai/project-management/zipball/4b432ebd0195a53dc591bbfe0b34d684aa89691a",
+                "reference": "4b432ebd0195a53dc591bbfe0b34d684aa89691a",
                 "shasum": ""
             },
             "require": {
@@ -3594,9 +3594,9 @@
             "description": "Project & task tracking workspace (projects, tasks, subtasks, assignments, notes, contacts) for Laravel + Inertia applications.",
             "support": {
                 "issues": "https://github.com/rayzenai/project-management/issues",
-                "source": "https://github.com/rayzenai/project-management/tree/1.0.0"
+                "source": "https://github.com/rayzenai/project-management/tree/1.1.0"
             },
-            "time": "2026-07-15T09:11:51+00:00"
+            "time": "2026-07-27T06:49:50+00:00"
         },
         {
             "name": "symfony/clock",
