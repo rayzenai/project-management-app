@@ -27,3 +27,6 @@ yarn-error.log
 /.vscode
 /.zed
 .env.docker
+
+# Dokploy API credentials (never commit)
+.dokploy.env
