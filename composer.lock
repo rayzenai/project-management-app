@@ -3553,16 +3553,16 @@
         },
         {
             "name": "rayzenai/project-management",
-            "version": "1.1.1",
+            "version": "1.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/rayzenai/project-management.git",
-                "reference": "88b0641b463b7bacced0895e0f299a47ec34d7c0"
+                "reference": "b1e32233c06e2749b65cf65236a042149209a202"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/rayzenai/project-management/zipball/88b0641b463b7bacced0895e0f299a47ec34d7c0",
-                "reference": "88b0641b463b7bacced0895e0f299a47ec34d7c0",
+                "url": "https://api.github.com/repos/rayzenai/project-management/zipball/b1e32233c06e2749b65cf65236a042149209a202",
+                "reference": "b1e32233c06e2749b65cf65236a042149209a202",
                 "shasum": ""
             },
             "require": {
@@ -3594,9 +3594,9 @@
             "description": "Project & task tracking workspace (projects, tasks, subtasks, assignments, notes, contacts) for Laravel + Inertia applications.",
             "support": {
                 "issues": "https://github.com/rayzenai/project-management/issues",
-                "source": "https://github.com/rayzenai/project-management/tree/1.1.1"
+                "source": "https://github.com/rayzenai/project-management/tree/v1.2.0"
             },
-            "time": "2026-09-02T15:19:17+00:00"
+            "time": "2026-09-02T15:27:13+00:00"
         },
         {
             "name": "symfony/clock",
