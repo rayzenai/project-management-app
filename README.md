@@ -34,7 +34,7 @@ API, user preferences, theming).
 ## Quick start
 
 ```bash
-git clone git@github.com:nepal-government/pmopm.git
+git clone git@github.com:rayzenai/project-management-app.git pmopm
 cd pmopm
 composer setup
 ```
