@@ -1,7 +1,5 @@
-# Stage 1: PHP deps — the Vite build imports vendor CSS
-# (rayzenai/project-management workspace.css) and app.css `@source`s vendor
-# views. Autoloader generated here (no --no-autoloader) because stage 2 runs
-# artisan.
+# Stage 1: PHP deps. Stage 2 needs a working autoloader (no --no-autoloader)
+# because the wayfinder Vite plugin runs artisan during `vite build`.
 FROM composer:2 AS phpdeps
 WORKDIR /build
 COPY composer.json composer.lock ./

@@ -1,11 +1,189 @@
 @import 'tailwindcss';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+@source '../js/**/*.svelte';
 
-@theme inline {
-    --font-sans:
-        Instrument Sans, ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+/* dark: follows the .dark class (set by the AppShell toggle), not the OS. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+    /* ------------------------------------------------------------------ *
+     * Semantic color layer. Each Tailwind color utility name resolves
+     * (via this indirection) to a runtime `--ws-*` variable that the
+     * theme applier (applyTheme.ts) writes per the active token theme.
+     * This generates `bg-bg`, `bg-surface`, `text-fg`, `border-line`,
+     * `text-accent`, etc. — utilities the component sweep will adopt.
+     * ------------------------------------------------------------------ */
+    --color-bg: var(--ws-bg);
+    --color-surface: var(--ws-surface);
+    --color-surface-alt: var(--ws-surface-alt);
+    --color-line: var(--ws-line);
+    --color-line-soft: var(--ws-line-soft);
+    --color-fg: var(--ws-text);
+    --color-fg-muted: var(--ws-text-muted);
+    --color-fg-faint: var(--ws-text-faint);
+    --color-accent: var(--ws-accent);
+    --color-accent-dim: var(--ws-accent-dim);
+    --color-warn: var(--ws-warn);
+    --color-danger: var(--ws-danger);
+    --color-success: var(--ws-success);
+}
+
+/* Terminal-noir defaults so first paint / SSR / pre-JS render the current
+   dark look; applyTheme overrides these post-hydration per the active theme. */
+:root {
+    --ws-bg: #08090a;
+    --ws-surface: #111417;
+    --ws-surface-alt: #161a1e;
+    --ws-line: #20262b;
+    --ws-line-soft: #181d21;
+    --ws-text: #e9e7e2;
+    --ws-text-muted: #9aa1a8;
+    --ws-text-faint: #5c646b;
+    --ws-accent: #b6ff3a;
+    --ws-accent-dim: #8bc91f;
+    --ws-warn: #f4b740;
+    --ws-danger: #ff5c5c;
+    --ws-success: #b6ff3a;
+}
+
+/* ------------------------------------------------------------------ *
+ * Terminal-noir as the dark theme.
+ *
+ * Every dark: utility in the workspace components resolves through the
+ * Tailwind color/radius custom properties, so remapping them under .dark
+ * rethemes the entire app (all pages) without touching component markup:
+ * neutrals become the ink/panel/line palette, amber becomes the lime
+ * signal, and radii flatten to the crisp 4px technical look.
+ * ------------------------------------------------------------------ */
+.dark {
+    /* Canvas */
+    --color-neutral-950: #08090a; /* ink */
+    --color-neutral-900: #111417; /* panel */
+    --color-neutral-800: #20262b; /* line */
+    --color-neutral-700: #2c343a;
+    --color-neutral-600: #5c646b;
+    --color-neutral-500: #868e96;
+    --color-neutral-400: #9aa1a8; /* mute */
+    --color-neutral-300: #c6cbd0;
+    --color-neutral-200: #d9d7d2;
+    --color-neutral-100: #e9e7e2; /* bone */
+
+    /* Amber accents become the lime signal */
+    --color-amber-300: #cdff70;
+    --color-amber-400: #b6ff3a;
+    --color-amber-500: #b6ff3a;
+    --color-amber-600: #8bc91f;
+    --color-amber-700: #8bc91f;
+
+    /* Crisp technical radii */
+    --radius-md: 4px;
+    --radius-lg: 4px;
+    --radius-xl: 4px;
+    --radius-2xl: 6px;
+}
+
+@layer base {
+    body {
+        font-family: var(--font-sans);
+        font-feature-settings: 'ss01';
+    }
+
+    .dark ::selection {
+        background: #b6ff3a;
+        color: #0a0a0a;
+    }
+
+    .dark ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    .dark ::-webkit-scrollbar-track {
+        background: #08090a;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+        background: #20262b;
+        border: 2px solid #08090a;
+        border-radius: 999px;
+    }
+    .dark ::-webkit-scrollbar-thumb:hover {
+        background: #2c343a;
+    }
+}
+
+@layer components {
+    /* Mono uppercase section label (portfolio .eyebrow) */
+    .ws-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+    }
+
+    /* Blueprint grid + signal glow atmosphere behind the dark canvas.
+       Composes with the background-color utilities on the same element. */
+    .dark .ws-canvas {
+        background-image:
+            radial-gradient(
+                60rem 40rem at 82% -8%,
+                rgba(182, 255, 58, 0.05),
+                transparent 60%
+            ),
+            radial-gradient(
+                50rem 50rem at -10% 8%,
+                rgba(182, 255, 58, 0.025),
+                transparent 55%
+            ),
+            linear-gradient(#14181c 1px, transparent 1px),
+            linear-gradient(90deg, #14181c 1px, transparent 1px);
+        background-size:
+            100% 100%,
+            100% 100%,
+            56px 56px,
+            56px 56px;
+        background-attachment: fixed;
+    }
+
+    /* Quick-add token highlighting (TokenInput mirror layer) */
+    .qa-tok {
+        border-radius: 3px;
+        padding: 0 1px;
+        margin: 0 -1px;
+    }
+    .qa-tok-project {
+        background: rgba(245, 158, 11, 0.18);
+        color: #b45309;
+    }
+    .qa-tok-assignee {
+        background: rgba(14, 165, 233, 0.15);
+        color: #0369a1;
+    }
+    .qa-tok-priority {
+        background: rgba(239, 68, 68, 0.15);
+        color: #b91c1c;
+    }
+    .qa-tok-date {
+        background: rgba(139, 92, 246, 0.15);
+        color: #6d28d9;
+    }
+    .dark .qa-tok-project {
+        background: rgba(182, 255, 58, 0.14);
+        color: #b6ff3a;
+    }
+    .dark .qa-tok-assignee {
+        background: rgba(56, 189, 248, 0.12);
+        color: #7dd3fc;
+    }
+    .dark .qa-tok-priority {
+        background: rgba(248, 113, 113, 0.12);
+        color: #fca5a5;
+    }
+    .dark .qa-tok-date {
+        background: rgba(167, 139, 250, 0.12);
+        color: #c4b5fd;
+    }
 }

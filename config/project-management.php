@@ -1,36 +1,6 @@
 <?php
 
-use App\Models\User;
-
 return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | User model
-    |--------------------------------------------------------------------------
-    |
-    | The host application's authenticatable model. Used by all package
-    | relationships that belong to a user (assignments, notes, contacts,
-    | subtasks, activities). Override in the host app's config if it lives
-    | somewhere other than App\Models\User.
-    |
-    */
-
-    'user_model' => User::class,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Route middleware
-    |--------------------------------------------------------------------------
-    |
-    | Middleware applied to the workspace route group. The host application is
-    | responsible for the listed aliases. By default only 'web' and 'auth' are
-    | applied; add your own gate (e.g. 'workspace.access') here if you need to
-    | restrict the workspace to a subset of authenticated users.
-    |
-    */
-
-    'middleware' => ['web', 'auth'],
 
     /*
     |--------------------------------------------------------------------------
@@ -41,7 +11,7 @@ return [
     | and dashboards all render from this single definition; `is_complete`
     | marks the statuses that count a task as finished everywhere (progress
     | percentages, the My Workspace triage, the one-click complete checkbox).
-    | Override in the host app to change the workflow.
+    | Edit here to change the workflow.
     |
     */
 
@@ -71,9 +41,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | Emails of users who hold the `manage-workspace` ability — they create and
-    | delete teams, manage every member, and archive any project. The package
-    | registers a `manage-workspace` Gate from this list unless the host app has
-    | already defined its own. Comma-separated via the PM_SUPER_ADMINS env var.
+    | delete teams, manage every member, and archive any project. AppServiceProvider
+    | registers the `manage-workspace` Gate from this list. Comma-separated via
+    | the PM_SUPER_ADMINS env var.
     |
     */
 

@@ -1,8 +1,9 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+Schedule::command('workspace:prune-trashed')->daily()->withoutOverlapping();
+
+Schedule::command('workspace:send-deadline-reminders')
+    ->dailyAt((string) config('project-management.reminders.run_at', '08:00'))
+    ->withoutOverlapping();

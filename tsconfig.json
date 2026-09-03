@@ -122,8 +122,6 @@
         "resources/js/**/*.ts",
         "resources/js/**/*.d.ts",
         "resources/js/**/*.svelte",
-        "vendor/rayzenai/project-management/resources/js/**/*.ts",
-        "vendor/rayzenai/project-management/resources/js/**/*.svelte",
         "vite.config.ts"
     ],
     "exclude": ["node_modules", "public", "vendor/inertiajs", "vendor/laravel"]

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "98360e8d481742175101f3daaa0da06c",
+    "content-hash": "8adb6b5219a4c2546e22387f9dad9caa",
     "packages": [
         {
             "name": "brick/math",
@@ -3550,53 +3550,6 @@
                 "source": "https://github.com/ramsey/uuid/tree/4.9.3"
             },
             "time": "2026-06-18T03:57:49+00:00"
-        },
-        {
-            "name": "rayzenai/project-management",
-            "version": "1.2.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/rayzenai/project-management.git",
-                "reference": "b1e32233c06e2749b65cf65236a042149209a202"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/rayzenai/project-management/zipball/b1e32233c06e2749b65cf65236a042149209a202",
-                "reference": "b1e32233c06e2749b65cf65236a042149209a202",
-                "shasum": ""
-            },
-            "require": {
-                "laravel/framework": "^12.0 || ^13.0",
-                "php": "^8.5"
-            },
-            "require-dev": {
-                "orchestra/testbench": "^10.0|^11.0",
-                "pestphp/pest": "^4.0"
-            },
-            "type": "library",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "RayzenAI\\ProjectManagement\\ProjectManagementServiceProvider"
-                    ]
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "RayzenAI\\ProjectManagement\\": "src/",
-                    "RayzenAI\\ProjectManagement\\Database\\Factories\\": "database/factories/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "description": "Project & task tracking workspace (projects, tasks, subtasks, assignments, notes, contacts) for Laravel + Inertia applications.",
-            "support": {
-                "issues": "https://github.com/rayzenai/project-management/issues",
-                "source": "https://github.com/rayzenai/project-management/tree/v1.2.0"
-            },
-            "time": "2026-09-02T15:27:13+00:00"
         },
         {
             "name": "symfony/clock",

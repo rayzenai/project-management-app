@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Workspace;
 
+use App\Models\Project;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
-use RayzenAI\ProjectManagement\Models\Project;
-use RayzenAI\ProjectManagement\Models\Team;
 use Tests\TestCase;
 
 /**

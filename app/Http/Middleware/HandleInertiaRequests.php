@@ -17,18 +17,6 @@ class HandleInertiaRequests extends Middleware
     protected $rootView = 'app';
 
     /**
-     * Resolve the root template for the package-owned workspace SPA.
-     */
-    public function rootView(Request $request): string
-    {
-        if ($request->is('workspace') || $request->is('workspace/*')) {
-            return 'workspace';
-        }
-
-        return $this->rootView;
-    }
-
-    /**
      * Determines the current asset version.
      *
      * @see https://inertiajs.com/asset-versioning

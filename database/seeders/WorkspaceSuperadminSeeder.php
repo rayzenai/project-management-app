@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Models\Member;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use RayzenAI\ProjectManagement\Models\Member;
 
 class WorkspaceSuperadminSeeder extends Seeder
 {
