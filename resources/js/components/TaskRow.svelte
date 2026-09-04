@@ -76,46 +76,48 @@
         {/if}
     </div>
 
-    {#if task.category_label}
-        <span
-            class="hidden w-36 shrink-0 truncate text-xs text-fg-muted lg:block"
-            >{task.category_label}</span
-        >
-    {/if}
-    {#if task.responsible_ministry}
-        <span
-            class="hidden w-40 shrink-0 truncate text-xs text-fg-muted xl:block"
-            >{task.responsible_ministry}</span
-        >
-    {/if}
+    <!-- Every trailing cell keeps its width whether or not it has content, so
+         the columns line up down the register instead of sliding around. -->
+    <span class="hidden w-36 shrink-0 truncate text-xs text-fg-muted lg:block">
+        {task.category_label ?? ''}
+    </span>
+    <span class="hidden w-40 shrink-0 truncate text-xs text-fg-muted xl:block">
+        {task.responsible_ministry ?? ''}
+    </span>
 
     <div class="flex shrink-0 items-center gap-2">
         {#if projectSlug}
-            <StatusChip {task} {projectSlug} size="sm" />
-            <PriorityFlag {task} {projectSlug} quiet />
-            <DateChip {task} {projectSlug} size="sm" ghost />
+            <span class="flex w-[92px] shrink-0 justify-start">
+                <StatusChip {task} {projectSlug} size="sm" />
+            </span>
+            <span class="flex w-3.5 shrink-0 justify-center">
+                <PriorityFlag {task} {projectSlug} quiet />
+            </span>
+            <span class="flex w-[86px] shrink-0 justify-end">
+                <DateChip {task} {projectSlug} size="sm" ghost />
+            </span>
         {:else}
-            <StatusBadge status={task.status} label={task.status_label} />
+            <span class="flex w-[92px] shrink-0 justify-start">
+                <StatusBadge status={task.status} label={task.status_label} />
+            </span>
         {/if}
-        {#if task.progress > 0}
-            <span class="font-mono text-xs text-fg-faint tabular-nums"
-                >{task.progress}%</span
-            >
-        {/if}
+        <span
+            class="w-8 shrink-0 text-right font-mono text-xs text-fg-faint tabular-nums"
+        >
+            {task.progress > 0 ? `${task.progress}%` : ''}
+        </span>
     </div>
 
-    {#if assignees.length > 0}
-        <div class="flex shrink-0 -space-x-0.5">
-            {#each assignees.slice(0, 3) as a (a.id)}
-                <Avatar name={a.member?.name} class="ring-2 ring-surface" />
-            {/each}
-            {#if assignees.length > 3}
-                <span
-                    class="inline-grid h-5 w-5 place-items-center rounded-[5px] border border-line bg-surface-alt font-mono text-[9.5px] text-fg-faint ring-2 ring-surface"
-                >
-                    +{assignees.length - 3}
-                </span>
-            {/if}
-        </div>
-    {/if}
+    <div class="flex w-[70px] shrink-0 justify-end -space-x-0.5">
+        {#each assignees.slice(0, 3) as a (a.id)}
+            <Avatar name={a.member?.name} class="ring-2 ring-surface" />
+        {/each}
+        {#if assignees.length > 3}
+            <span
+                class="inline-grid h-5 w-5 place-items-center rounded-[5px] border border-line bg-surface-alt font-mono text-[9.5px] text-fg-faint ring-2 ring-surface"
+            >
+                +{assignees.length - 3}
+            </span>
+        {/if}
+    </div>
 </div>

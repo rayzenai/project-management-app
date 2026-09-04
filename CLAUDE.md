@@ -22,6 +22,7 @@ php artisan test --compact --filter=TeamPermissions
 composer types:check                            # PHPStan level 7 over app/ config/ database/ routes/
 vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
+php artisan db:seed --class=WorkspaceDemoSeeder  # full demo workspace (idempotent, non-prod only)
 php artisan workspace:api-token bot@example.com --name=crm-sync   # token for an external system
 php artisan workspace:prune-trashed --pretend
 php artisan workspace:send-deadline-reminders --pretend

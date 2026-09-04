@@ -5,6 +5,7 @@ namespace App\Queries;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\Task;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -80,8 +81,11 @@ class DashboardQuery
             ];
         })->all());
 
+        // Scoped to the projects this user can see, NOT to ->public(): nothing
+        // ever sets is_public on an activity row (ProjectActivityRecorder always
+        // writes false), so that scope guaranteed an empty feed.
         $recentActivity = array_values(ProjectActivity::query()
-            ->public()
+            ->whereHas('task', fn (Builder $q) => $q->whereIn('project_id', $visibleProjectIds))
             ->recent(14)
             ->with(['user', 'task.project'])
             ->latest()

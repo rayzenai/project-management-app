@@ -109,7 +109,7 @@
     });
 
     const nav = [
-        { label: 'Overview', href: '/workspace', icon: LayoutGrid },
+        { label: 'Home', href: '/workspace', icon: LayoutGrid },
         { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
         {
             label: 'Notifications',
@@ -232,7 +232,7 @@
     {/if}
 
     <aside
-        class="fixed inset-y-0 left-0 z-40 flex w-[232px] -translate-x-full flex-col gap-0.5 bg-bg px-2.5 pt-3 pb-2.5 transition-transform lg:static lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-40 flex w-[232px] -translate-x-full flex-col gap-0.5 bg-bg px-2.5 pt-3 pb-2.5 transition-transform lg:sticky lg:top-0 lg:bottom-auto lg:h-screen lg:translate-x-0 lg:self-start"
         class:translate-x-0={mobileOpen}
     >
         <div class="mb-1.5 flex items-center gap-2 px-2 py-1.5">

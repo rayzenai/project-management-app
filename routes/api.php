@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AssignmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\MyWorkspaceController;
 use App\Http\Controllers\Api\NoteController;
@@ -46,6 +47,7 @@ Route::prefix('v1')->name('api.')->group(function () {
 
         Route::prefix('workspace')->name('workspace.')->group(function () {
             // Feeds & overview
+            Route::get('/home', HomeController::class)->name('home');
             Route::get('/dashboard', DashboardController::class)->name('dashboard');
             Route::get('/my', MyWorkspaceController::class)->name('my');
             Route::get('/plan-tracker', PlanTrackerController::class)->name('plan-tracker');

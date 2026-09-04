@@ -71,6 +71,7 @@ Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| GET | `/workspace/home` | the overview: headline `stats`, `status_breakdown`, per-project `projects` rollup, `recent_activity`, plus open work bucketed by due date (`overdue`, `today`, `week`, `later`, `unscheduled`) and `recently_done`. `?scope=mine\|all` scopes every field together — defaults to `mine` when the caller has open assignments, `all` otherwise |
 | GET | `/workspace/dashboard` | per-project rollups, status breakdown, recent activity |
 | GET | `/workspace/my` | the caller's focused tasks, open todos, assigned work |
 | GET | `/workspace/plan-tracker` | the 100-point plan tracker (`config/government.php`) |

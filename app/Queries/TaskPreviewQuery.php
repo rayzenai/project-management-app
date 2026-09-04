@@ -35,9 +35,11 @@ class TaskPreviewQuery
         $task->loadMissing(['project', 'notes.user', 'contacts', 'assignments.member', 'subtasks.user']);
         $task->loadCount('comments');
 
+        // No ->public() here: ProjectActivityRecorder always writes is_public
+        // false, so that scope made the Peek's activity list permanently empty.
+        // Visibility is already enforced upstream by EnsureProjectVisible.
         $activity = ProjectActivity::query()
             ->where('task_id', $task->id)
-            ->public()
             ->with('user')
             ->latest()
             ->limit(20)

@@ -3,7 +3,7 @@
 use App\Http\Controllers\Workspace\AssignmentController;
 use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\ContactController;
-use App\Http\Controllers\Workspace\DashboardController;
+use App\Http\Controllers\Workspace\HomeController;
 use App\Http\Controllers\Workspace\MemberController;
 use App\Http\Controllers\Workspace\MyWorkspaceController;
 use App\Http\Controllers\Workspace\NoteController;
@@ -39,7 +39,7 @@ Route::middleware(['auth', ShareWorkspaceData::class])
     ->prefix('workspace')
     ->name('workspace.')
     ->group(function () {
-        Route::get('/', DashboardController::class)->name('home');
+        Route::get('/', HomeController::class)->name('home');
 
         Route::get('/my', MyWorkspaceController::class)->name('my');
         Route::post('/quick-add', QuickAddController::class)->name('quick-add');

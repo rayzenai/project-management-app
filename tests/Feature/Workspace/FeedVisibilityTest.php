@@ -9,7 +9,7 @@ use Inertia\Testing\AssertableInertia;
 
 beforeEach(fn () => config(['project-management.super_admins' => ['boss@example.com']]));
 
-it('omits invisible projects from the dashboard rollup', function () {
+it('omits invisible projects from the home rollup', function () {
     $user = User::factory()->create();
     Member::factory()->linkedTo($user)->create();
     $foreign = Project::factory()->create(['is_public' => false, 'title' => 'Foreign']);

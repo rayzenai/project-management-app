@@ -40,8 +40,9 @@ it('returns everything the task peek needs from the preview endpoint', function 
         ->and($data['assignments'][0]['member']['name'])->toBe('Kiran Timsina')
         ->and($data['subtasks'])->toHaveCount(1)
         ->and($data['subtasks'][0]['body'])->toBe('Call them')
-        ->and($data['activity'])->toHaveCount(1)
-        ->and($data['activity'][0]['description'])->toBe('changed status')
+        // The observers write their own rows for the task, assignment and
+        // subtask created above, so assert on containment, not position.
+        ->and(collect($data['activity'])->pluck('description'))->toContain('changed status')
         ->and(collect($data['team'])->pluck('name'))->toContain('Kiran Timsina')
         ->and($data)->toHaveKeys(['notes', 'contacts']);
 });
