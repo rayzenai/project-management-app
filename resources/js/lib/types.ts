@@ -47,6 +47,8 @@ export interface Project extends ProjectSummary {
     can_archive?: boolean;
     can_manage_access?: boolean;
     tasks_count?: number;
+    /** Present on the project index only. */
+    percent_complete?: number;
     created_at?: string;
     updated_at?: string;
 }

@@ -2,7 +2,7 @@
     import { SvelteSet } from 'svelte/reactivity';
     import type { Status, Task } from '../../lib/types';
 
-    // Always fed the UNFILTERED task list — the strip describes the project, not the filter.
+    // Always fed the UNFILTERED task list: the strip describes the project, not the filter.
     let { tasks, statuses }: { tasks: Task[]; statuses: Status[] } = $props();
 
     const completeSet = $derived(
@@ -23,7 +23,7 @@
         total === 0 ? 0 : Math.round((doneCount / total) * 100),
     );
     const overdueCount = $derived(tasks.filter(isOverdue).length);
-    // Incomplete only — done-and-unassigned isn't actionable.
+    // Incomplete only: done-and-unassigned isn't actionable.
     const unassignedCount = $derived(
         tasks.filter(
             (t) => !isComplete(t) && (t.assignments ?? []).length === 0,
@@ -42,16 +42,16 @@
     );
 </script>
 
-<section class="mb-4 rounded-xl border border-line bg-surface p-4">
-    <div class="flex items-center gap-4">
-        <div class="shrink-0">
-            <div class="text-2xl font-bold text-fg tabular-nums">
-                {percent}%
-            </div>
-            <div class="ws-eyebrow text-fg-muted">Complete</div>
+<div
+    class="grid grid-cols-2 divide-x divide-line overflow-hidden rounded-lg border border-line bg-surface-alt sm:grid-cols-3 lg:grid-cols-5"
+>
+    <div class="px-4 py-3">
+        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+            {percent}%
         </div>
+        <div class="text-xs text-fg-muted">Complete</div>
         <div
-            class="flex h-2 flex-1 overflow-hidden rounded-full bg-surface-alt"
+            class="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-line"
             role="img"
             aria-label={`${percent}% complete`}
         >
@@ -64,33 +64,30 @@
             {/each}
         </div>
     </div>
-
-    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div>
-            <div class="text-lg font-semibold text-fg tabular-nums">
-                {total}
-            </div>
-            <div class="ws-eyebrow text-fg-muted">Tasks</div>
+    <div class="px-4 py-3">
+        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+            {total}
         </div>
-        <div>
-            <div class="text-lg font-semibold text-fg tabular-nums">
-                {openCount} / {doneCount}
-            </div>
-            <div class="ws-eyebrow text-fg-muted">Open/Done</div>
-        </div>
-        <div>
-            <div
-                class={`text-lg font-semibold tabular-nums ${overdueCount > 0 ? 'text-danger' : 'text-fg'}`}
-            >
-                {overdueCount} <span class="text-sm">⚠</span>
-            </div>
-            <div class="ws-eyebrow text-fg-muted">Overdue</div>
-        </div>
-        <div>
-            <div class="text-lg font-semibold text-fg tabular-nums">
-                {unassignedCount} <span class="text-sm text-fg-faint">◌</span>
-            </div>
-            <div class="ws-eyebrow text-fg-muted">Unassigned</div>
-        </div>
+        <div class="text-xs text-fg-muted">Tasks</div>
     </div>
-</section>
+    <div class="px-4 py-3">
+        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+            {openCount} / {doneCount}
+        </div>
+        <div class="text-xs text-fg-muted">Open / done</div>
+    </div>
+    <div class="px-4 py-3">
+        <div
+            class={`text-[22px] font-semibold tracking-[-0.02em] tabular-nums ${overdueCount > 0 ? 'text-danger' : ''}`}
+        >
+            {overdueCount}
+        </div>
+        <div class="text-xs text-fg-muted">Overdue</div>
+    </div>
+    <div class="px-4 py-3">
+        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+            {unassignedCount}
+        </div>
+        <div class="text-xs text-fg-muted">Unassigned</div>
+    </div>
+</div>

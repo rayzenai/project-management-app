@@ -4,7 +4,7 @@
     let {
         size = 16,
         class: className = '',
-        label = 'Loading…',
+        label = 'Loading',
     }: {
         size?: number;
         class?: string;

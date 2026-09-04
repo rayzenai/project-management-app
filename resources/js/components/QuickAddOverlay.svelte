@@ -49,12 +49,12 @@
 
 {#if quickAdd.isOpen}
     <div
-        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-16 backdrop-blur-md"
+        class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
         onclick={() => quickAdd.close()}
         role="presentation"
     >
         <div
-            class="w-full max-w-2xl overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+            class="popover mx-auto mt-[12vh] w-[min(640px,92vw)] overflow-hidden p-0"
             onclick={(e) => e.stopPropagation()}
             onkeydown={onPanelKeydown}
             role="dialog"
@@ -63,13 +63,10 @@
             tabindex="-1"
         >
             <div
-                class="flex items-center justify-between border-b border-line px-4 py-3"
+                class="flex h-11 items-center justify-between border-b border-line px-4"
             >
-                <div class="ws-eyebrow text-accent">+ New task</div>
-                <kbd
-                    class="rounded border border-line px-1.5 py-0.5 text-[10px] text-fg-muted"
-                    >Esc</kbd
-                >
+                <span class="font-medium text-fg">New task</span>
+                <kbd class="kbd">esc</kbd>
             </div>
             <QuickAddForm
                 bind:this={formComp}

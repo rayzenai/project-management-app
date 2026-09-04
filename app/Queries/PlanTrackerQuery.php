@@ -6,6 +6,7 @@ use App\Http\Resources\ProjectResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Project;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Date;
 
 /**
  * Assembles the 100-Day-Plan tracker payload shared by the Inertia web view and
@@ -26,8 +27,15 @@ class PlanTrackerQuery
             ->orderByRaw("CAST(metadata->>'item_number' AS INTEGER) ASC NULLS LAST")
             ->get();
 
+        $oathDate = config('government.oath_date');
+        $planDay = is_string($oathDate)
+            ? (int) Date::parse($oathDate)->startOfDay()->diffInDays(Date::today(), false)
+            : null;
+
         return [
             'project' => (new ProjectResource($project))->resolve(),
+            'oathDate' => $oathDate,
+            'planDay' => $planDay,
             'tasks' => TaskResource::collection($tasks)->resolve(),
             'categories' => config('government.categories', []),
             'statusMap' => config('project-management.statuses', []),

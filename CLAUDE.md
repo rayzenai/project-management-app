@@ -51,7 +51,7 @@ vendor/bin/pest > file 2>&1` and read the file.
   Inertia entry: `resources/js/app.ts`; one root view: `resources/views/app.blade.php`.
 - `config/project-management.php` — status workflow, super-admins, trash TTL,
   reminders. `config/government.php` — plan tracker metadata (categories,
-  deadline types, oath date). `config/themes.php` — theme/font catalogue.
+  deadline types, oath date). `config/themes.php` — the system/light/dark token sets.
 - `database/migrations` — all workspace tables (the former package migrations
   keep their original filenames, so existing databases need no re-migration).
 - `docs/api.md` — the HTTP API reference + external-integration guide.
@@ -153,13 +153,34 @@ reminders command.
 
 ## Semantic theming layer (web UI)
 
-`resources/css/app.css` defines the `--ws-*` custom properties and a Tailwind
-`@theme` block mapping color utilities (`bg-bg`, `bg-surface`, `text-fg`,
-`text-fg-muted`, `border-line`, `text-accent`, `text-warn/danger/success`…) to
-them. `resources/js/lib/applyTheme.ts` (`applyAppearance`) is the single source
-of mode. Components must use the semantic utilities — never raw `neutral-*` or
-`dark:` variants — except data-driven colors (`StatusBadge`, `PriorityFlag`,
-`PillGroup`) and the paper-bound stickies (`NoteSticky`, `WorkspaceNotesBoard`).
+`config/themes.php` holds exactly three themes: `system` (follows the OS),
+`light` and `dark`. One visual language, two grounds: cool-neutral surfaces,
+three text tones, hairline borders, one calm blue accent, and green / amber /
+red reserved for status, deadlines and priority. Fonts are fixed: Geist (UI),
+Geist Mono (ids, dates, counts) and Mukta (Nepali, via `font-np`).
+
+`resources/css/app.css` defines the `--ws-*` custom properties, the Tailwind
+`@theme` block mapping color utilities to them (`bg-bg`, `bg-surface`,
+`bg-surface-alt`, `bg-hover`, `bg-raised`, `text-fg`, `text-fg-muted`,
+`text-fg-faint`, `border-line`, `border-line-soft`, `text/bg/border-accent`,
+`bg-accent-soft`, `text-success/warn/danger`, `bg-success/warn/danger-soft`) and
+the component classes every screen is built from (`.btn`, `.btn-primary`,
+`.btn-ghost`, `.btn-danger`, `.btn-icon`, `.input`, `.label`, `.chip*`,
+`.panel`, `.row`, `.group-head`, `.col-head`, `.section-title`, `.popover`,
+`.menu-item`, `.kbd`). `resources/js/lib/applyTheme.ts` (`applyAppearance`) is
+the single source of mode.
+
+Primitives: `StatusGlyph` (the status icon: ring / dashed ring / amber half
+disc / green check / red cross), `PriorityBars`, `Avatar` (squircle initials),
+`ProgressRing`. Pages wrap themselves in `AppShell` and provide the 44px top
+bar through its `bar` snippet (breadcrumb left, actions right); `flush` drops
+the content padding for full-bleed registers and boards.
+
+Rules: semantic utilities only, never raw palette colours (`neutral-*`,
+`amber-*`) or `dark:` variants (the stickies in `lib/noteColors.ts` are the one
+exception), never black/white inverted buttons, never coloured status pills or
+dots, no `rounded-xl`/`shadow-*` outside `.popover`, no em-dashes in copy, no
+unicode glyph icons (Lucide only), no mono-uppercase eyebrow labels.
 
 ## Conventions
 

@@ -1,228 +1,132 @@
 <script lang="ts">
-    import { router } from '@inertiajs/svelte';
+    import { page, router } from '@inertiajs/svelte';
+    import { Monitor, Moon, Sun } from '@lucide/svelte';
     import { untrack } from 'svelte';
-    import { previewAppearance, themesToList } from '../lib/appearance';
-    import type {
-        AppearanceProps,
-        ConfigTheme,
-        FontAllowList,
-        FontOverride,
-        ThemeTokens,
-    } from '../lib/appearance';
+    import type { AppearanceProps, ThemeTokens } from '../lib/appearance';
     import { applyAppearance } from '../lib/applyTheme';
-    import type { Appearance } from '../lib/applyTheme';
-    import ThemeCard from './ThemeCard.svelte';
+    import type { SharedProps } from '../lib/types';
 
+    /**
+     * Settings: theme (system / light / dark) and email notifications.
+     * Selecting a theme previews it instantly; Save persists it.
+     */
     let {
         appearance,
-        themes: themesProp,
-        fontAllowList: fontAllowListProp,
         onsaved,
     }: {
         appearance: AppearanceProps;
-        themes?: ConfigTheme[];
-        fontAllowList?: FontAllowList;
         onsaved?: () => void;
     } = $props();
 
-    let themes = $state<ConfigTheme[]>(untrack(() => themesProp ?? []));
-    let fontAllowList = $state<FontAllowList | null>(
-        untrack(() => fontAllowListProp ?? null),
-    );
-    let loading = $state(
-        untrack(
-            () => themesProp === undefined || fontAllowListProp === undefined,
-        ),
+    const catalogue = $derived(
+        ((page.props ?? {}) as unknown as SharedProps).themeCatalogue?.themes ??
+            {},
     );
 
     let selectedKey = $state(untrack(() => appearance.theme));
-    let fontOverride = $state<FontOverride>(
-        untrack(() => normalizeOverride(appearance.font_override ?? null)),
-    );
     let emailNotifications = $state(
         untrack(() => appearance.email_notifications),
     );
     let saving = $state(false);
 
-    function normalizeOverride(o: Partial<FontOverride> | null): FontOverride {
-        return {
-            display: o?.display ?? null,
-            body: o?.body ?? null,
-            mono: o?.mono ?? null,
-        };
+    const options = [
+        { key: 'system', label: 'System', icon: Monitor },
+        { key: 'light', label: 'Light', icon: Sun },
+        { key: 'dark', label: 'Dark', icon: Moon },
+    ];
+
+    function tokensFor(key: string): ThemeTokens | undefined {
+        return catalogue[key]?.tokens;
     }
 
-    /** Light + dark token sets used for the `system` theme's preview. */
-    const systemTokens = $derived.by(
-        (): { light: ThemeTokens; dark: ThemeTokens } | undefined => {
-            const light = themes.find((t) => t.key === 'light')?.tokens;
-            const dark = themes.find((t) => t.key === 'dark')?.tokens;
+    function selectTheme(key: string): void {
+        selectedKey = key;
 
-            return light && dark ? { light, dark } : undefined;
-        },
-    );
+        if (key === 'system') {
+            const light = tokensFor('light');
+            const dark = tokensFor('dark');
 
-    const selectedTheme = $derived(themes.find((t) => t.key === selectedKey));
+            if (light && dark) {
+                applyAppearance({
+                    theme: 'system',
+                    mode: null,
+                    tokens: { light, dark },
+                });
+            }
 
-    // Fetch the theme catalogue if it wasn't passed in.
-    $effect(() => {
-        if (themesProp !== undefined && fontAllowListProp !== undefined) {
             return;
         }
 
-        let cancelled = false;
-        fetch('/api/v1/themes', {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((r) => r.json())
-            .then((json) => {
-                if (cancelled) {
-                    return;
-                }
+        const tokens = tokensFor(key);
 
-                themes = themesToList(json.data.themes);
-                fontAllowList = json.data.font_allow_list;
-                loading = false;
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    loading = false;
-                }
+        if (tokens) {
+            applyAppearance({
+                theme: key,
+                mode: catalogue[key]?.mode ?? 'light',
+                tokens,
             });
-
-        return () => {
-            cancelled = true;
-        };
-    });
-
-    function buildPreview(theme: ConfigTheme): Appearance {
-        return previewAppearance(theme, fontOverride, systemTokens);
-    }
-
-    function selectTheme(theme: ConfigTheme): void {
-        selectedKey = theme.key;
-        applyAppearance(buildPreview(theme));
-    }
-
-    function changeFont(role: keyof FontOverride, value: string): void {
-        fontOverride = { ...fontOverride, [role]: value === '' ? null : value };
-
-        if (selectedTheme) {
-            applyAppearance(buildPreview(selectedTheme));
         }
     }
 
     function save(): void {
         saving = true;
-        const payload = {
-            theme: selectedKey,
-            font_override: fontOverride,
-            email_notifications: emailNotifications,
-        };
-        router.patch('/workspace/preferences', payload, {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => {
-                saving = false;
+        router.patch(
+            '/workspace/preferences',
+            {
+                theme: selectedKey,
+                font_override: { display: null, body: null, mono: null },
+                email_notifications: emailNotifications,
             },
-            onSuccess: () => {
-                onsaved?.();
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => {
+                    saving = false;
+                },
+                onSuccess: () => {
+                    onsaved?.();
+                },
             },
-        });
+        );
     }
-
-    const fontRoles: { role: keyof FontOverride; label: string }[] = [
-        { role: 'display', label: 'Display' },
-        { role: 'body', label: 'Body' },
-        { role: 'mono', label: 'Mono' },
-    ];
 </script>
 
-<div class="space-y-8">
-    <!-- Theme -->
-    <section class="space-y-3">
-        <div>
-            <h3 class="font-display text-base font-bold tracking-tight text-fg">
-                Theme
-            </h3>
-            <p class="text-sm text-fg-muted">
-                Pick a look. The preview applies instantly.
-            </p>
+<div class="flex flex-col gap-5">
+    <section class="flex flex-col gap-2">
+        <div class="label">Theme</div>
+        <div
+            class="inline-flex overflow-hidden rounded-md border border-line bg-surface"
+            role="radiogroup"
+            aria-label="Theme"
+        >
+            {#each options as option, i (option.key)}
+                {@const active = selectedKey === option.key}
+                {@const Icon = option.icon}
+                <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    class={`inline-flex h-8 flex-1 items-center justify-center gap-1.5 text-[13px] font-medium transition ${
+                        i > 0 ? 'border-l border-line' : ''
+                    } ${
+                        active
+                            ? 'bg-accent-soft text-accent'
+                            : 'text-fg-muted hover:bg-hover hover:text-fg'
+                    }`}
+                    onclick={() => selectTheme(option.key)}
+                >
+                    <Icon class="h-3.5 w-3.5" />
+                    {option.label}
+                </button>
+            {/each}
         </div>
-
-        {#if loading}
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {#each Array(6) as _, i (i)}
-                    <div
-                        class="h-32 animate-pulse rounded-xl border border-line bg-surface-alt"
-                    ></div>
-                {/each}
-            </div>
-        {:else}
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {#each themes as theme (theme.key)}
-                    <ThemeCard
-                        {theme}
-                        selected={selectedKey === theme.key}
-                        onselect={() => selectTheme(theme)}
-                    />
-                {/each}
-            </div>
-        {/if}
     </section>
 
-    <!-- Fonts -->
-    {#if fontAllowList}
-        <section class="space-y-3">
-            <div>
-                <h3
-                    class="font-display text-base font-bold tracking-tight text-fg"
-                >
-                    Fonts
-                </h3>
-                <p class="text-sm text-fg-muted">
-                    Optional. Leave on “Theme default” to follow the theme.
-                </p>
-            </div>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {#each fontRoles as { role, label } (role)}
-                    <label class="block space-y-1">
-                        <span
-                            class="font-mono text-[0.7rem] tracking-wide text-fg-faint uppercase"
-                            >{label}</span
-                        >
-                        <select
-                            value={fontOverride[role] ?? ''}
-                            onchange={(e) =>
-                                changeFont(
-                                    role,
-                                    (e.currentTarget as HTMLSelectElement)
-                                        .value,
-                                )}
-                            class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-accent focus:outline-none"
-                        >
-                            <option value="">Theme default</option>
-                            {#each fontAllowList[role] as font (font)}
-                                <option value={font}>{font}</option>
-                            {/each}
-                        </select>
-                    </label>
-                {/each}
-            </div>
-        </section>
-    {/if}
-
-    <!-- Email notifications -->
-    <section
-        class="flex items-center justify-between gap-4 rounded-xl border border-line bg-surface p-4"
-    >
+    <section class="flex items-center justify-between gap-4">
         <div>
-            <h3 class="font-display text-base font-bold tracking-tight text-fg">
-                Email notifications
-            </h3>
-            <p class="text-sm text-fg-muted">
-                Receive workspace updates by email.
+            <div class="font-medium">Email notifications</div>
+            <p class="text-xs text-fg-muted">
+                Assignments, mentions and deadline reminders by email.
             </p>
         </div>
         <button
@@ -231,26 +135,28 @@
             aria-checked={emailNotifications}
             aria-label="Email notifications"
             onclick={() => (emailNotifications = !emailNotifications)}
-            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition"
-            class:bg-accent={emailNotifications}
-            class:bg-surface-alt={!emailNotifications}
+            class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
+                emailNotifications ? 'bg-accent' : 'bg-line'
+            }`}
         >
             <span
-                class="inline-block h-4 w-4 transform rounded-full bg-bg transition"
-                class:translate-x-6={emailNotifications}
-                class:translate-x-1={!emailNotifications}
+                class={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    emailNotifications
+                        ? 'translate-x-[18px]'
+                        : 'translate-x-0.5'
+                }`}
             ></span>
         </button>
     </section>
 
-    <div class="flex justify-end">
+    <div class="flex justify-end gap-2 border-t border-line pt-4">
         <button
             type="button"
             onclick={save}
             disabled={saving}
-            class="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+            class="btn-primary"
         >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving' : 'Save'}
         </button>
     </div>
 </div>

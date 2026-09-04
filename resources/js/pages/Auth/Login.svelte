@@ -20,20 +20,20 @@
 <main
     class="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-fg"
 >
-    <div class="w-full max-w-sm">
-        <div class="mb-8 text-center">
-            <p class="eyebrow text-fg-faint">Workspace</p>
-            <h1 class="mt-1 text-2xl font-semibold tracking-tight">Sign in</h1>
+    <div class="w-full max-w-[360px]">
+        <div class="mb-6 flex items-center gap-2.5">
+            <span
+                class="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-semibold text-white"
+                >W</span
+            >
+            <div>
+                <h1 class="text-[15px] font-semibold">Sign in to Workspace</h1>
+            </div>
         </div>
 
-        <form
-            onsubmit={submit}
-            class="rounded-2xl border border-line bg-surface p-6 shadow-sm"
-        >
+        <form onsubmit={submit} class="panel flex flex-col gap-4 p-5">
             <div class="flex flex-col gap-1.5">
-                <label for="{uid}-email" class="text-sm font-medium"
-                    >Email address</label
-                >
+                <label for="{uid}-email" class="label">Email address</label>
                 <input
                     id="{uid}-email"
                     type="email"
@@ -41,17 +41,15 @@
                     inputmode="email"
                     bind:value={form.email}
                     required
-                    class="w-full rounded-lg border border-line bg-bg px-3 py-2 text-fg outline-none focus:border-accent"
+                    class="input h-9"
                 />
                 {#if form.errors.email}<p class="text-xs text-danger">
                         {form.errors.email}
                     </p>{/if}
             </div>
 
-            <div class="mt-4 flex flex-col gap-1.5">
-                <label for="{uid}-password" class="text-sm font-medium"
-                    >Password</label
-                >
+            <div class="flex flex-col gap-1.5">
+                <label for="{uid}-password" class="label">Password</label>
                 <div class="relative">
                     <input
                         id="{uid}-password"
@@ -59,7 +57,7 @@
                         autocomplete="current-password"
                         bind:value={form.password}
                         required
-                        class="w-full rounded-lg border border-line bg-bg px-3 py-2 pr-10 text-fg outline-none focus:border-accent"
+                        class="input h-9 pr-10"
                     />
                     <button
                         type="button"
@@ -79,11 +77,11 @@
                     </p>{/if}
             </div>
 
-            <label class="mt-4 flex items-center gap-2 text-sm text-fg-muted">
+            <label class="flex items-center gap-2 text-[13px] text-fg-muted">
                 <input
                     type="checkbox"
                     bind:checked={form.remember}
-                    class="rounded border-line"
+                    class="h-3.5 w-3.5 rounded-sm border-line accent-accent"
                 />
                 Remember me
             </label>
@@ -91,9 +89,9 @@
             <button
                 type="submit"
                 disabled={form.processing}
-                class="mt-6 w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-bg transition hover:bg-accent-dim disabled:opacity-60"
+                class="btn-primary btn-lg mt-1 w-full justify-center"
             >
-                {form.processing ? 'Signing in…' : 'Sign in'}
+                {form.processing ? 'Signing in' : 'Sign in'}
             </button>
         </form>
     </div>

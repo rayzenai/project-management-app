@@ -1,6 +1,8 @@
 <script lang="ts">
     import { router, useForm } from '@inertiajs/svelte';
+    import { Check, Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
+    import ProgressRing from '../../components/ProgressRing.svelte';
     import type { Project } from '../../lib/types';
 
     let {
@@ -32,7 +34,7 @@
     const needsTeam = $derived(canCreate && assignableTeams.length === 0);
     const teamForm = useForm({ name: '', description: '', color: '' });
 
-    /** True once the user creates a team inside the wizard — keeps the stepper visible on step 2. */
+    /** True once the user creates a team inside the wizard, keeps the stepper visible on step 2. */
     let teamJustCreated = $state(false);
     /** Show the two-step stepper only inside the no-team wizard flow, not for the normal project form. */
     const showStepper = $derived(needsTeam || teamJustCreated);
@@ -93,324 +95,355 @@
             { preserveScroll: true },
         );
     }
+
+    const tabBase =
+        'inline-flex h-10 items-center gap-2 border-b-2 px-2.5 font-medium';
+    const tabOn = 'border-accent text-fg';
+    const tabOff = 'border-transparent text-fg-muted hover:text-fg';
 </script>
 
 <svelte:head><title>Projects · Workspace</title></svelte:head>
 
-<AppShell>
-    <div class="mb-6 flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-bold tracking-tight">Projects</h1>
-            <p class="mt-1 text-sm text-fg-muted">
-                Every initiative the office is tracking.
-            </p>
+<AppShell flush>
+    {#snippet bar()}
+        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <span class="truncate font-medium">Projects</span>
         </div>
         {#if canCreate}
-            <button
-                type="button"
-                class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim"
-                onclick={toggleCreating}
-                >{creating ? 'Cancel' : '+ New project'}</button
-            >
+            <div class="flex items-center gap-1.5">
+                {#if creating}
+                    <button type="button" class="btn" onclick={toggleCreating}
+                        >Cancel</button
+                    >
+                {:else}
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick={toggleCreating}
+                    >
+                        <Plus class="h-3.5 w-3.5" />
+                        New project
+                    </button>
+                {/if}
+            </div>
         {/if}
-    </div>
+    {/snippet}
 
-    <div class="mb-4 flex items-center gap-4 text-sm">
+    <div class="flex h-10 items-center gap-0.5 border-b border-line px-3">
         <a
             href="/workspace/projects"
-            class={archivedView
-                ? 'text-fg-muted hover:text-fg'
-                : 'font-semibold text-accent'}>Active</a
-        >
+            class={`${tabBase} ${archivedView ? tabOff : tabOn}`}
+            >Active
+            {#if !archivedView}
+                <span class="section-count">{projects.length}</span>
+            {/if}
+        </a>
         <a
             href="/workspace/projects?archived=1"
-            class={archivedView
-                ? 'font-semibold text-accent'
-                : 'text-fg-muted hover:text-fg'}
-            >Archived{archivedCount ? ` (${archivedCount})` : ''}</a
-        >
+            class={`${tabBase} ${archivedView ? tabOn : tabOff}`}
+            >Archived
+            {#if archivedCount}
+                <span class="section-count">{archivedCount}</span>
+            {/if}
+        </a>
     </div>
 
-    {#if creating}
-        <div class="mb-6 rounded-xl border border-line bg-surface p-4">
-            {#if showStepper}
-                <ol class="mb-4 flex items-center gap-3 text-sm font-medium">
-                    <li
-                        class="flex items-center gap-2 {needsTeam
-                            ? 'text-fg'
-                            : 'text-fg-muted'}"
+    <div class="px-4 py-5 lg:px-8 lg:py-6">
+        {#if creating}
+            <div class="mb-6 max-w-2xl border-b border-line pb-6">
+                {#if showStepper}
+                    <ol
+                        class="mb-5 flex items-center gap-3 text-xs font-medium"
                     >
-                        <span
-                            class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {needsTeam
-                                ? 'bg-accent text-bg'
-                                : 'bg-success/20 text-success'}"
+                        <li
+                            class="flex items-center gap-2 {needsTeam
+                                ? 'text-fg'
+                                : 'text-fg-muted'}"
                         >
-                            {needsTeam ? '1' : '✓'}
-                        </span>
-                        Create a team
-                    </li>
-                    <li
-                        class="h-px w-8 {needsTeam
-                            ? 'bg-line'
-                            : 'bg-success/40'}"
-                        aria-hidden="true"
-                    ></li>
-                    <li
-                        class="flex items-center gap-2 {needsTeam
-                            ? 'text-fg-faint'
-                            : 'text-fg'}"
-                    >
-                        <span
-                            class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold {needsTeam
-                                ? 'bg-surface-alt text-fg-faint'
-                                : 'bg-accent text-bg'}"
+                            <span
+                                class="inline-grid h-5 w-5 place-items-center rounded-sm font-mono text-[11px] {needsTeam
+                                    ? 'bg-accent text-white'
+                                    : 'bg-success-soft text-success'}"
+                            >
+                                {#if needsTeam}
+                                    1
+                                {:else}
+                                    <Check class="h-3 w-3" />
+                                {/if}
+                            </span>
+                            Create a team
+                        </li>
+                        <li
+                            class="h-px w-8 {needsTeam
+                                ? 'bg-line'
+                                : 'bg-success'}"
+                            aria-hidden="true"
+                        ></li>
+                        <li
+                            class="flex items-center gap-2 {needsTeam
+                                ? 'text-fg-faint'
+                                : 'text-fg'}"
                         >
-                            2
-                        </span>
-                        Create the project
-                    </li>
-                </ol>
-            {/if}
+                            <span
+                                class="inline-grid h-5 w-5 place-items-center rounded-sm font-mono text-[11px] {needsTeam
+                                    ? 'bg-surface-alt text-fg-faint'
+                                    : 'bg-accent text-white'}"
+                            >
+                                2
+                            </span>
+                            Create the project
+                        </li>
+                    </ol>
+                {/if}
 
-            {#if needsTeam}
-                <form onsubmit={createTeam}>
-                    <h2 class="text-lg font-bold tracking-tight text-fg">
-                        Create a team first
-                    </h2>
-                    <div
-                        class="mt-2 rounded-lg border border-line bg-surface-alt p-3"
-                    >
-                        <p class="text-sm text-fg-muted">
+                {#if needsTeam}
+                    <form onsubmit={createTeam}>
+                        <h2 class="text-[15px] font-semibold text-fg">
+                            Create a team first
+                        </h2>
+                        <p class="mt-1 text-fg-muted">
                             Projects belong to teams, and you don't have one
-                            yet. Create your first team below — then you'll
-                            continue to the project form.
+                            yet. Create your first team below, then continue to
+                            the project form.
                         </p>
-                    </div>
-                    <div class="mt-4">
-                        <label
-                            for={`${uid}-team-name`}
-                            class="mb-1 block text-xs font-medium text-fg-muted"
-                            >Team name</label
-                        >
-                        <input
-                            id={`${uid}-team-name`}
-                            type="text"
-                            bind:value={teamForm.name}
-                            required
-                            placeholder="e.g. Mayor's Office, Engineering, Comms"
-                            class="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg"
-                        />
-                        {#if teamForm.errors.name}<p
-                                class="mt-1 text-xs text-danger"
-                            >
-                                {teamForm.errors.name}
-                            </p>{/if}
-                    </div>
-                    <div class="mt-3">
-                        <label
-                            for={`${uid}-team-desc`}
-                            class="mb-1 block text-xs font-medium text-fg-muted"
-                            >Description (optional)</label
-                        >
-                        <textarea
-                            id={`${uid}-team-desc`}
-                            bind:value={teamForm.description}
-                            rows="2"
-                            class="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg"
-                        ></textarea>
-                    </div>
-                    <div class="mt-4 flex justify-end">
-                        <button
-                            type="submit"
-                            disabled={teamForm.processing}
-                            class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim disabled:opacity-50"
-                            >Create team &amp; continue →</button
-                        >
-                    </div>
-                </form>
-            {:else}
-                <form onsubmit={submit}>
-                    <h2 class="mb-4 text-lg font-bold tracking-tight text-fg">
-                        New project
-                    </h2>
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
+                        <div class="mt-4">
                             <label
-                                for={`${uid}-title`}
-                                class="mb-1 block text-xs font-medium text-fg-muted"
-                                >Title</label
+                                for={`${uid}-team-name`}
+                                class="label mb-1 block">Team name</label
                             >
                             <input
-                                id={`${uid}-title`}
+                                id={`${uid}-team-name`}
                                 type="text"
-                                bind:value={form.title}
+                                bind:value={teamForm.name}
                                 required
-                                class="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg"
+                                placeholder="e.g. Mayor's Office, Engineering, Comms"
+                                class="input"
                             />
-                        </div>
-                        <div>
-                            <label
-                                for={`${uid}-title-np`}
-                                class="mb-1 block text-xs font-medium text-fg-muted"
-                                >Title (Nepali)</label
-                            >
-                            <input
-                                id={`${uid}-title-np`}
-                                type="text"
-                                bind:value={form.title_np}
-                                class="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg"
-                            />
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <label
-                            for={`${uid}-description`}
-                            class="mb-1 block text-xs font-medium text-fg-muted"
-                            >Description</label
-                        >
-                        <textarea
-                            id={`${uid}-description`}
-                            bind:value={form.description}
-                            rows="2"
-                            class="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg"
-                        ></textarea>
-                    </div>
-                    <fieldset class="mt-4">
-                        <legend class="text-sm font-medium text-fg"
-                            >Teams with access</legend
-                        >
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            {#each assignableTeams as team (team.id)}
-                                <label
-                                    class="flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm"
+                            {#if teamForm.errors.name}<p
+                                    class="mt-1 text-xs text-danger"
                                 >
-                                    <input
-                                        type="checkbox"
-                                        value={team.id}
-                                        checked={form.team_ids.includes(
-                                            team.id,
-                                        )}
-                                        onchange={(e) => {
-                                            const id = team.id;
-                                            form.team_ids = e.currentTarget
-                                                .checked
-                                                ? [...form.team_ids, id]
-                                                : form.team_ids.filter(
-                                                      (t) => t !== id,
-                                                  );
-                                        }}
-                                    />
-                                    {team.name}
-                                </label>
-                            {/each}
+                                    {teamForm.errors.name}
+                                </p>{/if}
                         </div>
-                        {#if form.errors.team_ids}<p
-                                class="mt-1 text-xs text-danger"
+                        <div class="mt-3">
+                            <label
+                                for={`${uid}-team-desc`}
+                                class="label mb-1 block"
+                                >Description (optional)</label
                             >
-                                {form.errors.team_ids}
-                            </p>{/if}
-                    </fieldset>
-
-                    {#if isSuperAdmin}
-                        <label
-                            class="mt-4 flex items-center gap-2 text-sm text-fg-muted"
-                        >
-                            <input
-                                type="checkbox"
-                                bind:checked={form.is_public}
-                            /> Public (visible to everyone)
-                        </label>
-                    {/if}
-
-                    <div class="mt-3 flex items-center gap-2">
-                        <div class="flex-1"></div>
-                        <button
-                            type="submit"
-                            disabled={form.processing}
-                            class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim disabled:opacity-50"
-                            >Create</button
-                        >
-                    </div>
-                    {#if form.errors.title}<p class="mt-2 text-xs text-danger">
-                            {form.errors.title}
-                        </p>{/if}
-                </form>
-            {/if}
-        </div>
-    {/if}
-
-    {#if projects.length === 0}
-        <div
-            class="rounded-xl border border-dashed border-line bg-surface p-10 text-center"
-        >
-            <p class="text-base font-medium">No projects yet.</p>
-            <p class="mt-1 text-sm text-fg-muted">
-                Click "+ New project" to start one.
-            </p>
-        </div>
-    {/if}
-
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {#each projects as project (project.id)}
-            <a
-                href={`/workspace/projects/${project.slug}`}
-                class="group rounded-xl border border-line bg-surface p-4 transition hover:border-accent hover:shadow-sm"
-            >
-                <div class="flex items-start justify-between">
-                    <h3
-                        class="text-base font-semibold text-fg group-hover:text-accent"
-                    >
-                        {project.title}
-                    </h3>
-                    {#if project.is_public}
-                        <span
-                            class="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success"
-                            >public</span
-                        >
-                    {/if}
-                </div>
-                {#if project.title_np}
-                    <div class="mt-1 text-sm text-fg-muted">
-                        {project.title_np}
-                    </div>
-                {/if}
-                {#if project.description}
-                    <p class="mt-2 line-clamp-2 text-sm text-fg-muted">
-                        {project.description}
-                    </p>
-                {/if}
-                <div class="mt-3 flex items-center justify-between">
-                    <span class="text-xs text-fg-muted">
-                        {project.tasks_count ?? 0} task{(project.tasks_count ??
-                            0) === 1
-                            ? ''
-                            : 's'}
-                    </span>
-                    {#if project.can_archive}
-                        {#if project.is_archived}
+                            <textarea
+                                id={`${uid}-team-desc`}
+                                bind:value={teamForm.description}
+                                rows="2"
+                                class="input"
+                            ></textarea>
+                        </div>
+                        <div class="mt-4 flex justify-end">
                             <button
-                                type="button"
-                                class="rounded-md border border-line px-2 py-1 text-xs font-medium text-fg-muted hover:bg-surface-alt"
-                                onclick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    restore(project);
-                                }}>Restore</button
+                                type="submit"
+                                disabled={teamForm.processing}
+                                class="btn-primary"
+                                >Create team and continue</button
                             >
-                        {:else}
-                            <button
-                                type="button"
-                                class="rounded-md border border-line px-2 py-1 text-xs font-medium text-fg-muted hover:bg-surface-alt"
-                                onclick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    archive(project);
-                                }}>Archive</button
+                        </div>
+                    </form>
+                {:else}
+                    <form onsubmit={submit}>
+                        <h2 class="mb-4 text-[15px] font-semibold text-fg">
+                            New project
+                        </h2>
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label
+                                    for={`${uid}-title`}
+                                    class="label mb-1 block">Title</label
+                                >
+                                <input
+                                    id={`${uid}-title`}
+                                    type="text"
+                                    bind:value={form.title}
+                                    required
+                                    class="input"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    for={`${uid}-title-np`}
+                                    class="label mb-1 block"
+                                    >Title (Nepali)</label
+                                >
+                                <input
+                                    id={`${uid}-title-np`}
+                                    type="text"
+                                    bind:value={form.title_np}
+                                    class="input font-np"
+                                />
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <label
+                                for={`${uid}-description`}
+                                class="label mb-1 block">Description</label
                             >
+                            <textarea
+                                id={`${uid}-description`}
+                                bind:value={form.description}
+                                rows="2"
+                                class="input"
+                            ></textarea>
+                        </div>
+                        <fieldset class="mt-4">
+                            <legend class="label">Teams with access</legend>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                {#each assignableTeams as team (team.id)}
+                                    <label
+                                        class="flex h-7 items-center gap-2 rounded-md border border-line px-2.5 text-[13px] text-fg"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value={team.id}
+                                            checked={form.team_ids.includes(
+                                                team.id,
+                                            )}
+                                            onchange={(e) => {
+                                                const id = team.id;
+                                                form.team_ids = e.currentTarget
+                                                    .checked
+                                                    ? [...form.team_ids, id]
+                                                    : form.team_ids.filter(
+                                                          (t) => t !== id,
+                                                      );
+                                            }}
+                                        />
+                                        {team.name}
+                                    </label>
+                                {/each}
+                            </div>
+                            {#if form.errors.team_ids}<p
+                                    class="mt-1 text-xs text-danger"
+                                >
+                                    {form.errors.team_ids}
+                                </p>{/if}
+                        </fieldset>
+
+                        {#if isSuperAdmin}
+                            <label
+                                class="mt-4 flex items-center gap-2 text-fg-muted"
+                            >
+                                <input
+                                    type="checkbox"
+                                    bind:checked={form.is_public}
+                                /> Public (visible to everyone)
+                            </label>
                         {/if}
+
+                        <div class="mt-4 flex items-center gap-2">
+                            <div class="flex-1"></div>
+                            <button
+                                type="submit"
+                                disabled={form.processing}
+                                class="btn-primary">Create</button
+                            >
+                        </div>
+                        {#if form.errors.title}<p
+                                class="mt-2 text-xs text-danger"
+                            >
+                                {form.errors.title}
+                            </p>{/if}
+                    </form>
+                {/if}
+            </div>
+        {/if}
+
+        {#if projects.length === 0}
+            <p class="text-fg-muted">
+                {#if archivedView}
+                    No archived projects.
+                {:else if canCreate}
+                    No projects yet. Use "New project" to start one.
+                {:else}
+                    No projects yet.
+                {/if}
+            </p>
+        {:else}
+            <div class="-mx-4 lg:-mx-8">
+                <div
+                    class="col-head flex items-center gap-3 border-b border-line px-4 pb-1.5 lg:px-8"
+                >
+                    <span class="w-4"></span>
+                    <span class="flex-1">Name</span>
+                    <span class="w-14 text-right">Tasks</span>
+                    {#if projects.some((p) => p.can_archive)}
+                        <span class="w-[72px]"></span>
                     {/if}
                 </div>
-            </a>
-        {/each}
+                {#each projects as project (project.id)}
+                    <a
+                        href={`/workspace/projects/${project.slug}`}
+                        class={`row group min-h-10 py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
+                    >
+                        <ProgressRing
+                            percent={project.percent_complete ?? 0}
+                            class={archivedView ? 'opacity-50' : ''}
+                        />
+                        <div class="min-w-0 flex-1">
+                            <div class="flex min-w-0 items-baseline gap-2.5">
+                                <span
+                                    class={`truncate font-medium group-hover:text-accent ${archivedView ? 'text-fg-muted' : 'text-fg'}`}
+                                    >{project.title}</span
+                                >
+                                {#if project.title_np}
+                                    <span
+                                        class="font-np truncate text-xs text-fg-muted"
+                                        >{project.title_np}</span
+                                    >
+                                {/if}
+                                {#if project.is_public}
+                                    <span class="chip">public</span>
+                                {/if}
+                            </div>
+                            {#if project.description}
+                                <p
+                                    class="mt-0.5 line-clamp-1 text-xs text-fg-muted"
+                                >
+                                    {project.description}
+                                </p>
+                            {/if}
+                        </div>
+                        <span
+                            class="w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums"
+                            >{project.tasks_count ?? 0}</span
+                        >
+                        {#if project.can_archive}
+                            <span class="flex w-[72px] shrink-0 justify-end">
+                                {#if project.is_archived}
+                                    <button
+                                        type="button"
+                                        class="btn"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            restore(project);
+                                        }}>Restore</button
+                                    >
+                                {:else}
+                                    <button
+                                        type="button"
+                                        class="btn-ghost"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            archive(project);
+                                        }}>Archive</button
+                                    >
+                                {/if}
+                            </span>
+                        {:else if projects.some((p) => p.can_archive)}
+                            <span class="w-[72px] shrink-0"></span>
+                        {/if}
+                    </a>
+                {/each}
+            </div>
+        {/if}
     </div>
 </AppShell>

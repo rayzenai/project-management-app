@@ -1,6 +1,7 @@
 <script lang="ts">
-    import { initials } from '../lib/format';
+    import { Check, X } from '@lucide/svelte';
     import type { Member } from '../lib/types';
+    import Avatar from './Avatar.svelte';
 
     let {
         team,
@@ -55,7 +56,7 @@
         tabindex="0"
         aria-haspopup="listbox"
         aria-expanded={open}
-        class="flex min-h-[32px] w-full flex-wrap items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-left text-sm shadow-sm hover:border-line focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none"
+        class="flex min-h-[30px] w-full flex-wrap items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-left text-[13px] transition hover:bg-hover"
         onclick={() => (open = !open)}
         onkeydown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -68,24 +69,19 @@
             <span class="text-fg-faint">{placeholder}</span>
         {/if}
         {#each selected as user (user.id)}
-            <span
-                class="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent"
-            >
-                <span
-                    class="flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 text-[10px] font-semibold text-accent"
-                >
-                    {initials(user.name)}
-                </span>
+            <span class="chip chip-accent gap-1 pr-1">
                 {user.name}
                 <button
                     type="button"
                     aria-label="Remove"
-                    class="text-accent hover:text-accent-dim"
+                    class="inline-flex h-4 w-4 items-center justify-center rounded-sm text-accent hover:bg-accent-soft"
                     onclick={(e) => {
                         e.stopPropagation();
                         remove(user.id);
-                    }}>×</button
+                    }}
                 >
+                    <X class="h-3 w-3" />
+                </button>
             </span>
         {/each}
     </div>
@@ -93,46 +89,45 @@
     {#if open}
         <div
             class={flow
-                ? 'mt-1 max-h-72 overflow-auto rounded-md border border-line bg-surface shadow-sm'
-                : 'absolute right-0 left-0 z-30 mt-1 max-h-72 overflow-auto rounded-md border border-line bg-surface shadow-lg'}
+                ? 'popover mt-1 max-h-72 overflow-auto px-1'
+                : 'popover absolute right-0 left-0 z-30 mt-1 max-h-72 overflow-auto px-1'}
         >
-            <input
-                type="text"
-                bind:value={query}
-                placeholder="Search people..."
-                class="w-full border-b border-line bg-transparent px-3 py-2 text-sm focus:outline-none"
-            />
-            <ul class="max-h-56 overflow-auto py-1">
+            <div class="px-1 pt-1 pb-1.5">
+                <input
+                    type="text"
+                    bind:value={query}
+                    placeholder="Search people"
+                    class="input"
+                />
+            </div>
+            <ul class="max-h-56 overflow-auto">
                 {#each filtered as user (user.id)}
                     {@const sel = selectedIds.includes(user.id)}
                     <li>
                         <button
                             type="button"
-                            class={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-alt ${
-                                sel ? 'bg-accent/10' : ''
-                            }`}
+                            class={`menu-item ${sel ? 'bg-accent-soft text-fg' : ''}`}
                             onclick={() => toggle(user.id)}
                         >
-                            <span
-                                class="flex h-7 w-7 items-center justify-center rounded-full bg-surface-alt text-xs font-semibold text-fg-muted"
-                            >
-                                {initials(user.name)}
+                            <Avatar name={user.name} size="md" />
+                            <span class="min-w-0 flex-1 leading-tight">
+                                <span class="block truncate font-medium text-fg"
+                                    >{user.name}</span
+                                >
+                                <span
+                                    class="block truncate text-xs text-fg-muted"
+                                    >{user.email}</span
+                                >
                             </span>
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate font-medium">
-                                    {user.name}
-                                </div>
-                                <div class="truncate text-xs text-fg-muted">
-                                    {user.email}
-                                </div>
-                            </div>
-                            {#if selectedIds.includes(user.id)}
-                                <span class="text-accent">✓</span>
+                            {#if sel}
+                                <Check
+                                    class="h-3.5 w-3.5 shrink-0 text-accent"
+                                />
                             {/if}
                         </button>
                     </li>
                 {:else}
-                    <li class="px-3 py-3 text-sm text-fg-muted">No matches.</li>
+                    <li class="px-2 py-2 text-xs text-fg-faint">No matches.</li>
                 {/each}
             </ul>
         </div>

@@ -13,8 +13,8 @@
 </script>
 
 <script lang="ts">
-    import { initials } from '../../lib/format';
     import type { Member } from '../../lib/types';
+    import Avatar from '../Avatar.svelte';
 
     let {
         filters = $bindable(),
@@ -47,77 +47,63 @@
     }
 </script>
 
-<section
-    class="mb-6 flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border border-line bg-surface px-4 py-3"
->
+<div class="ml-auto flex shrink-0 items-center gap-1.5">
     {#if teammates.length > 0}
-        <div class="flex items-center gap-2">
-            <span class="ws-eyebrow text-fg-muted">Assignees</span>
-            <div class="flex items-center gap-1">
-                {#each teammates as user (user.id)}
-                    {@const active = filters.assigneeIds.includes(user.id)}
-                    <button
-                        type="button"
-                        aria-pressed={active}
-                        title={user.name}
-                        class={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold transition ${
-                            active
-                                ? 'bg-accent/20 text-accent ring-2 ring-accent'
-                                : 'bg-surface-alt text-fg-muted ring-1 ring-transparent hover:ring-accent/50'
-                        }`}
-                        onclick={() => toggleAssignee(user.id)}
-                    >
-                        {initials(user.name)}
-                    </button>
-                {/each}
-            </div>
+        <div class="flex items-center gap-1">
+            {#each teammates as user (user.id)}
+                {@const active = filters.assigneeIds.includes(user.id)}
+                <button
+                    type="button"
+                    aria-pressed={active}
+                    title={user.name}
+                    class={`rounded-md transition ${
+                        active
+                            ? 'ring-2 ring-accent'
+                            : 'opacity-70 hover:opacity-100'
+                    }`}
+                    onclick={() => toggleAssignee(user.id)}
+                >
+                    <Avatar name={user.name} size="md" />
+                </button>
+            {/each}
         </div>
     {/if}
 
     <button
         type="button"
         aria-pressed={filters.overdueOnly}
-        class={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+        class={`btn ${
             filters.overdueOnly
-                ? 'border-accent bg-accent/10 text-accent'
-                : 'border-line text-fg-muted hover:border-accent hover:text-accent'
+                ? 'border-accent/40 bg-accent-soft text-accent hover:bg-accent-soft'
+                : ''
         }`}
         onclick={() => (filters.overdueOnly = !filters.overdueOnly)}
     >
-        ⚠ Overdue only
+        Overdue only
     </button>
 
     {#if categories.length > 0}
-        <label class="flex items-center gap-2">
-            <span class="ws-eyebrow text-fg-muted">Category</span>
-            <select
-                value={filters.category ?? ''}
-                onchange={(e) =>
-                    (filters.category =
-                        (e.currentTarget as HTMLSelectElement).value || null)}
-                class="rounded-md border border-line bg-surface px-2 py-1 text-xs text-fg-muted"
-            >
-                <option value="">All</option>
-                {#each categories as category (category.value)}
-                    <option value={category.value}>{category.label}</option>
-                {/each}
-            </select>
-        </label>
+        <select
+            aria-label="Category"
+            value={filters.category ?? ''}
+            onchange={(e) =>
+                (filters.category =
+                    (e.currentTarget as HTMLSelectElement).value || null)}
+            class="input h-7 w-auto py-0"
+        >
+            <option value="">All categories</option>
+            {#each categories as category (category.value)}
+                <option value={category.value}>{category.label}</option>
+            {/each}
+        </select>
     {/if}
 
     {#if anyActive}
-        <div class="ml-auto flex items-center gap-2 font-mono text-xs">
-            <span class={shownCount === 0 ? 'text-danger' : 'text-fg-muted'}>
-                {shownCount} of {totalCount} shown
-            </span>
-            <span class="text-fg-faint">·</span>
-            <button
-                type="button"
-                class="text-fg-muted hover:text-fg"
-                onclick={clear}
-            >
-                Clear ✕
-            </button>
-        </div>
+        <span
+            class={`font-mono text-xs tabular-nums ${shownCount === 0 ? 'text-danger' : 'text-fg-muted'}`}
+        >
+            {shownCount}/{totalCount}
+        </span>
+        <button type="button" class="btn-ghost" onclick={clear}>Clear</button>
     {/if}
-</section>
+</div>

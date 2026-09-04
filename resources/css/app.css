@@ -2,24 +2,31 @@
 
 @source '../js/**/*.svelte';
 
-/* dark: follows the .dark class (set by the AppShell toggle), not the OS. */
+/* dark: follows the .dark class (set by applyTheme), not the OS. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
-    --font-sans: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+    --font-display: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+    --font-np: 'Mukta', 'Geist', ui-sans-serif, system-ui, sans-serif;
 
     /* ------------------------------------------------------------------ *
-     * Semantic color layer. Each Tailwind color utility name resolves
-     * (via this indirection) to a runtime `--ws-*` variable that the
-     * theme applier (applyTheme.ts) writes per the active token theme.
-     * This generates `bg-bg`, `bg-surface`, `text-fg`, `border-line`,
-     * `text-accent`, etc. — utilities the component sweep will adopt.
+     * Semantic color layer. Each Tailwind color utility resolves to a
+     * runtime `--ws-*` variable that applyTheme.ts writes per the active
+     * theme (config/themes.php). Components use ONLY these utilities:
+     *   surfaces  bg-bg (outer ground)  bg-surface (panels)  bg-surface-alt
+     *             bg-hover (row / item hover)  bg-raised (popovers, cards)
+     *   text      text-fg  text-fg-muted  text-fg-faint
+     *   lines     border-line  border-line-soft
+     *   accent    text/bg/border-accent  bg-accent-soft  (one calm blue)
+     *   state     success / warn / danger (+ -soft tints) for status only
      * ------------------------------------------------------------------ */
     --color-bg: var(--ws-bg);
     --color-surface: var(--ws-surface);
     --color-surface-alt: var(--ws-surface-alt);
+    --color-hover: var(--ws-hover);
+    --color-raised: var(--ws-raised);
     --color-line: var(--ws-line);
     --color-line-soft: var(--ws-line-soft);
     --color-fg: var(--ws-text);
@@ -27,163 +34,213 @@
     --color-fg-faint: var(--ws-text-faint);
     --color-accent: var(--ws-accent);
     --color-accent-dim: var(--ws-accent-dim);
+    --color-accent-soft: var(--ws-accent-soft);
     --color-warn: var(--ws-warn);
     --color-danger: var(--ws-danger);
     --color-success: var(--ws-success);
+    --color-warn-soft: var(--ws-warn-soft);
+    --color-danger-soft: var(--ws-danger-soft);
+    --color-success-soft: var(--ws-success-soft);
+    --color-selection: var(--ws-selection);
+
+    /* One radius scale: 6px for panels/buttons/inputs, 4px for chips. */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 10px;
+    --radius-2xl: 12px;
 }
 
-/* Terminal-noir defaults so first paint / SSR / pre-JS render the current
-   dark look; applyTheme overrides these post-hydration per the active theme. */
+/* First-paint defaults (light) so SSR / pre-hydration renders on the right
+   ground; applyTheme overrides these post-hydration per the active theme. */
 :root {
-    --ws-bg: #08090a;
-    --ws-surface: #111417;
-    --ws-surface-alt: #161a1e;
-    --ws-line: #20262b;
-    --ws-line-soft: #181d21;
-    --ws-text: #e9e7e2;
-    --ws-text-muted: #9aa1a8;
-    --ws-text-faint: #5c646b;
-    --ws-accent: #b6ff3a;
-    --ws-accent-dim: #8bc91f;
-    --ws-warn: #f4b740;
-    --ws-danger: #ff5c5c;
-    --ws-success: #b6ff3a;
+    --ws-bg: #f2f4f8;
+    --ws-surface: #ffffff;
+    --ws-surface-alt: #f7f8fb;
+    --ws-hover: #f0f2f7;
+    --ws-raised: #ffffff;
+    --ws-line: #e2e5ec;
+    --ws-line-soft: #ebedf3;
+    --ws-text: #1b2030;
+    --ws-text-muted: #626b7d;
+    --ws-text-faint: #9aa2b3;
+    --ws-accent: #3b6fe0;
+    --ws-accent-dim: #2f5fc7;
+    --ws-accent-soft: rgba(59, 111, 224, 0.1);
+    --ws-warn: #b8760a;
+    --ws-danger: #d63d33;
+    --ws-success: #1f9d62;
+    --ws-warn-soft: rgba(184, 118, 10, 0.1);
+    --ws-danger-soft: rgba(214, 61, 51, 0.09);
+    --ws-success-soft: rgba(31, 157, 98, 0.1);
+    --ws-selection: rgba(59, 111, 224, 0.07);
+    color-scheme: light;
 }
 
-/* ------------------------------------------------------------------ *
- * Terminal-noir as the dark theme.
- *
- * Every dark: utility in the workspace components resolves through the
- * Tailwind color/radius custom properties, so remapping them under .dark
- * rethemes the entire app (all pages) without touching component markup:
- * neutrals become the ink/panel/line palette, amber becomes the lime
- * signal, and radii flatten to the crisp 4px technical look.
- * ------------------------------------------------------------------ */
-.dark {
-    /* Canvas */
-    --color-neutral-950: #08090a; /* ink */
-    --color-neutral-900: #111417; /* panel */
-    --color-neutral-800: #20262b; /* line */
-    --color-neutral-700: #2c343a;
-    --color-neutral-600: #5c646b;
-    --color-neutral-500: #868e96;
-    --color-neutral-400: #9aa1a8; /* mute */
-    --color-neutral-300: #c6cbd0;
-    --color-neutral-200: #d9d7d2;
-    --color-neutral-100: #e9e7e2; /* bone */
-
-    /* Amber accents become the lime signal */
-    --color-amber-300: #cdff70;
-    --color-amber-400: #b6ff3a;
-    --color-amber-500: #b6ff3a;
-    --color-amber-600: #8bc91f;
-    --color-amber-700: #8bc91f;
-
-    /* Crisp technical radii */
-    --radius-md: 4px;
-    --radius-lg: 4px;
-    --radius-xl: 4px;
-    --radius-2xl: 6px;
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        --ws-bg: #0e1015;
+        --ws-surface: #151820;
+        --ws-surface-alt: #1a1e27;
+        --ws-hover: #1f2430;
+        --ws-raised: #242a37;
+        --ws-line: #262c39;
+        --ws-line-soft: #1f2430;
+        --ws-text: #e4e7ee;
+        --ws-text-muted: #8e95a6;
+        --ws-text-faint: #5b6275;
+        --ws-accent: #6d94f5;
+        --ws-accent-dim: #5a82e6;
+        --ws-accent-soft: rgba(109, 148, 245, 0.14);
+        --ws-warn: #e5a33a;
+        --ws-danger: #f2655a;
+        --ws-success: #3ec98a;
+        --ws-warn-soft: rgba(229, 163, 58, 0.13);
+        --ws-danger-soft: rgba(242, 101, 90, 0.13);
+        --ws-success-soft: rgba(62, 201, 138, 0.13);
+        --ws-selection: rgba(109, 148, 245, 0.08);
+        color-scheme: dark;
+    }
 }
 
 @layer base {
+    html {
+        font-size: 13.5px;
+    }
+
     body {
         font-family: var(--font-sans);
-        font-feature-settings: 'ss01';
+        font-feature-settings: 'ss01', 'cv11';
+        -webkit-font-smoothing: antialiased;
+        background: var(--ws-bg);
+        color: var(--ws-text);
     }
 
-    .dark ::selection {
-        background: #b6ff3a;
-        color: #0a0a0a;
+    ::selection {
+        background: var(--ws-accent-soft);
     }
 
-    .dark ::-webkit-scrollbar {
+    ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
     }
-    .dark ::-webkit-scrollbar-track {
-        background: #08090a;
+    ::-webkit-scrollbar-track {
+        background: transparent;
     }
-    .dark ::-webkit-scrollbar-thumb {
-        background: #20262b;
-        border: 2px solid #08090a;
+    ::-webkit-scrollbar-thumb {
+        background: var(--ws-line);
+        border: 3px solid transparent;
+        background-clip: padding-box;
         border-radius: 999px;
     }
-    .dark ::-webkit-scrollbar-thumb:hover {
-        background: #2c343a;
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--ws-text-faint);
+        background-clip: padding-box;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--ws-accent);
+        outline-offset: 2px;
     }
 }
 
 @layer components {
-    /* Mono uppercase section label (portfolio .eyebrow) */
-    .ws-eyebrow {
-        font-family: var(--font-mono);
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
+    /* ---- Buttons ------------------------------------------------------ */
+    .btn {
+        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface-alt px-2.5 text-[13px] font-medium whitespace-nowrap text-fg transition hover:bg-hover active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+    }
+    .btn-primary {
+        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-accent bg-accent px-2.5 text-[13px] font-medium whitespace-nowrap text-white transition hover:bg-accent-dim active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+    }
+    .btn-ghost {
+        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 text-[13px] font-medium whitespace-nowrap text-fg-muted transition hover:bg-hover hover:text-fg active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+    }
+    .btn-danger {
+        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface-alt px-2.5 text-[13px] font-medium whitespace-nowrap text-danger transition hover:bg-danger-soft active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+    }
+    .btn-lg {
+        @apply h-9 px-3.5 text-sm;
+    }
+    .btn-icon {
+        @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-fg-muted transition hover:bg-hover hover:text-fg;
+    }
+    .kbd {
+        @apply rounded-sm border border-line bg-surface px-1 font-mono text-[10.5px] text-fg-faint;
     }
 
-    /* Blueprint grid + signal glow atmosphere behind the dark canvas.
-       Composes with the background-color utilities on the same element. */
-    .dark .ws-canvas {
-        background-image:
-            radial-gradient(
-                60rem 40rem at 82% -8%,
-                rgba(182, 255, 58, 0.05),
-                transparent 60%
-            ),
-            radial-gradient(
-                50rem 50rem at -10% 8%,
-                rgba(182, 255, 58, 0.025),
-                transparent 55%
-            ),
-            linear-gradient(#14181c 1px, transparent 1px),
-            linear-gradient(90deg, #14181c 1px, transparent 1px);
-        background-size:
-            100% 100%,
-            100% 100%,
-            56px 56px,
-            56px 56px;
-        background-attachment: fixed;
+    /* ---- Inputs ------------------------------------------------------- */
+    .input {
+        @apply w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-fg placeholder:text-fg-faint focus:border-accent focus:outline-none;
+    }
+    .label {
+        @apply text-xs font-medium text-fg-muted;
     }
 
-    /* Quick-add token highlighting (TokenInput mirror layer) */
+    /* ---- Chips (small state labels) ----------------------------------- */
+    .chip {
+        @apply inline-flex h-5 items-center gap-1.5 rounded-sm border border-line px-1.5 text-[11.5px] font-medium whitespace-nowrap text-fg-muted;
+    }
+    .chip-danger {
+        @apply border-transparent bg-danger-soft text-danger;
+    }
+    .chip-warn {
+        @apply border-transparent bg-warn-soft text-warn;
+    }
+    .chip-success {
+        @apply border-transparent bg-success-soft text-success;
+    }
+    .chip-accent {
+        @apply border-transparent bg-accent-soft text-accent;
+    }
+
+    /* ---- Panels & rows ------------------------------------------------ */
+    .panel {
+        @apply rounded-lg border border-line bg-surface;
+    }
+    .section-title {
+        @apply flex items-baseline gap-2 text-[13px] font-semibold text-fg;
+    }
+    .section-count {
+        @apply text-xs font-normal text-fg-faint tabular-nums;
+    }
+    .group-head {
+        @apply flex h-8 items-center gap-2 border-y border-line bg-surface-alt px-4 text-[13px] font-medium text-fg;
+    }
+    .row {
+        @apply flex items-center gap-3 border-b border-line-soft px-4 transition hover:bg-hover;
+    }
+    .col-head {
+        @apply text-[11.5px] font-medium text-fg-faint;
+    }
+
+    /* ---- Popover panel ------------------------------------------------ */
+    .popover {
+        @apply rounded-lg border border-line bg-raised py-1 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.12)];
+    }
+    .menu-item {
+        @apply flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-fg-muted hover:bg-hover hover:text-fg;
+    }
+
+    /* ---- Quick-add token highlighting (TokenInput mirror layer) ------- */
     .qa-tok {
         border-radius: 3px;
         padding: 0 1px;
         margin: 0 -1px;
     }
     .qa-tok-project {
-        background: rgba(245, 158, 11, 0.18);
-        color: #b45309;
+        background: var(--ws-accent-soft);
+        color: var(--ws-accent);
     }
     .qa-tok-assignee {
-        background: rgba(14, 165, 233, 0.15);
-        color: #0369a1;
+        background: var(--ws-success-soft);
+        color: var(--ws-success);
     }
     .qa-tok-priority {
-        background: rgba(239, 68, 68, 0.15);
-        color: #b91c1c;
+        background: var(--ws-danger-soft);
+        color: var(--ws-danger);
     }
     .qa-tok-date {
-        background: rgba(139, 92, 246, 0.15);
-        color: #6d28d9;
-    }
-    .dark .qa-tok-project {
-        background: rgba(182, 255, 58, 0.14);
-        color: #b6ff3a;
-    }
-    .dark .qa-tok-assignee {
-        background: rgba(56, 189, 248, 0.12);
-        color: #7dd3fc;
-    }
-    .dark .qa-tok-priority {
-        background: rgba(248, 113, 113, 0.12);
-        color: #fca5a5;
-    }
-    .dark .qa-tok-date {
-        background: rgba(167, 139, 250, 0.12);
-        color: #c4b5fd;
+        background: var(--ws-warn-soft);
+        color: var(--ws-warn);
     }
 }

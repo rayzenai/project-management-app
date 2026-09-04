@@ -111,6 +111,7 @@ class TaskSearchQuery
                 'item_number' => $task->item_number,
                 'title' => $task->title,
                 'short_title' => $task->short_title,
+                'status' => $task->status,
                 'status_label' => $task->status_label,
                 'project' => $task->project ? [
                     'slug' => $task->project->slug,

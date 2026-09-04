@@ -1,10 +1,21 @@
 <script lang="ts">
     import { inertia, page, router } from '@inertiajs/svelte';
-    import { Bell, Menu, Settings, StickyNote, X } from '@lucide/svelte';
+    import {
+        Bell,
+        Folder,
+        LayoutGrid,
+        LogOut,
+        Menu,
+        Plus,
+        Search,
+        Settings,
+        StickyNote,
+        UserRound,
+        Users,
+        X,
+    } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
-    import { themesToList } from '../lib/appearance';
     import type { AppearanceProps } from '../lib/appearance';
-    import { initials } from '../lib/format';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { palette } from '../lib/palette.svelte';
     import { peek } from '../lib/peek.svelte';
@@ -12,13 +23,30 @@
     import { toast } from '../lib/toast.svelte';
     import type { SharedProps } from '../lib/types';
     import AppearanceConfig from './AppearanceConfig.svelte';
+    import Avatar from './Avatar.svelte';
     import CommandPalette from './CommandPalette.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
     import TaskPeek from './TaskPeek.svelte';
     import Toasts from './Toasts.svelte';
     import WorkspaceNotesBoard from './WorkspaceNotesBoard.svelte';
 
-    let { children }: { children: Snippet } = $props();
+    /**
+     * The app frame: a 232px sidebar and a bordered content panel. Pages
+     * provide the panel's 44px top bar through the `bar` snippet (breadcrumb
+     * on the left, actions on the right); `flush` drops the content padding
+     * for full-bleed registers and boards.
+     */
+    let {
+        children,
+        bar,
+        title = '',
+        flush = false,
+    }: {
+        children: Snippet;
+        bar?: Snippet;
+        title?: string;
+        flush?: boolean;
+    } = $props();
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
     const user = $derived(shared.auth?.user ?? null);
@@ -28,28 +56,11 @@
     const appearance = $derived(
         (shared.appearance ?? null) as AppearanceProps | null,
     );
-
-    // Theme catalogue shared from `config/themes.php` (web only). Feeding it as a
-    // prop lets AppearanceConfig skip the Sanctum-protected `GET /api/v1/themes`
-    // fetch, which 401s in the session context the web UI runs in.
-    const catalogue = $derived(shared.themeCatalogue ?? null);
-    const catalogueThemes = $derived(
-        catalogue ? themesToList(catalogue.themes) : undefined,
-    );
-    const catalogueFonts = $derived(catalogue?.fontAllowList);
+    const projects = $derived(shared.quickAddContext?.projects ?? []);
+    const noteCount = $derived(shared.workspaceNotes?.length ?? 0);
 
     let mobileOpen = $state(false);
     let lastFlash = $state<string | null>(null);
-
-    // First-run gate: blocks the workspace until the user saves preferences.
-    // Local flag lets us hide the overlay immediately on save; the next Inertia
-    // prop refresh carries `configured: true`.
-    let onboardingDismissed = $state(false);
-    const showOnboarding = $derived(
-        appearance?.configured === false && !onboardingDismissed,
-    );
-
-    // Settings → Appearance, reachable any time from the header as a modal panel.
     let settingsOpen = $state(false);
 
     $effect(() => {
@@ -91,11 +102,21 @@
         return () => clearInterval(id);
     });
 
+    // Close the mobile drawer on navigation.
+    $effect(() => {
+        void path;
+        mobileOpen = false;
+    });
+
     const nav = [
-        { label: 'Overview', href: '/workspace', icon: '▦' },
-        { label: 'My Workspace', href: '/workspace/my', icon: '✦' },
-        { label: 'Projects', href: '/workspace/projects', icon: '▤' },
-        { label: 'Team', href: '/workspace/team', icon: '◎' },
+        { label: 'Overview', href: '/workspace', icon: LayoutGrid },
+        { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
+        {
+            label: 'Notifications',
+            href: '/workspace/notifications',
+            icon: Bell,
+        },
+        { label: 'Team', href: '/workspace/team', icon: Users },
     ];
 
     function isActive(href: string) {
@@ -105,25 +126,12 @@
         );
     }
 
-    function logout() {
-        router.post('/workspace/logout');
+    function projectActive(slug: string) {
+        return path.startsWith(`/workspace/projects/${slug}`);
     }
 
-    function skipOnboarding() {
-        // Save the defaults so `configured` flips true — never trap the user.
-        router.patch(
-            '/workspace/preferences',
-            {
-                theme: 'system',
-                font_override: { display: null, body: null, mono: null },
-                email_notifications: true,
-            },
-            {
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: () => (onboardingDismissed = true),
-            },
-        );
+    function logout() {
+        router.post('/workspace/logout');
     }
 
     function isEditable(target: EventTarget | null): boolean {
@@ -150,13 +158,23 @@
             peek.target !== null,
     );
 
+    function openQuickAdd() {
+        // On a project/task page, pre-select & lock that project so quick-add
+        // never asks which project you're already working in.
+        const proj = (page.props as Record<string, unknown>).project as
+            { id?: number } | undefined;
+        quickAdd.open(
+            typeof proj?.id === 'number'
+                ? { projectId: proj.id, lockProject: true }
+                : {},
+        );
+    }
+
     function onGlobalKey(e: KeyboardEvent) {
         if (e.defaultPrevented) {
             return;
         }
 
-        // Esc fallback — the overlays handle Esc themselves when focused; this
-        // catches the case where focus drifted back to the document.
         if (e.key === 'Escape') {
             if (palette.isOpen) {
                 e.preventDefault();
@@ -169,7 +187,6 @@
             return;
         }
 
-        // ⌘K / Ctrl+K toggles the palette even from inside an input.
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
             e.preventDefault();
 
@@ -182,8 +199,6 @@
             return;
         }
 
-        // Bare-key shortcuts only when nothing editable is focused, no overlay
-        // is open, and no modifier is held.
         if (isEditable(e.target) || overlayOpen) {
             return;
         }
@@ -192,17 +207,9 @@
             return;
         }
 
-        if (e.key === 'q' || e.key === 'Q') {
+        if (e.key === 'q' || e.key === 'Q' || e.key === 'n' || e.key === 'N') {
             e.preventDefault();
-            // On a project/task page, pre-select & lock that project so quick-add
-            // never asks which project you're already working in.
-            const proj = (page.props as Record<string, unknown>).project as
-                { id?: number } | undefined;
-            quickAdd.open(
-                typeof proj?.id === 'number'
-                    ? { projectId: proj.id, lockProject: true }
-                    : {},
-            );
+            openQuickAdd();
 
             return;
         }
@@ -214,7 +221,7 @@
     }
 </script>
 
-<div class="ws-canvas bg-bg text-fg flex min-h-screen">
+<div class="flex min-h-screen bg-bg text-fg">
     {#if mobileOpen}
         <button
             type="button"
@@ -225,124 +232,184 @@
     {/if}
 
     <aside
-        class="bg-surface fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-line px-4 py-6 transition-transform lg:static lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-40 flex w-[232px] -translate-x-full flex-col gap-0.5 bg-bg px-2.5 pt-3 pb-2.5 transition-transform lg:static lg:translate-x-0"
         class:translate-x-0={mobileOpen}
     >
-        <div class="mb-8 flex items-center justify-between">
-            <div>
-                <div class="font-display text-lg font-bold tracking-tight">
-                    Workspace
-                </div>
-            </div>
-            <button
-                type="button"
-                aria-label="Close sidebar"
-                class="text-fg-muted hover:bg-surface-alt rounded-md p-1 lg:hidden"
-                onclick={() => (mobileOpen = false)}
-                ><X class="h-5 w-5" /></button
+        <div class="mb-1.5 flex items-center gap-2 px-2 py-1.5">
+            <span
+                class="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] bg-accent text-[10px] font-semibold text-white"
+                >W</span
             >
+            <span class="truncate font-semibold">Workspace</span>
+            <span class="ml-auto flex items-center gap-0.5">
+                <button
+                    type="button"
+                    class="btn-icon h-6 w-6"
+                    title="Search (⌘K)"
+                    aria-label="Search"
+                    onclick={() => palette.open()}
+                >
+                    <Search class="h-[15px] w-[15px]" />
+                </button>
+                <button
+                    type="button"
+                    class="btn-icon h-6 w-6"
+                    title="New task (N)"
+                    aria-label="New task"
+                    onclick={openQuickAdd}
+                >
+                    <Plus class="h-[15px] w-[15px]" />
+                </button>
+                <button
+                    type="button"
+                    aria-label="Close sidebar"
+                    class="btn-icon h-6 w-6 lg:hidden"
+                    onclick={() => (mobileOpen = false)}
+                >
+                    <X class="h-[15px] w-[15px]" />
+                </button>
+            </span>
         </div>
 
-        <nav class="flex flex-1 flex-col gap-1">
+        <nav class="flex flex-col gap-0.5">
             {#each nav as item (item.href)}
                 {@const active = isActive(item.href)}
+                {@const Icon = item.icon}
                 <a
                     href={item.href}
-                    class={`flex items-center gap-3 rounded-lg border-l-2 px-3 py-2 font-mono text-[0.8rem] font-medium tracking-wide transition ${
+                    use:inertia
+                    aria-current={active ? 'page' : undefined}
+                    class={`flex items-center gap-2.5 rounded-md px-2 py-[5px] font-medium transition ${
                         active
-                            ? 'border-accent bg-accent/10 text-accent'
-                            : 'text-fg-muted hover:bg-surface-alt border-transparent'
+                            ? 'bg-accent-soft text-accent'
+                            : 'text-fg-muted hover:bg-hover hover:text-fg'
                     }`}
                 >
-                    <span class="w-5 text-center text-base">{item.icon}</span>
-                    <span>{item.label}</span>
-                </a>
-            {/each}
-        </nav>
-
-        <div class="mt-6 border-t border-line pt-4">
-            {#if user}
-                <div class="flex items-center gap-3">
-                    <div
-                        class="bg-surface-alt text-fg-muted flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold"
-                    >
-                        {initials(user.name)}
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm font-medium">
-                            {user.name}
-                        </div>
-                        <div class="text-fg-muted truncate text-xs">
-                            {user.email}
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        aria-label="Sign out"
-                        class="text-fg-muted hover:bg-surface-alt hover:text-fg rounded-md p-1"
-                        onclick={logout}
-                        title="Sign out">↩</button
-                    >
-                </div>
-            {/if}
-        </div>
-    </aside>
-
-    <div class="flex min-w-0 flex-1 flex-col">
-        <header
-            class="bg-surface/80 sticky top-0 z-20 flex h-14 items-center justify-between border-b border-line px-4 backdrop-blur-md lg:px-8"
-        >
-            <button
-                type="button"
-                aria-label="Open menu"
-                class="text-fg-muted hover:bg-surface-alt rounded-md p-2 lg:hidden"
-                onclick={() => (mobileOpen = true)}
-                ><Menu class="h-5 w-5" /></button
-            >
-            <div class="flex-1"></div>
-            <div class="flex items-center gap-2">
-                <a
-                    href="/workspace/notifications"
-                    use:inertia
-                    aria-label={`Notifications${unreadNotifications ? ` (${unreadNotifications} unread)` : ''}`}
-                    title="Notifications"
-                    class="text-fg-muted hover:bg-surface-alt relative rounded-md p-2"
-                >
-                    <Bell class="h-5 w-5" />
-                    {#if unreadNotifications > 0}
+                    <Icon
+                        class={`h-[15px] w-[15px] shrink-0 ${active ? 'text-accent' : 'text-fg-faint'}`}
+                    />
+                    <span class="truncate">{item.label}</span>
+                    {#if item.href === '/workspace/notifications' && unreadNotifications > 0}
                         <span
-                            class="bg-accent text-bg absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold"
+                            class="ml-auto rounded-full bg-accent px-1.5 text-[11px] leading-4 font-medium text-white tabular-nums"
                             >{unreadNotifications > 99
                                 ? '99+'
                                 : unreadNotifications}</span
                         >
                     {/if}
                 </a>
+            {/each}
+        </nav>
+
+        <div
+            class="mt-3 flex items-center justify-between px-2 pb-1 text-xs font-medium text-fg-faint"
+        >
+            <a href="/workspace/projects" use:inertia class="hover:text-fg"
+                >Projects</a
+            >
+            <span class="tabular-nums">{projects.length}</span>
+        </div>
+        <nav class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+            {#each projects as project (project.id)}
+                {@const active = projectActive(project.slug)}
+                <a
+                    href={`/workspace/projects/${project.slug}`}
+                    use:inertia
+                    aria-current={active ? 'page' : undefined}
+                    class={`flex items-center gap-2.5 rounded-md px-2 py-[5px] transition ${
+                        active
+                            ? 'bg-accent-soft text-accent'
+                            : 'text-fg-muted hover:bg-hover hover:text-fg'
+                    }`}
+                >
+                    <Folder
+                        class={`h-[15px] w-[15px] shrink-0 ${active ? 'text-accent' : 'text-fg-faint'}`}
+                    />
+                    <span class="truncate">{project.title}</span>
+                </a>
+            {:else}
+                <span class="px-2 py-1 text-xs text-fg-faint"
+                    >No projects yet</span
+                >
+            {/each}
+        </nav>
+
+        <button
+            type="button"
+            onclick={() => notesBoard.toggle()}
+            aria-expanded={notesBoard.open}
+            class="mt-2 flex items-center gap-2.5 rounded-md px-2 py-[5px] font-medium text-fg-muted transition hover:bg-hover hover:text-fg"
+        >
+            <StickyNote class="h-[15px] w-[15px] shrink-0 text-fg-faint" />
+            <span class="truncate">Sticky notes</span>
+            {#if noteCount > 0}
+                <span class="ml-auto text-xs text-fg-faint tabular-nums"
+                    >{noteCount}</span
+                >
+            {/if}
+        </button>
+
+        {#if user}
+            <div
+                class="mt-1.5 flex items-center gap-2.5 border-t border-line pt-2.5 pl-1"
+            >
+                <Avatar name={user.name} size="lg" />
+                <div class="min-w-0 flex-1 leading-tight">
+                    <div class="truncate font-medium">{user.name}</div>
+                    <div class="truncate text-xs text-fg-muted">
+                        {shared.isSuperAdmin ? 'Super admin' : user.email}
+                    </div>
+                </div>
                 <button
                     type="button"
-                    onclick={() => notesBoard.toggle()}
-                    aria-label="My notes"
-                    aria-expanded={notesBoard.open}
-                    title="My notes"
-                    class="text-fg-muted hover:bg-surface-alt rounded-md p-2"
+                    class="btn-icon h-6 w-6"
+                    title="Settings"
+                    aria-label="Settings"
+                    onclick={() => (settingsOpen = true)}
                 >
-                    <StickyNote class="h-5 w-5" />
+                    <Settings class="h-[15px] w-[15px]" />
                 </button>
                 <button
                     type="button"
-                    onclick={() => (settingsOpen = true)}
-                    aria-label="Appearance settings"
-                    title="Appearance"
-                    class="text-fg-muted hover:bg-surface-alt rounded-md p-2"
+                    class="btn-icon h-6 w-6"
+                    title="Sign out"
+                    aria-label="Sign out"
+                    onclick={logout}
                 >
-                    <Settings class="h-5 w-5" />
+                    <LogOut class="h-[15px] w-[15px]" />
                 </button>
             </div>
-        </header>
+        {/if}
+    </aside>
 
-        <main class="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 lg:px-8">
-            {@render children()}
-        </main>
+    <div class="flex min-w-0 flex-1 flex-col lg:p-2 lg:pl-0">
+        <div
+            class="flex min-h-full flex-1 flex-col bg-surface lg:rounded-lg lg:border lg:border-line"
+        >
+            <div
+                class="sticky top-0 z-20 flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-3 backdrop-blur lg:rounded-t-lg lg:px-4"
+            >
+                <button
+                    type="button"
+                    aria-label="Open menu"
+                    class="btn-icon lg:hidden"
+                    onclick={() => (mobileOpen = true)}
+                >
+                    <Menu class="h-4 w-4" />
+                </button>
+                {#if bar}
+                    {@render bar()}
+                {:else}
+                    <div class="truncate font-medium">{title}</div>
+                {/if}
+            </div>
+
+            <main
+                class={`flex min-w-0 flex-1 flex-col ${flush ? '' : 'px-4 py-5 lg:px-8 lg:py-6'}`}
+            >
+                {@render children()}
+            </main>
+        </div>
     </div>
 
     <WorkspaceNotesBoard
@@ -354,70 +421,32 @@
     <CommandPalette />
     <Toasts />
 
-    <!-- Settings → Appearance: a modal panel reachable any time from the header -->
     {#if settingsOpen && appearance}
         <div
-            class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm"
+            class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
         >
             <button
                 type="button"
                 aria-label="Close"
-                class="fixed inset-0"
+                class="fixed inset-0 cursor-default"
                 onclick={() => (settingsOpen = false)}
             ></button>
-            <div
-                class="bg-bg text-fg relative my-8 w-full max-w-2xl rounded-2xl border border-line p-6 shadow-2xl"
-            >
-                <div class="mb-6 flex items-center justify-between">
-                    <h2 class="font-display text-xl font-bold tracking-tight">
-                        Appearance
-                    </h2>
+            <div class="popover relative my-12 w-full max-w-md px-5 py-4">
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-[15px] font-semibold">Settings</h2>
                     <button
                         type="button"
                         aria-label="Close"
-                        class="text-fg-muted hover:bg-surface-alt hover:text-fg rounded-md p-1"
-                        onclick={() => (settingsOpen = false)}>✕</button
+                        class="btn-icon"
+                        onclick={() => (settingsOpen = false)}
                     >
-                </div>
-                <AppearanceConfig
-                    {appearance}
-                    themes={catalogueThemes}
-                    fontAllowList={catalogueFonts}
-                    onsaved={() => (settingsOpen = false)}
-                />
-            </div>
-        </div>
-    {/if}
-
-    <!-- First-run gate: full-screen blocking overlay until the user configures -->
-    {#if showOnboarding && appearance}
-        <div class="bg-bg text-fg fixed inset-0 z-50 overflow-y-auto">
-            <div class="mx-auto w-full max-w-2xl px-4 py-12">
-                <div class="mb-8 text-center">
-                    <div class="ws-eyebrow text-accent">Welcome</div>
-                    <h1 class="font-display text-3xl font-bold tracking-tight">
-                        Make it yours
-                    </h1>
-                    <p class="text-fg-muted mt-2 text-sm">
-                        Choose a theme and fonts before you start. You can
-                        change these any time from the ⚙ menu.
-                    </p>
-                </div>
-                <AppearanceConfig
-                    {appearance}
-                    themes={catalogueThemes}
-                    fontAllowList={catalogueFonts}
-                    onsaved={() => (onboardingDismissed = true)}
-                />
-                <div class="mt-6 text-center">
-                    <button
-                        type="button"
-                        onclick={skipOnboarding}
-                        class="text-fg-faint hover:text-fg-muted text-sm underline-offset-4 hover:underline"
-                    >
-                        Skip — use defaults
+                        <X class="h-4 w-4" />
                     </button>
                 </div>
+                <AppearanceConfig
+                    {appearance}
+                    onsaved={() => (settingsOpen = false)}
+                />
             </div>
         </div>
     {/if}

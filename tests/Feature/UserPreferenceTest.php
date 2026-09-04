@@ -10,9 +10,9 @@ it('defaults appearance to system with no override', function () {
 
 it('persists a preference row and reads it back', function () {
     $user = User::factory()->create();
-    $user->preferences()->create(['theme' => 'paper']);
+    $user->preferences()->create(['theme' => 'dark']);
 
-    expect($user->fresh()->appearance()['theme'])->toBe('paper');
+    expect($user->fresh()->appearance()['theme'])->toBe('dark');
 });
 
 it('defaults email_notifications to true with no row', function () {

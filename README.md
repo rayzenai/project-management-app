@@ -67,7 +67,7 @@ Config files worth knowing:
 
 - `config/project-management.php` — task status workflow, super-admins, trash TTL, reminder cadence.
 - `config/government.php` — the 100-point plan metadata (categories, deadline types, oath date) that drives the plan tracker and task category labels.
-- `config/themes.php` — the theme + font catalogue for web and mobile appearance settings.
+- `config/themes.php` — the system / light / dark token sets for web and mobile appearance settings.
 
 ## Using the app
 

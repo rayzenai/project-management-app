@@ -1,5 +1,6 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
+    import { Check } from '@lucide/svelte';
     import { toast } from '../lib/toast.svelte';
     import type { SharedProps, Task } from '../lib/types';
 
@@ -82,13 +83,13 @@
     role="checkbox"
     aria-checked={isComplete}
     aria-label={isComplete ? 'Mark not complete' : 'Mark complete'}
-    class={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border text-[11px] leading-none transition ${
+    class={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-[1.5px] transition ${
         isComplete
-            ? 'border-success bg-success text-bg'
-            : 'border-line bg-surface text-transparent hover:border-success hover:text-success'
-    } ${failed ? 'ring-2 ring-danger' : ''}`}
+            ? 'border-success bg-success text-white'
+            : 'border-fg-faint bg-transparent text-transparent hover:border-success hover:text-success'
+    } ${failed ? 'ring-1 ring-danger' : ''}`}
     onclick={toggle}
     onkeydown={(e) => e.stopPropagation()}
 >
-    ✓
+    <Check class="h-3 w-3" strokeWidth={3} />
 </button>

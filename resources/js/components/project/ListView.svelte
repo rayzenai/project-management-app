@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { ArrowDown, ArrowUp } from '@lucide/svelte';
     import type { Project, Status, Task } from '../../lib/types';
     import TaskTableRow from './TaskTableRow.svelte';
 
@@ -75,63 +76,48 @@
 
 {#snippet sortArrow(key: SortKey)}
     {#if sort.key === key}
-        <span class="text-accent">{sort.dir === 'asc' ? '↑' : '↓'}</span>
+        {#if sort.dir === 'asc'}
+            <ArrowUp class="h-3 w-3 text-accent" />
+        {:else}
+            <ArrowDown class="h-3 w-3 text-accent" />
+        {/if}
     {/if}
 {/snippet}
 
-<div class="bg-surface overflow-x-auto rounded-xl border border-line">
-    <table class="w-full text-left">
-        <thead>
-            <tr class="border-b border-line">
-                <th class="w-8 px-3 py-2"
-                    ><span class="sr-only">Complete</span></th
-                >
-                <th class="w-14 px-2 py-2">
-                    <button
-                        type="button"
-                        class="ws-eyebrow text-fg-muted hover:text-fg"
-                        onclick={() => toggleSort('item')}
-                    >
-                        # {@render sortArrow('item')}
-                    </button>
-                </th>
-                <th class="px-2 py-2"
-                    ><span class="ws-eyebrow text-fg-muted">Title</span></th
-                >
-                <th class="w-36 px-2 py-2"
-                    ><span class="ws-eyebrow text-fg-muted">Status</span></th
-                >
-                <th class="w-10 px-2 py-2 text-center">
-                    <button
-                        type="button"
-                        class="ws-eyebrow text-fg-muted hover:text-fg"
-                        onclick={() => toggleSort('priority')}
-                        aria-label="Sort by priority"
-                    >
-                        <span
-                            class="bg-fg-faint inline-block h-2 w-2 rounded-full align-middle"
-                        ></span>
-                        {@render sortArrow('priority')}
-                    </button>
-                </th>
-                <th class="w-28 px-2 py-2">
-                    <button
-                        type="button"
-                        class="ws-eyebrow text-fg-muted hover:text-fg"
-                        onclick={() => toggleSort('deadline')}
-                    >
-                        Deadline {@render sortArrow('deadline')}
-                    </button>
-                </th>
-                <th class="w-24 px-3 py-2"
-                    ><span class="ws-eyebrow text-fg-muted">Who</span></th
-                >
-            </tr>
-        </thead>
-        <tbody>
-            {#each sorted as task (task.id)}
-                <TaskTableRow {task} {project} />
-            {/each}
-        </tbody>
-    </table>
+<div class="min-w-0 overflow-x-auto">
+    <div
+        class="col-head grid h-8 min-w-[640px] grid-cols-[16px_44px_minmax(0,1fr)_150px_130px_88px] items-center gap-3 border-b border-line px-4"
+    >
+        <span><span class="sr-only">Complete</span></span>
+        <button
+            type="button"
+            class="inline-flex items-center gap-1 text-left hover:text-fg"
+            onclick={() => toggleSort('item')}
+        >
+            # {@render sortArrow('item')}
+        </button>
+        <span>Title</span>
+        <span>Status</span>
+        <button
+            type="button"
+            class="inline-flex items-center gap-1 text-left hover:text-fg"
+            onclick={() => toggleSort('deadline')}
+        >
+            Deadline {@render sortArrow('deadline')}
+        </button>
+        <button
+            type="button"
+            class="inline-flex items-center justify-end gap-1 hover:text-fg"
+            onclick={() => toggleSort('priority')}
+            aria-label="Sort by priority"
+        >
+            Priority {@render sortArrow('priority')}
+        </button>
+    </div>
+
+    <div class="min-w-[640px]">
+        {#each sorted as task (task.id)}
+            <TaskTableRow {task} {project} />
+        {/each}
+    </div>
 </div>

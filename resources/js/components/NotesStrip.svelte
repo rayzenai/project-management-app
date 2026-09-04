@@ -1,5 +1,6 @@
 <script lang="ts">
     import { page } from '@inertiajs/svelte';
+    import { Plus } from '@lucide/svelte';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import type { Note, SharedProps, WorkspaceNote } from '../lib/types';
     import NoteSticky from './NoteSticky.svelte';
@@ -40,18 +41,17 @@
         type="button"
         onclick={() => notesBoard.show({ compose: true })}
         aria-label="New note"
-        class="flex h-20 w-32 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-line text-fg-faint transition hover:-translate-y-0.5 hover:border-accent hover:text-accent"
+        class="btn"
     >
-        <span class="text-xl leading-none">+</span>
-        <span class="text-[11px] font-medium">New note</span>
+        <Plus class="h-3.5 w-3.5" />
+        New note
     </button>
 
     {#if freeformOverflow > 0}
         <button
             type="button"
             onclick={() => notesBoard.show()}
-            class="h-20 rounded-md px-3 text-xs font-medium text-fg-muted hover:bg-surface-alt"
-            >+{freeformOverflow} more</button
+            class="btn-ghost tabular-nums">{freeformOverflow} more</button
         >
     {/if}
 </div>

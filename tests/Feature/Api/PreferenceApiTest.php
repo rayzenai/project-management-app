@@ -6,7 +6,7 @@ it('returns themes with full token sets', function () {
     $user = User::factory()->create();
     $this->actingAs($user, 'sanctum')->getJson('/api/v1/themes')
         ->assertSuccessful()
-        ->assertJsonPath('data.themes.terminal-noir.tokens.color.accent', '#b6ff3a');
+        ->assertJsonPath('data.themes.dark.tokens.color.accent', '#6d94f5');
 });
 
 it('gets and updates preferences with validation', function () {
@@ -15,8 +15,8 @@ it('gets and updates preferences with validation', function () {
     $this->actingAs($user, 'sanctum')->getJson('/api/v1/user/preferences')
         ->assertSuccessful()->assertJsonPath('data.theme', 'system');
 
-    $this->actingAs($user, 'sanctum')->patchJson('/api/v1/user/preferences', ['theme' => 'paper'])
-        ->assertSuccessful()->assertJsonPath('data.theme', 'paper');
+    $this->actingAs($user, 'sanctum')->patchJson('/api/v1/user/preferences', ['theme' => 'light'])
+        ->assertSuccessful()->assertJsonPath('data.theme', 'light');
 
     $this->actingAs($user, 'sanctum')->patchJson('/api/v1/user/preferences', ['theme' => 'nope'])
         ->assertStatus(422);
@@ -53,6 +53,6 @@ it('resolves system theme to both light and dark token sets', function () {
     $user = User::factory()->create();
     $this->actingAs($user, 'sanctum')->getJson('/api/v1/user/preferences')
         ->assertJsonPath('data.theme', 'system')
-        ->assertJsonPath('data.resolved_tokens.light.color.bg', '#f7f7f5')
-        ->assertJsonPath('data.resolved_tokens.dark.color.bg', '#0e0f12');
+        ->assertJsonPath('data.resolved_tokens.light.color.bg', '#f2f4f8')
+        ->assertJsonPath('data.resolved_tokens.dark.color.bg', '#0e1015');
 });

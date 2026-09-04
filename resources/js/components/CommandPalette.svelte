@@ -1,10 +1,21 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
+    import {
+        Folder,
+        LayoutGrid,
+        Plus,
+        Search,
+        StickyNote,
+        UserRound,
+    } from '@lucide/svelte';
     import { untrack } from 'svelte';
+    import type { Component } from 'svelte';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { palette } from '../lib/palette.svelte';
     import { peek } from '../lib/peek.svelte';
     import { quickAdd } from '../lib/quickAdd.svelte';
+    import Spinner from './Spinner.svelte';
+    import StatusGlyph from './StatusGlyph.svelte';
 
     type ProjectResult = {
         id: number;
@@ -18,6 +29,7 @@
         item_number: number | null;
         title: string;
         short_title: string | null;
+        status: string | null;
         status_label: string | null;
         project: { slug: string; title: string } | null;
     };
@@ -48,9 +60,11 @@
         contacts: ContactResult[];
     };
 
+    type Icon = Component<{ class?: string }>;
+
     type PaletteItem =
         | { kind: 'action'; id: 'new-task'; label: string }
-        | { kind: 'nav'; href: string; label: string; icon: string }
+        | { kind: 'nav'; href: string; label: string; icon: Icon }
         | {
               kind: 'project';
               id: number;
@@ -64,6 +78,7 @@
               slug: string;
               title: string;
               item_number: number | null;
+              status: string | null;
               meta: string;
           }
         | {
@@ -89,10 +104,10 @@
         contacts: [],
     };
 
-    const NAV = [
-        { label: 'Overview', href: '/workspace', icon: '▦' },
-        { label: 'My Workspace', href: '/workspace/my', icon: '✦' },
-        { label: 'Projects', href: '/workspace/projects', icon: '▤' },
+    const NAV: { label: string; href: string; icon: Icon }[] = [
+        { label: 'Overview', href: '/workspace', icon: LayoutGrid },
+        { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
+        { label: 'Projects', href: '/workspace/projects', icon: Folder },
     ];
 
     let query = $state('');
@@ -121,7 +136,7 @@
                 {
                     kind: 'action',
                     id: 'new-task',
-                    label: q ? `New task… "${q}"` : 'New task…',
+                    label: q ? `New task "${q}"` : 'New task',
                 },
             ],
         });
@@ -165,6 +180,7 @@
                         slug: t.slug,
                         title: t.title,
                         item_number: t.item_number,
+                        status: t.status,
                         meta: [t.project?.title, t.status_label]
                             .filter(Boolean)
                             .join(' · '),
@@ -418,29 +434,31 @@
 
 {#if palette.isOpen}
     <div
-        class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-16 backdrop-blur-md"
+        class="fixed inset-0 z-[60] overflow-y-auto bg-black/40"
         onclick={close}
         role="presentation"
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-            class="bg-surface w-full max-w-2xl overflow-hidden rounded-2xl border border-line shadow-2xl"
+            class="popover mx-auto mt-[12vh] w-[min(640px,92vw)] overflow-hidden p-0"
             onclick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
             aria-label="Command palette"
             tabindex="-1"
         >
-            <div class="flex items-center gap-2 border-b border-line px-4 py-3">
-                <span class="text-fg-faint">⌕</span>
+            <div
+                class="flex h-12 items-center gap-2.5 border-b border-line px-4"
+            >
+                <Search class="h-4 w-4 shrink-0 text-fg-faint" />
                 <input
                     bind:this={inputEl}
                     type="text"
                     bind:value={query}
                     oninput={onInput}
                     onkeydown={onKeydown}
-                    placeholder="Search or jump to…"
-                    class="placeholder:text-fg-faint w-full bg-transparent text-sm outline-none"
+                    placeholder="Search or jump to"
+                    class="w-full bg-transparent text-[15px] text-fg outline-none placeholder:text-fg-faint"
                     role="combobox"
                     aria-expanded="true"
                     aria-controls="palette-listbox"
@@ -449,20 +467,17 @@
                     autocomplete="off"
                     spellcheck="false"
                 />
-                <kbd
-                    class="text-fg-muted rounded border border-line px-1.5 py-0.5 text-[10px]"
-                    >Esc</kbd
-                >
+                <kbd class="kbd">esc</kbd>
             </div>
 
             <div
                 id="palette-listbox"
                 role="listbox"
                 aria-label="Results"
-                class="max-h-[60vh] overflow-y-auto pb-2"
+                class="max-h-[60vh] overflow-y-auto px-1 pb-1"
             >
                 {#each grouped as group (group.label)}
-                    <div class="ws-eyebrow text-fg-faint px-4 pt-3 pb-1">
+                    <div class="col-head px-3 py-1.5">
                         {group.label}
                     </div>
                     {#each group.items as item, j (itemKey(item))}
@@ -473,76 +488,76 @@
                             role="option"
                             aria-selected={i === activeIndex}
                             tabindex="-1"
-                            class={`flex cursor-pointer items-center gap-2 border-l-2 px-4 py-2 text-sm ${
-                                i === activeIndex
-                                    ? 'border-accent bg-accent/10'
-                                    : 'border-transparent'
+                            class={`menu-item h-9 cursor-pointer ${
+                                i === activeIndex ? 'bg-hover text-fg' : ''
                             }`}
                             onclick={() => execute(item)}
                             onmousemove={() => (activeIndex = i)}
                         >
                             {#if item.kind === 'action'}
-                                <span
-                                    class="text-accent w-5 text-center font-semibold"
-                                    >+</span
-                                >
-                                <span class="min-w-0 flex-1 truncate"
+                                <Plus
+                                    class="h-3.5 w-3.5 shrink-0 text-accent"
+                                />
+                                <span class="min-w-0 flex-1 truncate text-fg"
                                     >{item.label}</span
                                 >
-                                <kbd
-                                    class="text-fg-muted shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px]"
-                                    >{hasQuery ? '⏎' : 'q'}</kbd
-                                >
+                                <kbd class="kbd">{hasQuery ? '↩' : 'n'}</kbd>
                             {:else if item.kind === 'nav'}
-                                <span
-                                    class="text-fg-muted w-5 text-center text-base"
-                                    >{item.icon}</span
-                                >
+                                {@const NavIcon = item.icon}
+                                <NavIcon
+                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                                />
                                 <span class="min-w-0 flex-1 truncate"
                                     >{item.label}</span
                                 >
                             {:else if item.kind === 'project'}
-                                <span
-                                    class="text-fg-muted w-5 text-center text-base"
-                                    >▤</span
-                                >
+                                <Folder
+                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                                />
                                 <span class="min-w-0 flex-1 truncate"
                                     >{item.title}</span
                                 >
-                                <span class="text-fg-muted shrink-0 text-xs"
+                                <span
+                                    class="shrink-0 text-xs text-fg-faint tabular-nums"
                                     >{item.meta}</span
                                 >
                             {:else if item.kind === 'task'}
+                                <StatusGlyph status={item.status} size={13} />
                                 {#if item.item_number}
                                     <span
-                                        class="text-fg-faint shrink-0 font-mono text-xs"
-                                        >#{item.item_number}</span
+                                        class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
+                                        >{item.item_number}</span
                                     >
                                 {/if}
                                 <span class="min-w-0 flex-1 truncate"
                                     >{item.title}</span
                                 >
                                 {#if item.meta}
-                                    <span class="text-fg-muted shrink-0 text-xs"
+                                    <span class="shrink-0 text-xs text-fg-faint"
                                         >{item.meta}</span
                                     >
                                 {/if}
                             {:else if item.kind === 'note'}
-                                <span
-                                    class="text-fg-muted min-w-0 flex-1 truncate"
-                                    >“{item.body}”</span
+                                <StickyNote
+                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                                />
+                                <span class="min-w-0 flex-1 truncate"
+                                    >{item.body}</span
                                 >
                                 {#if item.meta}
-                                    <span class="text-fg-muted shrink-0 text-xs"
+                                    <span class="shrink-0 text-xs text-fg-faint"
                                         >{item.meta}</span
                                     >
                                 {/if}
                             {:else}
+                                <UserRound
+                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                                />
                                 <span class="min-w-0 flex-1 truncate"
                                     >{item.name}</span
                                 >
                                 {#if item.meta}
-                                    <span class="text-fg-muted shrink-0 text-xs"
+                                    <span class="shrink-0 text-xs text-fg-faint"
                                         >{item.meta}</span
                                     >
                                 {/if}
@@ -553,13 +568,21 @@
             </div>
 
             <div
-                class="text-fg-muted flex items-center gap-4 border-t border-line px-4 py-2 font-mono text-[10px]"
+                class="flex h-9 items-center gap-4 border-t border-line px-4 text-xs text-fg-faint"
             >
-                <span>↑↓ navigate</span>
-                <span>⏎ open</span>
-                <span>esc close</span>
+                <span class="flex items-center gap-1.5">
+                    <kbd class="kbd">↑↓</kbd> navigate
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <kbd class="kbd">↩</kbd> open
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <kbd class="kbd">esc</kbd> close
+                </span>
                 {#if loading}
-                    <span class="ml-auto">searching…</span>
+                    <span class="ml-auto flex items-center gap-1.5">
+                        <Spinner size={12} label="Searching" /> Searching
+                    </span>
                 {/if}
             </div>
         </div>

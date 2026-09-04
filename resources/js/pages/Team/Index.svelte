@@ -1,7 +1,7 @@
 <script lang="ts">
     import { page, router, useForm } from '@inertiajs/svelte';
     import AppShell from '../../components/AppShell.svelte';
-    import { initials } from '../../lib/format';
+    import Avatar from '../../components/Avatar.svelte';
     import type { Member, Team } from '../../lib/types';
 
     let { teams, members }: { teams: Team[]; members: Member[] } = $props();
@@ -188,499 +188,536 @@
         isSuperAdmin ? teams : teams.filter((t) => canManageTeam(t)),
     );
 
-    const inputClass =
-        'w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg';
+    const activeMembers = $derived(
+        members.filter((m) => m.is_active !== false),
+    );
 </script>
 
 <svelte:head><title>Team · Workspace</title></svelte:head>
 
-<AppShell>
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold tracking-tight">Team</h1>
-        <p class="mt-1 text-sm text-fg-muted">
-            People who can be assigned work — with or without a login — and the
-            teams that group them.
-        </p>
-    </div>
-
-    <div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
-        <!-- Teams panel -->
-        <section class="xl:col-span-2">
-            <div class="mb-3 flex items-center justify-between">
-                <h2 class="ws-eyebrow text-fg-muted">Teams · {teams.length}</h2>
-                {#if isSuperAdmin}
-                    <button
-                        type="button"
-                        class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim"
-                        onclick={() => (creatingTeam = !creatingTeam)}
-                        >{creatingTeam ? 'Cancel' : '+ New team'}</button
-                    >
-                {/if}
-            </div>
-
-            {#if isSuperAdmin && creatingTeam}
-                <form
-                    onsubmit={createTeam}
-                    class="mb-3 rounded-xl border border-line bg-surface p-4"
+{#snippet memberIdentity(member: Member)}
+    <Avatar name={member.name} size="md" />
+    <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+            <span class="truncate font-medium text-fg">{member.name}</span>
+            {#if !member.user_id}
+                <span
+                    class="chip"
+                    title="Edit and set a password to enable login"
+                    >No login</span
                 >
-                    <label
-                        class="mb-1 block text-xs font-medium text-fg-muted"
-                        for="team-name">Name</label
-                    >
+            {/if}
+            {#if member.is_active === false}
+                <span class="chip">Inactive</span>
+            {/if}
+        </div>
+        <div class="flex flex-wrap gap-x-3 text-xs text-fg-muted">
+            {#if member.title}<span class="truncate">{member.title}</span>{/if}
+            {#if member.email}<span class="truncate">{member.email}</span>{/if}
+            {#if memberTeamNames(member).length > 0}
+                <span class="truncate text-fg-faint"
+                    >{memberTeamNames(member).join(', ')}</span
+                >
+            {/if}
+        </div>
+    </div>
+{/snippet}
+
+<AppShell>
+    {#snippet bar()}
+        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <span class="truncate font-medium">Team</span>
+        </div>
+        {#if isSuperAdmin}
+            <div class="flex items-center gap-1.5">
+                <button
+                    type="button"
+                    class="btn"
+                    aria-expanded={creatingTeam}
+                    onclick={() => (creatingTeam = !creatingTeam)}
+                    >{creatingTeam ? 'Cancel' : 'New team'}</button
+                >
+                <button
+                    type="button"
+                    class="btn-primary"
+                    aria-expanded={addingMember}
+                    onclick={() => (addingMember = !addingMember)}
+                    >{addingMember ? 'Cancel' : 'Add person'}</button
+                >
+            </div>
+        {/if}
+    {/snippet}
+
+    <div class="space-y-8">
+        {#if isSuperAdmin && creatingTeam}
+            <form onsubmit={createTeam} class="panel max-w-lg space-y-3 p-4">
+                <h2 class="section-title">New team</h2>
+                <div class="flex flex-col gap-1">
+                    <label class="label" for="team-name">Name</label>
                     <input
                         id="team-name"
                         type="text"
                         bind:value={teamForm.name}
                         required
-                        class={inputClass}
+                        class="input"
                     />
-                    <label
-                        class="mt-3 mb-1 block text-xs font-medium text-fg-muted"
-                        for="team-description">Description (optional)</label
+                    {#if teamForm.errors.name}
+                        <p class="text-xs text-danger">
+                            {teamForm.errors.name}
+                        </p>
+                    {/if}
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="label" for="team-description"
+                        >Description (optional)</label
                     >
                     <input
                         id="team-description"
                         type="text"
                         bind:value={teamForm.description}
-                        class={inputClass}
+                        class="input"
                     />
-                    <div class="mt-3 flex justify-end">
-                        <button
-                            type="submit"
-                            disabled={teamForm.processing ||
-                                !teamForm.name.trim()}
-                            class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim disabled:opacity-50"
-                            >Create team</button
-                        >
+                </div>
+                <div class="flex justify-end gap-1.5">
+                    <button
+                        type="button"
+                        class="btn-ghost"
+                        onclick={() => (creatingTeam = false)}>Cancel</button
+                    >
+                    <button
+                        type="submit"
+                        disabled={teamForm.processing || !teamForm.name.trim()}
+                        class="btn-primary">Create team</button
+                    >
+                </div>
+            </form>
+        {/if}
+
+        {#if isSuperAdmin && addingMember}
+            <form onsubmit={addMember} class="panel max-w-2xl space-y-3 p-4">
+                <h2 class="section-title">Add person</h2>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="flex flex-col gap-1">
+                        <label class="label" for="member-name">Name</label>
+                        <input
+                            id="member-name"
+                            type="text"
+                            bind:value={memberForm.name}
+                            required
+                            class="input"
+                        />
+                        {#if memberForm.errors.name}
+                            <p class="text-xs text-danger">
+                                {memberForm.errors.name}
+                            </p>
+                        {/if}
                     </div>
-                    {#if teamForm.errors.name}<p
-                            class="mt-2 text-xs text-danger"
+                    <div class="flex flex-col gap-1">
+                        <label class="label" for="member-email"
+                            >Email {memberForm.password
+                                ? ''
+                                : '(optional)'}</label
                         >
-                            {teamForm.errors.name}
-                        </p>{/if}
-                </form>
-            {/if}
+                        <input
+                            id="member-email"
+                            type="email"
+                            bind:value={memberForm.email}
+                            required={!!memberForm.password}
+                            class="input"
+                        />
+                        {#if memberForm.errors.email}
+                            <p class="text-xs text-danger">
+                                {memberForm.errors.email}
+                            </p>
+                        {/if}
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="label" for="member-password"
+                            >Password (optional)</label
+                        >
+                        <input
+                            id="member-password"
+                            type="password"
+                            bind:value={memberForm.password}
+                            minlength="8"
+                            autocomplete="new-password"
+                            class="input"
+                        />
+                        {#if memberForm.errors.password}
+                            <p class="text-xs text-danger">
+                                {memberForm.errors.password}
+                            </p>
+                        {/if}
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="label" for="member-title"
+                            >Title (optional)</label
+                        >
+                        <input
+                            id="member-title"
+                            type="text"
+                            bind:value={memberForm.title}
+                            class="input"
+                        />
+                    </div>
+                </div>
+                <p class="text-xs text-fg-muted">
+                    Set a password to give them a login right away, or leave it
+                    blank and upgrade them later from Edit.
+                </p>
+                <div class="flex justify-end gap-1.5">
+                    <button
+                        type="button"
+                        class="btn-ghost"
+                        onclick={() => (addingMember = false)}>Cancel</button
+                    >
+                    <button
+                        type="submit"
+                        disabled={memberForm.processing ||
+                            !memberForm.name.trim()}
+                        class="btn-primary">Add person</button
+                    >
+                </div>
+            </form>
+        {/if}
+
+        <!-- Teams -->
+        <section>
+            <h2 class="section-title mb-2">
+                Teams
+                <span class="section-count">{teams.length}</span>
+            </h2>
 
             {#if visibleTeams.length === 0 && !creatingTeam}
-                <div
-                    class="rounded-xl border border-dashed border-line bg-surface p-8 text-center text-sm text-fg-muted"
-                >
+                <p class="border-t border-line py-3 text-xs text-fg-muted">
                     No teams yet. Until a project is attached to a team, every
                     active member is assignable everywhere.
-                </div>
+                </p>
             {/if}
 
-            <div class="space-y-3">
-                {#each visibleTeams as team (team.id)}
-                    <div class="rounded-xl border border-line bg-surface p-4">
-                        <div class="flex items-center gap-2">
-                            {#if editingTeamId === team.id}
-                                <form
-                                    onsubmit={(e) => saveTeam(e, team)}
-                                    class="w-full"
+            {#each visibleTeams as team (team.id)}
+                <div class="border-t border-line py-3">
+                    {#if editingTeamId === team.id}
+                        <form
+                            onsubmit={(e) => saveTeam(e, team)}
+                            class="max-w-lg space-y-3"
+                        >
+                            <div class="flex flex-col gap-1">
+                                <label
+                                    class="label"
+                                    for={`team-${team.id}-name`}>Name</label
                                 >
-                                    <label
-                                        class="mb-1 block text-xs font-medium text-fg-muted"
-                                        for={`team-${team.id}-name`}>Name</label
-                                    >
-                                    <input
-                                        id={`team-${team.id}-name`}
-                                        type="text"
-                                        bind:value={teamEditForm.name}
-                                        required
-                                        class={inputClass}
-                                        onkeydown={(e) => {
-                                            if (e.key === 'Escape') {
-                                                editingTeamId = null;
-                                            }
-                                        }}
-                                    />
-                                    <label
-                                        class="mt-3 mb-1 block text-xs font-medium text-fg-muted"
-                                        for={`team-${team.id}-description`}
-                                        >Description (optional)</label
-                                    >
-                                    <input
-                                        id={`team-${team.id}-description`}
-                                        type="text"
-                                        bind:value={teamEditForm.description}
-                                        class={inputClass}
-                                    />
-                                    <div class="mt-3 flex justify-end gap-2">
-                                        <button
-                                            type="button"
-                                            class="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-fg-muted transition hover:bg-surface-alt"
-                                            onclick={() =>
-                                                (editingTeamId = null)}
-                                            >Cancel</button
-                                        >
-                                        <button
-                                            type="submit"
-                                            disabled={teamEditForm.processing ||
-                                                !teamEditForm.name.trim()}
-                                            class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim disabled:opacity-50"
-                                            >Save</button
-                                        >
-                                    </div>
-                                    {#if teamEditForm.errors.name}<p
-                                            class="mt-2 text-xs text-danger"
-                                        >
-                                            {teamEditForm.errors.name}
-                                        </p>{/if}
-                                </form>
-                            {:else}
-                                {#if isSuperAdmin}
-                                    <button
-                                        type="button"
-                                        class="min-w-0 flex-1 truncate text-left text-base font-semibold hover:text-accent"
-                                        title="Edit"
-                                        onclick={() => startEditTeam(team)}
-                                        >{team.name}</button
-                                    >
-                                {:else}
-                                    <span
-                                        class="min-w-0 flex-1 truncate text-base font-semibold"
-                                        >{team.name}</span
-                                    >
+                                <input
+                                    id={`team-${team.id}-name`}
+                                    type="text"
+                                    bind:value={teamEditForm.name}
+                                    required
+                                    class="input"
+                                    onkeydown={(e) => {
+                                        if (e.key === 'Escape') {
+                                            editingTeamId = null;
+                                        }
+                                    }}
+                                />
+                                {#if teamEditForm.errors.name}
+                                    <p class="text-xs text-danger">
+                                        {teamEditForm.errors.name}
+                                    </p>
                                 {/if}
-                                <span class="ws-eyebrow shrink-0 text-fg-muted">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label
+                                    class="label"
+                                    for={`team-${team.id}-description`}
+                                    >Description (optional)</label
+                                >
+                                <input
+                                    id={`team-${team.id}-description`}
+                                    type="text"
+                                    bind:value={teamEditForm.description}
+                                    class="input"
+                                />
+                            </div>
+                            <div class="flex justify-end gap-1.5">
+                                <button
+                                    type="button"
+                                    class="btn-ghost"
+                                    onclick={() => (editingTeamId = null)}
+                                    >Cancel</button
+                                >
+                                <button
+                                    type="submit"
+                                    disabled={teamEditForm.processing ||
+                                        !teamEditForm.name.trim()}
+                                    class="btn-primary">Save</button
+                                >
+                            </div>
+                        </form>
+                    {:else}
+                        <div class="flex items-center gap-3">
+                            <h3 class="section-title min-w-0">
+                                <span class="truncate">{team.name}</span>
+                                <span class="section-count">
                                     {team.member_ids?.length ?? 0} member{(team
                                         .member_ids?.length ?? 0) === 1
                                         ? ''
                                         : 's'}
                                 </span>
-                                {#if isSuperAdmin}
+                            </h3>
+                            {#if team.description}
+                                <span
+                                    class="min-w-0 truncate text-xs text-fg-muted"
+                                    >{team.description}</span
+                                >
+                            {/if}
+                            {#if isSuperAdmin}
+                                <div
+                                    class="ml-auto flex shrink-0 items-center gap-1"
+                                >
                                     <button
                                         type="button"
-                                        class="shrink-0 text-xs text-fg-muted hover:text-fg"
+                                        class="btn-ghost"
                                         onclick={() => startEditTeam(team)}
                                         >Edit</button
                                     >
                                     <button
                                         type="button"
                                         aria-label={`Delete ${team.name}`}
-                                        class="shrink-0 rounded p-1 text-fg-faint hover:text-danger"
+                                        class="btn-danger"
                                         onclick={() => deleteTeam(team)}
-                                        >✕</button
+                                        >Delete</button
                                     >
-                                {/if}
+                                </div>
                             {/if}
                         </div>
-                        {#if team.description && editingTeamId !== team.id}
-                            <p class="mt-1 text-sm text-fg-muted">
-                                {team.description}
-                            </p>
-                        {/if}
-                        {#if canManageTeam(team) && members.length > 0}
-                            <div class="mt-3 space-y-1.5">
-                                {#each members.filter((m) => m.is_active !== false) as member (member.id)}
-                                    <div
-                                        class="flex items-center justify-between gap-2"
-                                    >
-                                        <span class="truncate text-sm"
-                                            >{member.name}</span
-                                        >
-                                        <div
-                                            class="flex shrink-0 items-center gap-2"
-                                        >
-                                            {#if (team.member_ids ?? []).includes(member.id)}
-                                                {#if isLeaderOf(team, member)}
-                                                    <button
-                                                        type="button"
-                                                        class="text-xs text-accent hover:underline"
-                                                        onclick={() =>
-                                                            setTeamRole(
-                                                                team,
-                                                                member,
-                                                                'member',
-                                                            )}>Leader ✓</button
-                                                    >
-                                                {:else}
-                                                    <button
-                                                        type="button"
-                                                        class="text-xs text-fg-muted hover:text-accent"
-                                                        onclick={() =>
-                                                            setTeamRole(
-                                                                team,
-                                                                member,
-                                                                'leader',
-                                                            )}
-                                                        >Make leader</button
-                                                    >
-                                                {/if}
-                                                <button
-                                                    type="button"
-                                                    class="text-xs text-fg-muted hover:text-danger"
-                                                    onclick={() =>
-                                                        removeMemberFromTeam(
-                                                            team,
-                                                            member,
-                                                        )}>Remove</button
-                                                >
-                                            {:else}
-                                                <button
-                                                    type="button"
-                                                    class="text-xs text-fg-muted hover:text-accent"
-                                                    onclick={() =>
-                                                        addMemberToTeam(
-                                                            team,
-                                                            member,
-                                                        )}>Add</button
+                    {/if}
+
+                    {#if canManageTeam(team) && members.length > 0}
+                        <div class="mt-2">
+                            {#each activeMembers as member (member.id)}
+                                {@const inTeam = (
+                                    team.member_ids ?? []
+                                ).includes(member.id)}
+                                <div class="row min-h-10 px-2 py-1">
+                                    <Avatar name={member.name} size="md" />
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <span
+                                                class="truncate font-medium text-fg"
+                                                >{member.name}</span
+                                            >
+                                            {#if inTeam && isLeaderOf(team, member)}
+                                                <span class="chip chip-accent"
+                                                    >Leader</span
                                                 >
                                             {/if}
                                         </div>
+                                        {#if member.title || member.email}
+                                            <div
+                                                class="truncate text-xs text-fg-muted"
+                                            >
+                                                {member.title || member.email}
+                                            </div>
+                                        {/if}
                                     </div>
-                                {/each}
-                            </div>
-                        {:else if members.length > 0}
-                            <div class="mt-3 flex flex-wrap gap-1.5">
-                                {#each members.filter( (m) => (team.member_ids ?? []).includes(m.id) ) as member (member.id)}
-                                    <span
-                                        class="rounded-full bg-accent/20 px-2.5 py-1 text-xs font-medium text-accent ring-1 ring-accent/60"
+                                    <div
+                                        class="flex shrink-0 items-center gap-1"
                                     >
-                                        {member.name}
-                                    </span>
-                                {/each}
-                            </div>
-                        {/if}
-                    </div>
-                {/each}
-            </div>
+                                        {#if inTeam}
+                                            <select
+                                                class="input h-7 w-auto py-0"
+                                                aria-label={`Role of ${member.name} in ${team.name}`}
+                                                value={isLeaderOf(team, member)
+                                                    ? 'leader'
+                                                    : 'member'}
+                                                onchange={(e) =>
+                                                    setTeamRole(
+                                                        team,
+                                                        member,
+                                                        e.currentTarget
+                                                            .value as
+                                                            'member' | 'leader',
+                                                    )}
+                                            >
+                                                <option value="member"
+                                                    >Member</option
+                                                >
+                                                <option value="leader"
+                                                    >Leader</option
+                                                >
+                                            </select>
+                                            <button
+                                                type="button"
+                                                class="btn-ghost"
+                                                onclick={() =>
+                                                    removeMemberFromTeam(
+                                                        team,
+                                                        member,
+                                                    )}>Remove</button
+                                            >
+                                        {:else}
+                                            <button
+                                                type="button"
+                                                class="btn-ghost"
+                                                onclick={() =>
+                                                    addMemberToTeam(
+                                                        team,
+                                                        member,
+                                                    )}>Add</button
+                                            >
+                                        {/if}
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {:else if members.length > 0}
+                        <div class="mt-2">
+                            {#each members.filter( (m) => (team.member_ids ?? []).includes(m.id) ) as member (member.id)}
+                                <div class="row min-h-10 px-2 py-1">
+                                    <Avatar name={member.name} size="md" />
+                                    <span class="truncate font-medium text-fg"
+                                        >{member.name}</span
+                                    >
+                                    {#if isLeaderOf(team, member)}
+                                        <span class="chip chip-accent"
+                                            >Leader</span
+                                        >
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+            {/each}
         </section>
 
-        <!-- Members panel -->
-        <section class="xl:col-span-3">
-            <div class="mb-3 flex items-center justify-between">
-                <h2 class="ws-eyebrow text-fg-muted">
-                    Members · {members.length}
-                </h2>
-                {#if isSuperAdmin}
-                    <button
-                        type="button"
-                        class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim"
-                        onclick={() => (addingMember = !addingMember)}
-                        >{addingMember ? 'Cancel' : '+ Add person'}</button
-                    >
-                {/if}
-            </div>
-
-            {#if isSuperAdmin && addingMember}
-                <form
-                    onsubmit={addMember}
-                    class="mb-3 rounded-xl border border-line bg-surface p-4"
-                >
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                            <label
-                                class="mb-1 block text-xs font-medium text-fg-muted"
-                                for="member-name">Name</label
-                            >
-                            <input
-                                id="member-name"
-                                type="text"
-                                bind:value={memberForm.name}
-                                required
-                                class={inputClass}
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="mb-1 block text-xs font-medium text-fg-muted"
-                                for="member-email"
-                                >Email {memberForm.password
-                                    ? ''
-                                    : '(optional)'}</label
-                            >
-                            <input
-                                id="member-email"
-                                type="email"
-                                bind:value={memberForm.email}
-                                required={!!memberForm.password}
-                                class={inputClass}
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="mb-1 block text-xs font-medium text-fg-muted"
-                                for="member-password">Password (optional)</label
-                            >
-                            <input
-                                id="member-password"
-                                type="password"
-                                bind:value={memberForm.password}
-                                minlength="8"
-                                autocomplete="new-password"
-                                class={inputClass}
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="mb-1 block text-xs font-medium text-fg-muted"
-                                for="member-title">Title (optional)</label
-                            >
-                            <input
-                                id="member-title"
-                                type="text"
-                                bind:value={memberForm.title}
-                                class={inputClass}
-                            />
-                        </div>
-                    </div>
-                    <p class="mt-2 text-xs text-fg-muted">
-                        Set a password to give them a login right away — or
-                        leave it blank and upgrade them later from Edit.
-                    </p>
-                    <div class="mt-3 flex justify-end">
-                        <button
-                            type="submit"
-                            disabled={memberForm.processing ||
-                                !memberForm.name.trim()}
-                            class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim disabled:opacity-50"
-                            >Add person</button
-                        >
-                    </div>
-                    {#if memberForm.errors.name}<p
-                            class="mt-2 text-xs text-danger"
-                        >
-                            {memberForm.errors.name}
-                        </p>{/if}
-                    {#if memberForm.errors.email}<p
-                            class="mt-2 text-xs text-danger"
-                        >
-                            {memberForm.errors.email}
-                        </p>{/if}
-                    {#if memberForm.errors.password}<p
-                            class="mt-2 text-xs text-danger"
-                        >
-                            {memberForm.errors.password}
-                        </p>{/if}
-                </form>
-            {/if}
+        <!-- People -->
+        <section>
+            <h2 class="section-title mb-2">
+                People
+                <span class="section-count">{members.length}</span>
+            </h2>
 
             {#if members.length === 0 && !addingMember}
-                <div
-                    class="rounded-xl border border-dashed border-line bg-surface p-8 text-center text-sm text-fg-muted"
-                >
-                    No members yet. Add anyone you assign work to — give them a
-                    password now or upgrade them to a login later.
-                </div>
+                <p class="border-t border-line py-3 text-xs text-fg-muted">
+                    No members yet. Add anyone you assign work to, and give them
+                    a password now or upgrade them to a login later.
+                </p>
             {/if}
 
-            <div class="space-y-2">
+            <div class="border-t border-line">
                 {#each members as member (member.id)}
                     <div
-                        class={`rounded-xl border border-line bg-surface p-4 ${
+                        class={`row min-h-11 px-2 py-1.5 ${
                             member.is_active === false ? 'opacity-60' : ''
                         }`}
                     >
                         {#if editingMemberId === member.id}
-                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <input
-                                    type="text"
-                                    bind:value={memberEditForm.name}
-                                    required
-                                    class={inputClass}
-                                    placeholder="Name"
-                                />
-                                <input
-                                    type="email"
-                                    bind:value={memberEditForm.email}
-                                    class={inputClass}
-                                    placeholder="Email"
-                                />
-                                <input
-                                    type="text"
-                                    bind:value={memberEditForm.title}
-                                    class={inputClass}
-                                    placeholder="Title"
-                                />
-                                <input
-                                    type="password"
-                                    bind:value={memberEditForm.password}
-                                    minlength="8"
-                                    autocomplete="new-password"
-                                    class={inputClass}
-                                    placeholder={member.user_id
-                                        ? 'New password (leave blank to keep)'
-                                        : 'Set a password to enable login'}
-                                />
-                            </div>
-                            {#if memberEditForm.errors.email}<p
-                                    class="mt-2 text-xs text-danger"
+                            <div class="min-w-0 flex-1 space-y-3 py-1.5">
+                                <div
+                                    class="grid grid-cols-1 gap-3 sm:grid-cols-2"
                                 >
-                                    {memberEditForm.errors.email}
-                                </p>{/if}
-                            {#if memberEditForm.errors.password}<p
-                                    class="mt-2 text-xs text-danger"
-                                >
-                                    {memberEditForm.errors.password}
-                                </p>{/if}
-                            <div
-                                class="mt-3 flex items-center justify-end gap-2"
-                            >
-                                <button
-                                    type="button"
-                                    class="rounded-md px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-alt"
-                                    onclick={() => (editingMemberId = null)}
-                                    >Cancel</button
-                                >
-                                <button
-                                    type="button"
-                                    disabled={memberEditForm.processing}
-                                    class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg hover:bg-accent-dim disabled:opacity-50"
-                                    onclick={() => saveMember(member)}
-                                    >Save</button
-                                >
-                            </div>
-                        {:else}
-                            <div class="flex items-center gap-3">
-                                <span
-                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-alt text-xs font-semibold text-fg-muted"
-                                >
-                                    {initials(member.name)}
-                                </span>
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="truncate text-sm font-semibold"
-                                            >{member.name}</span
+                                    <div class="flex flex-col gap-1">
+                                        <label
+                                            class="label"
+                                            for={`member-${member.id}-name`}
+                                            >Name</label
                                         >
-                                        {#if !member.user_id}
-                                            <span
-                                                class="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent"
-                                                title="Edit and set a password to enable login"
-                                                >no login</span
-                                            >
-                                        {/if}
-                                        {#if member.is_active === false}
-                                            <span
-                                                class="rounded-full bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-fg-muted"
-                                                >inactive</span
-                                            >
+                                        <input
+                                            id={`member-${member.id}-name`}
+                                            type="text"
+                                            bind:value={memberEditForm.name}
+                                            required
+                                            class="input"
+                                        />
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        <label
+                                            class="label"
+                                            for={`member-${member.id}-email`}
+                                            >Email</label
+                                        >
+                                        <input
+                                            id={`member-${member.id}-email`}
+                                            type="email"
+                                            bind:value={memberEditForm.email}
+                                            class="input"
+                                        />
+                                        {#if memberEditForm.errors.email}
+                                            <p class="text-xs text-danger">
+                                                {memberEditForm.errors.email}
+                                            </p>
                                         {/if}
                                     </div>
-                                    <div class="truncate text-xs text-fg-muted">
-                                        {[member.title, member.email]
-                                            .filter(Boolean)
-                                            .join(' · ') || '—'}
-                                        {#if memberTeamNames(member).length > 0}
-                                            · {memberTeamNames(member).join(
-                                                ', ',
-                                            )}
+                                    <div class="flex flex-col gap-1">
+                                        <label
+                                            class="label"
+                                            for={`member-${member.id}-title`}
+                                            >Title</label
+                                        >
+                                        <input
+                                            id={`member-${member.id}-title`}
+                                            type="text"
+                                            bind:value={memberEditForm.title}
+                                            class="input"
+                                        />
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        <label
+                                            class="label"
+                                            for={`member-${member.id}-password`}
+                                            >Password</label
+                                        >
+                                        <input
+                                            id={`member-${member.id}-password`}
+                                            type="password"
+                                            bind:value={memberEditForm.password}
+                                            minlength="8"
+                                            autocomplete="new-password"
+                                            class="input"
+                                            placeholder={member.user_id
+                                                ? 'New password (leave blank to keep)'
+                                                : 'Set a password to enable login'}
+                                        />
+                                        {#if memberEditForm.errors.password}
+                                            <p class="text-xs text-danger">
+                                                {memberEditForm.errors.password}
+                                            </p>
                                         {/if}
                                     </div>
                                 </div>
+                                <div
+                                    class="flex items-center justify-end gap-1.5"
+                                >
+                                    <button
+                                        type="button"
+                                        class="btn-ghost"
+                                        onclick={() => (editingMemberId = null)}
+                                        >Cancel</button
+                                    >
+                                    <button
+                                        type="button"
+                                        disabled={memberEditForm.processing}
+                                        class="btn-primary"
+                                        onclick={() => saveMember(member)}
+                                        >Save</button
+                                    >
+                                </div>
+                            </div>
+                        {:else}
+                            {@render memberIdentity(member)}
+                            <div class="flex shrink-0 items-center gap-1">
                                 {#if canEditMember(member)}
                                     <button
                                         type="button"
-                                        class="shrink-0 text-xs text-fg-muted hover:text-fg"
+                                        class="btn-ghost"
                                         onclick={() => startEditMember(member)}
                                         >Edit</button
                                     >
                                     {#if member.is_active === false}
                                         <button
                                             type="button"
-                                            class="shrink-0 text-xs text-success hover:underline"
+                                            class="btn-ghost"
                                             onclick={() =>
                                                 setMemberActive(member, true)}
                                             >Reactivate</button
@@ -688,7 +725,7 @@
                                     {:else}
                                         <button
                                             type="button"
-                                            class="shrink-0 text-xs text-fg-muted hover:text-fg"
+                                            class="btn-ghost"
                                             onclick={() =>
                                                 setMemberActive(member, false)}
                                             >Deactivate</button
@@ -699,9 +736,9 @@
                                     <button
                                         type="button"
                                         aria-label={`Delete ${member.name}`}
-                                        class="shrink-0 rounded p-1 text-fg-faint hover:text-danger"
+                                        class="btn-danger"
                                         onclick={() => deleteMember(member)}
-                                        >✕</button
+                                        >Delete</button
                                     >
                                 {/if}
                             </div>

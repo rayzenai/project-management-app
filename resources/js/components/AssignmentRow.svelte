@@ -1,5 +1,6 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
+    import { GripVertical, Moon, Star } from '@lucide/svelte';
     import { peek } from '../lib/peek.svelte';
     import type { Assignment, SharedProps } from '../lib/types';
     import AssigneeStack from './AssigneeStack.svelte';
@@ -20,14 +21,6 @@
     const projectSlug = $derived(task?.project?.slug ?? '');
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
     const team = $derived(shared.quickAddContext?.team ?? []);
-
-    const overdue = $derived.by(() => {
-        if (!task?.deadline_at) {
-            return false;
-        }
-
-        return new Date(task.deadline_at) < new Date(new Date().toDateString());
-    });
 
     function patch(payload: Record<string, string | number | boolean | null>) {
         router.patch(`/workspace/assignments/${assignment.id}`, payload, {
@@ -86,17 +79,13 @@
                 openPeek();
             }
         }}
-        class={`group flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg border bg-surface px-2.5 py-2 text-left transition hover:border-accent/40 ${
-            overdue && lane === 'due'
-                ? 'border-l-2 border-line border-l-danger'
-                : 'border-line'
-        }`}
+        class="row group min-h-9 w-full cursor-pointer flex-wrap gap-2 px-2 py-1 text-left"
     >
         <span
             aria-hidden="true"
-            class="hidden w-3 shrink-0 cursor-grab font-mono text-xs text-fg-faint opacity-0 group-hover:opacity-100 sm:block"
+            class="hidden w-3 shrink-0 cursor-grab text-fg-faint opacity-0 group-hover:opacity-100 sm:block"
         >
-            ⋮⋮
+            <GripVertical class="h-3.5 w-3.5" />
         </span>
 
         <CompleteCheckbox {task} {projectSlug} />
@@ -104,19 +93,19 @@
 
         <span class="flex min-w-0 flex-1 items-baseline gap-1.5">
             {#if task.item_number}
-                <span class="shrink-0 font-mono text-xs text-fg-muted"
+                <span
+                    class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
                     >#{task.item_number}</span
                 >
             {/if}
-            <span
-                class="truncate text-sm font-medium text-fg group-hover:text-accent"
-            >
+            <span class="truncate text-[13px] font-medium text-fg">
                 {task.short_title || task.title}
             </span>
             {#if lane === 'due' && assignment.is_focused}
-                <span aria-label="Pinned" class="shrink-0 text-xs text-accent"
-                    >★</span
-                >
+                <Star
+                    aria-label="Pinned"
+                    class="h-3 w-3 shrink-0 fill-current text-accent"
+                />
             {/if}
         </span>
 
@@ -126,8 +115,7 @@
             role="none"
         >
             {#if lane !== 'other' && task.project}
-                <span
-                    class="max-w-32 truncate font-mono text-[11px] text-fg-muted"
+                <span class="max-w-32 truncate text-xs text-fg-muted"
                     >{task.project.title}</span
                 >
             {/if}
@@ -139,37 +127,37 @@
         </span>
 
         <span
-            class="flex w-12 shrink-0 items-center justify-end gap-0.5 opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+            class="flex w-12 shrink-0 items-center justify-end gap-0.5 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
             role="none"
             onclick={(e) => e.stopPropagation()}
         >
             <button
                 type="button"
-                class={`rounded-full px-1 text-sm leading-none transition ${
-                    assignment.is_focused
-                        ? 'text-accent'
-                        : 'text-fg-faint hover:text-accent'
-                }`}
+                class={`btn-icon h-6 w-6 ${assignment.is_focused ? 'text-accent' : ''}`}
                 title={assignment.is_focused
                     ? 'Unpin from focus'
                     : 'Pin to focus'}
                 aria-pressed={assignment.is_focused}
                 onclick={toggleFocus}
             >
-                {assignment.is_focused ? '★' : '☆'}
+                <Star
+                    class={`h-3.5 w-3.5 ${assignment.is_focused ? 'fill-current' : ''}`}
+                />
             </button>
 
-            <Popover bind:open={snoozeOpen} align="right" triggerLabel="Snooze">
+            <Popover
+                bind:open={snoozeOpen}
+                align="right"
+                triggerLabel="Snooze"
+                triggerClass="btn-icon h-6 w-6"
+            >
                 {#snippet trigger()}
-                    <span
-                        class="text-sm leading-none text-fg-faint transition hover:text-accent"
-                        >☾</span
-                    >
+                    <Moon class="h-3.5 w-3.5" />
                 {/snippet}
                 <button
                     type="button"
                     data-popover-item
-                    class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-alt"
+                    class="menu-item"
                     onclick={() => snooze(1)}
                 >
                     Until tomorrow
@@ -177,7 +165,7 @@
                 <button
                     type="button"
                     data-popover-item
-                    class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-alt"
+                    class="menu-item"
                     onclick={() => snooze(3)}
                 >
                     3 days
@@ -185,7 +173,7 @@
                 <button
                     type="button"
                     data-popover-item
-                    class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-alt"
+                    class="menu-item"
                     onclick={() => snooze(7)}
                 >
                     1 week
@@ -193,7 +181,7 @@
                 <button
                     type="button"
                     data-popover-item
-                    class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-alt"
+                    class="menu-item"
                     onclick={() => snooze(30)}
                 >
                     1 month
@@ -202,7 +190,7 @@
                     <button
                         type="button"
                         data-popover-item
-                        class="block w-full border-t border-line px-3 py-1.5 text-left text-sm text-accent hover:bg-surface-alt"
+                        class="menu-item mt-1 border-t border-line-soft text-accent"
                         onclick={() => snooze(null)}
                     >
                         Unsnooze

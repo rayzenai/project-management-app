@@ -1,5 +1,6 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
+    import { Check, X } from '@lucide/svelte';
     import { formatDate } from '../lib/format';
     import { peek } from '../lib/peek.svelte';
     import type { Subtask } from '../lib/types';
@@ -84,19 +85,15 @@
     }
 </script>
 
-<section class="rounded-xl border border-success/30 bg-success/5 p-4">
-    <header class="mb-3 flex items-baseline justify-between">
-        <div class="flex items-baseline gap-3">
-            <h2 class="ws-eyebrow text-success">✓ My Open Todos</h2>
-            <span
-                class="rounded-full bg-success/20 px-2 py-0.5 text-xs font-medium text-success"
-            >
-                {todos.length}
-            </span>
-        </div>
+<section class="border-t border-line pt-4">
+    <header class="mb-2 flex items-center justify-between">
+        <h2 class="section-title">
+            My open todos
+            <span class="section-count">{todos.length}</span>
+        </h2>
         <button
             type="button"
-            class="text-xs text-success hover:underline"
+            class="btn-ghost h-6 px-1.5 text-xs"
             onclick={() => (hidden = !hidden)}
             >{hidden ? 'Show' : 'Hide'}</button
         >
@@ -104,85 +101,92 @@
 
     {#if !hidden}
         {#if todos.length === 0}
-            <p
-                class="rounded-md border border-dashed border-success/40 bg-surface px-4 py-6 text-center text-sm text-success"
-            >
-                No open todos. Add some from any task's <em>Todos</em> tab.
+            <p class="py-2 text-[13px] text-fg-muted">
+                No open todos. Add some from any task.
             </p>
         {:else}
-            <div class="space-y-5">
+            <div class="space-y-4">
                 {#each groups as group (group.key)}
                     <div>
                         <h3
-                            class="mb-2 text-xs font-semibold tracking-wider text-fg-muted uppercase"
+                            class={`mb-0.5 flex items-baseline gap-2 text-xs font-medium ${
+                                group.key === 'overdue'
+                                    ? 'text-danger'
+                                    : 'text-fg-muted'
+                            }`}
                         >
                             {group.label}
-                            <span class="ml-1 text-fg-faint"
+                            <span class="section-count"
                                 >{group.items.length}</span
                             >
                         </h3>
                         <ul
-                            class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3"
+                            class="grid grid-cols-1 gap-x-6 sm:grid-cols-2 xl:grid-cols-3"
                         >
                             {#each group.items as t (t.id)}
-                                <li
-                                    class="group rounded-lg border border-line bg-surface px-2.5 py-1.5 transition hover:border-success/40"
-                                >
-                                    <div class="flex items-start gap-2">
-                                        <button
-                                            type="button"
-                                            class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-line text-[10px] text-bg transition hover:border-success"
-                                            class:bg-success={t.is_done}
-                                            class:border-success={t.is_done}
-                                            aria-pressed={t.is_done}
-                                            onclick={(e) => {
-                                                e.stopPropagation();
-                                                toggle(t);
-                                            }}
-                                            title="Mark done"
-                                            >{t.is_done ? '✓' : ''}</button
+                                <li class="row group h-8 gap-2.5 px-1">
+                                    <button
+                                        type="button"
+                                        class={`inline-grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border-[1.5px] transition ${
+                                            t.is_done
+                                                ? 'border-accent bg-accent'
+                                                : 'border-line hover:border-accent'
+                                        }`}
+                                        aria-pressed={t.is_done}
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            toggle(t);
+                                        }}
+                                        title="Mark done"
+                                    >
+                                        {#if t.is_done}
+                                            <Check
+                                                class="h-2.5 w-2.5 text-white"
+                                            />
+                                        {/if}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+                                        onclick={() => openTask(t)}
+                                        title="Open task"
+                                    >
+                                        <span
+                                            class={`truncate text-[13px] ${
+                                                t.is_done
+                                                    ? 'text-fg-faint line-through'
+                                                    : 'text-fg'
+                                            }`}
                                         >
-                                        <button
-                                            type="button"
-                                            class="min-w-0 flex-1 cursor-pointer text-left text-sm"
-                                            onclick={() => openTask(t)}
-                                            title="Open task"
-                                        >
-                                            <p
-                                                class="line-clamp-1 leading-snug text-fg"
-                                                class:line-through={t.is_done}
-                                                class:text-fg-faint={t.is_done}
+                                            {t.body}
+                                        </span>
+                                        {#if t.task}
+                                            <span
+                                                class="truncate text-xs text-fg-muted"
                                             >
-                                                {t.body}
-                                            </p>
-                                            <div
-                                                class="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11px] text-fg-muted"
+                                                {t.task.short_title ||
+                                                    t.task.title}
+                                            </span>
+                                        {/if}
+                                        {#if t.due_at}
+                                            <span
+                                                class="ml-auto shrink-0 font-mono text-[11px] text-fg-faint tabular-nums"
+                                                >{formatDate(t.due_at)}</span
                                             >
-                                                {#if t.due_at}<span
-                                                        >{formatDate(
-                                                            t.due_at,
-                                                        )}</span
-                                                    >{/if}
-                                                {#if t.task}
-                                                    <span
-                                                        class="truncate text-success"
-                                                    >
-                                                        {t.task.short_title ||
-                                                            t.task.title}
-                                                    </span>
-                                                {/if}
-                                            </div>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="invisible text-fg-faint group-hover:visible hover:text-danger"
-                                            onclick={(e) => {
-                                                e.stopPropagation();
-                                                remove(t);
-                                            }}
-                                            title="Remove">×</button
-                                        >
-                                    </div>
+                                        {/if}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-icon h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            remove(t);
+                                        }}
+                                        title="Remove"
+                                        aria-label="Remove"
+                                    >
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
                                 </li>
                             {/each}
                         </ul>

@@ -1,7 +1,7 @@
 /**
  * Applies a server-resolved theme to the document by writing its token values
  * onto the semantic `--ws-*` CSS custom properties. The workspace stylesheet
- * (`workspace.css`) maps every Tailwind color utility name to one of these
+ * (`app.css`) maps every Tailwind color utility name to one of these
  * vars via `@theme { --color-X: var(--ws-X) }`, so writing `--ws-*` here
  * rethemes the whole app at runtime without touching component markup.
  */
@@ -16,6 +16,8 @@ const WS_VAR: Record<string, string> = {
     bg: '--ws-bg',
     surface: '--ws-surface',
     surfaceAlt: '--ws-surface-alt',
+    hover: '--ws-hover',
+    raised: '--ws-raised',
     line: '--ws-line',
     lineSoft: '--ws-line-soft',
     text: '--ws-text',
@@ -23,9 +25,14 @@ const WS_VAR: Record<string, string> = {
     textFaint: '--ws-text-faint',
     accent: '--ws-accent',
     accentDim: '--ws-accent-dim',
+    accentSoft: '--ws-accent-soft',
     warn: '--ws-warn',
     danger: '--ws-danger',
     success: '--ws-success',
+    warnSoft: '--ws-warn-soft',
+    dangerSoft: '--ws-danger-soft',
+    successSoft: '--ws-success-soft',
+    selection: '--ws-selection',
 };
 
 export function applyTheme(tokens: Tokens, mode: 'light' | 'dark'): void {
@@ -45,8 +52,8 @@ export function applyTheme(tokens: Tokens, mode: 'light' | 'dark'): void {
 
     root.style.colorScheme = mode;
     root.dataset.theme = mode;
-    // Compatibility shim: un-migrated components still rely on the `.dark`
-    // remap in workspace.css. Removed once the component sweep lands.
+    // `.dark` drives the `dark:` variant for the few data-driven colours
+    // (note stickies) that need a per-mode override.
     root.classList.toggle('dark', mode === 'dark');
 }
 

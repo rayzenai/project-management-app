@@ -40,14 +40,7 @@ export type AppearanceProps = {
 };
 
 /** Display order for the theme grid (System first). */
-export const THEME_ORDER = [
-    'system',
-    'terminal-noir',
-    'light',
-    'dark',
-    'paper',
-    'glass',
-];
+export const THEME_ORDER = ['system', 'light', 'dark'];
 
 /** Turns the `themes` map from `GET /api/v1/themes` into an ordered array. */
 export function themesToList(

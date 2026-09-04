@@ -1,7 +1,9 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
+    import { Check } from '@lucide/svelte';
     import type { Priority, Task } from '../lib/types';
     import Popover from './Popover.svelte';
+    import PriorityBars from './PriorityBars.svelte';
 
     let {
         task,
@@ -16,15 +18,11 @@
         onUpdated?: (priority: Priority) => void;
     } = $props();
 
-    const OPTIONS: { value: Priority; label: string; dot: string }[] = [
-        { value: 'urgent', label: 'Urgent', dot: 'bg-red-500' },
-        { value: 'high', label: 'High', dot: 'bg-orange-500' },
-        { value: 'medium', label: 'Medium', dot: 'bg-amber-400' },
-        {
-            value: 'low',
-            label: 'Low',
-            dot: 'bg-neutral-400 dark:bg-neutral-500',
-        },
+    const OPTIONS: { value: Priority; label: string }[] = [
+        { value: 'urgent', label: 'Urgent' },
+        { value: 'high', label: 'High' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'low', label: 'Low' },
     ];
 
     let open = $state(false);
@@ -73,12 +71,10 @@
     bind:open
     role="listbox"
     triggerLabel={`Priority: ${meta.label}`}
-    triggerClass={hidden ? 'opacity-0 transition group-hover:opacity-100' : ''}
+    triggerClass={`inline-flex h-6 items-center rounded-md px-1.5 transition hover:bg-hover ${hidden ? 'opacity-0 group-hover:opacity-100' : ''} ${failed ? 'ring-1 ring-danger' : ''}`}
 >
     {#snippet trigger()}
-        <span
-            class={`inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/10 ring-inset dark:ring-white/15 ${meta.dot} ${failed ? 'ring-2 ring-danger' : ''}`}
-        ></span>
+        <PriorityBars priority={shown} />
     {/snippet}
 
     {#each OPTIONS as option (option.value)}
@@ -87,14 +83,14 @@
             data-popover-item
             role="option"
             aria-selected={option.value === shown}
-            class="text-fg-muted hover:bg-surface-alt flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm"
+            class="menu-item"
             onclick={() => setPriority(option.value)}
         >
-            <span
-                class={`inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/10 ring-inset dark:ring-white/15 ${option.dot}`}
-            ></span>
+            <PriorityBars priority={option.value} />
             <span class="flex-1">{option.label}</span>
-            {#if option.value === shown}<span class="text-accent">✓</span>{/if}
+            {#if option.value === shown}<Check
+                    class="h-3.5 w-3.5 text-accent"
+                />{/if}
         </button>
     {/each}
 </Popover>

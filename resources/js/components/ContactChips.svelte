@@ -1,6 +1,8 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
+    import { ChevronRight, Mail, Phone } from '@lucide/svelte';
     import type { Contact, Id } from '../lib/types';
+    import Avatar from './Avatar.svelte';
 
     let { contacts }: { contacts: Contact[] } = $props();
 
@@ -50,14 +52,16 @@
 <svelte:window onkeydown={onWindowKey} />
 
 <div class="flex flex-wrap items-center gap-2">
-    <span
-        class="text-[11px] font-semibold tracking-wider text-fg-faint uppercase"
-        >Contacts</span
-    >
+    <span class="section-title">
+        Contacts
+        {#if contacts.length > 0}
+            <span class="section-count">{contacts.length}</span>
+        {/if}
+    </span>
 
     {#if contacts.length === 0}
         <span class="text-xs text-fg-faint">
-            Add a contact on any task and they'll surface here.
+            Contacts added on tasks show up here.
         </span>
     {:else}
         {#each contacts as contact (contact.id)}
@@ -71,36 +75,30 @@
                     }}
                     aria-haspopup="dialog"
                     aria-expanded={openId === contact.id}
-                    class={`group inline-flex max-w-[16rem] items-center gap-1.5 rounded-full border bg-surface py-1 pr-2.5 pl-1.5 text-xs transition hover:border-accent/40 hover:shadow-sm ${
-                        openId === contact.id
-                            ? 'border-accent/40 shadow-sm'
-                            : 'border-line'
+                    class={`inline-flex h-6 max-w-[16rem] items-center gap-1.5 rounded-md border bg-surface pr-2 pl-0.5 text-xs transition hover:bg-hover ${
+                        openId === contact.id ? 'border-accent' : 'border-line'
                     }`}
                 >
-                    <span
-                        class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-alt text-[9px] font-semibold text-fg-muted"
-                    >
-                        {contact.name.slice(0, 1).toUpperCase()}
-                    </span>
+                    <Avatar name={contact.name} size="sm" />
                     <span class="truncate font-medium text-fg"
                         >{contact.name}</span
                     >
                     {#if subtitle(contact)}
                         <span class="truncate text-fg-faint"
-                            >· {subtitle(contact)}</span
+                            >{subtitle(contact)}</span
                         >
                     {/if}
                 </button>
 
                 {#if openId === contact.id}
                     <div
-                        class="absolute top-full left-0 z-30 mt-1.5 w-64 overflow-hidden rounded-xl border border-line bg-surface text-left shadow-xl"
+                        class="popover absolute top-full left-0 z-30 mt-1 w-64 py-0 text-left"
                         role="dialog"
                         aria-label={`Contact ${contact.name}`}
                         tabindex="-1"
                     >
                         <div class="border-b border-line-soft px-3 py-2.5">
-                            <div class="text-sm font-semibold text-fg">
+                            <div class="text-[13px] font-semibold text-fg">
                                 {contact.name}
                             </div>
                             {#if subtitle(contact)}
@@ -114,20 +112,24 @@
                             {#if contact.email}
                                 <a
                                     href={`mailto:${contact.email}`}
-                                    class="flex items-center gap-2 text-fg-muted hover:text-accent"
+                                    class="flex items-center gap-2 text-fg-muted hover:text-fg"
                                 >
-                                    <span class="text-fg-faint">✉</span><span
-                                        class="truncate">{contact.email}</span
+                                    <Mail
+                                        class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                                    />
+                                    <span class="truncate">{contact.email}</span
                                     >
                                 </a>
                             {/if}
                             {#if contact.phone}
                                 <a
                                     href={`tel:${contact.phone}`}
-                                    class="flex items-center gap-2 text-fg-muted hover:text-accent"
+                                    class="flex items-center gap-2 text-fg-muted hover:text-fg"
                                 >
-                                    <span class="text-fg-faint">☎</span><span
-                                        class="truncate">{contact.phone}</span
+                                    <Phone
+                                        class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                                    />
+                                    <span class="truncate">{contact.phone}</span
                                     >
                                 </a>
                             {/if}
@@ -145,10 +147,15 @@
                             <button
                                 type="button"
                                 onclick={() => goToTask(contact)}
-                                class="block w-full truncate border-t border-line-soft px-3 py-2 text-left text-xs font-medium text-accent hover:bg-accent/10"
+                                class="flex w-full items-center gap-1.5 border-t border-line-soft px-3 py-2 text-left text-xs font-medium text-accent hover:bg-hover"
                             >
-                                on: {contact.task.short_title ||
-                                    contact.task.title} →
+                                <span class="truncate">
+                                    {contact.task.short_title ||
+                                        contact.task.title}
+                                </span>
+                                <ChevronRight
+                                    class="ml-auto h-3.5 w-3.5 shrink-0"
+                                />
                             </button>
                         {/if}
                     </div>

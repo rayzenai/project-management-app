@@ -16,11 +16,11 @@ return [
     */
 
     'statuses' => [
-        'not_started' => ['label' => 'Not Started', 'color' => '#9CA3AF', 'is_complete' => false],
-        'unclear' => ['label' => 'Unclear', 'color' => '#9CA3AF', 'is_complete' => false],
-        'in_progress' => ['label' => 'In Progress', 'color' => '#3B82F6', 'is_complete' => false],
-        'done' => ['label' => 'Done', 'color' => '#10B981', 'is_complete' => true],
-        'failed' => ['label' => 'Failed', 'color' => '#EF4444', 'is_complete' => false],
+        'not_started' => ['label' => 'Not Started', 'color' => '#9AA2B3', 'is_complete' => false],
+        'unclear' => ['label' => 'Unclear', 'color' => '#9AA2B3', 'is_complete' => false],
+        'in_progress' => ['label' => 'In Progress', 'color' => '#E5A33A', 'is_complete' => false],
+        'done' => ['label' => 'Done', 'color' => '#3EC98A', 'is_complete' => true],
+        'failed' => ['label' => 'Failed', 'color' => '#F2655A', 'is_complete' => false],
     ],
 
     /*

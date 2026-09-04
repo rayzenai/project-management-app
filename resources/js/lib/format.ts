@@ -113,14 +113,12 @@ export function initials(name: string | null | undefined): string {
 export function priorityColor(priority: string | null | undefined): string {
     switch (priority) {
         case 'urgent':
-            return 'bg-red-100 text-red-800 ring-red-200 dark:bg-red-500/15 dark:text-red-400 dark:ring-red-500/30';
+            return 'bg-danger-soft text-danger';
         case 'high':
-            return 'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-500/15 dark:text-orange-400 dark:ring-orange-500/30';
+            return 'bg-warn-soft text-warn';
         case 'medium':
-            return 'bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-500/30';
-        case 'low':
-            return 'bg-neutral-100 text-neutral-700 ring-neutral-200 dark:bg-neutral-700/40 dark:text-neutral-300 dark:ring-neutral-600';
+            return 'bg-surface-alt text-fg-muted';
         default:
-            return 'bg-neutral-100 text-neutral-700 ring-neutral-200 dark:bg-neutral-700/40 dark:text-neutral-300 dark:ring-neutral-600';
+            return 'bg-surface-alt text-fg-faint';
     }
 }

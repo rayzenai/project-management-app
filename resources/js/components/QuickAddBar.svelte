@@ -15,7 +15,7 @@
     } = $props();
 </script>
 
-<div class="rounded-xl border border-line bg-surface p-3 shadow-sm">
+<div class="panel px-3 py-2">
     <QuickAddForm
         {projects}
         {team}

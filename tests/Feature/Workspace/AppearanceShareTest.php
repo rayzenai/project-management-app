@@ -4,11 +4,11 @@ use App\Models\User;
 
 it('shares the users appearance on workspace pages', function () {
     $user = User::factory()->create();
-    $user->preferences()->create(['theme' => 'paper']);
+    $user->preferences()->create(['theme' => 'light']);
 
     $this->actingAs($user)->get('/workspace')
         ->assertInertia(fn ($page) => $page
-            ->where('appearance.theme', 'paper')
+            ->where('appearance.theme', 'light')
             ->where('appearance.mode', 'light')
             ->where('appearance.configured', true)
             ->has('appearance.tokens.color')
@@ -28,8 +28,8 @@ it('shares the theme catalogue so the appearance UI renders without an API fetch
 
     $this->actingAs($user)->get('/workspace')
         ->assertInertia(fn ($page) => $page
-            ->has('themeCatalogue.themes', 6)
-            ->has('themeCatalogue.themes.terminal-noir')
+            ->has('themeCatalogue.themes', 3)
+            ->has('themeCatalogue.themes.dark')
             ->has('themeCatalogue.themes.system')
             ->has('themeCatalogue.fontAllowList.display')
             ->has('themeCatalogue.fontAllowList.body')

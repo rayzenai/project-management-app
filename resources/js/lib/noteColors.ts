@@ -1,5 +1,11 @@
 import type { WorkspaceNoteColor } from './types';
 
+/**
+ * The sticky-note paper tints. This is the ONE place data-driven paper
+ * colours (and `dark:` variants) are allowed: the semantic `--ws-*` tokens
+ * carry no paper hues, so each tint is a pastel / desaturated hex pair that
+ * keeps `text-fg` readable on both themes.
+ */
 export const NOTE_COLORS: WorkspaceNoteColor[] = [
     'amber',
     'rose',
@@ -9,25 +15,26 @@ export const NOTE_COLORS: WorkspaceNoteColor[] = [
 ];
 
 export const paperClass: Record<WorkspaceNoteColor, string> = {
-    amber: 'bg-amber-200/95 border-amber-300 dark:bg-amber-400/20 dark:border-amber-400/30',
-    rose: 'bg-rose-200/95 border-rose-300 dark:bg-rose-400/20 dark:border-rose-400/30',
-    sky: 'bg-sky-200/95 border-sky-300 dark:bg-sky-400/20 dark:border-sky-400/30',
+    amber: 'bg-[#faf3dc] border-[#ecdfae] dark:bg-[#33301f] dark:border-[#4d4729]',
+    rose: 'bg-[#fbe7ea] border-[#efc3ca] dark:bg-[#372529] dark:border-[#55353b]',
+    sky: 'bg-[#e3eefb] border-[#bcd3f0] dark:bg-[#1f2b3d] dark:border-[#2e4160]',
     emerald:
-        'bg-emerald-200/95 border-emerald-300 dark:bg-emerald-400/20 dark:border-emerald-400/30',
-    violet: 'bg-violet-200/95 border-violet-300 dark:bg-violet-400/20 dark:border-violet-400/30',
+        'bg-[#e2f3ea] border-[#b8dfc9] dark:bg-[#1e3128] dark:border-[#2d4a3b]',
+    violet: 'bg-[#ece6fa] border-[#cfc2ef] dark:bg-[#2b2640] dark:border-[#423a60]',
 };
 
+/** Colour-picker swatches: one mid-tone per tint, identical on both themes. */
 export const swatchClass: Record<WorkspaceNoteColor, string> = {
-    amber: 'bg-amber-400',
-    rose: 'bg-rose-400',
-    sky: 'bg-sky-400',
-    emerald: 'bg-emerald-400',
-    violet: 'bg-violet-400',
+    amber: 'bg-[#e2b94a]',
+    rose: 'bg-[#e07a8a]',
+    sky: 'bg-[#5c93df]',
+    emerald: 'bg-[#4bb583]',
+    violet: 'bg-[#9a7fe0]',
 };
 
 /** Deterministic gentle tilt (deg) per note id, so the board looks hand-pinned. */
 export function tilt(id: number): number {
-    return ((id * 37) % 11) - 5;
+    return ((id * 37) % 5) - 2;
 }
 
 /**

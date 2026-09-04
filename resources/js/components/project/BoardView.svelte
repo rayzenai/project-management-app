@@ -1,8 +1,10 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
+    import { Plus } from '@lucide/svelte';
     import { SvelteMap, SvelteSet } from 'svelte/reactivity';
     import { toast } from '../../lib/toast.svelte';
     import type { Project, Status, Task } from '../../lib/types';
+    import StatusGlyph from '../StatusGlyph.svelte';
     import BoardCard from './BoardCard.svelte';
     import ColumnComposer from './ColumnComposer.svelte';
 
@@ -206,14 +208,17 @@
     }
 </script>
 
-<div class="flex gap-4 overflow-x-auto pb-4">
+<div
+    class="flex min-h-0 flex-1 gap-3.5 overflow-x-auto border-t border-line bg-surface-alt px-4 py-4"
+>
     {#each columnDefs as def (def.value)}
         {@const colTasks = columns.get(def.value) ?? []}
         {@const isHover = hoverTarget?.status === def.value}
         {@const droppable = def.value !== OTHER}
+        {@const canAdd = droppable && !(filtersActive && colTasks.length === 0)}
         <div
-            class={`flex min-h-[200px] w-72 min-w-72 shrink-0 flex-col rounded-xl border-2 bg-surface-alt transition ${
-                isHover ? 'border-accent bg-accent/5' : 'border-line'
+            class={`flex min-h-[200px] w-[272px] shrink-0 flex-col rounded-md transition ${
+                isHover ? 'bg-accent-soft' : ''
             }`}
             ondragover={droppable
                 ? (e) => onColumnDragOver(def.value, e)
@@ -223,33 +228,33 @@
             role="list"
             aria-label={def.label}
         >
-            <header class="flex items-baseline justify-between px-3 pt-3 pb-2">
-                <h3 class="ws-eyebrow flex items-center gap-1.5 text-fg-muted">
-                    <span
-                        class="h-2 w-2 shrink-0 rounded-full"
-                        style={`background:${def.color}`}
-                    ></span>
-                    {def.label}
-                </h3>
-                <span class="font-mono text-xs text-fg-muted"
-                    >{colTasks.length}</span
-                >
+            <header class="flex h-8 shrink-0 items-center gap-2 px-1">
+                <StatusGlyph status={def.value} size={14} />
+                <h3 class="truncate font-medium text-fg">{def.label}</h3>
+                <span class="section-count">{colTasks.length}</span>
+                {#if canAdd}
+                    <button
+                        type="button"
+                        class="btn-icon ml-auto"
+                        aria-label={`Add task to ${def.label}`}
+                        title="Add task"
+                        onclick={() => (composerOpenFor = def.value)}
+                    >
+                        <Plus class="h-4 w-4" />
+                    </button>
+                {/if}
             </header>
 
-            <div class="flex-1 space-y-2 px-2 pb-2">
+            <div class="flex flex-1 flex-col gap-2 px-0.5 pt-1 pb-2">
                 {#if colTasks.length === 0}
-                    <div
-                        class="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-line"
-                    >
-                        <span class="font-mono text-xs text-fg-muted"
-                            >{filtersActive ? 'No matches' : 'Drop here'}</span
-                        >
-                    </div>
+                    <p class="px-1 py-2 text-xs text-fg-faint">
+                        {filtersActive ? 'No matches' : 'No tasks'}
+                    </p>
                 {:else}
                     {#each colTasks as task, index (task.id)}
                         {#if isHover && hoverTarget?.index === index}
                             <div
-                                class="-mb-1 h-1 rounded-full bg-accent/80"
+                                class="-mb-1 h-0.5 rounded-full bg-accent"
                             ></div>
                         {/if}
                         <BoardCard
@@ -264,30 +269,18 @@
                         />
                     {/each}
                     {#if isHover && hoverTarget?.index === colTasks.length}
-                        <div class="-mt-1 h-1 rounded-full bg-accent/80"></div>
+                        <div class="-mt-1 h-0.5 rounded-full bg-accent"></div>
                     {/if}
                 {/if}
-            </div>
 
-            {#if droppable && !(filtersActive && colTasks.length === 0)}
-                <div class="px-2 pb-3">
-                    {#if composerOpenFor === def.value}
-                        <ColumnComposer
-                            {project}
-                            status={def.value}
-                            onClose={() => (composerOpenFor = null)}
-                        />
-                    {:else}
-                        <button
-                            type="button"
-                            class="w-full rounded-lg border border-dashed border-line bg-transparent px-3 py-2 text-left text-sm text-fg-muted transition hover:border-accent hover:bg-accent/5 hover:text-accent"
-                            onclick={() => (composerOpenFor = def.value)}
-                        >
-                            + Add
-                        </button>
-                    {/if}
-                </div>
-            {/if}
+                {#if canAdd && composerOpenFor === def.value}
+                    <ColumnComposer
+                        {project}
+                        status={def.value}
+                        onClose={() => (composerOpenFor = null)}
+                    />
+                {/if}
+            </div>
         </div>
     {/each}
 </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { page } from '@inertiajs/svelte';
+    import { MessageSquare, Phone } from '@lucide/svelte';
     import { peek } from '../../lib/peek.svelte';
     import type { Project, SharedProps, Task } from '../../lib/types';
     import AssigneeStack from '../AssigneeStack.svelte';
@@ -20,9 +21,10 @@
     }
 </script>
 
-<tr
+<div
+    role="button"
     tabindex="0"
-    class="group cursor-pointer border-b border-line-soft transition last:border-b-0 hover:bg-surface-alt"
+    class="group grid h-11 cursor-pointer grid-cols-[16px_44px_minmax(0,1fr)_150px_130px_88px] items-center gap-3 border-b border-line-soft px-4 text-left transition hover:bg-hover"
     onclick={openPeek}
     onkeydown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -31,37 +33,51 @@
         }
     }}
 >
-    <td class="w-8 px-3 py-2">
-        <CompleteCheckbox {task} projectSlug={project.slug} />
-    </td>
-    <td class="w-14 px-2 py-2 font-mono text-xs text-fg-muted">
-        {#if task.item_number}#{task.item_number}{/if}
-    </td>
-    <td class="px-2 py-2">
-        <span class="text-sm font-medium text-fg group-hover:text-accent">
+    <CompleteCheckbox {task} projectSlug={project.slug} />
+
+    <span class="truncate font-mono text-xs text-fg-faint tabular-nums">
+        {task.item_number ?? ''}
+    </span>
+
+    <div class="flex min-w-0 items-baseline gap-2">
+        <span class="truncate font-medium text-fg">
             {task.short_title || task.title}
         </span>
-        {#if task.notes_count}
-            <span class="ml-1.5 font-mono text-[11px] text-fg-faint"
-                >✎{task.notes_count}</span
+        {#if task.title_np}
+            <span class="font-np truncate text-xs text-fg-muted"
+                >{task.title_np}</span
             >
+        {/if}
+        {#if task.notes_count}
+            <span
+                class="inline-flex shrink-0 items-center gap-0.5 font-mono text-[11px] text-fg-faint tabular-nums"
+                title={`${task.notes_count} notes`}
+            >
+                <MessageSquare class="h-3 w-3" />
+                {task.notes_count}
+            </span>
         {/if}
         {#if task.contacts_count}
-            <span class="ml-1 font-mono text-[11px] text-fg-faint"
-                >☎{task.contacts_count}</span
+            <span
+                class="inline-flex shrink-0 items-center gap-0.5 font-mono text-[11px] text-fg-faint tabular-nums"
+                title={`${task.contacts_count} contacts`}
             >
+                <Phone class="h-3 w-3" />
+                {task.contacts_count}
+            </span>
         {/if}
-    </td>
-    <td class="w-36 px-2 py-2">
+    </div>
+
+    <div class="min-w-0">
         <StatusChip {task} projectSlug={project.slug} size="sm" />
-    </td>
-    <td class="w-10 px-2 py-2 text-center">
-        <PriorityFlag {task} projectSlug={project.slug} quiet />
-    </td>
-    <td class="w-28 px-2 py-2">
+    </div>
+
+    <div class="min-w-0">
         <DateChip {task} projectSlug={project.slug} size="sm" ghost />
-    </td>
-    <td class="w-24 px-3 py-2">
+    </div>
+
+    <div class="flex items-center justify-end gap-1.5">
+        <PriorityFlag {task} projectSlug={project.slug} quiet />
         <AssigneeStack {task} {team} size="sm" />
-    </td>
-</tr>
+    </div>
+</div>

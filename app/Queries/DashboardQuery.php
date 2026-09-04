@@ -70,6 +70,7 @@ class DashboardQuery
             return [
                 'slug' => $project->slug,
                 'title' => $project->title,
+                'title_np' => $project->title_np,
                 'tasks_count' => $items->count(),
                 'percent_complete' => $percent($items),
                 'stalled' => $items->filter($isStalled)->count(),

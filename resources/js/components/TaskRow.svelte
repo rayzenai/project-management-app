@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { initials } from '../lib/format';
     import { peek } from '../lib/peek.svelte';
     import type { Task } from '../lib/types';
+    import Avatar from './Avatar.svelte';
     import DateChip from './DateChip.svelte';
     import PriorityFlag from './PriorityFlag.svelte';
     import StatusBadge from './StatusBadge.svelte';
@@ -34,8 +34,11 @@
 <div
     role="button"
     tabindex="0"
-    class="group block w-full cursor-pointer rounded-lg border border-line bg-surface p-3 text-left transition hover:border-accent hover:shadow-sm"
-    class:p-2={compact}
+    class="group row cursor-pointer text-left"
+    class:min-h-11={!compact}
+    class:min-h-9={compact}
+    class:py-2={!compact}
+    class:py-1={compact}
     onclick={openPeek}
     onkeydown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -44,79 +47,75 @@
         }
     }}
 >
-    <div class="flex items-start gap-3">
-        {#if task.item_number}
-            <span
-                class="mt-0.5 rounded bg-surface-alt px-1.5 py-0.5 font-mono text-xs text-fg-muted select-none"
-            >
-                #{task.item_number}
+    {#if task.item_number}
+        <span class="w-9 shrink-0 font-mono text-xs text-fg-faint tabular-nums">
+            {task.item_number}
+        </span>
+    {/if}
+
+    <div class="min-w-0 flex-1">
+        <div class="flex min-w-0 items-baseline gap-2.5">
+            <span class="truncate text-[13px] font-medium text-fg">
+                {task.short_title || task.title}
             </span>
-        {/if}
-        <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-baseline gap-2">
-                <h3
-                    class="truncate text-sm font-medium text-fg group-hover:text-accent"
+            {#if task.title_np && !compact}
+                <span class="font-np truncate text-xs text-fg-muted"
+                    >{task.title_np}</span
                 >
-                    {task.short_title || task.title}
-                </h3>
-                {#if showProject && task.project}
-                    <span class="text-xs text-fg-muted"
-                        >in {task.project.title}</span
-                    >
-                {/if}
-            </div>
-
-            {#if !compact && task.description}
-                <p class="mt-1 line-clamp-2 text-sm text-fg-muted">
-                    {task.description}
-                </p>
             {/if}
-
-            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                {#if projectSlug}
-                    <StatusChip {task} {projectSlug} />
-                    <PriorityFlag {task} {projectSlug} quiet />
-                    <DateChip {task} {projectSlug} ghost />
-                {:else}
-                    <StatusBadge
-                        status={task.status}
-                        label={task.status_label}
-                    />
-                {/if}
-                {#if task.progress > 0}
-                    <span class="text-fg-muted">{task.progress}%</span>
-                {/if}
-                {#if task.category_label}
-                    <span
-                        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
-                        style="background-color: {task.category_color}15; color: {task.category_color}; --tw-ring-color: {task.category_color}40;"
-                        >{task.category_label}</span
-                    >
-                {/if}
-                {#if task.responsible_ministry}
-                    <span class="text-fg-muted"
-                        >{task.responsible_ministry}</span
-                    >
-                {/if}
-            </div>
+            {#if showProject && task.project}
+                <span class="shrink-0 text-xs text-fg-faint"
+                    >{task.project.title}</span
+                >
+            {/if}
         </div>
-
-        {#if assignees.length > 0}
-            <div class="flex -space-x-1.5">
-                {#each assignees.slice(0, 3) as a (a.id)}
-                    <span
-                        class="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-surface-alt text-[10px] font-semibold text-fg-muted"
-                        title={a.member?.name}>{initials(a.member?.name)}</span
-                    >
-                {/each}
-                {#if assignees.length > 3}
-                    <span
-                        class="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-surface-alt text-[10px] font-semibold text-fg-faint"
-                    >
-                        +{assignees.length - 3}
-                    </span>
-                {/if}
-            </div>
+        {#if !compact && task.description}
+            <p class="mt-0.5 line-clamp-1 text-xs text-fg-muted">
+                {task.description}
+            </p>
         {/if}
     </div>
+
+    {#if task.category_label}
+        <span
+            class="hidden w-36 shrink-0 truncate text-xs text-fg-muted lg:block"
+            >{task.category_label}</span
+        >
+    {/if}
+    {#if task.responsible_ministry}
+        <span
+            class="hidden w-40 shrink-0 truncate text-xs text-fg-muted xl:block"
+            >{task.responsible_ministry}</span
+        >
+    {/if}
+
+    <div class="flex shrink-0 items-center gap-2">
+        {#if projectSlug}
+            <StatusChip {task} {projectSlug} size="sm" />
+            <PriorityFlag {task} {projectSlug} quiet />
+            <DateChip {task} {projectSlug} size="sm" ghost />
+        {:else}
+            <StatusBadge status={task.status} label={task.status_label} />
+        {/if}
+        {#if task.progress > 0}
+            <span class="font-mono text-xs text-fg-faint tabular-nums"
+                >{task.progress}%</span
+            >
+        {/if}
+    </div>
+
+    {#if assignees.length > 0}
+        <div class="flex shrink-0 -space-x-0.5">
+            {#each assignees.slice(0, 3) as a (a.id)}
+                <Avatar name={a.member?.name} class="ring-2 ring-surface" />
+            {/each}
+            {#if assignees.length > 3}
+                <span
+                    class="inline-grid h-5 w-5 place-items-center rounded-[5px] border border-line bg-surface-alt font-mono text-[9.5px] text-fg-faint ring-2 ring-surface"
+                >
+                    +{assignees.length - 3}
+                </span>
+            {/if}
+        </div>
+    {/if}
 </div>

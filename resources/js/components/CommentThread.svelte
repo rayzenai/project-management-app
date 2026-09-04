@@ -1,19 +1,17 @@
 <script lang="ts">
     import { router, useForm } from '@inertiajs/svelte';
-    import { formatTimeAgo, initials } from '../lib/format';
+    import { formatTimeAgo } from '../lib/format';
     import type { Comment, Member, Task } from '../lib/types';
+    import Avatar from './Avatar.svelte';
 
     let {
         comments,
         task,
         members,
-        embedded = false,
     }: {
         comments: Comment[];
         task: Task;
         members: Member[];
-        /** When inside an existing panel, drop the composer/comment card chrome to avoid nested boxes. */
-        embedded?: boolean;
     } = $props();
 
     /** Matches the canonical mention token `@[Display Name](member:ID)` (mirrors the PHP MentionParser). */
@@ -240,20 +238,88 @@
     }
 </script>
 
-<div>
+<div class="space-y-3">
+    {#each comments as comment (comment.id)}
+        <div
+            class="group rounded-lg border border-line bg-surface-alt px-3.5 py-3"
+        >
+            <div class="flex items-center gap-2">
+                <Avatar name={comment.author.name} size="sm" />
+                <span class="font-medium text-fg"
+                    >{comment.author.name ?? 'Someone'}</span
+                >
+                <span class="text-xs text-fg-faint"
+                    >{formatTimeAgo(comment.created_at)}</span
+                >
+                {#if comment.updated_at && comment.updated_at !== comment.created_at}
+                    <span class="text-xs text-fg-faint">edited</span>
+                {/if}
+                {#if comment.can_edit && editingId !== comment.id}
+                    <span
+                        class="ml-auto flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                    >
+                        <button
+                            type="button"
+                            onclick={() => startEdit(comment)}
+                            class="btn-ghost h-6 px-1.5 text-xs">Edit</button
+                        >
+                        <button
+                            type="button"
+                            onclick={() => deleteComment(comment)}
+                            class="btn-ghost h-6 px-1.5 text-xs hover:text-danger"
+                            title="Delete comment">Delete</button
+                        >
+                    </span>
+                {/if}
+            </div>
+
+            {#if editingId === comment.id}
+                <textarea
+                    bind:value={editDraft}
+                    rows="3"
+                    class="input mt-2 min-h-[72px] resize-y"
+                ></textarea>
+                <div class="mt-2 flex justify-end gap-1.5">
+                    <button type="button" onclick={cancelEdit} class="btn-ghost"
+                        >Cancel</button
+                    >
+                    <button
+                        type="button"
+                        onclick={() => saveEdit(comment)}
+                        disabled={editProcessing || !editDraft.trim()}
+                        class="btn-primary">Save</button
+                    >
+                </div>
+            {:else}
+                <p
+                    class="mt-2 text-[13.5px] leading-relaxed whitespace-pre-wrap text-fg"
+                >
+                    {#each parseBody(comment.body) as seg, i (i)}
+                        {#if seg.type === 'mention'}
+                            <span
+                                class="rounded-sm bg-accent-soft px-0.5 font-medium text-accent"
+                                >@{seg.name}</span
+                            >
+                        {:else}{seg.value}{/if}
+                    {/each}
+                </p>
+            {/if}
+        </div>
+    {:else}
+        <p class="text-[13px] text-fg-muted">No comments yet.</p>
+    {/each}
+
     <form
         onsubmit={addComment}
-        class={embedded
-            ? 'mb-4'
-            : 'bg-surface mb-4 rounded-xl border border-line p-3'}
+        class="rounded-lg border border-line bg-surface-alt px-3.5 py-3"
     >
         <div class="relative">
             <textarea
                 bind:this={textarea}
                 bind:value={composeForm.body}
                 rows="3"
-                placeholder="Write a comment… type @ to mention a teammate"
-                class="bg-surface w-full resize-none rounded-md border border-line px-3 py-1.5 text-sm"
+                placeholder="Write a comment. Type @ to mention a teammate."
+                class="input min-h-[72px] resize-y border-0 bg-transparent p-0 focus:border-0"
                 oninput={detectMention}
                 onkeydown={onComposeKeydown}
                 onclick={detectMention}
@@ -262,25 +328,19 @@
 
             {#if mentionOpen && mentionMatches.length > 0}
                 <ul
-                    class="bg-surface absolute right-0 left-0 z-30 mt-1 max-h-56 overflow-auto rounded-md border border-line py-1 shadow-lg"
+                    class="popover absolute right-0 left-0 z-30 mt-1 max-h-56 overflow-auto px-1"
                 >
                     {#each mentionMatches as member, i (member.id)}
                         <li>
                             <button
                                 type="button"
-                                class={`hover:bg-surface-alt flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
-                                    i === highlighted ? 'bg-accent/10' : ''
-                                }`}
+                                class={`menu-item ${i === highlighted ? 'bg-hover text-fg' : ''}`}
                                 onmousedown={(e) => {
                                     e.preventDefault();
                                     insertMention(member);
                                 }}
                             >
-                                <span
-                                    class="bg-surface-alt text-fg-muted flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold"
-                                >
-                                    {initials(member.name)}
-                                </span>
+                                <Avatar name={member.name} size="sm" />
                                 <span
                                     class="min-w-0 flex-1 truncate font-medium"
                                     >{member.name}</span
@@ -291,91 +351,13 @@
                 </ul>
             {/if}
         </div>
-        <div class="mt-2 flex items-center justify-between">
-            <p class="text-fg-faint text-xs">Press ⌘/Ctrl + Enter to post</p>
+        <div class="mt-2 flex items-center justify-between gap-3">
+            <p class="text-xs text-fg-faint">Type @ to mention a teammate</p>
             <button
                 type="submit"
                 disabled={composeForm.processing || !composeForm.body.trim()}
-                class="bg-accent text-bg hover:bg-accent-dim rounded-md px-3 py-1 text-xs font-semibold disabled:opacity-50"
-                >Comment</button
+                class="btn-primary">Comment <kbd class="kbd">⌘↵</kbd></button
             >
         </div>
     </form>
-
-    <div class={embedded ? 'divide-y divide-line-soft' : 'space-y-2'}>
-        {#each comments as comment (comment.id)}
-            <div
-                class={embedded
-                    ? 'py-3 first:pt-0 last:pb-0'
-                    : 'bg-surface rounded-xl border border-line p-3'}
-            >
-                <div class="text-fg-muted mb-1 flex items-center gap-2 text-xs">
-                    <span
-                        class="bg-surface-alt text-fg-muted flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold"
-                    >
-                        {initials(comment.author.name)}
-                    </span>
-                    <span class="text-fg-muted font-medium"
-                        >{comment.author.name ?? 'Someone'}</span
-                    >
-                    <span>· {formatTimeAgo(comment.created_at)}</span>
-                    {#if comment.updated_at && comment.updated_at !== comment.created_at}
-                        <span class="italic">· edited</span>
-                    {/if}
-                    {#if comment.can_edit}
-                        <div class="flex-1"></div>
-                        {#if editingId === comment.id}
-                            <button
-                                type="button"
-                                onclick={cancelEdit}
-                                class="hover:text-fg">Cancel</button
-                            >
-                        {:else}
-                            <button
-                                type="button"
-                                onclick={() => startEdit(comment)}
-                                class="hover:text-accent">Edit</button
-                            >
-                            <button
-                                type="button"
-                                onclick={() => deleteComment(comment)}
-                                class="text-fg-faint hover:text-danger"
-                                title="Delete comment">×</button
-                            >
-                        {/if}
-                    {/if}
-                </div>
-
-                {#if editingId === comment.id}
-                    <textarea
-                        bind:value={editDraft}
-                        rows="3"
-                        class="bg-surface w-full resize-none rounded-md border border-line px-3 py-1.5 text-sm"
-                    ></textarea>
-                    <div class="mt-2 flex justify-end">
-                        <button
-                            type="button"
-                            onclick={() => saveEdit(comment)}
-                            disabled={editProcessing || !editDraft.trim()}
-                            class="bg-accent text-bg hover:bg-accent-dim rounded-md px-3 py-1 text-xs font-semibold disabled:opacity-50"
-                            >Save</button
-                        >
-                    </div>
-                {:else}
-                    <p class="text-fg-muted text-sm whitespace-pre-wrap">
-                        {#each parseBody(comment.body) as seg, i (i)}
-                            {#if seg.type === 'mention'}
-                                <span
-                                    class="bg-accent/10 text-accent rounded px-1 font-medium"
-                                    >@{seg.name}</span
-                                >
-                            {:else}{seg.value}{/if}
-                        {/each}
-                    </p>
-                {/if}
-            </div>
-        {:else}
-            <p class="text-sm text-fg-muted">No comments yet.</p>
-        {/each}
-    </div>
 </div>

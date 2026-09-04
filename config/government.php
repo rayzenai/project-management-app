@@ -30,11 +30,11 @@ return [
     ],
 
     'statuses' => [
-        'done' => ['label' => 'Done', 'color' => '#10B981'],
-        'in_progress' => ['label' => 'In Progress', 'color' => '#3B82F6'],
-        'failed' => ['label' => 'Failed', 'color' => '#EF4444'],
-        'not_started' => ['label' => 'Not Started', 'color' => '#9CA3AF'],
-        'unclear' => ['label' => 'Unclear', 'color' => '#9CA3AF'],
+        'done' => ['label' => 'Done', 'color' => '#3EC98A'],
+        'in_progress' => ['label' => 'In Progress', 'color' => '#E5A33A'],
+        'failed' => ['label' => 'Failed', 'color' => '#F2655A'],
+        'not_started' => ['label' => 'Not Started', 'color' => '#9AA2B3'],
+        'unclear' => ['label' => 'Unclear', 'color' => '#9AA2B3'],
     ],
 
     'deadline_types' => [

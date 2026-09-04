@@ -5,7 +5,7 @@ it('defines every required token + mode for every theme', function () {
     $colorKeys = ['bg', 'surface', 'surfaceAlt', 'line', 'lineSoft', 'text', 'textMuted', 'textFaint', 'accent', 'accentDim', 'warn', 'danger', 'success'];
     $fontKeys = ['display', 'body', 'mono'];
 
-    expect($themes)->toHaveKey('terminal-noir');
+    expect($themes)->toHaveKeys(['system', 'light', 'dark']);
 
     foreach ($themes as $key => $theme) {
         if ($key === 'system') {

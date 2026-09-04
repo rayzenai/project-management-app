@@ -1,7 +1,9 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
+    import { Check } from '@lucide/svelte';
     import type { SharedProps, Task } from '../lib/types';
     import Popover from './Popover.svelte';
+    import StatusGlyph from './StatusGlyph.svelte';
 
     let {
         task,
@@ -28,7 +30,6 @@
     const shown = $derived(optimistic ?? task.status);
     const meta = $derived(statuses.find((s) => s.value === shown));
     const label = $derived(meta?.label ?? task.status_label ?? shown);
-    const color = $derived(meta?.color ?? task.status_color ?? '#9CA3AF');
 
     $effect(() => {
         if (optimistic !== null && task.status === optimistic) {
@@ -67,15 +68,11 @@
 <Popover bind:open role="listbox" triggerLabel={`Status: ${label}`}>
     {#snippet trigger()}
         <span
-            class={`inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap ring-1 ring-inset ${
-                size === 'sm'
-                    ? 'px-1.5 py-px text-[10px]'
-                    : 'px-2 py-0.5 text-xs'
-            } ${failed ? 'ring-2 ring-danger' : ''}`}
-            style={`background-color:${color}1a; color:${color}; --tw-ring-color:${color}40;`}
+            class={`inline-flex items-center gap-1.5 rounded-md font-medium whitespace-nowrap text-fg-muted transition hover:bg-hover hover:text-fg ${
+                size === 'sm' ? 'h-6 px-1.5 text-xs' : 'h-7 px-2 text-[13px]'
+            } ${failed ? 'ring-1 ring-danger' : ''}`}
         >
-            <span class="h-1.5 w-1.5 rounded-full" style={`background:${color}`}
-            ></span>
+            <StatusGlyph status={shown} size={size === 'sm' ? 12 : 14} />
             {label}
         </span>
     {/snippet}
@@ -86,15 +83,14 @@
             data-popover-item
             role="option"
             aria-selected={s.value === shown}
-            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg-muted hover:bg-surface-alt"
+            class="menu-item"
             onclick={() => setStatus(s.value)}
         >
-            <span
-                class="h-2 w-2 shrink-0 rounded-full"
-                style={`background:${s.color}`}
-            ></span>
+            <StatusGlyph status={s.value} size={13} />
             <span class="flex-1">{s.label}</span>
-            {#if s.value === shown}<span class="text-accent">✓</span>{/if}
+            {#if s.value === shown}<Check
+                    class="h-3.5 w-3.5 text-accent"
+                />{/if}
         </button>
     {/each}
 </Popover>

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { useForm } from '@inertiajs/svelte';
+    import { ChevronDown, ChevronUp, Plus } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import type { Member, Priority, QuickAddProject } from '../lib/types';
     import AssigneePicker from './AssigneePicker.svelte';
@@ -33,7 +34,7 @@
         () => defaultProjectId ?? projects[0]?.id ?? null,
     );
 
-    // When launched from inside a project, the project is fixed — we hide the
+    // When launched from inside a project, the project is fixed: we hide the
     // selector and show its name as static text instead.
     const lockedProjectName = $derived(
         lockProject
@@ -175,49 +176,40 @@
 </script>
 
 {#snippet advancedFields()}
-    <div>
-        <span class="text-fg-muted mb-1 block text-xs font-medium"
-            >Assign to</span
-        >
+    <div class="flex flex-col gap-1">
+        <span class="label">Assign to</span>
         {#if projectTeam.length > 0}
             <AssigneePicker
                 team={projectTeam}
                 bind:selectedIds={form.assignee_member_ids}
                 max={5}
-                placeholder="Pick teammates..."
+                placeholder="Pick teammates"
                 flow={variant === 'overlay'}
             />
             {#if selfEligible && !form.assignee_member_ids.includes(currentMemberId ?? -1)}
                 <button
                     type="button"
-                    class="text-accent mt-1 text-xs hover:underline"
+                    class="self-start text-xs font-medium text-accent hover:underline"
                     onclick={assignMe}>Assign me</button
                 >
             {/if}
         {:else}
-            <p
-                class="text-fg-faint rounded-md border border-line bg-surface px-2 py-1.5 text-sm"
-            >
+            <p class="text-xs text-fg-faint">
                 No teammates on this project's team yet.
             </p>
         {/if}
     </div>
-    <div>
-        <label
-            for={`${uid}-due`}
-            class="text-fg-muted mb-1 block text-xs font-medium">Due date</label
-        >
+    <div class="flex flex-col gap-1">
+        <label for={`${uid}-due`} class="label">Due date</label>
         <input
             id={`${uid}-due`}
             type="date"
             bind:value={form.deadline_at}
-            class="bg-surface w-full rounded-md border border-line px-2 py-1 text-sm"
+            class="input"
         />
     </div>
-    <div>
-        <span class="text-fg-muted mb-1 block text-xs font-medium"
-            >Priority</span
-        >
+    <div class="flex flex-col gap-1">
+        <span class="label">Priority</span>
         <PillGroup
             dot
             bind:value={form.priority}
@@ -231,6 +223,26 @@
     </div>
 {/snippet}
 
+{#snippet projectPicker()}
+    {#if lockProject}
+        {#if lockedProjectName}
+            <span class="flex items-center gap-1.5 text-xs text-fg-muted">
+                Project
+                <span class="font-medium text-fg">{lockedProjectName}</span>
+            </span>
+        {/if}
+    {:else}
+        <label class="flex items-center gap-1.5 text-xs text-fg-muted">
+            Project
+            <select bind:value={form.project_id} class="input h-7 w-auto py-0">
+                {#each projects as project (project.id)}
+                    <option value={project.id}>{project.title}</option>
+                {/each}
+            </select>
+        </label>
+    {/if}
+{/snippet}
+
 <form
     onsubmit={(e) => {
         e.preventDefault();
@@ -239,51 +251,30 @@
 >
     {#if variant === 'inline'}
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div class="flex flex-1 items-center gap-2">
-                <span
-                    class="bg-accent/15 text-accent rounded-md px-2 py-1 text-base font-semibold select-none"
-                    >+</span
-                >
+            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                <Plus class="h-4 w-4 shrink-0 text-accent" />
                 <div class="min-w-0 flex-1">
                     <TokenInput
                         bind:this={tokenInput}
                         bind:value={form.title}
-                        placeholder="What needs to happen? (press Q anywhere)"
+                        placeholder="What needs to happen? (press N anywhere)"
                         disabled={form.processing}
                         onsubmit={submit}
                     />
                 </div>
             </div>
-            <div class="flex items-center gap-2">
-                {#if lockProject}
-                    {#if lockedProjectName}
-                        <span class="text-fg-muted text-sm"
-                            >Project: <span class="text-fg"
-                                >{lockedProjectName}</span
-                            ></span
-                        >
-                    {/if}
-                {:else}
-                    <select
-                        bind:value={form.project_id}
-                        class="bg-surface rounded-md border border-line px-2 py-1 text-sm"
-                    >
-                        {#each projects as project (project.id)}
-                            <option value={project.id}>{project.title}</option>
-                        {/each}
-                    </select>
-                {/if}
+            <div class="flex items-center gap-1.5">
+                {@render projectPicker()}
                 <button
                     type="button"
-                    class="text-fg-muted hover:text-fg text-xs"
+                    class="btn-ghost"
                     onclick={() => (advanced = !advanced)}
                     >{advanced ? 'Less' : 'More'}</button
                 >
                 <button
                     type="submit"
                     disabled={form.processing || !form.title.trim()}
-                    class="bg-accent text-bg hover:bg-accent-dim rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50"
-                    >Add</button
+                    class="btn-primary">Add</button
                 >
             </div>
         </div>
@@ -302,79 +293,70 @@
                 bind:value={form.title}
                 placeholder="What needs to happen?"
                 disabled={form.processing}
+                size="lg"
                 onsubmit={submit}
             />
         </div>
 
         <div
-            class="text-fg-muted flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-3 py-2 font-mono text-[10px]"
+            class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 py-2 text-xs text-fg-faint"
         >
-            <span>#project</span>
-            <span>@assignee</span>
-            <span>!low / !medium / !high / !urgent</span>
-            <span>today · fri · jun 20</span>
+            <span><kbd class="kbd">#</kbd> project</span>
+            <span><kbd class="kbd">@</kbd> assignee</span>
+            <span><kbd class="kbd">!</kbd> low, medium, high, urgent</span>
+            <span>today, fri, jun 20</span>
         </div>
 
-        <div class="flex items-center justify-between gap-2 px-3 py-3">
-            {#if lockProject}
-                <span class="text-fg-muted text-sm">
-                    Project:
-                    {#if lockedProjectName}<span class="text-fg"
-                            >{lockedProjectName}</span
-                        >{/if}
-                </span>
-            {:else}
-                <label class="text-fg-muted flex items-center gap-2 text-sm">
-                    Project:
-                    <select
-                        bind:value={form.project_id}
-                        class="bg-surface text-fg rounded-md border border-line px-2 py-1 text-sm"
-                    >
-                        {#each projects as project (project.id)}
-                            <option value={project.id}>{project.title}</option>
-                        {/each}
-                    </select>
-                </label>
-            {/if}
+        <div class="flex items-center justify-between gap-2 px-4 py-2.5">
+            <div class="flex items-center">{@render projectPicker()}</div>
             <button
                 type="button"
-                class="text-fg-muted hover:text-fg text-xs"
+                class="btn-ghost"
+                aria-expanded={advanced}
                 onclick={() => (advanced = !advanced)}
-                >{advanced ? 'Less ▴' : 'More ▾'}</button
             >
+                {advanced ? 'Less' : 'More'}
+                {#if advanced}
+                    <ChevronUp class="h-3.5 w-3.5" />
+                {:else}
+                    <ChevronDown class="h-3.5 w-3.5" />
+                {/if}
+            </button>
         </div>
 
         {#if advanced}
             <div
-                class="grid grid-cols-1 items-start gap-3 border-t border-line px-3 py-3 sm:grid-cols-3"
+                class="grid grid-cols-1 items-start gap-3 border-t border-line px-4 py-3 sm:grid-cols-3"
             >
                 {@render advancedFields()}
             </div>
         {/if}
 
         <div
-            class="flex items-center justify-end gap-2 border-t border-line px-3 py-3"
+            class="flex items-center justify-end gap-1.5 border-t border-line px-4 py-2.5"
         >
             {#if onCancel}
-                <button
-                    type="button"
-                    class="text-fg-muted hover:bg-surface-alt rounded-md px-3 py-1.5 text-sm"
-                    onclick={onCancel}>Cancel</button
+                <button type="button" class="btn-ghost" onclick={onCancel}
+                    >Cancel</button
                 >
             {/if}
             <button
                 type="submit"
                 disabled={form.processing || !form.title.trim()}
-                class="bg-accent text-bg hover:bg-accent-dim rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50"
-                >Add task ⏎</button
+                class="btn-primary"
             >
+                Add task
+                <kbd class="kbd border-white/30 bg-transparent text-white/80"
+                    >↩</kbd
+                >
+            </button>
         </div>
     {/if}
 
     {#if form.errors.title}
         <p
             class="mt-2 text-xs text-danger"
-            class:px-3={variant === 'overlay'}
+            class:px-4={variant === 'overlay'}
             class:pb-3={variant === 'overlay'}
         >
             {form.errors.title}

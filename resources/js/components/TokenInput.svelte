@@ -5,12 +5,15 @@
         value = $bindable(''),
         placeholder = '',
         disabled = false,
+        size = 'md',
         oninput,
         onsubmit,
     }: {
         value: string;
         placeholder?: string;
         disabled?: boolean;
+        /** `lg` matches the command palette's 48px input row (used in the overlay). */
+        size?: 'md' | 'lg';
         oninput?: () => void;
         onsubmit?: () => void;
     } = $props();
@@ -19,6 +22,13 @@
     let mirrorEl = $state<HTMLDivElement | null>(null);
 
     const segments = $derived(tokenize(value));
+
+    // Both layers MUST share these metrics exactly (see the note below).
+    const metrics = $derived(
+        size === 'lg'
+            ? 'h-12 px-4 font-sans text-[15px] leading-[48px] whitespace-pre'
+            : 'h-8 px-2.5 font-sans text-[13.5px] leading-8 whitespace-pre',
+    );
 
     export function focus(): void {
         inputEl?.focus();
@@ -32,14 +42,14 @@
 </script>
 
 <!-- Transparent input stacked over an aria-hidden mirror that renders the
-     tokenized text. Both layers share identical typography metrics
-     (px-3 py-2 font-sans text-base whitespace-pre) — that is the entire trick:
-     the input's text is invisible, the mirror's is visible, the caret stays native. -->
+     tokenized text. Both layers share identical typography metrics (the
+     `metrics` classes): the input's text is invisible, the mirror's is
+     visible, the caret stays native. -->
 <div class="relative">
     <div
         bind:this={mirrorEl}
         aria-hidden="true"
-        class="qa-mirror pointer-events-none absolute inset-0 overflow-hidden px-3 py-2 font-sans text-base whitespace-pre"
+        class={`qa-mirror pointer-events-none absolute inset-0 overflow-hidden text-fg ${metrics}`}
     >
         {#each segments as seg, i (i)}
             {#if seg.type === 'plain'}{seg.text}{:else}<span
@@ -53,7 +63,7 @@
         type="text"
         {placeholder}
         {disabled}
-        class="relative w-full bg-transparent px-3 py-2 font-sans text-base text-transparent caret-fg outline-none placeholder:text-fg-faint"
+        class={`relative w-full bg-transparent text-transparent caret-fg outline-none placeholder:text-fg-faint ${metrics}`}
         autocomplete="off"
         spellcheck="false"
         oninput={() => {

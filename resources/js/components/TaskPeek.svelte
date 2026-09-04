@@ -1,14 +1,26 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
+    import {
+        Check,
+        ChevronRight,
+        Clock,
+        ExternalLink,
+        LoaderCircle,
+        MessageSquare,
+        Plus,
+        X,
+    } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import { SvelteMap, SvelteSet } from 'svelte/reactivity';
     import { formatDate } from '../lib/format';
     import { peek } from '../lib/peek.svelte';
     import type { Priority, TaskPreview } from '../lib/types';
     import AssigneeStack from './AssigneeStack.svelte';
+    import Avatar from './Avatar.svelte';
     import CompleteCheckbox from './CompleteCheckbox.svelte';
     import DateChip from './DateChip.svelte';
     import PriorityFlag from './PriorityFlag.svelte';
+    import ProgressRing from './ProgressRing.svelte';
     import StatusChip from './StatusChip.svelte';
 
     const NOTE_TYPES: { value: string; label: string }[] = [
@@ -19,6 +31,13 @@
         { value: 'milestone', label: 'Milestone' },
         { value: 'decision', label: 'Decision' },
     ];
+
+    const PRIORITY_LABELS: Record<Priority, string> = {
+        urgent: 'Urgent',
+        high: 'High',
+        medium: 'Medium',
+        low: 'Low',
+    };
 
     const cache = new SvelteMap<number, TaskPreview>();
 
@@ -56,6 +75,20 @@
     const projectSlug = $derived(task?.project?.slug ?? '');
     const doneSubtasks = $derived(
         preview?.subtasks.filter((s) => s.is_done).length ?? 0,
+    );
+    const ownerNames = $derived(
+        (preview?.assignments ?? [])
+            .map((a) => a.member?.name)
+            .filter(Boolean)
+            .join(', '),
+    );
+    const hasPlan = $derived(
+        Boolean(
+            task &&
+            (task.item_number ||
+                task.category_label ||
+                task.responsible_ministry),
+        ),
     );
 
     async function load(
@@ -107,7 +140,7 @@
         }
     }
 
-    // Re-runs only when the open target changes — NOT when `cache` mutates.
+    // Re-runs only when the open target changes, NOT when `cache` mutates.
     // Reading `cache.get()` here would subscribe the effect to the cache key
     // that `load()` writes to, creating an infinite refetch loop that also
     // wiped transient UI state (open drafts, expanded history) on every cycle.
@@ -432,10 +465,7 @@
 </script>
 
 {#if target}
-    <div
-        aria-hidden="true"
-        class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-    ></div>
+    <div aria-hidden="true" class="fixed inset-0 z-40 bg-black/40"></div>
     <div
         bind:this={panel}
         role="dialog"
@@ -443,51 +473,56 @@
         aria-labelledby="peek-title"
         aria-busy={!preview && !loadFailed}
         tabindex="-1"
-        class="bg-surface fixed inset-y-0 right-0 z-50 flex w-full max-w-[540px] flex-col border-l border-line shadow-2xl outline-none"
+        class="fixed inset-y-0 right-0 z-50 flex w-[min(560px,92vw)] flex-col border-l border-line bg-surface outline-none"
         onkeydown={onPanelKeydown}
     >
-        <header class="flex items-center gap-3 border-b border-line px-5 py-3">
-            <div class="ws-eyebrow text-fg-muted min-w-0 flex-1 truncate">
+        <header
+            class="flex h-11 shrink-0 items-center gap-1.5 border-b border-line px-4"
+        >
+            <div class="flex min-w-0 flex-1 items-center gap-1.5 text-fg-muted">
                 {#if task}
-                    {#if task.item_number}#{task.item_number} ·
-                    {/if}
                     <a
                         href={`/workspace/projects/${projectSlug}`}
-                        class="hover:text-accent"
+                        class="truncate hover:text-fg"
                     >
                         {task.project?.title ?? 'Project'}
                     </a>
+                    <span class="text-fg-faint">/</span>
+                    <span class="shrink-0 font-mono tabular-nums">
+                        {#if task.item_number}#{task.item_number}{:else}{task.slug}{/if}
+                    </span>
                 {:else}
-                    Loading…
+                    <span class="text-fg-faint">Loading</span>
                 {/if}
             </div>
             {#if task}
                 <a
                     href={`/workspace/projects/${projectSlug}/tasks/${task.slug}`}
-                    class="text-fg-muted hover:text-accent font-mono text-[11px] whitespace-nowrap"
+                    class="btn-ghost"
                 >
-                    Open full page ↗
+                    <ExternalLink class="h-3.5 w-3.5" />
+                    Open full page
                 </a>
             {/if}
             <button
                 type="button"
                 aria-label="Close"
-                class="text-fg-muted hover:bg-surface-alt hover:text-fg rounded-md p-1"
+                class="btn-icon"
                 onclick={() => peek.close()}
             >
-                ✕
+                <X class="h-4 w-4" />
             </button>
         </header>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             {#if loadFailed}
                 <div class="flex flex-col items-center gap-3 py-16 text-center">
-                    <p class="text-fg-muted text-sm">
-                        Couldn't load this task.
+                    <p class="text-[13px] text-fg-muted">
+                        Could not load this task.
                     </p>
                     <button
                         type="button"
-                        class="hover:border-accent rounded-md border border-line px-3 py-1.5 font-mono text-xs"
+                        class="btn"
                         onclick={() => target && load(target.id)}
                     >
                         Retry
@@ -495,91 +530,132 @@
                 </div>
             {:else if !task}
                 <div class="animate-pulse space-y-4 py-2">
-                    <div class="bg-surface-alt h-6 w-3/4 rounded"></div>
-                    <div class="bg-surface-alt h-4 w-1/2 rounded"></div>
-                    <div class="bg-surface-alt h-24 rounded"></div>
-                    <div class="bg-surface-alt h-16 rounded"></div>
+                    <div class="h-6 w-3/4 rounded-md bg-surface-alt"></div>
+                    <div class="h-4 w-1/2 rounded-md bg-surface-alt"></div>
+                    <div class="h-24 rounded-md bg-surface-alt"></div>
+                    <div class="h-16 rounded-md bg-surface-alt"></div>
                 </div>
             {:else}
-                <div class="space-y-5">
-                    <div class="flex items-start gap-3">
-                        <div class="pt-1">
-                            <CompleteCheckbox {task} {projectSlug} />
-                        </div>
-                        {#if editingTitle}
-                            <!-- svelte-ignore a11y_autofocus -->
-                            <input
-                                type="text"
-                                bind:value={titleDraft}
-                                autofocus
-                                class="border-accent min-w-0 flex-1 border-0 border-b bg-transparent p-0 font-display text-lg font-bold tracking-tight outline-none"
-                                onblur={saveTitle}
-                                onkeydown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        saveTitle();
-                                    }
-
-                                    if (e.key === 'Escape') {
-                                        e.stopPropagation();
-                                        editingTitle = false;
-                                    }
-                                }}
-                            />
-                        {:else}
-                            <button
-                                type="button"
-                                id="peek-title"
-                                class="hover:text-accent min-w-0 flex-1 text-left font-display text-lg leading-snug font-bold tracking-tight"
-                                title="Click to rename"
-                                onclick={() => {
-                                    titleDraft = task.title;
-                                    editingTitle = true;
-                                }}
-                            >
-                                {task.title}
-                            </button>
-                        {/if}
+                <div class="flex items-start gap-3">
+                    <div class="pt-1">
+                        <CompleteCheckbox {task} {projectSlug} />
                     </div>
+                    {#if editingTitle}
+                        <!-- svelte-ignore a11y_autofocus -->
+                        <input
+                            type="text"
+                            bind:value={titleDraft}
+                            autofocus
+                            class="min-w-0 flex-1 border-0 border-b border-accent bg-transparent p-0 text-[20px] leading-tight font-semibold tracking-[-0.02em] text-fg outline-none focus-visible:outline-none"
+                            onblur={saveTitle}
+                            onkeydown={(e) => {
+                                if (e.key === 'Enter') {
+                                    saveTitle();
+                                }
 
-                    <div class="flex flex-wrap items-center gap-2">
+                                if (e.key === 'Escape') {
+                                    e.stopPropagation();
+                                    editingTitle = false;
+                                }
+                            }}
+                        />
+                    {:else}
+                        <button
+                            type="button"
+                            id="peek-title"
+                            class="min-w-0 flex-1 rounded-sm text-left text-[20px] leading-tight font-semibold tracking-[-0.02em] text-fg hover:text-accent"
+                            title="Click to rename"
+                            onclick={() => {
+                                titleDraft = task.title;
+                                editingTitle = true;
+                            }}
+                        >
+                            {task.title}
+                        </button>
+                    {/if}
+                </div>
+                {#if task.title_np}
+                    <p class="mt-1.5 pl-8 font-np text-[15px] text-fg-muted">
+                        {task.title_np}
+                    </p>
+                {/if}
+
+                <div class="mt-4">
+                    {#if editingDescription}
+                        <!-- svelte-ignore a11y_autofocus -->
+                        <textarea
+                            bind:value={descriptionDraft}
+                            rows="4"
+                            autofocus
+                            class="input min-h-[96px] resize-y text-[14px] leading-relaxed"
+                            onblur={saveDescription}
+                            onkeydown={(e) => {
+                                if (e.key === 'Escape') {
+                                    e.stopPropagation();
+                                    editingDescription = false;
+                                }
+                            }}
+                        ></textarea>
+                    {:else}
+                        <button
+                            type="button"
+                            class="w-full rounded-sm text-left text-[14px] leading-relaxed whitespace-pre-wrap text-fg hover:text-fg"
+                            onclick={() => {
+                                descriptionDraft = task.description ?? '';
+                                editingDescription = true;
+                            }}
+                        >
+                            {#if task.description}
+                                {task.description}
+                            {:else}
+                                <span class="text-fg-faint"
+                                    >Add a description</span
+                                >
+                            {/if}
+                        </button>
+                    {/if}
+                    {#if task.description_np}
+                        <p
+                            class="mt-3 font-np text-[14px] leading-relaxed whitespace-pre-wrap text-fg-muted"
+                        >
+                            {task.description_np}
+                        </p>
+                    {/if}
+                </div>
+
+                <dl
+                    class="mt-5 grid grid-cols-[88px_1fr] items-center gap-x-2.5 border-t border-line pt-3 text-[12.5px]"
+                >
+                    <dt class="flex min-h-[30px] items-center text-fg-muted">
+                        Status
+                    </dt>
+                    <dd class="flex min-h-[30px] min-w-0 items-center">
                         <StatusChip
                             {task}
                             {projectSlug}
                             onUpdated={(status) => applyLocal({ status })}
                         />
+                    </dd>
+
+                    <dt class="flex min-h-[30px] items-center text-fg-muted">
+                        Priority
+                    </dt>
+                    <dd class="flex min-h-[30px] min-w-0 items-center gap-1.5">
                         <PriorityFlag
                             {task}
                             {projectSlug}
                             onUpdated={(priority: Priority) =>
                                 applyLocal({ priority })}
                         />
-                        <DateChip
-                            {task}
-                            {projectSlug}
-                            onUpdated={(deadline_at) =>
-                                applyLocal({ deadline_at })}
-                        />
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <span class="ws-eyebrow text-fg-muted">Progress</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="5"
-                            bind:value={progressDraft}
-                            class="accent-accent flex-1"
-                            onchange={saveProgress}
-                        />
-                        <span
-                            class="text-fg-muted w-10 text-right font-mono text-xs"
-                            >{progressDraft}%</span
+                        <span class="text-fg"
+                            >{PRIORITY_LABELS[task.priority ?? 'medium']}</span
                         >
-                    </div>
+                    </dd>
 
-                    <div>
-                        <h3 class="ws-eyebrow text-fg-muted mb-2">Assignees</h3>
+                    <dt class="flex min-h-[30px] items-center text-fg-muted">
+                        Owners
+                    </dt>
+                    <dd class="flex min-h-[30px] min-w-0 items-center gap-2">
                         <AssigneeStack
                             task={{
                                 id: task.id,
@@ -587,64 +663,147 @@
                                 assignments: preview?.assignments ?? [],
                             }}
                             team={preview?.team ?? []}
-                            max={6}
+                            max={4}
                             align="left"
                             onUpdated={revalidate}
                         />
-                    </div>
-
-                    <div>
-                        {#if editingDescription}
-                            <!-- svelte-ignore a11y_autofocus -->
-                            <textarea
-                                bind:value={descriptionDraft}
-                                rows="4"
-                                autofocus
-                                class="bg-surface w-full rounded-md border border-line px-2.5 py-2 text-sm"
-                                onblur={saveDescription}
-                                onkeydown={(e) => {
-                                    if (e.key === 'Escape') {
-                                        e.stopPropagation();
-                                        editingDescription = false;
-                                    }
-                                }}
-                            ></textarea>
-                        {:else}
-                            <button
-                                type="button"
-                                class="text-fg-muted hover:text-fg w-full text-left text-sm whitespace-pre-wrap"
-                                onclick={() => {
-                                    descriptionDraft = task.description ?? '';
-                                    editingDescription = true;
-                                }}
+                        {#if ownerNames}
+                            <span class="truncate text-xs text-fg-muted"
+                                >{ownerNames}</span
                             >
-                                {#if task.description}
-                                    {task.description}
-                                {:else}
-                                    <span class="text-fg-faint italic"
-                                        >Click to add a description…</span
-                                    >
-                                {/if}
-                            </button>
                         {/if}
-                    </div>
+                    </dd>
 
-                    <section class="border-t border-line-soft pt-4">
-                        <h3 class="ws-eyebrow text-fg-muted mb-2">
-                            Subtasks {#if preview && preview.subtasks.length > 0}({doneSubtasks}/{preview
-                                    .subtasks.length}){/if}
-                        </h3>
-                        <ul class="space-y-1">
-                            {#each preview?.subtasks ?? [] as subtask (subtask.id)}
-                                {@const pending = pendingSubtaskIds.has(
-                                    subtask.id,
-                                )}
-                                <li class="group flex items-center gap-2">
+                    <dt class="flex min-h-[30px] items-center text-fg-muted">
+                        Progress
+                    </dt>
+                    <dd class="flex min-h-[30px] min-w-0 items-center gap-2">
+                        <ProgressRing percent={progressDraft} />
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            bind:value={progressDraft}
+                            aria-label="Progress"
+                            class="w-24 accent-accent"
+                            onchange={saveProgress}
+                        />
+                        <span
+                            class="font-mono text-xs text-fg-muted tabular-nums"
+                            >{progressDraft}%</span
+                        >
+                    </dd>
+
+                    <dt class="flex min-h-[30px] items-center text-fg-muted">
+                        Deadline
+                    </dt>
+                    <dd class="flex min-h-[30px] min-w-0 items-center gap-2">
+                        <DateChip
+                            {task}
+                            {projectSlug}
+                            onUpdated={(deadline_at) =>
+                                applyLocal({ deadline_at })}
+                        />
+                        {#if task.deadline_at}
+                            <span
+                                class="font-mono text-xs text-fg-faint tabular-nums"
+                                >{formatDate(task.deadline_at)}</span
+                            >
+                        {/if}
+                    </dd>
+                    {#if task.deadline_label}
+                        <dt
+                            class="flex min-h-[30px] items-center text-fg-muted"
+                        >
+                            Type
+                        </dt>
+                        <dd
+                            class="flex min-h-[30px] min-w-0 items-center text-fg"
+                        >
+                            {task.deadline_label}
+                        </dd>
+                    {/if}
+
+                    {#if hasPlan}
+                        <dt
+                            class="section-title col-span-2 mt-3 mb-1 min-h-0 text-[13px]"
+                        >
+                            Plan
+                        </dt>
+                        {#if task.item_number}
+                            <dt
+                                class="flex min-h-[30px] items-center text-fg-muted"
+                            >
+                                Item
+                            </dt>
+                            <dd
+                                class="flex min-h-[30px] items-center font-mono text-fg tabular-nums"
+                            >
+                                #{task.item_number}
+                            </dd>
+                        {/if}
+                        {#if task.category_label}
+                            <dt
+                                class="flex min-h-[30px] items-center text-fg-muted"
+                            >
+                                Category
+                            </dt>
+                            <dd
+                                class="flex min-h-[30px] min-w-0 items-center gap-1.5"
+                            >
+                                {#if task.category_color}
+                                    <span
+                                        class="h-2 w-2 shrink-0 rounded-[2px]"
+                                        style={`background:${task.category_color}`}
+                                    ></span>
+                                {/if}
+                                <span class="truncate text-fg"
+                                    >{task.category_label}</span
+                                >
+                            </dd>
+                        {/if}
+                        {#if task.responsible_ministry}
+                            <dt
+                                class="flex min-h-[30px] items-center text-fg-muted"
+                            >
+                                Ministry
+                            </dt>
+                            <dd
+                                class="flex min-h-[30px] min-w-0 items-center text-fg"
+                            >
+                                <span class="truncate"
+                                    >{task.responsible_ministry}</span
+                                >
+                            </dd>
+                        {/if}
+                    {/if}
+                </dl>
+
+                <section class="mt-8">
+                    <h3 class="section-title text-[15px]">
+                        Subtasks
+                        {#if preview && preview.subtasks.length > 0}
+                            <span class="section-count"
+                                >{doneSubtasks}/{preview.subtasks.length}</span
+                            >
+                        {/if}
+                    </h3>
+                    <ul class="mt-1.5">
+                        {#each preview?.subtasks ?? [] as subtask (subtask.id)}
+                            {@const pending = pendingSubtaskIds.has(subtask.id)}
+                            <li
+                                class="group flex h-8 items-center gap-2.5 border-b border-line-soft"
+                            >
+                                <span
+                                    class="relative inline-flex h-3.5 w-3.5 shrink-0"
+                                >
                                     <input
                                         type="checkbox"
                                         checked={subtask.is_done}
                                         disabled={pending}
-                                        class="h-4 w-4 rounded accent-success disabled:opacity-40"
+                                        aria-label={subtask.body}
+                                        class="peer h-3.5 w-3.5 cursor-pointer appearance-none rounded-sm border-[1.5px] border-line transition checked:border-accent checked:bg-accent hover:border-accent disabled:opacity-40"
                                         onchange={(e) =>
                                             toggleSubtask(
                                                 subtask.id,
@@ -653,178 +812,189 @@
                                                 ).checked,
                                             )}
                                     />
-                                    {#if editingSubtaskId === subtask.id}
-                                        <!-- svelte-ignore a11y_autofocus -->
-                                        <input
-                                            type="text"
-                                            bind:value={subtaskEditDraft}
-                                            autofocus
-                                            class="border-accent text-fg-muted min-w-0 flex-1 border-0 border-b bg-transparent p-0 text-sm outline-none"
-                                            onblur={() =>
+                                    <Check
+                                        class="pointer-events-none absolute inset-0 m-auto h-2.5 w-2.5 text-white opacity-0 peer-checked:opacity-100"
+                                    />
+                                </span>
+                                {#if editingSubtaskId === subtask.id}
+                                    <!-- svelte-ignore a11y_autofocus -->
+                                    <input
+                                        type="text"
+                                        bind:value={subtaskEditDraft}
+                                        autofocus
+                                        class="min-w-0 flex-1 border-0 border-b border-accent bg-transparent p-0 text-[13.5px] text-fg outline-none focus-visible:outline-none"
+                                        onblur={() =>
+                                            saveSubtaskEdit(
+                                                subtask.id,
+                                                subtask.body,
+                                            )}
+                                        onkeydown={(e) => {
+                                            if (e.key === 'Enter') {
                                                 saveSubtaskEdit(
                                                     subtask.id,
                                                     subtask.body,
-                                                )}
-                                            onkeydown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    saveSubtaskEdit(
-                                                        subtask.id,
-                                                        subtask.body,
-                                                    );
-                                                }
+                                                );
+                                            }
 
-                                                if (e.key === 'Escape') {
-                                                    e.stopPropagation();
-                                                    editingSubtaskId = null;
-                                                }
-                                            }}
-                                        />
-                                    {:else}
-                                        <span
-                                            class={`flex-1 cursor-text text-sm ${subtask.is_done ? 'text-fg-faint line-through' : 'text-fg-muted'}`}
-                                            title="Double-click to edit"
-                                            ondblclick={() =>
-                                                startEditSubtask(
-                                                    subtask.id,
-                                                    subtask.body,
-                                                )}
-                                            role="button"
-                                            tabindex="-1"
-                                        >
-                                            {subtask.body}
-                                        </span>
-                                    {/if}
-                                    {#if pending}
-                                        <span
-                                            class="border-accent h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-[1.5px] border-t-transparent"
-                                            aria-label="Saving"
-                                        ></span>
-                                    {:else}
-                                        <button
-                                            type="button"
-                                            aria-label="Delete subtask"
-                                            class="text-fg-faint opacity-0 group-hover:opacity-100 hover:text-danger"
-                                            onclick={() =>
-                                                deleteSubtask(subtask.id)}
-                                        >
-                                            ×
-                                        </button>
-                                    {/if}
-                                </li>
-                            {/each}
-                        </ul>
-                        <input
-                            type="text"
-                            bind:value={subtaskDraft}
-                            placeholder="+ Add a subtask…"
-                            class="placeholder:text-fg-faint focus:border-accent mt-2 w-full rounded-md border border-dashed border-line bg-transparent px-2.5 py-1.5 text-sm focus:outline-none"
-                            onblur={addSubtask}
-                            onkeydown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    addSubtask();
-                                }
-                            }}
-                        />
-                    </section>
-
-                    <section class="border-t border-line-soft pt-4">
-                        <h3 class="ws-eyebrow text-fg-muted mb-2">
-                            Notes {#if preview && preview.notes.length > 0}({preview
-                                    .notes.length}){/if}
-                        </h3>
-                        <div class="space-y-2">
-                            {#each preview?.notes ?? [] as note (note.id)}
-                                <div
-                                    class="group rounded-lg border border-line px-3 py-2"
-                                >
-                                    <div
-                                        class="text-fg-muted flex items-center gap-2 font-mono text-[10px]"
+                                            if (e.key === 'Escape') {
+                                                e.stopPropagation();
+                                                editingSubtaskId = null;
+                                            }
+                                        }}
+                                    />
+                                {:else}
+                                    <span
+                                        class={`min-w-0 flex-1 cursor-text truncate text-[13.5px] ${subtask.is_done ? 'text-fg-faint line-through' : 'text-fg'}`}
+                                        title="Double-click to edit"
+                                        ondblclick={() =>
+                                            startEditSubtask(
+                                                subtask.id,
+                                                subtask.body,
+                                            )}
+                                        role="button"
+                                        tabindex="-1"
                                     >
-                                        <span>{note.user?.name}</span>
-                                        <span>· {note.type_label}</span>
-                                        {#if note.happened_at}<span
-                                                >· {formatDate(
-                                                    note.happened_at,
-                                                )}</span
-                                            >{/if}
-                                        <button
-                                            type="button"
-                                            aria-label="Delete note"
-                                            class="text-fg-faint ml-auto opacity-0 group-hover:opacity-100 hover:text-danger"
-                                            onclick={() => deleteNote(note.id)}
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                    <p
-                                        class="text-fg-muted mt-1 text-sm whitespace-pre-wrap"
+                                        {subtask.body}
+                                    </span>
+                                {/if}
+                                {#if pending}
+                                    <LoaderCircle
+                                        class="h-3.5 w-3.5 shrink-0 animate-spin text-accent"
+                                        aria-label="Saving"
+                                    />
+                                {:else}
+                                    <button
+                                        type="button"
+                                        aria-label="Delete subtask"
+                                        class="btn-icon h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                                        onclick={() =>
+                                            deleteSubtask(subtask.id)}
                                     >
-                                        {note.body}
-                                    </p>
-                                </div>
-                            {/each}
-                        </div>
-                        <div class="mt-2 flex items-start gap-2">
-                            <textarea
-                                bind:value={noteDraft}
-                                rows="2"
-                                placeholder="Add a note…"
-                                class="bg-surface min-w-0 flex-1 rounded-md border border-line px-2.5 py-1.5 text-sm"
-                            ></textarea>
-                            <div class="flex flex-col gap-1.5">
-                                <select
-                                    bind:value={noteType}
-                                    class="bg-surface rounded-md border border-line px-1.5 py-1 text-xs"
-                                >
-                                    {#each NOTE_TYPES as t (t.value)}
-                                        <option value={t.value}
-                                            >{t.label}</option
-                                        >
-                                    {/each}
-                                </select>
-                                <button
-                                    type="button"
-                                    class="bg-accent text-bg rounded-md px-2 py-1 text-xs font-semibold disabled:opacity-40"
-                                    disabled={noteDraft.trim() === ''}
-                                    onclick={addNote}
-                                >
-                                    Add
-                                </button>
-                            </div>
-                        </div>
-                    </section>
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
+                                {/if}
+                            </li>
+                        {/each}
+                    </ul>
+                    <input
+                        type="text"
+                        bind:value={subtaskDraft}
+                        placeholder="Add a subtask"
+                        aria-label="Add a subtask"
+                        class="input mt-2"
+                        onblur={addSubtask}
+                        onkeydown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                addSubtask();
+                            }
+                        }}
+                    />
+                </section>
 
-                    {#if preview}
-                        <section class="border-t border-line-soft pt-4">
-                            <a
-                                href={`/workspace/projects/${projectSlug}/tasks/${task.slug}`}
-                                class="ws-eyebrow text-fg-muted hover:text-accent flex items-center gap-1"
+                <section class="mt-8">
+                    <h3 class="section-title text-[15px]">
+                        Notes
+                        {#if preview && preview.notes.length > 0}
+                            <span class="section-count"
+                                >{preview.notes.length}</span
                             >
-                                Comments ({preview.comments_count}) ↗
-                            </a>
-                        </section>
-                    {/if}
-
-                    <section class="border-t border-line-soft pt-4">
-                        <div class="mb-2 flex items-center justify-between">
-                            <h3 class="ws-eyebrow text-fg-muted">
-                                Contacts {#if preview && preview.contacts.length > 0}({preview
-                                        .contacts.length}){/if}
-                            </h3>
+                        {/if}
+                    </h3>
+                    <div class="mt-1">
+                        {#each preview?.notes ?? [] as note (note.id)}
+                            <div class="group border-b border-line-soft py-2.5">
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="font-medium text-fg"
+                                        >{note.user?.name}</span
+                                    >
+                                    <span class="chip">{note.type_label}</span>
+                                    {#if note.happened_at}
+                                        <span
+                                            class="font-mono text-fg-faint tabular-nums"
+                                            >{formatDate(
+                                                note.happened_at,
+                                            )}</span
+                                        >
+                                    {/if}
+                                    <button
+                                        type="button"
+                                        aria-label="Delete note"
+                                        class="btn-icon ml-auto h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                                        onclick={() => deleteNote(note.id)}
+                                    >
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <p
+                                    class="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-fg"
+                                >
+                                    {note.body}
+                                </p>
+                            </div>
+                        {/each}
+                    </div>
+                    <div
+                        class="mt-3 rounded-lg border border-line bg-surface-alt px-3.5 py-3"
+                    >
+                        <textarea
+                            bind:value={noteDraft}
+                            rows="2"
+                            placeholder="Add a note"
+                            aria-label="Add a note"
+                            class="input min-h-[56px] resize-y border-0 bg-transparent p-0 focus:border-0"
+                        ></textarea>
+                        <div class="mt-2 flex items-center gap-2">
+                            <select
+                                bind:value={noteType}
+                                aria-label="Note type"
+                                class="input w-auto py-1"
+                            >
+                                {#each NOTE_TYPES as t (t.value)}
+                                    <option value={t.value}>{t.label}</option>
+                                {/each}
+                            </select>
                             <button
                                 type="button"
-                                class="text-fg-muted hover:text-accent font-mono text-[11px]"
-                                onclick={() =>
-                                    (showContactForm = !showContactForm)}
+                                class="btn-primary ml-auto"
+                                disabled={noteDraft.trim() === ''}
+                                onclick={addNote}
                             >
-                                {showContactForm ? 'cancel' : '+ add'}
+                                Add
                             </button>
                         </div>
-                        <div class="flex flex-wrap gap-1.5">
-                            {#each preview?.contacts ?? [] as contact (contact.id)}
+                    </div>
+                </section>
+
+                <section class="mt-8">
+                    <div class="flex items-center justify-between">
+                        <h3 class="section-title text-[15px]">
+                            Contacts
+                            {#if preview && preview.contacts.length > 0}
+                                <span class="section-count"
+                                    >{preview.contacts.length}</span
+                                >
+                            {/if}
+                        </h3>
+                        <button
+                            type="button"
+                            class="btn-ghost"
+                            onclick={() => (showContactForm = !showContactForm)}
+                        >
+                            {#if showContactForm}
+                                <X class="h-3.5 w-3.5" />
+                                Cancel
+                            {:else}
+                                <Plus class="h-3.5 w-3.5" />
+                                Add
+                            {/if}
+                        </button>
+                    </div>
+                    {#if preview && preview.contacts.length > 0}
+                        <div class="mt-1.5 flex flex-wrap gap-1.5">
+                            {#each preview.contacts as contact (contact.id)}
                                 <span
-                                    class="bg-surface-alt text-fg-muted inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs"
+                                    class="chip h-6 gap-1 px-2"
                                     title={[
                                         contact.organization,
                                         contact.phone,
@@ -833,103 +1003,167 @@
                                         .filter(Boolean)
                                         .join(' · ')}
                                 >
-                                    <span class="font-medium"
+                                    <span class="font-medium text-fg"
                                         >{contact.name}</span
                                     >
-                                    {#if contact.role}<span
-                                            class="text-fg-muted"
-                                            >· {contact.role}</span
-                                        >{/if}
+                                    {#if contact.role}
+                                        <span class="font-normal"
+                                            >{contact.role}</span
+                                        >
+                                    {/if}
                                 </span>
                             {/each}
                         </div>
-                        {#if showContactForm}
-                            <div class="mt-2 grid grid-cols-2 gap-2">
+                    {:else if !showContactForm}
+                        <p class="mt-1 text-[13px] text-fg-muted">
+                            No contacts yet.
+                        </p>
+                    {/if}
+                    {#if showContactForm}
+                        <div class="mt-3 grid grid-cols-2 gap-3">
+                            <div class="col-span-2">
+                                <label class="label" for="peek-contact-name"
+                                    >Name</label
+                                >
                                 <input
+                                    id="peek-contact-name"
                                     type="text"
                                     bind:value={contactDraft.name}
-                                    placeholder="Name *"
-                                    class="bg-surface col-span-2 rounded-md border border-line px-2.5 py-1.5 text-sm"
+                                    class="input mt-1"
                                 />
+                            </div>
+                            <div>
+                                <label class="label" for="peek-contact-role"
+                                    >Role</label
+                                >
                                 <input
+                                    id="peek-contact-role"
                                     type="text"
                                     bind:value={contactDraft.role}
-                                    placeholder="Role"
-                                    class="bg-surface rounded-md border border-line px-2.5 py-1.5 text-sm"
+                                    class="input mt-1"
                                 />
+                            </div>
+                            <div>
+                                <label class="label" for="peek-contact-org"
+                                    >Organization</label
+                                >
                                 <input
+                                    id="peek-contact-org"
                                     type="text"
                                     bind:value={contactDraft.organization}
-                                    placeholder="Organization"
-                                    class="bg-surface rounded-md border border-line px-2.5 py-1.5 text-sm"
+                                    class="input mt-1"
                                 />
+                            </div>
+                            <div>
+                                <label class="label" for="peek-contact-phone"
+                                    >Phone</label
+                                >
                                 <input
+                                    id="peek-contact-phone"
                                     type="text"
                                     bind:value={contactDraft.phone}
-                                    placeholder="Phone"
-                                    class="bg-surface rounded-md border border-line px-2.5 py-1.5 text-sm"
+                                    class="input mt-1"
                                 />
+                            </div>
+                            <div>
+                                <label class="label" for="peek-contact-email"
+                                    >Email</label
+                                >
                                 <input
+                                    id="peek-contact-email"
                                     type="email"
                                     bind:value={contactDraft.email}
-                                    placeholder="Email"
-                                    class="bg-surface rounded-md border border-line px-2.5 py-1.5 text-sm"
+                                    class="input mt-1"
                                 />
+                            </div>
+                            <div class="col-span-2 flex justify-end">
                                 <button
                                     type="button"
-                                    class="bg-accent text-bg col-span-2 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+                                    class="btn-primary"
                                     disabled={contactDraft.name.trim() === ''}
                                     onclick={addContact}
                                 >
                                     Add contact
                                 </button>
                             </div>
-                        {/if}
-                    </section>
+                        </div>
+                    {/if}
+                </section>
 
-                    <section class="border-t border-line-soft pt-4 pb-2">
-                        <button
-                            type="button"
-                            aria-expanded={showHistory}
-                            class="ws-eyebrow text-fg-muted hover:text-fg flex items-center gap-1"
-                            onclick={() => (showHistory = !showHistory)}
+                {#if preview}
+                    <section class="mt-8">
+                        <a
+                            href={`/workspace/projects/${projectSlug}/tasks/${task.slug}`}
+                            class="btn-ghost -ml-2"
                         >
-                            <span
-                                class={`transition-transform ${showHistory ? 'rotate-90' : ''}`}
-                                >▸</span
+                            <MessageSquare class="h-3.5 w-3.5" />
+                            Comments
+                            <span class="section-count"
+                                >{preview.comments_count}</span
                             >
-                            History {#if preview && preview.activity.length > 0}({preview
-                                    .activity.length}){/if}
-                        </button>
-                        {#if showHistory}
-                            <ul class="mt-2 space-y-1.5">
-                                {#each preview?.activity ?? [] as entry (entry.id)}
-                                    <li
-                                        class="text-fg-muted flex items-baseline gap-2 text-xs"
-                                    >
-                                        <span class="min-w-0 flex-1">
-                                            {#if entry.user}<span
-                                                    class="text-fg-muted font-medium"
-                                                    >{entry.user.name}</span
-                                                >{/if}
-                                            {entry.description}
-                                        </span>
+                            <ExternalLink class="h-3 w-3 text-fg-faint" />
+                        </a>
+                    </section>
+                {/if}
+
+                <section class="mt-6 pb-2">
+                    <button
+                        type="button"
+                        aria-expanded={showHistory}
+                        class="section-title -ml-1 rounded-md px-1 text-[15px] hover:bg-hover"
+                        onclick={() => (showHistory = !showHistory)}
+                    >
+                        <ChevronRight
+                            class={`h-3.5 w-3.5 self-center text-fg-faint transition-transform ${showHistory ? 'rotate-90' : ''}`}
+                        />
+                        Activity
+                        {#if preview && preview.activity.length > 0}
+                            <span class="section-count"
+                                >{preview.activity.length}</span
+                            >
+                        {/if}
+                    </button>
+                    {#if showHistory}
+                        <ul class="mt-2">
+                            {#each preview?.activity ?? [] as entry (entry.id)}
+                                <li
+                                    class="grid grid-cols-[20px_1fr] gap-3 py-1.5 text-[13px] text-fg-muted"
+                                >
+                                    {#if entry.user}
+                                        <Avatar
+                                            name={entry.user.name}
+                                            size="sm"
+                                        />
+                                    {:else}
                                         <span
-                                            class="text-fg-faint shrink-0 font-mono text-[10px]"
+                                            class="grid h-5 w-5 place-items-center"
+                                        >
+                                            <Clock
+                                                class="h-3.5 w-3.5 text-fg-faint"
+                                            />
+                                        </span>
+                                    {/if}
+                                    <span class="min-w-0 leading-5">
+                                        {#if entry.user}<span
+                                                class="font-medium text-fg"
+                                                >{entry.user.name}</span
+                                            >{/if}
+                                        {entry.description}
+                                        <span class="ml-1 text-xs text-fg-faint"
                                             >{formatDate(
                                                 entry.created_at,
                                             )}</span
                                         >
-                                    </li>
-                                {:else}
-                                    <li class="text-xs text-fg-faint">
-                                        No recorded activity.
-                                    </li>
-                                {/each}
-                            </ul>
-                        {/if}
-                    </section>
-                </div>
+                                    </span>
+                                </li>
+                            {:else}
+                                <li class="py-1.5 text-xs text-fg-faint">
+                                    No recorded activity.
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                </section>
             {/if}
         </div>
     </div>
