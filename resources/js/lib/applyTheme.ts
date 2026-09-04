@@ -104,5 +104,5 @@ export function applyAppearance(
         return;
     }
 
-    applyTheme(appearance.tokens as Tokens, appearance.mode ?? 'dark');
+    applyTheme(appearance.tokens as Tokens, appearance.mode ?? 'light');
 }

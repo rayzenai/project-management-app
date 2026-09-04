@@ -50,9 +50,32 @@ class User extends Authenticatable
             'email_notifications' => true,
         ]);
 
+        // A theme or font saved under an earlier catalogue no longer resolves;
+        // fall back to the defaults rather than sharing half-valid appearance.
+        /** @var array<string, mixed> $themes */
+        $themes = config('themes.themes', []);
+        $theme = array_key_exists($preferences->theme, $themes)
+            ? $preferences->theme
+            : (string) config('themes.default', 'system');
+
+        /** @var array{display?: list<string>, body?: list<string>, mono?: list<string>} $allowed */
+        $allowed = config('themes.font_allow_list', []);
+        $fontOverride = null;
+
+        if (is_array($preferences->font_override)) {
+            $fontOverride = [];
+
+            foreach (['display', 'body', 'mono'] as $role) {
+                $value = $preferences->font_override[$role] ?? null;
+                $fontOverride[$role] = is_string($value) && in_array($value, $allowed[$role] ?? [], true)
+                    ? $value
+                    : null;
+            }
+        }
+
         return [
-            'theme' => $preferences->theme,
-            'font_override' => $preferences->font_override,
+            'theme' => $theme,
+            'font_override' => $fontOverride,
             'email_notifications' => $preferences->email_notifications,
         ];
     }

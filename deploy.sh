@@ -6,8 +6,11 @@ set -Eeuo pipefail
 # same image). The API key lives in .dokploy.env (gitignored); the application
 # IDs below are not secret (they identify the Dokploy services, nothing more).
 #
-# NB: Dokploy's per-app "deploy webhook" URLs are GitHub-push webhooks — a bare
-# curl to one returns {"message":"Branch Not Match"} and does NOT deploy. The
+# Source: the three services use Dokploy's plain Git provider pointed at
+# https://github.com/rayzenai/project-management-app.git (branch main). Pushes
+# to main auto-deploy through GitHub push webhooks on that repo, one per
+# service (Dokploy's /api/deploy/<refreshToken> URLs). A bare curl to one of
+# those URLs returns {"message":"Branch Not Match"} and does NOT deploy; the
 # API endpoint below is the reliable manual trigger.
 #
 # Usage:
