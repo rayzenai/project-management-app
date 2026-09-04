@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\WorkspaceNote;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreWorkspaceNoteRequest extends FormRequest
 {
@@ -19,6 +21,7 @@ class StoreWorkspaceNoteRequest extends FormRequest
         return [
             'title' => ['nullable', 'string', 'max:255'],
             'body' => ['required', 'string'],
+            'color' => ['nullable', 'string', Rule::in(WorkspaceNote::COLORS)],
         ];
     }
 }

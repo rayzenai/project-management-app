@@ -134,6 +134,10 @@
 
     let draftTitle = $state('');
     let draftBody = $state('');
+    // The composer is a preview of the sticky you are about to pin, so the
+    // colour is chosen before saving rather than corrected afterwards.
+    let draftColor = $state<WorkspaceNoteColor>('amber');
+    let bodyEl = $state<HTMLTextAreaElement | null>(null);
 
     // Drag bookkeeping.
     let dragId = $state<number | null>(null);
@@ -224,6 +228,7 @@
     function startCompose() {
         draftTitle = '';
         draftBody = '';
+        draftColor = COLORS[notes.length % COLORS.length];
         composing = true;
         // The toolbar's "New note" composes inside an already-open board, so
         // backing out returns to the board, not all the way out.
@@ -248,7 +253,11 @@
 
         router.post(
             '/workspace/my-notes',
-            { title: draftTitle.trim(), body: draftBody.trim() },
+            {
+                title: draftTitle.trim(),
+                body: draftBody.trim(),
+                color: draftColor,
+            },
             {
                 ...visitOptions,
                 onSuccess: () => {
@@ -261,6 +270,23 @@
                 },
             },
         );
+    }
+
+    // Esc backs out, Cmd/Ctrl+Enter saves — the two keys anyone types in a
+    // composer without being told.
+    function onComposeKey(e: KeyboardEvent) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelCompose();
+
+            return;
+        }
+
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            createNote();
+        }
     }
 
     function startEdit(note: WorkspaceNote) {
@@ -689,53 +715,104 @@
                 {/if}
             </div>
 
-            <!-- compose -->
+            <!-- compose: the dialog is the sticky it will become, so the
+                 colour, the heading and the body all read as the pinned note
+                 before it is saved. -->
             {#if composing}
                 <div
-                    class="absolute inset-0 z-50 flex items-start justify-center bg-black/20 p-4 pt-[12vh]"
+                    class="absolute inset-0 z-50 flex items-start justify-center bg-black/25 p-4 pt-[10vh]"
+                    onclick={cancelCompose}
+                    role="presentation"
                 >
-                    <div class="popover w-full max-w-sm px-4 py-3">
+                    <div
+                        class={`w-full max-w-md rounded-lg border p-4 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.18)] ${paperClass[draftColor]}`}
+                        onclick={(e) => e.stopPropagation()}
+                        onkeydown={onComposeKey}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="New note"
+                        tabindex="-1"
+                    >
                         <div class="mb-3 flex items-center justify-between">
-                            <h3 class="font-medium text-fg">New note</h3>
+                            <div class="flex items-center gap-2">
+                                <StickyNote
+                                    class="h-[15px] w-[15px] text-fg-muted"
+                                />
+                                <h3 class="text-[13px] font-medium text-fg">
+                                    New note
+                                </h3>
+                            </div>
                             <button
                                 type="button"
                                 onclick={cancelCompose}
                                 aria-label="Cancel"
-                                class="btn-icon"
+                                class="btn-icon h-6 w-6"
                             >
-                                <X class="h-4 w-4" />
+                                <X class="h-3.5 w-3.5" />
                             </button>
                         </div>
+
                         <form
                             onsubmit={(e) => {
                                 e.preventDefault();
                                 createNote();
                             }}
-                            class="flex flex-col gap-2"
                         >
                             <input
                                 type="text"
                                 bind:value={draftTitle}
                                 placeholder="Heading (optional)"
-                                class="input font-medium"
+                                class="w-full bg-transparent text-sm font-medium text-fg outline-none placeholder:text-fg-faint"
                             />
+                            <!-- svelte-ignore a11y_autofocus -->
                             <textarea
+                                bind:this={bodyEl}
                                 bind:value={draftBody}
+                                autofocus
                                 placeholder="Write a note"
-                                rows="5"
-                                class="input resize-y"
+                                rows="7"
+                                class="mt-2 w-full resize-none bg-transparent text-[13px] leading-relaxed text-fg outline-none placeholder:text-fg-faint"
                             ></textarea>
-                            <div class="flex justify-end gap-1.5">
-                                <button
-                                    type="button"
-                                    onclick={cancelCompose}
-                                    class="btn-ghost">Cancel</button
+
+                            <div
+                                class="mt-3 flex items-center justify-between gap-3 border-t border-line-soft pt-3"
+                            >
+                                <div
+                                    class="flex items-center gap-1.5"
+                                    role="radiogroup"
+                                    aria-label="Note colour"
                                 >
-                                <button
-                                    type="submit"
-                                    disabled={!draftBody.trim() || saving}
-                                    class="btn-primary">Add note</button
-                                >
+                                    {#each COLORS as c (c)}
+                                        <button
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={draftColor === c}
+                                            aria-label={`Colour ${c}`}
+                                            onclick={() => (draftColor = c)}
+                                            class={`h-4 w-4 rounded-sm transition ${swatchClass[c]} ${
+                                                draftColor === c
+                                                    ? 'ring-2 ring-accent ring-offset-1 ring-offset-transparent'
+                                                    : 'opacity-70 hover:opacity-100'
+                                            }`}
+                                        ></button>
+                                    {/each}
+                                </div>
+
+                                <div class="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onclick={cancelCompose}
+                                        class="btn-ghost">Cancel</button
+                                    >
+                                    <button
+                                        type="submit"
+                                        disabled={!draftBody.trim() || saving}
+                                        class="btn-primary"
+                                    >
+                                        {saving ? 'Saving' : 'Add note'}
+                                        <kbd class="kbd">⌘↵</kbd>
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>

@@ -24,6 +24,57 @@
     let wrapper = $state<HTMLElement | null>(null);
     let panel = $state<HTMLElement | null>(null);
     let triggerEl = $state<HTMLButtonElement | null>(null);
+    let placement = $state('');
+
+    const GAP = 4;
+    const EDGE = 8;
+
+    /**
+     * The panel is moved to <body> and positioned in viewport coordinates.
+     * Absolute positioning inside the trigger's own stacking context looked
+     * right until a toolbar scrolled sideways: `overflow-x: auto` computes
+     * `overflow-y` to `auto` as well, so the menu was clipped to the strip it
+     * dropped out of. Nothing can clip a child of <body>.
+     */
+    function portal(node: HTMLElement) {
+        document.body.appendChild(node);
+
+        return {
+            destroy() {
+                node.remove();
+            },
+        };
+    }
+
+    /** Anchors the panel under the trigger, flipping up and clamping to fit. */
+    function place() {
+        const anchor = triggerEl?.getBoundingClientRect();
+
+        if (!anchor || !panel) {
+            return;
+        }
+
+        const width = panel.offsetWidth;
+        const height = panel.offsetHeight;
+        const below = window.innerHeight - anchor.bottom - GAP - EDGE;
+        const above = anchor.top - GAP - EDGE;
+        const flip = height > below && above > below;
+
+        const left = Math.max(
+            EDGE,
+            Math.min(
+                align === 'right' ? anchor.right - width : anchor.left,
+                window.innerWidth - width - EDGE,
+            ),
+        );
+        const top = flip
+            ? Math.max(EDGE, anchor.top - GAP - Math.min(height, above))
+            : anchor.bottom + GAP;
+
+        placement =
+            `left:${Math.round(left)}px;top:${Math.round(top)}px;` +
+            `max-height:${Math.round(Math.max(flip ? above : below, 120))}px;`;
+    }
 
     function items(): HTMLElement[] {
         return Array.from(
@@ -33,10 +84,15 @@
 
     $effect(() => {
         if (!open) {
+            placement = '';
+
             return;
         }
 
+        place();
+
         queueMicrotask(() => {
+            place();
             const first =
                 items()[0] ??
                 panel?.querySelector<HTMLElement>('input, button, [tabindex]');
@@ -44,15 +100,31 @@
         });
 
         function onPointerDown(event: PointerEvent) {
-            if (wrapper && !wrapper.contains(event.target as Node)) {
+            const target = event.target as Node;
+
+            if (
+                wrapper?.contains(target) !== true &&
+                panel?.contains(target) !== true
+            ) {
                 open = false;
             }
         }
 
-        document.addEventListener('pointerdown', onPointerDown, true);
+        // The trigger travels with the page, so the panel has to follow it —
+        // `true` catches scrolls in any ancestor, not just the window.
+        function reposition() {
+            place();
+        }
 
-        return () =>
+        document.addEventListener('pointerdown', onPointerDown, true);
+        window.addEventListener('scroll', reposition, true);
+        window.addEventListener('resize', reposition);
+
+        return () => {
             document.removeEventListener('pointerdown', onPointerDown, true);
+            window.removeEventListener('scroll', reposition, true);
+            window.removeEventListener('resize', reposition);
+        };
     });
 
     function onPanelKeydown(event: KeyboardEvent) {
@@ -120,9 +192,11 @@
     {#if open}
         <div
             bind:this={panel}
+            use:portal
             {role}
             tabindex="-1"
-            class={`popover absolute top-full z-30 mt-1 min-w-44 px-1 ${align === 'right' ? 'right-0' : 'left-0'} ${panelClass}`}
+            class={`popover fixed z-50 min-w-44 overflow-auto px-1 ${panelClass}`}
+            style={placement}
             onkeydown={onPanelKeydown}
             onclick={(e) => e.stopPropagation()}
         >

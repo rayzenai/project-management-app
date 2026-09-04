@@ -27,7 +27,11 @@ class CreateWorkspaceNoteService
                     'user_id' => $userId,
                     'title' => $this->normalizeTitle($attributes['title'] ?? null),
                     'body' => $body,
-                    'color' => WorkspaceNote::COLORS[$count % count(WorkspaceNote::COLORS)],
+                    // The composer picks a colour; without one the paper
+                    // rotates through the palette so a board of notes never
+                    // comes out all one tint.
+                    'color' => $this->normalizeColor($attributes['color'] ?? null)
+                        ?? WorkspaceNote::COLORS[$count % count(WorkspaceNote::COLORS)],
                     'position_x' => 48 + ($count % 6) * 36,
                     'position_y' => 48 + ($count % 6) * 36,
                 ]);
@@ -39,6 +43,11 @@ class CreateWorkspaceNoteService
 
             return ServiceResult::fromException($e);
         }
+    }
+
+    private function normalizeColor(mixed $color): ?string
+    {
+        return in_array($color, WorkspaceNote::COLORS, true) ? $color : null;
     }
 
     private function normalizeTitle(mixed $title): ?string
