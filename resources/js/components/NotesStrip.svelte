@@ -6,13 +6,16 @@
     import NoteSticky from './NoteSticky.svelte';
 
     let {
-        stickyNotes,
+        stickyNotes = [],
         taskNotes,
+        compose = true,
     }: {
-        stickyNotes: WorkspaceNote[];
+        stickyNotes?: WorkspaceNote[];
         // Optional: falls back to the globally shared `taskNotes` prop when the
         // parent doesn't pass an explicit (page-scoped) list.
         taskNotes?: Note[];
+        /** Sticky-only strips show the composer; the task strip is read-only. */
+        compose?: boolean;
     } = $props();
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
@@ -23,8 +26,10 @@
 
     const freeformPreview = $derived(stickyNotes.slice(0, FREEFORM_PREVIEW));
     const taskPreview = $derived(resolvedTaskNotes.slice(0, TASK_PREVIEW));
-    const freeformOverflow = $derived(
-        stickyNotes.length - freeformPreview.length,
+    const overflow = $derived(
+        stickyNotes.length -
+            freeformPreview.length +
+            (resolvedTaskNotes.length - taskPreview.length),
     );
 </script>
 
@@ -37,21 +42,23 @@
         <NoteSticky kind="task" {note} />
     {/each}
 
-    <button
-        type="button"
-        onclick={() => notesBoard.show({ compose: true })}
-        aria-label="New note"
-        class="btn"
-    >
-        <Plus class="h-3.5 w-3.5" />
-        New note
-    </button>
+    {#if compose}
+        <button
+            type="button"
+            onclick={() => notesBoard.show({ compose: true })}
+            aria-label="New note"
+            class="btn"
+        >
+            <Plus class="h-3.5 w-3.5" />
+            New note
+        </button>
+    {/if}
 
-    {#if freeformOverflow > 0}
+    {#if overflow > 0}
         <button
             type="button"
             onclick={() => notesBoard.show()}
-            class="btn-ghost tabular-nums">{freeformOverflow} more</button
+            class="btn-ghost tabular-nums">{overflow} more</button
         >
     {/if}
 </div>

@@ -45,6 +45,26 @@ class WorkspaceDemoSeeder extends Seeder
     /** Every seeded login shares this password. */
     private const PASSWORD = 'password';
 
+    /**
+     * Checklist lines the seeded subtasks rotate through, so each task's todos
+     * read like that task's own work rather than a copied template.
+     *
+     * @var list<string>
+     */
+    private const TODO_POOL = [
+        'Pull the current numbers from the district returns',
+        'Circulate the draft note to the secretariat',
+        'Book the follow-up review with the ministry',
+        'Chase the pending sign-off',
+        'Reconcile the figures with the treasury export',
+        'Confirm the focal person in each province',
+        'Draft the cabinet note for the next sitting',
+        'Publish the revised checklist to the portal',
+        'Close out the outstanding audit query',
+        'Agree the handover date with the contractor',
+        'Verify the vendor invoice against the contract',
+    ];
+
     /** @var array<string, User> handle => user (only people with a login) */
     private array $users = [];
 
@@ -232,14 +252,14 @@ class WorkspaceDemoSeeder extends Seeder
                 'name' => 'Reform Desk',
                 'description' => 'Legal and administrative reform workstream.',
                 'color' => '#8B5CF6',
-                'roster' => ['bikash' => 'leader', 'deepak' => 'member', 'eliza' => 'member'],
+                'roster' => ['bikash' => 'leader', 'deepak' => 'member', 'eliza' => 'member', 'namrata' => 'member'],
             ],
             [
                 'slug' => 'field-ops',
                 'name' => 'Field Ops',
                 'description' => 'District-level verification and follow-up.',
                 'color' => '#059669',
-                'roster' => ['deepak' => 'leader', 'nirmala' => 'member', 'sujan' => 'member'],
+                'roster' => ['deepak' => 'leader', 'nirmala' => 'member', 'sujan' => 'member', 'namrata' => 'member'],
             ],
         ];
 
@@ -389,7 +409,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => 12,
                 'updated_hours_ago' => 3,          // moved
                 'ministry' => 'Office of the Prime Minister',
-                'assign' => ['bikash', 'chhaya'],
+                'assign' => ['bikash', 'chhaya', 'namrata'],
+                'focus' => ['namrata'],
             ],
             [
                 'item_number' => 2,
@@ -403,7 +424,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => 54,
                 'updated_hours_ago' => 20 * 24,    // stalled
                 'ministry' => 'Ministry of Federal Affairs',
-                'assign' => ['bikash'],
+                'assign' => ['bikash', 'namrata'],
             ],
             [
                 'item_number' => 3,
@@ -416,7 +437,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'progress' => 0,
                 'deadline_in' => null,
                 'updated_hours_ago' => 41 * 24,    // cold
-                'assign' => ['nirmala'],
+                'assign' => ['nirmala', 'namrata'],
             ],
 
             // ---- unclear -----------------------------------------------------
@@ -432,7 +453,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => null,
                 'updated_hours_ago' => 5 * 24,     // fresh
                 'status_note' => 'Waiting on a written opinion from the Attorney General.',
-                'assign' => ['asha', 'eliza'],
+                'assign' => ['asha', 'eliza', 'namrata'],
             ],
             [
                 'item_number' => 5,
@@ -446,7 +467,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => -6,               // overdue and not done -> is_late
                 'updated_hours_ago' => 33 * 24,    // cold
                 'ministry' => 'Ministry of Energy',
-                'assign' => ['deepak'],
+                'assign' => ['namrata', 'deepak'],
+                'snooze' => ['deepak'],
             ],
             [
                 'item_number' => 6,
@@ -459,7 +481,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'progress' => 5,
                 'deadline_in' => 3,
                 'updated_hours_ago' => 26,         // moved
-                'assign' => ['chhaya', 'nirmala'],
+                'assign' => ['chhaya', 'nirmala', 'namrata'],
             ],
 
             // ---- in_progress -------------------------------------------------
@@ -476,7 +498,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => 31,
                 'updated_hours_ago' => 6,          // moved
                 'ministry' => 'Ministry of Finance',
-                'assign' => ['asha', 'deepak', 'chhaya'],
+                'assign' => ['asha', 'deepak', 'chhaya', 'namrata'],
+                'focus' => ['asha', 'namrata'],
             ],
             [
                 'item_number' => 8,
@@ -490,7 +513,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => 19,
                 'updated_hours_ago' => 4 * 24,     // fresh
                 'ministry' => 'Ministry of Industry',
-                'assign' => ['bikash', 'eliza'],
+                'assign' => ['bikash', 'eliza', 'namrata'],
+                'snooze' => ['namrata'],
             ],
             [
                 'item_number' => 9,
@@ -504,7 +528,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => -2,               // overdue while still in flight
                 'updated_hours_ago' => 17 * 24,    // stalled
                 'status_note' => 'Redaction queue is the bottleneck; two more operators requested.',
-                'assign' => ['eliza'],
+                'assign' => ['namrata', 'eliza'],
             ],
 
             // ---- done --------------------------------------------------------
@@ -522,7 +546,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'completed_days_ago' => 88,        // finished before the deadline
                 'updated_hours_ago' => 88 * 24,    // cold
                 'ministry' => 'Office of the Prime Minister',
-                'assign' => ['asha', 'eliza'],
+                'assign' => ['asha', 'eliza', 'admin'],
             ],
             [
                 'item_number' => 11,
@@ -534,10 +558,10 @@ class WorkspaceDemoSeeder extends Seeder
                 'priority' => 'high',
                 'progress' => 100,
                 'deadline_in' => -20,
-                'completed_days_ago' => 9,         // completed AFTER the deadline -> is_late
-                'updated_hours_ago' => 9 * 24,     // fresh
+                'completed_days_ago' => 3,         // completed AFTER the deadline -> is_late
+                'updated_hours_ago' => 3 * 24,     // fresh
                 'ministry' => 'Ministry of Industry',
-                'assign' => ['bikash', 'chhaya'],
+                'assign' => ['bikash', 'chhaya', 'namrata'],
             ],
             [
                 'item_number' => 12,
@@ -552,7 +576,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'completed_days_ago' => 41,
                 'updated_hours_ago' => 41 * 24,    // cold
                 'ministry' => 'Ministry of Water Supply',
-                'assign' => ['deepak', 'nirmala'],
+                'assign' => ['deepak', 'nirmala', 'namrata'],
+                'focus' => ['deepak'],
             ],
 
             // ---- failed ------------------------------------------------------
@@ -569,7 +594,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'updated_hours_ago' => 15 * 24,    // stalled
                 'status_note' => 'Vendor contract lapsed mid-run; a re-tender is now unavoidable.',
                 'ministry' => 'Ministry of Home Affairs',
-                'assign' => ['eliza', 'deepak'],
+                'assign' => ['eliza', 'deepak', 'namrata'],
             ],
             [
                 'item_number' => 14,
@@ -584,7 +609,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'updated_hours_ago' => 4 * 24,     // fresh
                 'status_note' => 'Reset to a risk-ranked sample of ninety units for the next cycle.',
                 'ministry' => 'Office of the Auditor General',
-                'assign' => ['bikash'],
+                'assign' => ['bikash', 'admin'],
             ],
             [
                 'item_number' => 15,
@@ -598,7 +623,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => -55,
                 'updated_hours_ago' => 60 * 24,    // cold
                 'ministry' => 'Ministry of Physical Infrastructure',
-                'assign' => ['nirmala'],
+                'assign' => ['nirmala', 'admin'],
             ],
         ];
     }
@@ -611,7 +636,7 @@ class WorkspaceDemoSeeder extends Seeder
      */
     private function secondaryTasks(int $itemNumberBase, string $category, string $ministry): array
     {
-        /** @var list<array{status: string, title: string, description: string, priority: string, progress: int, deadline_type: string, deadline_in: ?int, updated_hours_ago: int, completed_days_ago?: int, status_note?: string, assign: list<string>}> $shape */
+        /** @var list<array{status: string, title: string, description: string, priority: string, progress: int, deadline_type: string, deadline_in: ?int, updated_hours_ago: int, completed_days_ago?: int, status_note?: string, assign: list<string>, focus?: list<string>, snooze?: list<string>}> $shape */
         $shape = [
             [
                 'status' => 'not_started',
@@ -622,7 +647,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_type' => '30d',
                 'deadline_in' => 21,
                 'updated_hours_ago' => 12,
-                'assign' => ['asha'],
+                'assign' => ['asha', 'namrata'],
             ],
             [
                 'status' => 'unclear',
@@ -634,7 +659,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => null,
                 'updated_hours_ago' => 19 * 24,
                 'status_note' => 'Parked until the MoU question is answered.',
-                'assign' => ['eliza'],
+                'assign' => ['eliza', 'namrata'],
             ],
             [
                 'status' => 'in_progress',
@@ -645,7 +670,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_type' => '60d',
                 'deadline_in' => 9,
                 'updated_hours_ago' => 30,
-                'assign' => ['deepak', 'nirmala'],
+                'assign' => ['deepak', 'nirmala', 'admin'],
+                'focus' => ['deepak'],
             ],
             [
                 'status' => 'done',
@@ -669,7 +695,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'deadline_in' => -11,
                 'updated_hours_ago' => 11 * 24,
                 'status_note' => 'Replaced by a phased migration in the next cycle.',
-                'assign' => ['chhaya'],
+                'assign' => ['chhaya', 'admin'],
             ],
         ];
 
@@ -735,8 +761,12 @@ class WorkspaceDemoSeeder extends Seeder
 
         /** @var list<string> $assignees */
         $assignees = $spec['assign'] ?? [];
+        /** @var list<string> $focus */
+        $focus = $spec['focus'] ?? [];
+        /** @var list<string> $snooze */
+        $snooze = $spec['snooze'] ?? [];
 
-        $this->seedAssignments($task, $assignees);
+        $this->seedAssignments($task, $assignees, $focus, $snooze);
         $this->seedSubtasks($task, $assignees);
         $this->seedNotes($task, $assignees);
         $this->seedContacts($task, $itemNumber);
@@ -746,12 +776,15 @@ class WorkspaceDemoSeeder extends Seeder
     }
 
     /**
-     * First assignee is the lead. One task in three gets a focused assignment
-     * and one in five a snoozed one, so the My Workspace triage has both.
+     * First assignee is the lead. Focus and snooze are named per task rather
+     * than derived from the item number, so the My Workspace lanes (Due soon /
+     * Focused / Everything else / Snoozed) can be populated on purpose.
      *
      * @param  list<string>  $assignees
+     * @param  list<string>  $focus
+     * @param  list<string>  $snooze
      */
-    private function seedAssignments(Task $task, array $assignees): void
+    private function seedAssignments(Task $task, array $assignees, array $focus, array $snooze): void
     {
         $today = CarbonImmutable::today();
 
@@ -767,8 +800,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'personal_progress' => $isLead ? $task->progress : max(0, $task->progress - fake()->numberBetween(10, 30)),
                 'personal_due_at' => $task->deadline_at?->subDays(fake()->numberBetween(1, 5)),
                 'personal_status_note' => $isLead ? null : fake()->sentence(),
-                'is_focused' => $isLead && $task->item_number % 3 === 0,
-                'snoozed_until' => (! $isLead && $task->item_number % 5 === 0) ? $today->addDays(4) : null,
+                'is_focused' => in_array($handle, $focus, true),
+                'snoozed_until' => in_array($handle, $snooze, true) ? $today->addDays(4) : null,
             ]);
         }
     }
@@ -792,12 +825,17 @@ class WorkspaceDemoSeeder extends Seeder
 
             Auth::login($user);
 
+            // Rotate through the pool by item number so no two tasks carry an
+            // identical checklist.
+            $offset = ((int) $task->item_number) % count(self::TODO_POOL);
+            $bodies = array_slice(array_merge(self::TODO_POOL, self::TODO_POOL), $offset, 4);
+
             /** @var list<array{body: string, done: bool, due_in: ?int}> $todos */
             $todos = [
-                ['body' => 'Pull the current numbers from the district returns', 'done' => true, 'due_in' => -9],
-                ['body' => 'Circulate the draft note to the secretariat', 'done' => $task->isComplete(), 'due_in' => -2],
-                ['body' => 'Book the follow-up review with the ministry', 'done' => false, 'due_in' => 6],
-                ['body' => 'Chase the pending sign-off', 'done' => false, 'due_in' => -3],
+                ['body' => $bodies[0], 'done' => true, 'due_in' => -9],
+                ['body' => $bodies[1], 'done' => $task->isComplete(), 'due_in' => -2],
+                ['body' => $bodies[2], 'done' => false, 'due_in' => 6],
+                ['body' => $bodies[3], 'done' => false, 'due_in' => -3],
             ];
 
             foreach ($todos as $position => $todo) {
@@ -823,12 +861,36 @@ class WorkspaceDemoSeeder extends Seeder
     {
         /** @var array<string, list<string>> $bodies */
         $bodies = [
-            'general' => ['Scope confirmed with the secretariat; no change to the target date.'],
-            'action_taken' => ['Circular issued to all district offices with the revised checklist.'],
-            'meeting' => ['Review with the ministry: three of five deliverables signed off, two carried over.'],
-            'blocker' => ['Blocked on the budget release; nothing moves until the authority letter lands.'],
-            'milestone' => ['First district went live and processed 240 files in the opening week.'],
-            'decision' => ['Decided to keep the paper register in parallel for one more quarter.'],
+            'general' => [
+                'Scope confirmed with the secretariat; no change to the target date.',
+                'Reporting line agreed: weekly to the delivery unit, monthly to cabinet.',
+                'Two districts asked for a longer transition; noted, no change yet.',
+            ],
+            'action_taken' => [
+                'Circular issued to all district offices with the revised checklist.',
+                'Training run for 40 focal persons across the three provinces.',
+                'Data migration rehearsed on a copy of the live registry.',
+            ],
+            'meeting' => [
+                'Review with the ministry: three of five deliverables signed off, two carried over.',
+                'Joint sitting with the treasury on the release schedule.',
+                'Walkthrough with the vendor; open items logged against the contract.',
+            ],
+            'blocker' => [
+                'Blocked on the budget release; nothing moves until the authority letter lands.',
+                'Waiting on a legal opinion before the data can be shared across provinces.',
+                'Contractor claim unresolved, so the handover cannot be scheduled.',
+            ],
+            'milestone' => [
+                'First district went live and processed 240 files in the opening week.',
+                'Halfway point reached ahead of schedule.',
+                'Public portal opened; 1,100 sessions on day one.',
+            ],
+            'decision' => [
+                'Decided to keep the paper register in parallel for one more quarter.',
+                'Agreed to phase the rollout by province rather than cut over at once.',
+                'Scope trimmed to a risk-ranked sample for this cycle.',
+            ],
         ];
 
         $types = array_keys($bodies);
@@ -839,13 +901,16 @@ class WorkspaceDemoSeeder extends Seeder
         $count = $task->isComplete() ? 3 : 2;
 
         for ($i = 0; $i < $count; $i++) {
-            $type = $types[($task->item_number + $i) % count($types)];
+            $type = $types[((int) $task->item_number + $i) % count($types)];
+            $pool = $bodies[$type];
 
             ProjectNote::query()->create([
                 'task_id' => $task->getKey(),
                 'user_id' => $author->getKey(),
                 'type' => $type,
-                'body' => $bodies[$type][0],
+                // Rotate within the type so the same task note does not appear
+                // verbatim on every task in the workspace.
+                'body' => $pool[((int) $task->item_number + $i) % count($pool)],
                 'happened_at' => CarbonImmutable::today()->subDays(fake()->numberBetween(1, 45)),
             ]);
         }

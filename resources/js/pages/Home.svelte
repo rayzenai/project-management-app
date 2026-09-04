@@ -1,14 +1,16 @@
 <script lang="ts">
-    import { inertia, router } from '@inertiajs/svelte';
-    import { ChevronRight } from '@lucide/svelte';
+    import { inertia, page, router } from '@inertiajs/svelte';
+    import { ChevronRight, StickyNote } from '@lucide/svelte';
     import AppShell from '../components/AppShell.svelte';
     import Avatar from '../components/Avatar.svelte';
+    import NotesStrip from '../components/NotesStrip.svelte';
     import StatusGlyph from '../components/StatusGlyph.svelte';
     import TaskRow from '../components/TaskRow.svelte';
     import { formatTimeAgo } from '../lib/format';
+    import { notesBoard } from '../lib/notesBoard.svelte';
     import { peek } from '../lib/peek.svelte';
     import { quickAdd } from '../lib/quickAdd.svelte';
-    import type { Task } from '../lib/types';
+    import type { SharedProps, Task } from '../lib/types';
 
     type Bucket = { key: string; label: string; tasks: Task[] };
     type StatusSlice = {
@@ -160,6 +162,15 @@
         status_breakdown.reduce((sum, s) => sum + s.count, 0),
     );
 
+    // Stickies ride on the shared props of every workspace page, so Home reads
+    // them from there rather than adding them to its own payload.
+    const stickyNotes = $derived(
+        ((page.props ?? {}) as unknown as SharedProps).workspaceNotes ?? [],
+    );
+    const noteFeed = $derived(
+        ((page.props ?? {}) as unknown as SharedProps).taskNotes ?? [],
+    );
+
     function setScope(next: 'mine' | 'all') {
         router.get(
             '/workspace',
@@ -209,169 +220,227 @@
         </div>
     {/snippet}
 
-    <div class="px-4 pt-5 pb-6 lg:px-6">
-        <header class="mb-4">
-            <h1 class="text-[19px] font-semibold tracking-[-0.02em]">
-                {heading}
-            </h1>
-            <p class="mt-0.5 text-[13px] text-fg-muted">
-                {scope === 'mine'
-                    ? 'Your assigned work'
-                    : 'Everything across your projects'} · {stats.open} open
-            </p>
-        </header>
+    <div class="xl:grid xl:grid-cols-[minmax(0,1fr)_312px]">
+        <div class="px-4 pt-5 pb-6 lg:px-6">
+            <header class="mb-4">
+                <h1 class="text-[19px] font-semibold tracking-[-0.02em]">
+                    {heading}
+                </h1>
+                <p class="mt-0.5 text-[13px] text-fg-muted">
+                    {scope === 'mine'
+                        ? 'Your assigned work'
+                        : 'Everything across your projects'} · {stats.open} open
+                </p>
+            </header>
 
-        <!-- Completion is the one hero figure; the cards beside it are the
+            <!-- Completion is the one hero figure; the cards beside it are the
              exceptions worth acting on. -->
-        <div class="grid gap-3 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
-            <div class="panel flex flex-col justify-between p-4">
-                <div class="text-xs font-medium text-fg-muted">Completion</div>
-                <div class="mt-3 flex items-end gap-2">
-                    <span
-                        class="text-[48px] leading-none font-semibold tracking-[-0.03em]"
-                        >{stats.percent_complete}<span
-                            class="text-[26px] text-fg-faint">%</span
-                        ></span
-                    >
-                </div>
-                <div
-                    class="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-alt"
-                >
+            <div
+                class="grid gap-3 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]"
+            >
+                <div class="panel flex flex-col justify-between p-4">
+                    <div class="text-xs font-medium text-fg-muted">
+                        Completion
+                    </div>
+                    <div class="mt-3 flex items-end gap-2">
+                        <span
+                            class="text-[48px] leading-none font-semibold tracking-[-0.03em]"
+                            >{stats.percent_complete}<span
+                                class="text-[26px] text-fg-faint">%</span
+                            ></span
+                        >
+                    </div>
                     <div
-                        class="h-full rounded-full bg-accent"
-                        style={`width: ${stats.percent_complete}%`}
-                    ></div>
+                        class="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-alt"
+                    >
+                        <div
+                            class="h-full rounded-full bg-accent"
+                            style={`width: ${stats.percent_complete}%`}
+                        ></div>
+                    </div>
+                    <div class="mt-2 text-xs text-fg-muted tabular-nums">
+                        {stats.complete} of {stats.total} done · {stats.done_this_week}
+                        finished this week
+                    </div>
                 </div>
-                <div class="mt-2 text-xs text-fg-muted tabular-nums">
-                    {stats.complete} of {stats.total} done · {stats.done_this_week}
-                    finished this week
+
+                <div
+                    class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5"
+                >
+                    {#each cards as card (card.key)}
+                        {@const active = filter === card.key}
+                        <button
+                            type="button"
+                            aria-pressed={active}
+                            disabled={card.value === 0}
+                            onclick={() => (filter = active ? 'all' : card.key)}
+                            class={`panel flex flex-col justify-between p-3 text-left transition disabled:pointer-events-none disabled:opacity-45 ${
+                                active
+                                    ? 'border-accent bg-accent-soft'
+                                    : 'hover:bg-hover'
+                            }`}
+                        >
+                            <span class="text-xs font-medium text-fg-muted"
+                                >{card.label}</span
+                            >
+                            <span
+                                class={`mt-3 text-[28px] leading-none font-semibold tracking-[-0.02em] ${
+                                    card.value === 0
+                                        ? 'text-fg-faint'
+                                        : toneText[card.tone]
+                                }`}>{card.value}</span
+                            >
+                            <span class="mt-1.5 text-[11px] text-fg-faint"
+                                >{card.hint}</span
+                            >
+                        </button>
+                    {/each}
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                {#each cards as card (card.key)}
-                    {@const active = filter === card.key}
-                    <button
-                        type="button"
-                        aria-pressed={active}
-                        disabled={card.value === 0}
-                        onclick={() => (filter = active ? 'all' : card.key)}
-                        class={`panel flex flex-col justify-between p-3 text-left transition disabled:pointer-events-none disabled:opacity-45 ${
-                            active
-                                ? 'border-accent bg-accent-soft'
-                                : 'hover:bg-hover'
-                        }`}
+            <!-- Part-to-whole across the workflow. Segments are separated by a 2px
+             surface gap because two statuses share a colour in config. -->
+            {#if breakdownTotal > 0}
+                <section class="panel mt-3 p-4">
+                    <div class="section-title">
+                        Status <span class="section-count"
+                            >{breakdownTotal}</span
+                        >
+                    </div>
+                    <div class="mt-3 flex h-2 gap-[2px] overflow-hidden">
+                        {#each status_breakdown.filter((s) => s.count > 0) as slice (slice.value)}
+                            <div
+                                class="h-full rounded-[4px]"
+                                style={`width: ${(slice.count / breakdownTotal) * 100}%; background: ${slice.color}`}
+                            ></div>
+                        {/each}
+                    </div>
+                    <div
+                        class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2"
                     >
-                        <span class="text-xs font-medium text-fg-muted"
-                            >{card.label}</span
+                        {#each status_breakdown as slice (slice.value)}
+                            <span
+                                class={`flex items-center gap-1.5 text-xs ${slice.count === 0 ? 'text-fg-faint' : 'text-fg-muted'}`}
+                            >
+                                <StatusGlyph status={slice.value} />
+                                {slice.label}
+                                <span
+                                    class="font-mono text-fg-faint tabular-nums"
+                                    >{slice.count}</span
+                                >
+                            </span>
+                        {/each}
+                    </div>
+                </section>
+            {/if}
+
+            {#if projects.length > 0}
+                <section class="mt-6">
+                    <div class="section-title mb-2.5">
+                        Projects <span class="section-count"
+                            >{projects.length}</span
                         >
-                        <span
-                            class={`mt-3 text-[28px] leading-none font-semibold tracking-[-0.02em] ${
-                                card.value === 0
-                                    ? 'text-fg-faint'
-                                    : toneText[card.tone]
-                            }`}>{card.value}</span
-                        >
-                        <span class="mt-1.5 text-[11px] text-fg-faint"
-                            >{card.hint}</span
-                        >
-                    </button>
-                {/each}
-            </div>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {#each projects as project (project.slug)}
+                            <a
+                                href={`/workspace/projects/${project.slug}`}
+                                use:inertia
+                                class="panel block p-4 transition hover:bg-hover"
+                            >
+                                <div
+                                    class="flex items-baseline justify-between gap-3"
+                                >
+                                    <span
+                                        class="truncate text-[13px] font-medium"
+                                        >{project.title}</span
+                                    >
+                                    <span
+                                        class="shrink-0 font-mono text-xs text-fg-muted tabular-nums"
+                                        >{project.percent_complete}%</span
+                                    >
+                                </div>
+                                {#if project.title_np}
+                                    <div
+                                        class="font-np mt-0.5 truncate text-xs text-fg-faint"
+                                    >
+                                        {project.title_np}
+                                    </div>
+                                {/if}
+                                <div
+                                    class="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-alt"
+                                >
+                                    <div
+                                        class="h-full rounded-full bg-accent"
+                                        style={`width: ${project.percent_complete}%`}
+                                    ></div>
+                                </div>
+                                <div
+                                    class="mt-2.5 flex items-center gap-3 text-xs tabular-nums"
+                                >
+                                    <span class="text-fg-muted"
+                                        >{project.complete}/{project.tasks_count}
+                                        done</span
+                                    >
+                                    {#if project.overdue > 0}
+                                        <span class="text-danger"
+                                            >{project.overdue} overdue</span
+                                        >
+                                    {/if}
+                                    {#if project.stalled > 0}
+                                        <span class="text-warn"
+                                            >{project.stalled} stalled</span
+                                        >
+                                    {/if}
+                                </div>
+                            </a>
+                        {/each}
+                    </div>
+                </section>
+            {/if}
         </div>
 
-        <!-- Part-to-whole across the workflow. Segments are separated by a 2px
-             surface gap because two statuses share a colour in config. -->
-        {#if breakdownTotal > 0}
-            <section class="panel mt-3 p-4">
-                <div class="section-title">
-                    Status <span class="section-count">{breakdownTotal}</span>
-                </div>
-                <div class="mt-3 flex h-2 gap-[2px] overflow-hidden">
-                    {#each status_breakdown.filter((s) => s.count > 0) as slice (slice.value)}
-                        <div
-                            class="h-full rounded-[4px]"
-                            style={`width: ${(slice.count / breakdownTotal) * 100}%; background: ${slice.color}`}
-                        ></div>
-                    {/each}
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-                    {#each status_breakdown as slice (slice.value)}
-                        <span
-                            class={`flex items-center gap-1.5 text-xs ${slice.count === 0 ? 'text-fg-faint' : 'text-fg-muted'}`}
-                        >
-                            <StatusGlyph status={slice.value} />
-                            {slice.label}
-                            <span class="font-mono text-fg-faint tabular-nums"
-                                >{slice.count}</span
-                            >
-                        </span>
-                    {/each}
-                </div>
-            </section>
-        {/if}
-
-        {#if projects.length > 0}
-            <section class="mt-6">
-                <div class="section-title mb-2.5">
-                    Projects <span class="section-count">{projects.length}</span
+        <aside
+            class="border-t border-line xl:sticky xl:top-11 xl:self-start xl:border-t-0 xl:border-l"
+        >
+            <section class="px-4 py-5 lg:px-5">
+                <div class="mb-3 flex items-center gap-2">
+                    <StickyNote
+                        class="h-[15px] w-[15px] shrink-0 text-fg-faint"
+                    />
+                    <span class="section-title">
+                        My notes
+                        <span class="section-count">{stickyNotes.length}</span>
+                    </span>
+                    <button
+                        type="button"
+                        class="btn-ghost ml-auto h-6"
+                        onclick={() => notesBoard.show()}>Open board</button
                     >
                 </div>
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {#each projects as project (project.slug)}
-                        <a
-                            href={`/workspace/projects/${project.slug}`}
-                            use:inertia
-                            class="panel block p-4 transition hover:bg-hover"
-                        >
-                            <div
-                                class="flex items-baseline justify-between gap-3"
-                            >
-                                <span class="truncate text-[13px] font-medium"
-                                    >{project.title}</span
-                                >
-                                <span
-                                    class="shrink-0 font-mono text-xs text-fg-muted tabular-nums"
-                                    >{project.percent_complete}%</span
-                                >
-                            </div>
-                            {#if project.title_np}
-                                <div
-                                    class="font-np mt-0.5 truncate text-xs text-fg-faint"
-                                >
-                                    {project.title_np}
-                                </div>
-                            {/if}
-                            <div
-                                class="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-alt"
-                            >
-                                <div
-                                    class="h-full rounded-full bg-accent"
-                                    style={`width: ${project.percent_complete}%`}
-                                ></div>
-                            </div>
-                            <div
-                                class="mt-2.5 flex items-center gap-3 text-xs tabular-nums"
-                            >
-                                <span class="text-fg-muted"
-                                    >{project.complete}/{project.tasks_count} done</span
-                                >
-                                {#if project.overdue > 0}
-                                    <span class="text-danger"
-                                        >{project.overdue} overdue</span
-                                    >
-                                {/if}
-                                {#if project.stalled > 0}
-                                    <span class="text-warn"
-                                        >{project.stalled} stalled</span
-                                    >
-                                {/if}
-                            </div>
-                        </a>
-                    {/each}
-                </div>
+                {#if stickyNotes.length === 0}
+                    <button
+                        type="button"
+                        onclick={() => notesBoard.show({ compose: true })}
+                        class="panel flex w-full items-center justify-center p-5 text-[13px] text-fg-muted transition hover:bg-hover"
+                    >
+                        Jot down your first note
+                    </button>
+                {:else}
+                    <NotesStrip {stickyNotes} taskNotes={[]} />
+                {/if}
             </section>
-        {/if}
+
+            {#if noteFeed.length > 0}
+                <section class="border-t border-line px-4 py-5 lg:px-5">
+                    <h2 class="section-title mb-3">
+                        From my tasks
+                        <span class="section-count">{noteFeed.length}</span>
+                    </h2>
+                    <NotesStrip taskNotes={noteFeed} compose={false} />
+                </section>
+            {/if}
+        </aside>
     </div>
 
     <div class="border-t border-line">

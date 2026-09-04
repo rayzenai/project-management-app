@@ -23,9 +23,13 @@
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
     const notes = $derived(shared.workspaceNotes ?? []);
-    // Read-only task-anchored notes, shown alongside the draggable stickies so
-    // the board surfaces every note the user authored, not just sticky notes.
+    // Read-only task-anchored notes. They live in their own lane rather than on
+    // the sticky canvas: they are records on a task, not a personal scratchpad,
+    // and scattering dozens of them over the stickies buried both.
     const taskNotes = $derived(shared.taskNotes ?? []);
+
+    type Lane = 'mine' | 'tasks';
+    let lane = $state<Lane>('mine');
 
     // The paper card shell shared by every sticky on the board.
     const PAPER = 'rounded-md border shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
@@ -40,15 +44,7 @@
         return `/workspace/projects/${task.project.slug}/tasks/${task.slug}?tab=notes`;
     }
 
-    // Task notes have no saved position, so scatter them across the canvas
-    // (deterministically, by id), free-flowing like the stickies rather than
-    // lined up. They sit beneath the draggable stickies so your own notes stay
-    // grabbable.
-    const TASK_CARD_W = 160;
-    const TASK_CARD_H = 96;
-    const TASK_MARGIN = 24;
-
-    // Positions are relative to the drawer's canvas, so clamps and the scatter
+    // Sticky positions are relative to the drawer's canvas, so the drag clamps
     // measure the canvas element (falling back to the window before it mounts).
     let canvasEl = $state<HTMLDivElement | null>(null);
     let viewport = $state({ w: 720, h: 800 });
@@ -65,53 +61,25 @@
         return () => window.removeEventListener('resize', measure);
     });
 
-    function scatter(id: number): { x: number; y: number } {
-        const rand = (seed: number) => {
-            const v = Math.sin(id * seed) * 43758.5453;
-
-            return v - Math.floor(v);
-        };
-
-        return {
-            x:
-                TASK_MARGIN +
-                rand(12.9898) *
-                    Math.max(0, viewport.w - TASK_CARD_W - TASK_MARGIN * 2),
-            y:
-                TASK_MARGIN +
-                rand(78.233) *
-                    Math.max(0, viewport.h - TASK_CARD_H - TASK_MARGIN * 2),
-        };
-    }
-
-    // Arrange / sort modes. "free" is the draggable canvas; the others switch to
-    // a tidy, scannable grid (dragging off) grouped or sorted accordingly.
-    type ArrangeMode = 'free' | 'task' | 'title' | 'type';
+    // How the task lane is ordered. The sticky lane is always the free canvas —
+    // that is the whole point of a sticky.
+    type ArrangeMode = 'task' | 'title' | 'type';
     const ARRANGE_OPTIONS: { value: ArrangeMode; label: string }[] = [
-        { value: 'free', label: 'Free layout' },
         { value: 'task', label: 'Group by task' },
         { value: 'title', label: 'Sort by title' },
         { value: 'type', label: 'Sort by type' },
     ];
-    let arrange = $state<ArrangeMode>('free');
+    let arrange = $state<ArrangeMode>('task');
 
-    type ArrangeItem = { key: string; workspace?: WorkspaceNote; task?: Note };
+    type ArrangeItem = { key: string; task: Note };
 
     const arranged = $derived.by(
         (): { label: string; items: ArrangeItem[] }[] => {
-            if (arrange === 'free') {
-                return [];
-            }
-
-            const items: ArrangeItem[] = [
-                ...notes.map((n) => ({ key: `w-${n.id}`, workspace: n })),
-                ...taskNotes.map((n) => ({ key: `t-${n.id}`, task: n })),
-            ];
-            const text = (it: ArrangeItem) =>
-                (it.workspace
-                    ? it.workspace.title || it.workspace.body
-                    : (it.task?.body ?? '')
-                ).toLowerCase();
+            const items: ArrangeItem[] = taskNotes.map((n) => ({
+                key: `t-${n.id}`,
+                task: n,
+            }));
+            const text = (it: ArrangeItem) => it.task.body.toLowerCase();
 
             if (arrange === 'title') {
                 return [
@@ -129,14 +97,10 @@
             for (const it of items) {
                 const label =
                     arrange === 'task'
-                        ? it.task
-                            ? it.task.task?.short_title ||
-                              it.task.task?.title ||
-                              'Untagged'
-                            : 'My notes'
-                        : it.task
-                          ? it.task.type_label
-                          : 'Sticky note';
+                        ? (it.task.task?.short_title ??
+                          it.task.task?.title ??
+                          'Untagged')
+                        : it.task.type_label;
                 const bucket = groups.get(label);
 
                 if (bucket) {
@@ -156,27 +120,6 @@
     let pos = $state<Record<number, { x: number; y: number }>>({});
     function coords(note: WorkspaceNote): { x: number; y: number } {
         return pos[note.id] ?? { x: note.position_x, y: note.position_y };
-    }
-
-    // Task-note placement: draggable like stickies, but persisted client-side
-    // (project_notes has no position columns) so an arrangement survives reloads
-    // on this browser. Falls back to the deterministic scatter when unset.
-    const TASK_POS_KEY = 'ws:taskNotePos';
-    function loadTaskPos(): Record<number, { x: number; y: number }> {
-        if (typeof localStorage === 'undefined') {
-            return {};
-        }
-
-        try {
-            return JSON.parse(localStorage.getItem(TASK_POS_KEY) ?? '{}');
-        } catch {
-            return {};
-        }
-    }
-    let taskPos =
-        $state<Record<number, { x: number; y: number }>>(loadTaskPos());
-    function taskCoords(note: Note): { x: number; y: number } {
-        return taskPos[note.id] ?? scatter(note.id);
     }
 
     let expandedId = $state<number | null>(null);
@@ -199,33 +142,6 @@
     let originX = 0;
     let originY = 0;
     let moved = false;
-
-    // Task-note drag bookkeeping (mirrors the sticky drag; persisted to localStorage).
-    let taskDragId = $state<number | null>(null);
-    let taskStartX = 0;
-    let taskStartY = 0;
-    let taskOriginX = 0;
-    let taskOriginY = 0;
-    let taskMoved = false;
-
-    function beginTaskDrag(note: Note, e: PointerEvent) {
-        if (e.button !== 0) {
-            return;
-        }
-
-        // The link (icon + task name) navigates; the rest of the card drags.
-        if ((e.target as HTMLElement)?.closest('[data-task-link]')) {
-            return;
-        }
-
-        const p = taskCoords(note);
-        taskDragId = note.id;
-        taskStartX = e.clientX;
-        taskStartY = e.clientY;
-        taskOriginX = p.x;
-        taskOriginY = p.y;
-        taskMoved = false;
-    }
 
     const visitOptions = {
         preserveScroll: true,
@@ -279,23 +195,6 @@
 
             return;
         }
-
-        if (taskDragId !== null) {
-            const dx = e.clientX - taskStartX;
-            const dy = e.clientY - taskStartY;
-
-            if (Math.abs(dx) + Math.abs(dy) > 4) {
-                taskMoved = true;
-            }
-
-            taskPos = {
-                ...taskPos,
-                [taskDragId]: {
-                    x: clampX(taskOriginX + dx),
-                    y: clampY(taskOriginY + dy),
-                },
-            };
-        }
     }
 
     function onPointerUp() {
@@ -318,20 +217,6 @@
                 }
             } else if (expandedId !== id) {
                 expandedId = id;
-            }
-
-            return;
-        }
-
-        if (taskDragId !== null) {
-            taskDragId = null;
-
-            if (taskMoved && typeof localStorage !== 'undefined') {
-                try {
-                    localStorage.setItem(TASK_POS_KEY, JSON.stringify(taskPos));
-                } catch {
-                    /* ignore quota / serialization errors */
-                }
             }
         }
     }
@@ -433,13 +318,6 @@
         editingId = null;
     }
 
-    // From a tidy/arranged card, jump back to the freeform canvas with the note
-    // expanded so it can be edited/recoloured in place.
-    function openWorkspaceNote(note: WorkspaceNote) {
-        arrange = 'free';
-        expandedId = note.id;
-    }
-
     function onWindowKey(event: KeyboardEvent) {
         if (event.key !== 'Escape' || !open) {
             return;
@@ -467,10 +345,13 @@
         }
 
         // Apply the intent the opener requested (focus a note / start composing).
+        // Both act on stickies, so make sure that lane is the one on screen.
         if (notesBoard.compose) {
+            lane = 'mine';
             composing = true;
             openedViaCompose = true;
         } else if (notesBoard.focusId != null) {
+            lane = 'mine';
             expandedId = notesBoard.focusId;
         }
     });
@@ -481,19 +362,6 @@
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
 />
-
-{#snippet taskLabel(note: Note, href: string | null)}
-    <svelte:element
-        this={href ? 'a' : 'div'}
-        {href}
-        data-task-link
-        title={href ? 'Open task notes' : note.type_label}
-        class="mb-0.5 inline-flex w-fit items-center gap-1 text-[11px] font-medium text-fg-muted hover:text-fg"
-    >
-        <Link2 class="h-3 w-3 shrink-0" />
-        <span class="line-clamp-1">{note.type_label}</span>
-    </svelte:element>
-{/snippet}
 
 {#if open}
     <div class="fixed inset-0 z-50 select-none">
@@ -516,31 +384,57 @@
                 class="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4"
             >
                 <StickyNote class="h-[15px] w-[15px] shrink-0 text-fg-faint" />
-                <span class="section-title">
-                    Sticky notes
-                    <span class="section-count"
-                        >{notes.length + taskNotes.length}</span
-                    >
-                </span>
-                <div class="ml-auto flex items-center gap-1.5">
-                    <label
-                        class="flex items-center gap-1.5 text-xs text-fg-muted"
-                    >
-                        Arrange
-                        <select
-                            bind:value={arrange}
-                            class="input h-7 w-auto py-0"
-                            aria-label="Arrange notes"
+                <div
+                    class="flex items-center rounded-md border border-line bg-surface-alt p-[2px]"
+                    role="group"
+                    aria-label="Which notes"
+                >
+                    {#each [{ key: 'mine', label: 'My notes', count: notes.length }, { key: 'tasks', label: 'From tasks', count: taskNotes.length }] as opt (opt.key)}
+                        <button
+                            type="button"
+                            aria-pressed={lane === opt.key}
+                            onclick={() => (lane = opt.key as Lane)}
+                            class={`flex h-[22px] items-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition ${
+                                lane === opt.key
+                                    ? 'bg-surface text-fg'
+                                    : 'text-fg-muted hover:text-fg'
+                            }`}
                         >
-                            {#each ARRANGE_OPTIONS as opt (opt.value)}
-                                <option value={opt.value}>{opt.label}</option>
-                            {/each}
-                        </select>
-                    </label>
-                    <button type="button" onclick={startCompose} class="btn">
-                        <Plus class="h-3.5 w-3.5" />
-                        New note
-                    </button>
+                            {opt.label}
+                            <span class="font-mono text-fg-faint tabular-nums"
+                                >{opt.count}</span
+                            >
+                        </button>
+                    {/each}
+                </div>
+                <div class="ml-auto flex items-center gap-1.5">
+                    {#if lane === 'tasks'}
+                        <label
+                            class="flex items-center gap-1.5 text-xs text-fg-muted"
+                        >
+                            Arrange
+                            <select
+                                bind:value={arrange}
+                                class="input h-7 w-auto py-0"
+                                aria-label="Arrange notes"
+                            >
+                                {#each ARRANGE_OPTIONS as opt (opt.value)}
+                                    <option value={opt.value}
+                                        >{opt.label}</option
+                                    >
+                                {/each}
+                            </select>
+                        </label>
+                    {:else}
+                        <button
+                            type="button"
+                            onclick={startCompose}
+                            class="btn"
+                        >
+                            <Plus class="h-3.5 w-3.5" />
+                            New note
+                        </button>
+                    {/if}
                     <button
                         type="button"
                         onclick={onClose}
@@ -557,11 +451,11 @@
                 bind:this={canvasEl}
                 class="relative min-h-0 flex-1 overflow-auto bg-surface-alt"
             >
-                {#if notes.length === 0 && taskNotes.length === 0 && !composing}
+                {#if lane === 'mine' && notes.length === 0 && !composing}
                     <div
                         class="absolute inset-0 flex flex-col items-center justify-center gap-3"
                     >
-                        <p class="text-fg-muted">No notes yet.</p>
+                        <p class="text-fg-muted">No sticky notes yet.</p>
                         <button
                             type="button"
                             onclick={startCompose}
@@ -571,9 +465,18 @@
                             New note
                         </button>
                     </div>
+                {:else if lane === 'tasks' && taskNotes.length === 0}
+                    <div
+                        class="absolute inset-0 flex flex-col items-center justify-center gap-2"
+                    >
+                        <p class="text-fg-muted">No notes on your tasks yet.</p>
+                        <p class="text-xs text-fg-faint">
+                            Notes you add to a task show up here.
+                        </p>
+                    </div>
                 {/if}
 
-                {#if arrange === 'free'}
+                {#if lane === 'mine'}
                     {#each notes as note (note.id)}
                         {@const p = coords(note)}
                         {@const isExpanded = expandedId === note.id}
@@ -725,48 +628,10 @@
                             </div>
                         </div>
                     {/each}
-
-                    <!-- Task-anchored notes blended onto the canvas: read-only (mutating
-                     them would touch project_notes), tagged with a link icon and the
-                     task name so they're distinguishable from your draggable stickies.
-                     Click opens the task's Notes tab. -->
-                    {#each taskNotes as note (`t-${note.id}`)}
-                        {@const p = taskCoords(note)}
-                        {@const href = taskNoteHref(note)}
-                        {@const isTaskDragging = taskDragId === note.id}
-                        <div
-                            class={`absolute z-10 flex h-24 w-40 cursor-grab touch-none flex-col overflow-hidden p-2 text-left active:cursor-grabbing ${PAPER} ${paperClass[noteTypeColor(note.type)]}`}
-                            style:left={`${p.x}px`}
-                            style:top={`${p.y}px`}
-                            style:transform={`rotate(${isTaskDragging ? 0 : tilt(note.id)}deg)`}
-                            style:z-index={isTaskDragging ? 30 : 10}
-                            style:transition={isTaskDragging
-                                ? 'none'
-                                : 'transform 150ms ease'}
-                            onpointerdown={(e) => beginTaskDrag(note, e)}
-                            role="button"
-                            tabindex="-1"
-                        >
-                            {@render taskLabel(note, href)}
-                            <span
-                                class="line-clamp-3 flex-1 text-xs leading-snug text-fg"
-                                >{note.body}</span
-                            >
-                            {#if note.task}
-                                <svelte:element
-                                    this={href ? 'a' : 'span'}
-                                    {href}
-                                    data-task-link
-                                    class="mt-0.5 line-clamp-1 w-fit text-[11px] text-fg-faint hover:underline"
-                                >
-                                    {note.task.short_title || note.task.title}
-                                </svelte:element>
-                            {/if}
-                        </div>
-                    {/each}
                 {:else}
-                    <!-- Tidy, scannable layout: dragging off; notes grouped/sorted by the
-                         chosen Arrange mode. Workspace notes open back on the canvas to edit. -->
+                    <!-- Task lane: read-only records grouped or sorted by the Arrange
+                         control. Always a tidy grid — these are notes ON something,
+                         not a scratchpad, and there can be dozens of them. -->
                     <div class="space-y-6 px-4 py-4">
                         {#each arranged as group (group.label || 'all')}
                             <div>
@@ -782,55 +647,7 @@
                                     class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
                                 >
                                     {#each group.items as it (it.key)}
-                                        {#if it.workspace}
-                                            {@const note = it.workspace}
-                                            <div
-                                                class={`flex h-36 flex-col p-3 ${PAPER} ${paperClass[note.color]}`}
-                                            >
-                                                {#if note.title}
-                                                    <span
-                                                        class="mb-0.5 line-clamp-1 text-[13px] font-medium text-fg"
-                                                        >{note.title}</span
-                                                    >
-                                                {/if}
-                                                <span
-                                                    class="line-clamp-4 flex-1 text-xs leading-snug break-words whitespace-pre-wrap text-fg-muted"
-                                                    >{note.body}</span
-                                                >
-                                                <div
-                                                    class="mt-1.5 flex items-center justify-between border-t border-line-soft pt-1"
-                                                >
-                                                    <span
-                                                        class="font-mono text-[11px] text-fg-faint tabular-nums"
-                                                        >{formatDate(
-                                                            note.updated_at,
-                                                        )}</span
-                                                    >
-                                                    <div
-                                                        class="flex items-center gap-0.5"
-                                                    >
-                                                        <button
-                                                            type="button"
-                                                            onclick={() =>
-                                                                openWorkspaceNote(
-                                                                    note,
-                                                                )}
-                                                            class="btn-ghost h-6 px-1.5 text-xs"
-                                                            >Open</button
-                                                        >
-                                                        <button
-                                                            type="button"
-                                                            onclick={() =>
-                                                                deleteNote(
-                                                                    note,
-                                                                )}
-                                                            class="btn-ghost h-6 px-1.5 text-xs text-danger hover:text-danger"
-                                                            >Delete</button
-                                                        >
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        {:else if it.task}
+                                        {#if it.task}
                                             {@const note = it.task}
                                             {@const href = taskNoteHref(note)}
                                             <svelte:element

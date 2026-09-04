@@ -391,13 +391,21 @@
         >
             <section class="px-4 py-4">
                 <h2 class="section-title mb-3">
-                    Notes
-                    <span class="section-count"
-                        >{stickyNotes.length + recentNotes.length}</span
-                    >
+                    My notes
+                    <span class="section-count">{stickyNotes.length}</span>
                 </h2>
-                <NotesStrip {stickyNotes} taskNotes={recentNotes} />
+                <NotesStrip {stickyNotes} taskNotes={[]} />
             </section>
+
+            {#if recentNotes.length > 0}
+                <section class="border-t border-line px-4 py-4">
+                    <h2 class="section-title mb-3">
+                        From my tasks
+                        <span class="section-count">{recentNotes.length}</span>
+                    </h2>
+                    <NotesStrip taskNotes={recentNotes} compose={false} />
+                </section>
+            {/if}
 
             <section class="border-t border-line px-4 py-4">
                 <ContactChips contacts={recentContacts} />
