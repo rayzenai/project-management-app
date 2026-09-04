@@ -135,7 +135,9 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
 `MentionedInComment`, `TaskDeadlineDue` share `Concerns\BuildsWorkspaceNotification`
-and emit the stable payload `{kind, title, body, task, actor, url}`. Dispatched
+and emit the stable payload `{kind, title, action, body, task, actor, url}`
+(`action` is the short form with the task title left out, for surfaces that lead
+with the title; `body` keeps the long sentence). Dispatched
 from observers (assignment created → `TaskAssigned`; task status entering
 done/failed → `TaskStatusChanged`), the comment service (mentions) and the
 reminders command.

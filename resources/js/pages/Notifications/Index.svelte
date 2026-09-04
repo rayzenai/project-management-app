@@ -1,7 +1,15 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
-    import { Bell, Check } from '@lucide/svelte';
+    import {
+        AtSign,
+        Bell,
+        CalendarClock,
+        Check,
+        CircleDot,
+        UserPlus,
+    } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
+    import Avatar from '../../components/Avatar.svelte';
     import { formatTimeAgo } from '../../lib/format';
 
     // Laravel's paginator labels carry HTML entities ("&laquo; Previous");
@@ -16,9 +24,13 @@
         read_at: string | null;
         created_at: string | null;
         data: {
+            kind?: string;
             title?: string;
             body?: string;
+            action?: string;
             url?: string;
+            task?: { slug: string; title: string; project_slug: string } | null;
+            actor?: { name: string } | null;
             [key: string]: unknown;
         };
     };
@@ -28,11 +40,115 @@
         links: { url: string | null; label: string; active: boolean }[];
     };
 
-    let { notifications }: { notifications: Paginated } = $props();
+    let {
+        notifications,
+        filters,
+        counts,
+    }: {
+        notifications: Paginated;
+        filters: { scope: string; type: string | null };
+        counts: Record<string, number>;
+    } = $props();
 
-    const hasUnread = $derived(
-        notifications.data.some((n) => n.read_at === null),
-    );
+    const hasUnread = $derived(counts.unread > 0);
+
+    // One icon per kind, so a glance down the column separates an assignment
+    // from a mention from a deadline without reading a word.
+    const KIND_ICON: Record<string, typeof Bell> = {
+        task_assigned: UserPlus,
+        task_status_changed: CircleDot,
+        mentioned_in_comment: AtSign,
+        task_deadline_due: CalendarClock,
+    };
+
+    const TYPE_CHIPS = [
+        { key: null, label: 'All' },
+        { key: 'assigned', label: 'Assigned' },
+        { key: 'status', label: 'Status' },
+        { key: 'mention', label: 'Mentions' },
+        { key: 'deadline', label: 'Deadlines' },
+    ];
+
+    /**
+     * The task title is the headline; the sentence beneath says what happened.
+     * `action` omits the title (added later), so fall back to `body` — which
+     * embeds it — for notifications written before that field existed.
+     */
+    function headline(n: NotificationRow): string {
+        return n.data.task?.title ?? n.data.title ?? 'Notification';
+    }
+
+    function detail(n: NotificationRow): string {
+        return n.data.action ?? n.data.body ?? '';
+    }
+
+    /** Day buckets, so a long inbox reads as a timeline rather than a wall. */
+    function dayLabel(iso: string | null): string {
+        if (!iso) {
+            return 'Earlier';
+        }
+
+        const d = new Date(iso);
+        const today = new Date();
+        const startOf = (x: Date) =>
+            new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+        const days = Math.round((startOf(today) - startOf(d)) / 86_400_000);
+
+        if (days <= 0) {
+            return 'Today';
+        }
+
+        if (days === 1) {
+            return 'Yesterday';
+        }
+
+        if (days < 7) {
+            return 'Earlier this week';
+        }
+
+        return d.toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'long',
+            year:
+                d.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+        });
+    }
+
+    const groups = $derived.by(() => {
+        const out: { label: string; rows: NotificationRow[] }[] = [];
+
+        for (const n of notifications.data) {
+            const label = dayLabel(n.created_at);
+            const last = out[out.length - 1];
+
+            if (last && last.label === label) {
+                last.rows.push(n);
+            } else {
+                out.push({ label, rows: [n] });
+            }
+        }
+
+        return out;
+    });
+
+    function go(next: { scope?: string; type?: string | null }) {
+        const scope = next.scope ?? filters.scope;
+        const type = next.type === undefined ? filters.type : next.type;
+        const params: Record<string, string> = {};
+
+        if (scope === 'unread') {
+            params.scope = 'unread';
+        }
+
+        if (type) {
+            params.type = type;
+        }
+
+        router.get('/workspace/notifications', params, {
+            preserveState: false,
+            preserveScroll: true,
+        });
+    }
 
     function csrfToken(): string {
         return (
@@ -47,6 +163,7 @@
         }
 
         n.read_at = new Date().toISOString();
+        counts.unread = Math.max(0, counts.unread - 1);
         void fetch(`/workspace/notifications/${n.id}/read`, {
             method: 'POST',
             headers: {
@@ -76,10 +193,15 @@
     }
 </script>
 
+<svelte:head><title>Notifications · Workspace</title></svelte:head>
+
 <AppShell flush>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
             <span class="truncate font-medium">Notifications</span>
+            {#if counts.unread > 0}
+                <span class="chip chip-accent">{counts.unread} unread</span>
+            {/if}
         </div>
         {#if hasUnread}
             <div class="flex items-center gap-1.5">
@@ -90,92 +212,148 @@
         {/if}
     {/snippet}
 
-    {#if notifications.data.length === 0}
-        <p class="px-4 py-5 text-fg-muted lg:px-8 lg:py-6">
-            You're all caught up. No notifications yet.
-        </p>
-    {:else}
-        <ul class="flex flex-col">
-            {#snippet body(n: NotificationRow, unread: boolean)}
-                <span class="relative shrink-0">
-                    {#if unread}
-                        <span
-                            class="absolute top-1/2 -left-3 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-accent"
-                            aria-hidden="true"
-                        ></span>
-                    {/if}
-                    <Bell
-                        class={`h-3.5 w-3.5 ${unread ? 'text-fg' : 'text-fg-faint'}`}
-                    />
-                </span>
-                <div class="min-w-0 flex-1">
-                    <div
-                        class={`truncate ${unread ? 'font-medium text-fg' : 'text-fg'}`}
+    <div
+        class="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-2.5 lg:px-6"
+    >
+        <div
+            class="flex items-center rounded-md border border-line bg-surface-alt p-[2px]"
+            role="group"
+            aria-label="Read state"
+        >
+            {#each [{ key: 'all', label: 'All', n: counts.all }, { key: 'unread', label: 'Unread', n: counts.unread }] as opt (opt.key)}
+                <button
+                    type="button"
+                    aria-pressed={filters.scope === opt.key}
+                    onclick={() => go({ scope: opt.key })}
+                    class={`flex h-[22px] items-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition ${
+                        filters.scope === opt.key
+                            ? 'bg-surface text-fg'
+                            : 'text-fg-muted hover:text-fg'
+                    }`}
+                >
+                    {opt.label}
+                    <span class="font-mono text-fg-faint tabular-nums"
+                        >{opt.n}</span
                     >
-                        {n.data.title ?? 'Notification'}
-                    </div>
-                    {#if n.data.body}
-                        <div class="mt-0.5 truncate text-xs text-fg-muted">
-                            {n.data.body}
-                        </div>
-                    {/if}
-                </div>
-            {/snippet}
+                </button>
+            {/each}
+        </div>
 
-            {#each notifications.data as n (n.id)}
-                {@const unread = n.read_at === null}
-                {@const navClass =
-                    'flex min-w-0 flex-1 items-center gap-3 py-2 text-left'}
-                <li class="row min-h-11 pl-6 lg:pl-8">
-                    {#if n.data.url}
+        <span class="mx-1 h-4 w-px bg-line" aria-hidden="true"></span>
+
+        {#each TYPE_CHIPS as chip (chip.label)}
+            {@const active = filters.type === chip.key}
+            {@const n = chip.key === null ? counts.all : counts[chip.key]}
+            <button
+                type="button"
+                aria-pressed={active}
+                disabled={n === 0 && chip.key !== null}
+                onclick={() => go({ type: chip.key })}
+                class={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[13px] transition disabled:pointer-events-none disabled:opacity-40 ${
+                    active
+                        ? 'border-accent bg-accent-soft text-accent'
+                        : 'border-line bg-surface-alt text-fg-muted hover:bg-hover hover:text-fg'
+                }`}
+            >
+                {chip.label}
+                <span class="font-mono tabular-nums">{n}</span>
+            </button>
+        {/each}
+    </div>
+
+    {#if notifications.data.length === 0}
+        <div class="flex flex-col items-center gap-2 px-4 py-16">
+            <Bell class="h-5 w-5 text-fg-faint" />
+            <p class="text-[13px] text-fg-muted">
+                {filters.scope === 'unread' || filters.type
+                    ? 'Nothing here.'
+                    : "You're all caught up."}
+            </p>
+            {#if filters.scope === 'unread' || filters.type}
+                <button
+                    type="button"
+                    class="btn"
+                    onclick={() => go({ scope: 'all', type: null })}
+                    >Show everything</button
+                >
+            {/if}
+        </div>
+    {:else}
+        {#each groups as group (group.label)}
+            <section>
+                <div class="group-head">
+                    <span>{group.label}</span>
+                    <span class="text-xs font-normal text-fg-faint tabular-nums"
+                        >{group.rows.length}</span
+                    >
+                </div>
+
+                {#each group.rows as n (n.id)}
+                    {@const unread = n.read_at === null}
+                    {@const Icon = KIND_ICON[n.data.kind ?? ''] ?? Bell}
+                    <div
+                        class={`row min-h-11 py-1.5 ${unread ? 'bg-accent-soft/30' : ''}`}
+                    >
+                        <span
+                            class={`flex w-4 shrink-0 justify-center ${unread ? 'text-accent' : 'text-fg-faint'}`}
+                        >
+                            <Icon class="h-3.5 w-3.5" />
+                        </span>
+
                         <a
-                            href={n.data.url}
+                            href={n.data.url ?? '#'}
                             onclick={(e) => {
                                 e.preventDefault();
                                 open(n);
                             }}
-                            class={navClass}
+                            class="flex min-w-0 flex-1 items-center gap-3 text-left"
                         >
-                            {@render body(n, unread)}
+                            <span class="min-w-0 flex-1">
+                                <span
+                                    class={`block truncate text-[13px] ${unread ? 'font-medium text-fg' : 'text-fg'}`}
+                                >
+                                    {headline(n)}
+                                </span>
+                                <span
+                                    class="mt-0.5 block truncate text-xs text-fg-muted"
+                                >
+                                    {detail(n)}
+                                </span>
+                            </span>
                         </a>
-                    {:else}
-                        <button
-                            type="button"
-                            onclick={() => open(n)}
-                            class={navClass}
-                        >
-                            {@render body(n, unread)}
-                        </button>
-                    {/if}
 
-                    <div class="flex shrink-0 items-center gap-1.5">
+                        {#if n.data.actor?.name}
+                            <span class="hidden shrink-0 sm:block">
+                                <Avatar name={n.data.actor.name} />
+                            </span>
+                        {/if}
+
                         <span
-                            class="font-mono text-xs text-fg-faint tabular-nums"
+                            class="w-16 shrink-0 text-right font-mono text-xs text-fg-faint tabular-nums"
                         >
                             {formatTimeAgo(n.created_at)}
                         </span>
-                        {#if unread}
-                            <button
-                                type="button"
-                                title="Mark as read"
-                                aria-label="Mark as read"
-                                class="btn-icon"
-                                onclick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    markRead(n);
-                                }}
-                            >
-                                <Check class="h-3.5 w-3.5" />
-                            </button>
-                        {/if}
+
+                        <span class="flex w-7 shrink-0 justify-end">
+                            {#if unread}
+                                <button
+                                    type="button"
+                                    title="Mark as read"
+                                    aria-label="Mark as read"
+                                    class="btn-icon"
+                                    onclick={() => markRead(n)}
+                                >
+                                    <Check class="h-3.5 w-3.5" />
+                                </button>
+                            {/if}
+                        </span>
                     </div>
-                </li>
-            {/each}
-        </ul>
+                {/each}
+            </section>
+        {/each}
 
         {#if notifications.links.length > 3}
-            <div class="flex flex-wrap items-center gap-1 px-4 py-4 lg:px-8">
+            <div class="flex flex-wrap items-center gap-1 px-4 py-4 lg:px-6">
                 {#each notifications.links as link (link.label)}
                     {#if link.url}
                         <button

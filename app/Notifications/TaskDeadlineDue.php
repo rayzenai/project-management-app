@@ -24,6 +24,7 @@ class TaskDeadlineDue extends Notification
             'kind' => 'task_deadline_due',
             'title' => 'Deadline reminder',
             'body' => $this->bodyForWindow(),
+            'action' => $this->actionForWindow(),
             'task' => $this->taskRef($this->task),
             'actor' => null,
             'url' => $this->taskUrl($this->task),
@@ -36,6 +37,15 @@ class TaskDeadlineDue extends Notification
             'due_today' => "“{$this->task->title}” is due today.",
             'overdue' => "“{$this->task->title}” is {$this->overdueLabel()}.",
             default => "“{$this->task->title}” is due soon.",
+        };
+    }
+
+    protected function actionForWindow(): string
+    {
+        return match ($this->window) {
+            'due_today' => 'Due today',
+            'overdue' => ucfirst($this->overdueLabel()),
+            default => 'Due soon',
         };
     }
 

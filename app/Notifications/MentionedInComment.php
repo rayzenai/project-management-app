@@ -24,6 +24,7 @@ class MentionedInComment extends Notification
             'kind' => 'mentioned_in_comment',
             'title' => 'You were mentioned',
             'body' => "{$this->actorName} mentioned you: “{$this->excerpt}”.",
+            'action' => "{$this->actorName} mentioned you: “{$this->excerpt}”",
             'task' => $this->taskRef($this->task),
             'actor' => ['name' => $this->actorName],
             'url' => $this->taskUrl($this->task),

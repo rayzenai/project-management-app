@@ -24,6 +24,8 @@ class TaskStatusChanged extends Notification
             'kind' => 'task_status_changed',
             'title' => 'Task status changed',
             'body' => "{$this->actorName} moved “{$this->task->title}” to {$this->statusLabel}.",
+            'action' => "{$this->actorName} moved this to {$this->statusLabel}",
+            'status' => $this->task->status,
             'task' => $this->taskRef($this->task),
             'actor' => ['name' => $this->actorName],
             'url' => $this->taskUrl($this->task),

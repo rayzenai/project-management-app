@@ -14,7 +14,11 @@ use App\Models\TaskComment;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkspaceNote;
+use App\Notifications\MentionedInComment;
+use App\Notifications\TaskDeadlineDue;
+use App\Notifications\TaskStatusChanged;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -105,6 +109,7 @@ class WorkspaceDemoSeeder extends Seeder
         $this->seedProjects();
         $this->seedStickies();
         $this->seedDigestSubscribers();
+        $this->seedNotifications();
 
         Auth::logout();
 
@@ -954,16 +959,20 @@ class WorkspaceDemoSeeder extends Seeder
             return;
         }
 
-        $lead = $this->members[$assignees[0]];
-        $author = $this->authorFor(array_slice($assignees, 1) ?: $assignees);
+        // Rotate who gets mentioned rather than always picking the lead, so the
+        // mention notifications do not all land on the same few people.
+        $mentionedHandle = $assignees[$itemNumber % count($assignees)];
+        $mentioned = $this->members[$mentionedHandle];
+        $others = array_values(array_filter($assignees, fn (string $h): bool => $h !== $mentionedHandle));
+        $author = $this->authorFor($others ?: $assignees);
 
         Auth::login($author);
 
         TaskComment::query()->create([
             'task_id' => $task->getKey(),
             'user_id' => $author->getKey(),
-            'body' => '@'.$lead->name.' can you confirm the district numbers before the review?',
-            'mentioned_member_ids' => [$lead->getKey()],
+            'body' => '@'.$mentioned->name.' can you confirm the district numbers before the review?',
+            'mentioned_member_ids' => [$mentioned->getKey()],
         ]);
 
         TaskComment::query()->create([
@@ -990,6 +999,69 @@ class WorkspaceDemoSeeder extends Seeder
         }
 
         return $this->users['admin'];
+    }
+
+    /**
+     * The observers only emit TaskAssigned while the tasks are being built —
+     * a status notification needs a real transition, a mention needs the comment
+     * service, and a deadline reminder needs the scheduled command. Emit the
+     * other three kinds directly so the inbox has every kind in it, then spread
+     * them over the past week so the day grouping has something to group.
+     */
+    private function seedNotifications(): void
+    {
+        $today = CarbonImmutable::today();
+
+        $mentions = TaskComment::query()
+            ->whereNotNull('mentioned_member_ids')
+            ->with(['task.project', 'user'])
+            ->get();
+
+        foreach ($this->users as $handle => $user) {
+            $memberId = $this->members[$handle]->getKey();
+
+            $tasks = Task::query()
+                ->forActiveProjects()
+                ->whereHas('assignments', fn (Builder $q) => $q->where('member_id', $memberId))
+                ->with('project')
+                ->get();
+
+            $tasks->filter(fn (Task $task): bool => $task->isComplete())
+                ->take(2)
+                ->each(fn (Task $task) => $user->notify(
+                    new TaskStatusChanged($task, (string) $task->status_label, 'Workspace Admin'),
+                ));
+
+            $tasks->filter(fn (Task $task): bool => ! $task->isComplete()
+                && $task->deadline_at !== null
+                && $task->deadline_at->lte($today))
+                ->take(3)
+                ->each(fn (Task $task) => $user->notify(new TaskDeadlineDue(
+                    $task,
+                    $task->deadline_at?->lt($today) ? 'overdue' : 'due_today',
+                )));
+
+            $mentions
+                ->filter(fn (TaskComment $comment): bool => in_array(
+                    $memberId,
+                    (array) ($comment->mentioned_member_ids ?? []),
+                    true,
+                ))
+                ->take(3)
+                ->each(fn (TaskComment $comment) => $user->notify(new MentionedInComment(
+                    $comment->task,
+                    $comment->user->name ?? 'Someone',
+                    Str::limit($comment->body, 60),
+                )));
+
+            // Everything above lands at "now", which would collapse the inbox
+            // into a single Today group. Walk them back ~7 hours apart instead.
+            $user->notifications()->get()->values()->each(
+                fn (object $notification, int $index) => $notification
+                    ->forceFill(['created_at' => CarbonImmutable::now()->subHours($index * 7)])
+                    ->saveQuietly(),
+            );
+        }
     }
 
     /**

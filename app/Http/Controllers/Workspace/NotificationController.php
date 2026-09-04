@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Workspace;
 
+use App\Queries\NotificationIndexQuery;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -11,16 +12,19 @@ use Inertia\Response;
 
 class NotificationController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, NotificationIndexQuery $query): Response
     {
+        $payload = $query->get($request);
+
         return Inertia::render('Notifications/Index', [
-            'notifications' => $request->user()->notifications()->paginate(30)
-                ->through(fn (DatabaseNotification $n): array => [
-                    'id' => $n->id,
-                    'read_at' => $n->read_at?->toIso8601String(),
-                    'created_at' => $n->created_at?->toIso8601String(),
-                    'data' => $n->data,
-                ]),
+            'notifications' => $payload['notifications']->through(fn (DatabaseNotification $n): array => [
+                'id' => $n->id,
+                'read_at' => $n->read_at?->toIso8601String(),
+                'created_at' => $n->created_at?->toIso8601String(),
+                'data' => $n->data,
+            ]),
+            'filters' => $payload['filters'],
+            'counts' => $payload['counts'],
         ]);
     }
 
