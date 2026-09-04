@@ -20,6 +20,43 @@
 
     let open = $state(false);
     let query = $state('');
+    let rootEl = $state<HTMLDivElement | null>(null);
+    let triggerEl = $state<HTMLDivElement | null>(null);
+
+    /**
+     * `restoreFocus` matters: the search field lives inside the list, so closing
+     * it leaves focus on <body> and the surrounding dialog stops receiving key
+     * events (a second Escape would do nothing). Hand focus back to the trigger
+     * on keyboard closes; leave it alone when the user clicked elsewhere.
+     */
+    function close(restoreFocus = false): void {
+        open = false;
+        query = '';
+
+        if (restoreFocus) {
+            triggerEl?.focus();
+        }
+    }
+
+    // Close on a click anywhere outside the picker. pointerdown (not click) so it
+    // lands before the toggle's own click; the toggle is inside `rootEl`, so it
+    // is excluded and keeps toggling normally.
+    $effect(() => {
+        if (!open || typeof document === 'undefined') {
+            return;
+        }
+
+        const onPointerDown = (event: PointerEvent) => {
+            if (!rootEl?.contains(event.target as Node)) {
+                close();
+            }
+        };
+
+        document.addEventListener('pointerdown', onPointerDown, true);
+
+        return () =>
+            document.removeEventListener('pointerdown', onPointerDown, true);
+    });
 
     const filtered = $derived(
         query.trim() === ''
@@ -39,7 +76,7 @@
             selectedIds = selectedIds.filter((id) => id !== memberId);
         } else if (max === 1) {
             selectedIds = [memberId];
-            open = false;
+            close(true);
         } else if (selectedIds.length < max) {
             selectedIds = [...selectedIds, memberId];
         }
@@ -50,8 +87,21 @@
     }
 </script>
 
-<div class="relative">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+    bind:this={rootEl}
+    class="relative"
+    onkeydown={(e) => {
+        // Escape closes the list, not the dialog the picker sits in.
+        if (e.key === 'Escape' && open) {
+            e.preventDefault();
+            e.stopPropagation();
+            close(true);
+        }
+    }}
+>
     <div
+        bind:this={triggerEl}
         role="button"
         tabindex="0"
         aria-haspopup="listbox"

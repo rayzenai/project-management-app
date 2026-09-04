@@ -28,6 +28,8 @@ class QuickAddController extends Controller
             priority: $request->input('priority'),
             deadline: $request->date('deadline_at')?->toDateString(),
             user: $request->user(),
+            status: $request->input('status'),
+            description: $request->input('description'),
         );
 
         return $this->respondWithResult(

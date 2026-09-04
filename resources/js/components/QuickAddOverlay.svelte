@@ -1,5 +1,6 @@
 <script lang="ts">
     import { page } from '@inertiajs/svelte';
+    import { X } from '@lucide/svelte';
     import { quickAdd } from '../lib/quickAdd.svelte';
     import type { SharedProps } from '../lib/types';
     import QuickAddForm from './QuickAddForm.svelte';
@@ -54,7 +55,7 @@
         role="presentation"
     >
         <div
-            class="popover mx-auto mt-[12vh] w-[min(640px,92vw)] overflow-hidden p-0"
+            class="popover mx-auto mt-[8vh] mb-12 flex w-[min(920px,94vw)] flex-col overflow-hidden p-0"
             onclick={(e) => e.stopPropagation()}
             onkeydown={onPanelKeydown}
             role="dialog"
@@ -63,10 +64,18 @@
             tabindex="-1"
         >
             <div
-                class="flex h-11 items-center justify-between border-b border-line px-4"
+                class="flex h-12 shrink-0 items-center justify-between border-b border-line px-5"
             >
-                <span class="font-medium text-fg">New task</span>
-                <kbd class="kbd">esc</kbd>
+                <span class="text-[15px] font-semibold text-fg">New task</span>
+                <button
+                    type="button"
+                    class="btn-icon"
+                    title="Close (esc)"
+                    aria-label="Close"
+                    onclick={() => quickAdd.close()}
+                >
+                    <X class="h-4 w-4" />
+                </button>
             </div>
             <QuickAddForm
                 bind:this={formComp}

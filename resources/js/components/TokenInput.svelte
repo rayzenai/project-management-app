@@ -12,8 +12,8 @@
         value: string;
         placeholder?: string;
         disabled?: boolean;
-        /** `lg` matches the command palette's 48px input row (used in the overlay). */
-        size?: 'md' | 'lg';
+        /** `lg` matches the command palette's 48px row; `xl` is the new-task dialog. */
+        size?: 'md' | 'lg' | 'xl';
         oninput?: () => void;
         onsubmit?: () => void;
     } = $props();
@@ -25,9 +25,11 @@
 
     // Both layers MUST share these metrics exactly (see the note below).
     const metrics = $derived(
-        size === 'lg'
-            ? 'h-12 px-4 font-sans text-[15px] leading-[48px] whitespace-pre'
-            : 'h-8 px-2.5 font-sans text-[13.5px] leading-8 whitespace-pre',
+        size === 'xl'
+            ? 'h-16 px-5 font-sans text-[17px] leading-[64px] whitespace-pre'
+            : size === 'lg'
+              ? 'h-12 px-4 font-sans text-[15px] leading-[48px] whitespace-pre'
+              : 'h-8 px-2.5 font-sans text-[13.5px] leading-8 whitespace-pre',
     );
 
     export function focus(): void {

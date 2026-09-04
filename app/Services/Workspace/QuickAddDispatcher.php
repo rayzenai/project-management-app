@@ -34,12 +34,20 @@ final readonly class QuickAddDispatcher
         ?string $priority,
         ?string $deadline,
         Authenticatable $user,
+        ?string $status = null,
+        ?string $description = null,
     ): ServiceResult {
         $tokens = QuickAddParser::parse($rawTitle);
         $consumed = [];
 
+        // A missing or archived project is a message, not a 404: the picker can
+        // hold a stale id, and findOrFail would drop the whole modal.
         $project = $this->resolveProject($tokens, $consumed)
-            ?? Project::query()->active()->findOrFail($projectId);
+            ?? ($projectId === null ? null : Project::query()->active()->find($projectId));
+
+        if ($project === null) {
+            return ServiceResult::failure('Pick a project to add this task to.', 422);
+        }
 
         if (! WorkspaceAccess::canViewProject($user, $project)) {
             return ServiceResult::failure('That project is not available to you.', 403);
@@ -78,6 +86,8 @@ final readonly class QuickAddDispatcher
             deadline: $deadline,
             priority: $priority ?? 'medium',
             authorUserId: $user->getAuthIdentifier(),
+            status: $status,
+            description: $description,
         );
     }
 

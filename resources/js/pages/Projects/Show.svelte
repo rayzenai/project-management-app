@@ -53,7 +53,21 @@
 
     function initialTab(): Tab {
         if (typeof window === 'undefined') {
-            return 'list';
+            return 'board';
+        }
+
+        // An explicit ?view= wins over the remembered one — that is how the
+        // new-task dialog drops you on the board next to what you just made.
+        const requested = new URLSearchParams(window.location.search).get(
+            'view',
+        );
+
+        if (
+            requested === 'board' ||
+            requested === 'list' ||
+            requested === 'people'
+        ) {
+            return requested;
         }
 
         const raw = window.localStorage.getItem(
@@ -64,7 +78,7 @@
             return 'board';
         } // legacy value migration
 
-        return raw === 'board' || raw === 'people' ? raw : 'list'; // default + garbage guard
+        return raw === 'list' || raw === 'people' ? raw : 'board'; // default + garbage guard
     }
 
     let activeTab = $state<Tab>(initialTab());

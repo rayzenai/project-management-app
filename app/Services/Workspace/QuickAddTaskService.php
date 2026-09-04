@@ -29,11 +29,19 @@ class QuickAddTaskService
         ?string $deadline = null,
         ?string $priority = 'medium',
         ?int $authorUserId = null,
+        ?string $status = null,
+        ?string $description = null,
     ): ServiceResult {
         $title = trim($title);
         if ($title === '') {
             return ServiceResult::failure('Title is required.', 422);
         }
+
+        // An explicit status wins; anything else keeps the long-standing default
+        // so API callers that never sent one are unaffected. The UI always sends
+        // one, so the modal decides its own default.
+        $statuses = array_keys((array) config('project-management.statuses'));
+        $status = in_array($status, $statuses, true) ? $status : 'unclear';
 
         // An empty assignee list is allowed: the task is created unassigned and can
         // be assigned later. Any members that ARE provided must be on the project.
@@ -47,7 +55,7 @@ class QuickAddTaskService
         }
 
         try {
-            return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $deadline, $priority): ServiceResult {
+            return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $deadline, $priority, $status, $description): ServiceResult {
                 $itemNumber = $this->nextItemNumber($project->id);
                 $sortOrder = ((int) Task::query()->where('project_id', $project->id)->max('sort_order')) + 100;
 
@@ -55,8 +63,8 @@ class QuickAddTaskService
                     'project_id' => $project->id,
                     'title' => $title,
                     'slug' => $this->uniqueSlug($title, $itemNumber),
-                    'description' => '',
-                    'status' => 'unclear',
+                    'description' => $description ?? '',
+                    'status' => $status,
                     'priority' => $priority ?: 'medium',
                     'progress' => 0,
                     'deadline_at' => $deadline,
