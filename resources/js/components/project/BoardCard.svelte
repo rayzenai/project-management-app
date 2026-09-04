@@ -9,17 +9,16 @@
     let {
         task,
         projectSlug,
+        index,
         isDragging,
-        ondragstart,
-        ondragend,
-        ondragover,
+        onpointerdown,
     }: {
         task: Task;
         projectSlug: string;
+        index: number;
         isDragging: boolean;
-        ondragstart: (e: DragEvent) => void;
-        ondragend: () => void;
-        ondragover: (e: DragEvent) => void;
+        /** Board-level pointer drag; undefined for non-droppable columns. */
+        onpointerdown?: (e: PointerEvent) => void;
     } = $props();
 
     const team = $derived(
@@ -31,10 +30,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
     role="listitem"
-    draggable="true"
-    {ondragstart}
-    {ondragend}
-    {ondragover}
+    data-card-index={index}
+    {onpointerdown}
     onclick={() => peek.open({ id: task.id, slug: task.slug })}
     onkeydown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -43,7 +40,7 @@
         }
     }}
     tabindex="0"
-    class={`group cursor-grab rounded-lg border border-line bg-raised px-3 py-2.5 transition select-none hover:border-accent active:cursor-grabbing ${
+    class={`group cursor-grab touch-pan-y rounded-lg border border-line bg-raised px-3 py-2.5 transition select-none hover:border-accent active:cursor-grabbing ${
         isDragging ? 'opacity-40' : ''
     }`}
 >

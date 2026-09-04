@@ -98,64 +98,203 @@
         return map;
     });
 
-    function onDragStart(task: Task, event: DragEvent) {
-        // getData is unreadable during dragover, so local state is authoritative;
-        // dataTransfer is set for completeness/devtools.
-        event.dataTransfer?.setData(
-            'application/x-pm-task',
-            JSON.stringify({ id: task.id, fromStatus: task.status }),
-        );
-        event.dataTransfer?.setData('text/plain', String(task.id));
+    /*
+     * Pointer-based drag and drop. HTML5 drag events are not delivered inside
+     * embedded browsers (CEF hosts, most WebViews) and never on touch, so the
+     * board tracks the pointer itself: press, move past a small threshold to
+     * lift the card into a ghost, hit-test columns under the pointer, drop.
+     */
+    const DRAG_THRESHOLD = 6;
+    const EDGE_SCROLL_ZONE = 48;
+    const EDGE_SCROLL_STEP = 14;
 
-        if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = 'move';
+    let boardEl = $state<HTMLElement | null>(null);
+    let press: {
+        task: Task;
+        el: HTMLElement;
+        x: number;
+        y: number;
+        offsetX: number;
+        offsetY: number;
+    } | null = null;
+    let ghost: HTMLElement | null = null;
+    let justDragged = false;
+
+    function onCardPointerDown(task: Task, event: PointerEvent) {
+        if (event.button !== 0 || !event.isPrimary) {
+            return;
         }
 
-        dragState = { id: task.id, fromStatus: task.status };
+        // Interactive children (assignee picker, date chip, priority) keep
+        // their own behaviour; only the card body starts a drag.
+        const target = event.target as HTMLElement | null;
+
+        if (target?.closest('button, a, input, textarea, select')) {
+            return;
+        }
+
+        const el = event.currentTarget as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        press = {
+            task,
+            el,
+            x: event.clientX,
+            y: event.clientY,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top,
+        };
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', cancelDrag);
+        window.addEventListener('keydown', onDragKey);
     }
 
-    function onDragEnd() {
+    function beginDrag(event: PointerEvent) {
+        if (!press) {
+            return;
+        }
+
+        const rect = press.el.getBoundingClientRect();
+        ghost = press.el.cloneNode(true) as HTMLElement;
+        ghost.setAttribute('aria-hidden', 'true');
+        ghost.removeAttribute('tabindex');
+        ghost.className = press.el.className;
+        ghost.style.cssText = `position:fixed;left:0;top:0;width:${rect.width}px;margin:0;pointer-events:none;z-index:60;opacity:.95;box-shadow:0 12px 32px rgba(0,0,0,.18);transition:none;will-change:transform;`;
+        document.body.appendChild(ghost);
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'grabbing';
+
+        dragState = { id: press.task.id, fromStatus: press.task.status };
+        moveGhost(event.clientX, event.clientY);
+    }
+
+    function moveGhost(x: number, y: number) {
+        if (!ghost || !press) {
+            return;
+        }
+
+        ghost.style.transform = `translate(${x - press.offsetX}px, ${y - press.offsetY}px) rotate(1.5deg)`;
+    }
+
+    /** Which column and slot the pointer is over, from real element geometry. */
+    function targetAt(
+        x: number,
+        y: number,
+    ): { status: string; index: number } | null {
+        const under = document.elementFromPoint(x, y);
+        const column = under?.closest<HTMLElement>('[data-column]');
+        const status = column?.dataset.column;
+
+        if (!column || !status || status === OTHER) {
+            return null;
+        }
+
+        const cards = Array.from(
+            column.querySelectorAll<HTMLElement>('[data-card-index]'),
+        );
+
+        for (const card of cards) {
+            const r = card.getBoundingClientRect();
+
+            if (y < r.top + r.height / 2) {
+                return { status, index: Number(card.dataset.cardIndex) };
+            }
+        }
+
+        return { status, index: cards.length };
+    }
+
+    function edgeScroll(x: number) {
+        if (!boardEl) {
+            return;
+        }
+
+        const rect = boardEl.getBoundingClientRect();
+
+        if (x < rect.left + EDGE_SCROLL_ZONE) {
+            boardEl.scrollLeft -= EDGE_SCROLL_STEP;
+        } else if (x > rect.right - EDGE_SCROLL_ZONE) {
+            boardEl.scrollLeft += EDGE_SCROLL_STEP;
+        }
+    }
+
+    function onPointerMove(event: PointerEvent) {
+        if (!press) {
+            return;
+        }
+
+        if (!dragState) {
+            if (
+                Math.hypot(event.clientX - press.x, event.clientY - press.y) <
+                DRAG_THRESHOLD
+            ) {
+                return;
+            }
+
+            beginDrag(event);
+        }
+
+        event.preventDefault();
+        moveGhost(event.clientX, event.clientY);
+        hoverTarget = targetAt(event.clientX, event.clientY);
+        edgeScroll(event.clientX);
+    }
+
+    function onPointerUp(event: PointerEvent) {
+        if (!dragState) {
+            release();
+
+            return; // a plain click: the card's own click handler opens the peek
+        }
+
+        const target = targetAt(event.clientX, event.clientY) ?? hoverTarget;
+        const state = dragState;
+        release();
+
+        // The click that follows pointerup must not open the peek.
+        justDragged = true;
+        setTimeout(() => (justDragged = false), 0);
+
+        if (target) {
+            drop(state, target);
+        }
+    }
+
+    function onDragKey(event: KeyboardEvent) {
+        if (event.key === 'Escape' && dragState) {
+            event.preventDefault();
+            cancelDrag();
+        }
+    }
+
+    function cancelDrag() {
+        release();
+    }
+
+    /** Tears down listeners, ghost and transient state; never posts. */
+    function release() {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', cancelDrag);
+        window.removeEventListener('keydown', onDragKey);
+        ghost?.remove();
+        ghost = null;
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        press = null;
         dragState = null;
         hoverTarget = null;
     }
 
-    function onCardDragOver(status: string, index: number, event: DragEvent) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = 'move';
-        }
-
-        // Decide above-or-below based on cursor position within the target card.
-        const rect = (
-            event.currentTarget as HTMLElement
-        ).getBoundingClientRect();
-        const above = event.clientY < rect.top + rect.height / 2;
-        hoverTarget = { status, index: above ? index : index + 1 };
-    }
-
-    function onColumnDragOver(status: string, event: DragEvent) {
-        event.preventDefault();
-
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = 'move';
-        }
-
-        if (!hoverTarget || hoverTarget.status !== status) {
-            hoverTarget = { status, index: (columns.get(status) ?? []).length };
+    function swallowClickAfterDrag(event: MouseEvent) {
+        if (justDragged) {
+            event.stopPropagation();
+            event.preventDefault();
         }
     }
 
-    function onColumnDragLeave(event: DragEvent) {
-        const related = event.relatedTarget as Node | null;
-
-        if (related && (event.currentTarget as HTMLElement).contains(related)) {
-            return;
-        }
-
-        hoverTarget = null;
-    }
+    $effect(() => release);
 
     function unchangedOrder(orderedIds: number[], status: string): boolean {
         const current = (columns.get(status) ?? []).map((t) => t.id);
@@ -166,24 +305,23 @@
         );
     }
 
-    function onDrop(toStatus: string, event: DragEvent) {
-        event.preventDefault();
-        const target = hoverTarget;
-        const state = dragState;
-        hoverTarget = null;
-        dragState = null;
-
-        if (!state) {
-            return;
-        }
-
+    function drop(
+        state: { id: number; fromStatus: string },
+        target: { status: string; index: number },
+    ) {
         const { id, fromStatus } = state;
+        const toStatus = target.status;
         const column = columns.get(toStatus) ?? [];
-        const index =
-            target?.status === toStatus ? target.index : column.length;
 
-        const orderedIds = column.map((t) => t.id).filter((tid) => tid !== id);
-        orderedIds.splice(Math.min(index, orderedIds.length), 0, id);
+        // `target.index` counts the dragged card if it sits in this column;
+        // remove it first so the index lands on the right neighbour.
+        const before = column.slice(0, target.index).filter((t) => t.id !== id);
+        const after = column.slice(target.index).filter((t) => t.id !== id);
+        const orderedIds = [
+            ...before.map((t) => t.id),
+            id,
+            ...after.map((t) => t.id),
+        ];
 
         if (fromStatus === toStatus && unchangedOrder(orderedIds, toStatus)) {
             return;
@@ -209,6 +347,8 @@
 </script>
 
 <div
+    bind:this={boardEl}
+    onclickcapture={swallowClickAfterDrag}
     class="flex min-h-0 flex-1 gap-3.5 overflow-x-auto border-t border-line bg-surface-alt px-4 py-4"
 >
     {#each columnDefs as def (def.value)}
@@ -220,11 +360,7 @@
             class={`flex min-h-[200px] w-[272px] shrink-0 flex-col rounded-md transition ${
                 isHover ? 'bg-accent-soft' : ''
             }`}
-            ondragover={droppable
-                ? (e) => onColumnDragOver(def.value, e)
-                : undefined}
-            ondragleave={droppable ? onColumnDragLeave : undefined}
-            ondrop={droppable ? (e) => onDrop(def.value, e) : undefined}
+            data-column={def.value}
             role="list"
             aria-label={def.label}
         >
@@ -260,12 +396,11 @@
                         <BoardCard
                             {task}
                             projectSlug={project.slug}
+                            {index}
                             isDragging={dragState?.id === task.id}
-                            ondragstart={(e) => onDragStart(task, e)}
-                            ondragend={onDragEnd}
-                            ondragover={droppable
-                                ? (e) => onCardDragOver(def.value, index, e)
-                                : () => {}}
+                            onpointerdown={droppable
+                                ? (e) => onCardPointerDown(task, e)
+                                : undefined}
                         />
                     {/each}
                     {#if isHover && hoverTarget?.index === colTasks.length}
