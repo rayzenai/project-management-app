@@ -1,6 +1,6 @@
 # .assistants — PMOPM project map
 
-- **generated-from:** `bd40a8c386a25e923369776bff627494f8ce8359`
+- **generated-from:** `e2bfe76bd70812a440b077965120ba8efb3c6110`
 
 Agent-readable map of this repo. Read alongside `CLAUDE.md` (binding rules);
 these files are orientation, not rules.

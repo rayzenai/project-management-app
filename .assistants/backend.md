@@ -51,7 +51,9 @@ team-reassignment are super-admin only; team role changes require BOTH
 ## Domain model
 
 - **Project** — slug-routed, `archived_at` soft-archive, `is_public`; scopes
-  `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team.
+  `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team; derived
+  `code` attribute (uppercased initials of the title's words, max 4, fallback
+  `P{id}`) exposed on Project/Task resources so tasks render as `CODE-123`.
 - **Task** — slug-routed `{project_id}-{slug}`; 100-point-plan fields
   (`item_number`, `category`, `deadline_type`, `responsible_ministry`,
   `title_np`, `description_np`) live in the `metadata` jsonb via `Attribute`
@@ -62,7 +64,11 @@ team-reassignment are super-admin only; team role changes require BOTH
   authorization); `scopeAssignableFor(Project)` is the source of truth for
   assignees. **Team** — auto-slugged, pivot `member_team` with `role`.
 - **ProjectActivity** — polymorphic audit log, written only by the six
-  observers. **WorkspaceNote** — personal stickies.
+  observers. Surfaced through `App\Queries\ActivityFeedQuery` on the activity
+  tab of the notifications screen (`/workspace/notifications?tab=activity`);
+  visibility rides on the task's project via `visibleTo` — never filter the
+  feed on `->public()` (observers write `is_public = false`).
+  **WorkspaceNote** — personal stickies.
   **ProjectAssignment/Note/Contact, TaskComment** — task children.
   **ProjectDigestSubscriber** — weekly digest recipients.
 

@@ -5,12 +5,13 @@ Single Inertia entry `resources/js/app.ts`; single root view
 
 ## Pages (`resources/js/pages`)
 
-`Home`, `MyWorkspace`, `PlanTracker`, `Auth/`, `Notifications/`,
-`Projects/Index`, `Projects/Show` (list/board/people views via
-`components/project/`), `Tasks/Show`, `Team/Index`. Pages wrap themselves in
-`AppShell` and supply the 44px top bar through its `bar` snippet (breadcrumb
-left, actions right); `flush` drops content padding for full-bleed
-registers/boards.
+`Home`, `MyWorkspace`, `PlanTracker`, `Auth/`, `Notifications/` (two tabs:
+personal inbox + workspace activity feed, `?tab=activity`), `Projects/Index`,
+`Projects/Show` (list/board/people views via `components/project/`),
+`Tasks/Show`, `Team/Index`. Pages wrap themselves in `AppShell` and supply the
+44px top bar through its `bar` snippet (breadcrumb left, actions right);
+`flush` drops content padding for full-bleed registers/boards. The sidebar
+collapses to an icon rail (`[` shortcut, persisted in localStorage).
 
 ## Key components (`resources/js/components`)
 
@@ -19,8 +20,10 @@ red cross), `PriorityBars`, `Avatar` (squircle initials), `ProgressRing`.
 Shell + chrome: `AppShell`, `CommandPalette`, `Popover`, `Toasts`.
 Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 `lib/quickAddTokens.ts` (server twin: `App\Support\QuickAddParser`).
-Task UI: `TaskRow`, `TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`,
-`AssigneePicker/Stack`, `DateChip`, `StatusChip/Badge`, `CompleteCheckbox`.
+Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
+`TaskCode` (mono `CODE-123` id chip from project code + item number),
+`TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`, `AssigneePicker/Stack`,
+`DateChip`, `StatusChip/Badge`, `CompleteCheckbox`.
 Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
 `lib/notesBoard.svelte.ts`, `lib/noteColors.ts`.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
@@ -42,7 +45,9 @@ Mukta (`font-np`, Nepali).
 classes every screen is built from (`.btn`, `.btn-primary`, `.btn-ghost`,
 `.btn-danger`, `.btn-icon`, `.input`, `.label`, `.chip*`, `.panel`, `.row`,
 `.group-head`, `.col-head`, `.section-title`, `.popover`, `.menu-item`,
-`.kbd`). `resources/js/lib/applyTheme.ts` (`applyAppearance`) is the single
+`.kbd`, plus the task-register grid `.task-cols`/`.task-head`/`.task-row` —
+one shared column template so header and rows align, optional columns from
+xl/2xl). `resources/js/lib/applyTheme.ts` (`applyAppearance`) is the single
 source of mode.
 
 Hard rules (see conventions.md): semantic utilities only; no raw palette
