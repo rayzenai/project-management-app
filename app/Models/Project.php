@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $updated_at
  * @property-read int|null $tasks_count
  * @property-read int|null $done_tasks_count
+ * @property-read non-empty-string $code
  */
 class Project extends Model
 {
@@ -58,6 +59,28 @@ class Project extends Model
             'ends_at' => 'date',
             'archived_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Short project code: the first alphanumeric character of each word in the
+     * title, uppercased, capped at four. "Digital Nepal Rollout" -> DNR,
+     * "Government 100-Day Plan" -> G1P. Tasks quote it as CODE-123 so an id can
+     * be pasted into a chat and still mean something.
+     *
+     * @return Attribute<non-empty-string, never>
+     */
+    protected function code(): Attribute
+    {
+        return Attribute::get(function (): string {
+            $initials = collect(preg_split('/\s+/u', (string) $this->title) ?: [])
+                ->map(fn (string $word): string => (string) (preg_replace('/[^\p{L}\p{N}]/u', '', $word) ?: ''))
+                ->filter()
+                ->map(fn (string $word): string => mb_strtoupper(mb_substr($word, 0, 1)))
+                ->take(4)
+                ->implode('');
+
+            return $initials !== '' ? $initials : 'P'.$this->id;
+        });
     }
 
     public function getRouteKeyName(): string

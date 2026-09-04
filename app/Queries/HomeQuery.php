@@ -5,7 +5,6 @@ namespace App\Queries;
 use App\Http\Resources\TaskResource;
 use App\Models\Member;
 use App\Models\Project;
-use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -43,8 +42,7 @@ class HomeQuery
      *     recently_done: list<array<string, mixed>>,
      *     stats: array<string, int>,
      *     status_breakdown: list<array{value: string, label: string, color: string, count: int}>,
-     *     projects: list<array<string, mixed>>,
-     *     recent_activity: list<array<string, mixed>>
+     *     projects: list<array<string, mixed>>
      * }
      */
     public function get(Request $request): array
@@ -120,7 +118,6 @@ class HomeQuery
             ],
             'status_breakdown' => $this->statusBreakdown($all),
             'projects' => $this->projectRollup($user, $all, $scope, $today, $weekEnd, $stalledBefore),
-            'recent_activity' => $this->recentActivity($user),
         ];
     }
 
@@ -205,34 +202,6 @@ class HomeQuery
             ->reject(fn (array $row): bool => $scope === 'mine' && $row['tasks_count'] === 0);
 
         return array_values($rows->all());
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function recentActivity(User $user): array
-    {
-        $entries = ProjectActivity::query()
-            ->whereHas(
-                'task',
-                fn (Builder $q) => $q->whereIn('project_id', Project::query()->visibleTo($user)->select('id')),
-            )
-            ->recent(14)
-            ->with(['user', 'task.project'])
-            ->latest()
-            ->limit(12)
-            ->get()
-            ->map(fn (ProjectActivity $activity): array => [
-                'id' => $activity->id,
-                'description' => $activity->description,
-                'user_name' => $activity->user?->name,
-                'task_title' => $activity->task?->title,
-                'task_slug' => $activity->task?->slug,
-                'project_slug' => $activity->task?->project?->slug,
-                'happened_at' => $activity->created_at?->toIso8601String(),
-            ]);
-
-        return array_values($entries->all());
     }
 
     /**

@@ -66,11 +66,12 @@ class NotificationIndexQuery
 
     /**
      * Totals for the chips: every notification, the unread ones, and one per
-     * kind. Counted over the whole inbox, not the current page.
+     * kind. Counted over the whole inbox, not the current page. Public because
+     * the activity tab renders the same labels without paginating the inbox.
      *
      * @return array<string, int>
      */
-    private function counts(User $user): array
+    public function counts(User $user): array
     {
         // reorder() drops the relation's default ORDER BY created_at, which
         // Postgres rejects on a grouped query (SQLite tolerates it, so this

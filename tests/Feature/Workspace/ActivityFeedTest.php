@@ -12,19 +12,21 @@ use Inertia\Testing\AssertableInertia;
  * filters on ->public() is permanently empty. These guard both feeds that used
  * to do exactly that.
  */
-it('shows observer-written activity on the home feed', function () {
+it('shows observer-written activity on the activity tab', function () {
     $user = User::factory()->create();
     Member::factory()->linkedTo($user)->create();
     $project = Project::factory()->create(['is_public' => true]);
 
     $task = Task::factory()->for($project)->create();
 
-    $this->actingAs($user)->get('/workspace')->assertInertia(fn (AssertableInertia $page) => $page
-        ->has('recent_activity')
-        ->where('recent_activity.0.task_slug', $task->slug));
+    $this->actingAs($user)->get('/workspace/notifications?tab=activity')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('tab', 'activity')
+            ->has('activity.data')
+            ->where('activity.data.0.task_slug', $task->slug));
 });
 
-it('keeps another team private project out of the home feed', function () {
+it('keeps another team private project out of the activity tab', function () {
     config(['project-management.super_admins' => []]);
 
     $user = User::factory()->create();
@@ -34,8 +36,9 @@ it('keeps another team private project out of the home feed', function () {
     $foreign->teams()->attach(Team::factory()->create()->id);
     Task::factory()->for($foreign)->create();
 
-    $this->actingAs($user)->get('/workspace')->assertInertia(fn (AssertableInertia $page) => $page
-        ->has('recent_activity', 0));
+    $this->actingAs($user)->get('/workspace/notifications?tab=activity')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('activity.data', 0));
 });
 
 it('shows observer-written activity in the task peek', function () {

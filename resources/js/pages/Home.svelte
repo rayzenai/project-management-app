@@ -2,11 +2,10 @@
     import { inertia, page, router } from '@inertiajs/svelte';
     import { ChevronRight, StickyNote } from '@lucide/svelte';
     import AppShell from '../components/AppShell.svelte';
-    import Avatar from '../components/Avatar.svelte';
     import NotesStrip from '../components/NotesStrip.svelte';
     import StatusGlyph from '../components/StatusGlyph.svelte';
+    import TaskRegisterHead from '../components/TaskRegisterHead.svelte';
     import TaskRow from '../components/TaskRow.svelte';
-    import { formatTimeAgo } from '../lib/format';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { peek } from '../lib/peek.svelte';
     import { quickAdd } from '../lib/quickAdd.svelte';
@@ -30,15 +29,6 @@
         due_this_week: number;
         stalled: number;
     };
-    type Activity = {
-        id: number;
-        description: string | null;
-        user_name: string | null;
-        task_title: string | null;
-        task_slug: string | null;
-        project_slug: string | null;
-        happened_at: string | null;
-    };
     type Stats = {
         open: number;
         overdue: number;
@@ -59,7 +49,6 @@
         stats,
         status_breakdown,
         projects,
-        recent_activity,
     }: {
         scope: 'mine' | 'all';
         buckets: Bucket[];
@@ -67,7 +56,6 @@
         stats: Stats;
         status_breakdown: StatusSlice[];
         projects: ProjectRow[];
-        recent_activity: Activity[];
     } = $props();
 
     /**
@@ -221,7 +209,7 @@
     {/snippet}
 
     <div class="xl:grid xl:grid-cols-[minmax(0,1fr)_312px]">
-        <div class="px-4 pt-5 pb-6 lg:px-6">
+        <div class="px-5 pt-6 pb-8 lg:px-6">
             <header class="mb-4">
                 <h1 class="text-[19px] font-semibold tracking-[-0.02em]">
                     {heading}
@@ -236,9 +224,9 @@
             <!-- Completion is the one hero figure; the cards beside it are the
              exceptions worth acting on. -->
             <div
-                class="grid gap-3 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]"
+                class="grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]"
             >
-                <div class="panel flex flex-col justify-between p-4">
+                <div class="panel flex flex-col justify-between p-5">
                     <div class="text-xs font-medium text-fg-muted">
                         Completion
                     </div>
@@ -265,7 +253,7 @@
                 </div>
 
                 <div
-                    class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5"
+                    class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5"
                 >
                     {#each cards as card (card.key)}
                         {@const active = filter === card.key}
@@ -274,7 +262,7 @@
                             aria-pressed={active}
                             disabled={card.value === 0}
                             onclick={() => (filter = active ? 'all' : card.key)}
-                            class={`panel flex flex-col justify-between p-3 text-left transition disabled:pointer-events-none disabled:opacity-45 ${
+                            class={`panel flex flex-col justify-between p-4 text-left transition disabled:pointer-events-none disabled:opacity-45 ${
                                 active
                                     ? 'border-accent bg-accent-soft'
                                     : 'hover:bg-hover'
@@ -301,7 +289,7 @@
             <!-- Part-to-whole across the workflow. Segments are separated by a 2px
              surface gap because two statuses share a colour in config. -->
             {#if breakdownTotal > 0}
-                <section class="panel mt-3 p-4">
+                <section class="panel mt-4 p-5">
                     <div class="section-title">
                         Status <span class="section-count"
                             >{breakdownTotal}</span
@@ -341,12 +329,12 @@
                             >{projects.length}</span
                         >
                     </div>
-                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {#each projects as project (project.slug)}
                             <a
                                 href={`/workspace/projects/${project.slug}`}
                                 use:inertia
-                                class="panel block p-4 transition hover:bg-hover"
+                                class="panel block p-5 transition hover:bg-hover"
                             >
                                 <div
                                     class="flex items-baseline justify-between gap-3"
@@ -401,9 +389,9 @@
         </div>
 
         <aside
-            class="border-t border-line xl:sticky xl:top-11 xl:self-start xl:border-t-0 xl:border-l"
+            class="border-t border-line xl:sticky xl:top-12 xl:self-start xl:border-t-0 xl:border-l"
         >
-            <section class="px-4 py-5 lg:px-5">
+            <section class="px-5 py-6 lg:px-6">
                 <div class="mb-3 flex items-center gap-2">
                     <StickyNote
                         class="h-[15px] w-[15px] shrink-0 text-fg-faint"
@@ -432,7 +420,7 @@
             </section>
 
             {#if noteFeed.length > 0}
-                <section class="border-t border-line px-4 py-5 lg:px-5">
+                <section class="border-t border-line px-5 py-6 lg:px-6">
                     <h2 class="section-title mb-3">
                         From my tasks
                         <span class="section-count">{noteFeed.length}</span>
@@ -444,7 +432,7 @@
     </div>
 
     <div class="border-t border-line">
-        <div class="flex h-9 items-center gap-2 px-4 lg:px-6">
+        <div class="flex h-11 items-center gap-2 px-5 lg:px-6">
             <span class="section-title">
                 {filter === 'all' ? 'Open work' : 'Filtered'}
                 <span class="section-count">{visibleCount}</span>
@@ -492,6 +480,7 @@
             </div>
         </div>
     {:else}
+        <TaskRegisterHead />
         {#each shown as bucket (bucket.key)}
             <section>
                 <div class="group-head">
@@ -530,43 +519,6 @@
                     <TaskRow {task} showProject compact />
                 {/each}
             {/if}
-        </section>
-    {/if}
-
-    {#if recent_activity.length > 0}
-        <section class="px-4 py-6 lg:px-6">
-            <div class="section-title mb-2.5">
-                Activity <span class="section-count"
-                    >{recent_activity.length}</span
-                >
-            </div>
-            <ul class="space-y-2.5">
-                {#each recent_activity as entry (entry.id)}
-                    <li class="flex items-start gap-2.5 text-xs">
-                        <Avatar name={entry.user_name ?? '?'} />
-                        <div class="min-w-0 flex-1 leading-relaxed">
-                            <span class="font-medium text-fg"
-                                >{entry.user_name ?? 'Someone'}</span
-                            >
-                            <span class="text-fg-muted"
-                                >{entry.description}</span
-                            >
-                            {#if entry.task_slug && entry.project_slug}
-                                <span class="text-fg-faint">·</span>
-                                <a
-                                    href={`/workspace/projects/${entry.project_slug}/tasks/${entry.task_slug}`}
-                                    use:inertia
-                                    class="text-fg-muted underline decoration-line underline-offset-2 hover:text-fg"
-                                    >{entry.task_title}</a
-                                >
-                            {/if}
-                        </div>
-                        <span class="shrink-0 text-fg-faint tabular-nums"
-                            >{formatTimeAgo(entry.happened_at)}</span
-                        >
-                    </li>
-                {/each}
-            </ul>
         </section>
     {/if}
 </AppShell>

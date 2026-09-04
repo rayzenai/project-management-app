@@ -31,18 +31,6 @@
 
     let editing = $state(false);
 
-    function toggleProjectTeam(team: Team) {
-        const current = project.team_ids ?? [];
-        const next = current.includes(team.id)
-            ? current.filter((id) => id !== team.id)
-            : [...current, team.id];
-        router.patch(
-            `/workspace/projects/${project.slug}`,
-            { team_ids: next },
-            { preserveState: true, preserveScroll: true },
-        );
-    }
-
     type Tab = 'board' | 'list' | 'people';
 
     const TABS: { value: Tab; label: string }[] = [
@@ -264,9 +252,10 @@
     {/if}
 
     {#if editing}
-        <div class="border-b border-line px-4 py-4">
+        <div class="border-b border-line px-6 py-7 lg:px-8">
             <ProjectEditForm
                 {project}
+                {teams}
                 isSuperAdmin={shared.isSuperAdmin ?? false}
                 onclose={() => (editing = false)}
             />
@@ -274,7 +263,7 @@
     {/if}
 
     {#if tasks.length === 0}
-        <div class="flex flex-col items-start gap-2 px-4 py-8">
+        <div class="flex flex-col items-start gap-3 px-6 py-12 lg:px-8">
             <p class="font-medium">No tasks yet</p>
             <p class="text-fg-muted">
                 Press <kbd class="kbd">Q</kbd> anywhere to add one, or:
@@ -290,13 +279,13 @@
         </div>
     {:else}
         <div
-            class="flex h-10 items-center gap-0.5 overflow-x-auto border-b border-line px-3"
+            class="flex h-14 items-center gap-1 overflow-x-auto border-b border-line px-6 lg:px-8"
         >
             {#each TABS as tab (tab.value)}
                 {@const active = activeTab === tab.value}
                 <button
                     type="button"
-                    class={`inline-flex h-10 shrink-0 items-center gap-2 border-b-2 px-2.5 font-medium transition ${
+                    class={`inline-flex h-14 shrink-0 items-center gap-2 border-b-2 px-3.5 font-medium transition ${
                         active
                             ? 'border-accent text-fg'
                             : 'border-transparent text-fg-muted hover:text-fg'
@@ -318,42 +307,25 @@
             />
         </div>
 
-        <div class="flex flex-col gap-4 px-4 py-4">
-            {#if project.description || teams.length > 0}
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                    {#if project.description}
-                        <p class="max-w-2xl text-fg-muted">
-                            {project.description}
-                        </p>
-                    {/if}
-                    {#if teams.length > 0}
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="label">Teams</span>
-                            {#each teams as team (team.id)}
-                                {@const attached = (
-                                    project.team_ids ?? []
-                                ).includes(team.id)}
-                                <button
-                                    type="button"
-                                    aria-pressed={attached}
-                                    title={attached
-                                        ? `Detach ${team.name}`
-                                        : `Attach ${team.name}: scopes the assignee picker to its members`}
-                                    class={`btn ${attached ? 'border-accent/40 bg-accent-soft text-accent hover:bg-accent-soft' : ''}`}
-                                    onclick={() => toggleProjectTeam(team)}
-                                >
-                                    {team.name}
-                                </button>
-                            {/each}
-                            {#if (project.team_ids ?? []).length === 0}
-                                <span class="text-xs text-fg-faint"
-                                    >None. Everyone is assignable.</span
-                                >
-                            {/if}
-                        </div>
-                    {/if}
-                </div>
-            {/if}
+        <!-- Project context: the title block, then the metric cards. Team
+             attachment lives in Edit project — it changes who is assignable, so
+             it is configuration, not a filter. -->
+        <div class="flex flex-col gap-4 border-b border-line px-6 py-5 lg:px-8">
+            <div>
+                <h1 class="text-[17px] font-semibold tracking-[-0.02em]">
+                    {project.title}
+                </h1>
+                {#if project.title_np}
+                    <p class="font-np mt-1 text-[13px] text-fg-muted">
+                        {project.title_np}
+                    </p>
+                {/if}
+                {#if project.description}
+                    <p class="mt-1 max-w-2xl text-[13px] text-fg-muted">
+                        {project.description}
+                    </p>
+                {/if}
+            </div>
 
             <ProjectSummaryStrip {tasks} {statuses} />
         </div>

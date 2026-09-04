@@ -387,9 +387,9 @@
         </div>
 
         <aside
-            class="border-t border-line xl:sticky xl:top-11 xl:border-t-0 xl:border-l"
+            class="border-t border-line xl:sticky xl:top-12 xl:border-t-0 xl:border-l"
         >
-            <section class="px-4 py-4">
+            <section class="px-5 py-6 lg:px-6">
                 <h2 class="section-title mb-3">
                     My notes
                     <span class="section-count">{stickyNotes.length}</span>
@@ -398,7 +398,7 @@
             </section>
 
             {#if recentNotes.length > 0}
-                <section class="border-t border-line px-4 py-4">
+                <section class="border-t border-line px-5 py-6 lg:px-6">
                     <h2 class="section-title mb-3">
                         From my tasks
                         <span class="section-count">{recentNotes.length}</span>
@@ -407,7 +407,7 @@
                 </section>
             {/if}
 
-            <section class="border-t border-line px-4 py-4">
+            <section class="border-t border-line px-5 py-6 lg:px-6">
                 <ContactChips contacts={recentContacts} />
             </section>
         </aside>

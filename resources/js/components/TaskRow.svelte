@@ -6,6 +6,7 @@
     import PriorityFlag from './PriorityFlag.svelte';
     import StatusBadge from './StatusBadge.svelte';
     import StatusChip from './StatusChip.svelte';
+    import TaskCode from './TaskCode.svelte';
 
     let {
         task,
@@ -31,14 +32,15 @@
     }
 </script>
 
+<!-- One grid cell per column, in the order `.task-cols` declares. Cells stay
+     in place whether or not they hold anything, so the register reads down as
+     well as across; `TaskRegisterHead` renders the matching header. -->
 <div
     role="button"
     tabindex="0"
-    class="group row cursor-pointer text-left"
-    class:min-h-11={!compact}
-    class:min-h-9={compact}
-    class:py-2={!compact}
-    class:py-1={compact}
+    class="group task-cols task-row"
+    class:h-16={!compact}
+    class:h-[52px]={compact}
     onclick={openPeek}
     onkeydown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -47,15 +49,15 @@
         }
     }}
 >
-    {#if task.item_number}
-        <span class="w-9 shrink-0 font-mono text-xs text-fg-faint tabular-nums">
-            {task.item_number}
-        </span>
-    {/if}
+    <span class="flex min-w-0">
+        {#if task.item_number}
+            <TaskCode {task} projectSlug={projectSlug ?? undefined} />
+        {/if}
+    </span>
 
-    <div class="min-w-0 flex-1">
+    <div class="min-w-0">
         <div class="flex min-w-0 items-baseline gap-2.5">
-            <span class="truncate text-[13px] font-medium text-fg">
+            <span class="truncate text-sm font-medium text-fg">
                 {task.short_title || task.title}
             </span>
             {#if task.title_np && !compact}
@@ -64,7 +66,7 @@
                 >
             {/if}
             {#if showProject && task.project}
-                <span class="shrink-0 text-xs text-fg-faint"
+                <span class="max-w-[28%] truncate text-[13px] text-fg-faint"
                     >{task.project.title}</span
                 >
             {/if}
@@ -76,39 +78,36 @@
         {/if}
     </div>
 
-    <!-- Every trailing cell keeps its width whether or not it has content, so
-         the columns line up down the register instead of sliding around. -->
-    <span class="hidden w-36 shrink-0 truncate text-xs text-fg-muted lg:block">
+    <span class="hidden truncate text-[13px] text-fg-muted xl:block">
         {task.category_label ?? ''}
     </span>
-    <span class="hidden w-40 shrink-0 truncate text-xs text-fg-muted xl:block">
+    <span class="hidden truncate text-[13px] text-fg-muted 2xl:block">
         {task.responsible_ministry ?? ''}
     </span>
 
-    <div class="flex shrink-0 items-center gap-2">
+    <span class="flex min-w-0 justify-start">
         {#if projectSlug}
-            <span class="flex w-[92px] shrink-0 justify-start">
-                <StatusChip {task} {projectSlug} size="sm" />
-            </span>
-            <span class="flex w-3.5 shrink-0 justify-center">
-                <PriorityFlag {task} {projectSlug} quiet />
-            </span>
-            <span class="flex w-[86px] shrink-0 justify-end">
-                <DateChip {task} {projectSlug} size="sm" ghost />
-            </span>
+            <StatusChip {task} {projectSlug} size="sm" />
         {:else}
-            <span class="flex w-[92px] shrink-0 justify-start">
-                <StatusBadge status={task.status} label={task.status_label} />
-            </span>
+            <StatusBadge status={task.status} label={task.status_label} />
         {/if}
-        <span
-            class="w-8 shrink-0 text-right font-mono text-xs text-fg-faint tabular-nums"
-        >
-            {task.progress > 0 ? `${task.progress}%` : ''}
-        </span>
-    </div>
+    </span>
+    <span class="flex justify-center">
+        {#if projectSlug}
+            <PriorityFlag {task} {projectSlug} quiet />
+        {/if}
+    </span>
+    <span class="flex justify-end">
+        {#if projectSlug}
+            <DateChip {task} {projectSlug} size="sm" ghost />
+        {/if}
+    </span>
 
-    <div class="flex w-[70px] shrink-0 justify-end -space-x-0.5">
+    <span class="text-right font-mono text-[13px] text-fg-faint tabular-nums">
+        {task.progress > 0 ? `${task.progress}%` : ''}
+    </span>
+
+    <div class="flex justify-end -space-x-0.5">
         {#each assignees.slice(0, 3) as a (a.id)}
             <Avatar name={a.member?.name} class="ring-2 ring-surface" />
         {/each}

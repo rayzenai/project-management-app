@@ -42,52 +42,64 @@
     );
 </script>
 
-<div
-    class="grid grid-cols-2 divide-x divide-line overflow-hidden rounded-lg border border-line bg-surface-alt sm:grid-cols-3 lg:grid-cols-5"
->
-    <div class="px-4 py-3">
-        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
-            {percent}%
-        </div>
-        <div class="text-xs text-fg-muted">Complete</div>
-        <div
-            class="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-line"
-            role="img"
-            aria-label={`${percent}% complete`}
-        >
-            {#each segments as seg (seg.value)}
-                <div
-                    class="h-full"
-                    style={`width:${total === 0 ? 0 : (seg.count / total) * 100}%; background:${seg.color};`}
-                    title={`${seg.label}: ${seg.count}`}
-                ></div>
-            {/each}
+<div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div class="panel px-4 py-3">
+        <div class="text-xs font-medium text-fg-muted">Complete</div>
+        <div class="mt-1.5 flex items-center gap-2.5">
+            <span
+                class="text-[22px] leading-none font-semibold tracking-[-0.02em]"
+                >{percent}%</span
+            >
+            <span
+                class="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-line"
+                role="img"
+                aria-label={`${percent}% complete`}
+            >
+                {#each segments as seg (seg.value)}
+                    <span
+                        class="h-full"
+                        style={`width:${total === 0 ? 0 : (seg.count / total) * 100}%; background:${seg.color};`}
+                        title={`${seg.label}: ${seg.count}`}
+                    ></span>
+                {/each}
+            </span>
         </div>
     </div>
-    <div class="px-4 py-3">
-        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+
+    <div class="panel px-4 py-3">
+        <div class="text-xs font-medium text-fg-muted">Tasks</div>
+        <div
+            class="mt-1.5 text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums"
+        >
             {total}
         </div>
-        <div class="text-xs text-fg-muted">Tasks</div>
     </div>
-    <div class="px-4 py-3">
-        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
-            {openCount} / {doneCount}
-        </div>
-        <div class="text-xs text-fg-muted">Open / done</div>
-    </div>
-    <div class="px-4 py-3">
+
+    <div class="panel px-4 py-3">
+        <div class="text-xs font-medium text-fg-muted">Open / done</div>
         <div
-            class={`text-[22px] font-semibold tracking-[-0.02em] tabular-nums ${overdueCount > 0 ? 'text-danger' : ''}`}
+            class="mt-1.5 text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums"
+        >
+            {openCount} <span class="text-fg-faint">/</span>
+            {doneCount}
+        </div>
+    </div>
+
+    <div class="panel px-4 py-3">
+        <div class="text-xs font-medium text-fg-muted">Overdue</div>
+        <div
+            class={`mt-1.5 text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums ${overdueCount > 0 ? 'text-danger' : 'text-fg-faint'}`}
         >
             {overdueCount}
         </div>
-        <div class="text-xs text-fg-muted">Overdue</div>
     </div>
-    <div class="px-4 py-3">
-        <div class="text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+
+    <div class="panel px-4 py-3">
+        <div class="text-xs font-medium text-fg-muted">Unassigned</div>
+        <div
+            class={`mt-1.5 text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums ${unassignedCount > 0 ? 'text-warn' : 'text-fg-faint'}`}
+        >
             {unassignedCount}
         </div>
-        <div class="text-xs text-fg-muted">Unassigned</div>
     </div>
 </div>

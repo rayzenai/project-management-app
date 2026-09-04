@@ -349,22 +349,24 @@
 <div
     bind:this={boardEl}
     onclickcapture={swallowClickAfterDrag}
-    class="flex min-h-0 flex-1 gap-3.5 overflow-x-auto border-t border-line bg-surface-alt px-4 py-4"
+    class="flex min-h-0 flex-1 overflow-x-auto border-t border-line bg-surface-alt px-3 py-7"
 >
-    {#each columnDefs as def (def.value)}
+    {#each columnDefs as def, columnIndex (def.value)}
         {@const colTasks = columns.get(def.value) ?? []}
         {@const isHover = hoverTarget?.status === def.value}
         {@const droppable = def.value !== OTHER}
         {@const canAdd = droppable && !(filtersActive && colTasks.length === 0)}
         <div
-            class={`flex min-h-[200px] w-[272px] shrink-0 flex-col rounded-md transition ${
-                isHover ? 'bg-accent-soft' : ''
-            }`}
+            class={`flex min-h-[240px] w-[336px] shrink-0 flex-col px-5 transition ${
+                columnIndex > 0 ? 'border-l border-line' : ''
+            } ${isHover ? 'bg-accent-soft' : ''}`}
             data-column={def.value}
             role="list"
             aria-label={def.label}
         >
-            <header class="flex h-8 shrink-0 items-center gap-2 px-1">
+            <header
+                class="mb-4 flex h-9 shrink-0 items-center gap-2 border-b border-line pb-3"
+            >
                 <StatusGlyph status={def.value} size={14} />
                 <h3 class="truncate font-medium text-fg">{def.label}</h3>
                 <span class="section-count">{colTasks.length}</span>
@@ -381,9 +383,9 @@
                 {/if}
             </header>
 
-            <div class="flex flex-1 flex-col gap-2 px-0.5 pt-1 pb-2">
+            <div class="flex flex-1 flex-col gap-3.5 pb-2">
                 {#if colTasks.length === 0}
-                    <p class="px-1 py-2 text-xs text-fg-faint">
+                    <p class="py-2 text-xs text-fg-faint">
                         {filtersActive ? 'No matches' : 'No tasks'}
                     </p>
                 {:else}
@@ -396,6 +398,7 @@
                         <BoardCard
                             {task}
                             projectSlug={project.slug}
+                            projectCode={project.code}
                             {index}
                             isDragging={dragState?.id === task.id}
                             onpointerdown={droppable

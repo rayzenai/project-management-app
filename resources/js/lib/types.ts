@@ -34,6 +34,8 @@ export interface ProjectSummary {
     id: Id;
     slug: string;
     title: string;
+    /** Short prefix for task codes, e.g. DNR in DNR-106. */
+    code?: string;
 }
 
 export interface Project extends ProjectSummary {

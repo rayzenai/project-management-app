@@ -21,7 +21,12 @@
         isSuperAdmin?: boolean;
     } = $props();
 
-    let creating = $state(false);
+    // ?new=1 opens the composer straight away, so the sidebar's + can mean
+    // "new project" rather than just "take me to the list".
+    let creating = $state(
+        typeof window !== 'undefined' &&
+            new URLSearchParams(window.location.search).has('new'),
+    );
     const uid = $props.id();
     const form = useForm({
         title: '',

@@ -203,14 +203,48 @@
     .section-count {
         @apply text-xs font-normal text-fg-faint tabular-nums;
     }
+    /* Registers share this rhythm so a group head and its rows line up on
+       every screen: 20px gutter, 24px from lg. */
     .group-head {
-        @apply flex h-8 items-center gap-2 border-y border-line bg-surface-alt px-4 text-[13px] font-medium text-fg;
+        @apply flex h-9 items-center gap-2 border-y border-line bg-surface-alt px-5 text-[13px] font-medium text-fg lg:px-6;
     }
     .row {
-        @apply flex items-center gap-3 border-b border-line-soft px-4 transition hover:bg-hover;
+        @apply flex items-center gap-3 border-b border-line px-5 transition hover:bg-hover lg:px-6;
     }
     .col-head {
         @apply text-[11.5px] font-medium text-fg-faint;
+    }
+
+    /* ---- Task register grid -------------------------------------------
+       The column header and every task row share one template, so each cell
+       lines up straight down the register. The optional columns only appear
+       once there is room for them without starving the title: category from
+       xl, ministry from 2xl. Keep the hidden cells in DOM order. */
+    .task-cols {
+        @apply grid items-center gap-x-6 px-5 lg:px-6;
+        grid-template-columns:
+            68px minmax(0, 1fr) 96px 16px 92px 40px
+            76px;
+    }
+    @media (min-width: 1280px) {
+        .task-cols {
+            grid-template-columns:
+                68px minmax(0, 1fr) 132px 96px 16px 92px
+                40px 76px;
+        }
+    }
+    @media (min-width: 1536px) {
+        .task-cols {
+            grid-template-columns:
+                68px minmax(0, 1fr) 132px 156px 96px 16px
+                92px 40px 76px;
+        }
+    }
+    .task-head {
+        @apply sticky top-12 z-10 h-10 border-b border-line bg-surface-alt text-[11.5px] font-medium text-fg-faint;
+    }
+    .task-row {
+        @apply cursor-pointer border-b border-line text-left transition hover:bg-hover;
     }
 
     /* ---- Popover panel ------------------------------------------------ */
