@@ -6,7 +6,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 it('creates, lists, edits own, forbids editing others, and deletes', function () {
-    $author = User::factory()->create();
+    $author = User::factory()->withMember()->create();
     $task = Task::factory()->create();
 
     $created = $this->actingAs($author, 'sanctum')
@@ -21,7 +21,7 @@ it('creates, lists, edits own, forbids editing others, and deletes', function ()
         ->patchJson("/api/v1/workspace/comments/{$created['id']}", ['body' => 'edited'])
         ->assertSuccessful();
 
-    $other = User::factory()->create();
+    $other = User::factory()->withMember()->create();
     $this->actingAs($other, 'sanctum')
         ->patchJson("/api/v1/workspace/comments/{$created['id']}", ['body' => 'nope'])
         ->assertForbidden();
@@ -42,7 +42,7 @@ it('creates, lists, edits own, forbids editing others, and deletes', function ()
 });
 
 it('lists a thread of comments with a bounded query count (batched, no 2N)', function () {
-    $author = User::factory()->create();
+    $author = User::factory()->withMember()->create();
     $task = Task::factory()->create();
 
     foreach (range(1, 3) as $i) {

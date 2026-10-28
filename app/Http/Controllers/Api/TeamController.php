@@ -13,6 +13,7 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
 
 /**
  * JSON sibling of the Workspace\TeamController. Reuses the same FormRequests
@@ -23,14 +24,14 @@ class TeamController extends Controller
 {
     use RespondsWithServiceResult;
 
-    public function index(TeamIndexQuery $query): JsonResponse
+    public function index(Request $request, TeamIndexQuery $query): JsonResponse
     {
-        return response()->json($query->data());
+        return response()->json($query->data($request));
     }
 
     public function store(StoreTeamRequest $request): JsonResponse
     {
-        $team = Team::create($request->safe()->except('member_ids'));
+        $team = Team::create(Arr::except($request->validated(), ['member_ids']));
 
         $team->members()->sync($request->validated('member_ids', []));
 
@@ -42,7 +43,7 @@ class TeamController extends Controller
 
     public function update(UpdateTeamRequest $request, Team $team): JsonResponse
     {
-        $team->update($request->safe()->except('member_ids'));
+        $team->update(Arr::except($request->validated(), ['member_ids']));
 
         if ($request->has('member_ids')) {
             $team->members()->sync($request->validated('member_ids', []));
@@ -56,7 +57,7 @@ class TeamController extends Controller
 
     public function destroy(Request $request, Team $team): JsonResponse
     {
-        abort_unless(WorkspaceAccess::isSuperAdmin($request->user()), 403);
+        abort_unless(WorkspaceAccess::canEditTeam($request->user(), $team), 403);
 
         $team->delete();
 
@@ -65,7 +66,7 @@ class TeamController extends Controller
 
     public function restore(Request $request, RestoreWorkspaceModel $service, Team $team): JsonResponse
     {
-        abort_unless(WorkspaceAccess::isSuperAdmin($request->user()), 403);
+        abort_unless(WorkspaceAccess::canEditTeam($request->user(), $team), 403);
 
         $result = $service->execute($team);
 

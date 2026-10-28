@@ -10,11 +10,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
+ * @property int $organization_id
  * @property string $slug
  * @property string $title
  * @property string|null $title_np
@@ -38,6 +40,7 @@ class Project extends Model
     protected $table = 'projects';
 
     protected $fillable = [
+        'organization_id',
         'slug',
         'title',
         'title_np',
@@ -89,6 +92,14 @@ class Project extends Model
     }
 
     /**
+     * @return BelongsTo<Organization, $this>
+     */
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    /**
      * @return HasMany<Task, $this>
      */
     public function tasks(): HasMany
@@ -132,8 +143,11 @@ class Project extends Model
     }
 
     /**
-     * Projects the user may see: public, or attached to a team the user's
-     * member belongs to. Super-admins see everything (unconstrained).
+     * Projects the user may see: those of their organization's office they
+     * administer, public ones of their own organization, and any attached
+     * to a team they are on (which is how a cross-organization team's
+     * outsiders see its projects). Super-admins see everything. The query
+     * twin of {@see WorkspaceAccess::canViewProject()}; keep them in step.
      *
      * @param  Builder<Project>  $query
      * @return Builder<Project>
@@ -144,15 +158,25 @@ class Project extends Model
             return $query;
         }
 
-        $memberId = $user === null
-            ? null
-            : Member::query()->where('user_id', $user->getAuthIdentifier())->value('id');
+        $member = WorkspaceAccess::memberFor($user);
 
-        return $query->where(function (Builder $q) use ($memberId): void {
-            $q->where('is_public', true);
+        if ($member === null) {
+            return $query->whereRaw('1 = 0');
+        }
 
-            if ($memberId !== null) {
-                $q->orWhereHas('teams.members', fn (Builder $m): Builder => $m->where('members.id', $memberId));
+        $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId): void {
+            $q->whereHas('teams.members', fn (Builder $m): Builder => $m->where('members.id', $member->getKey()));
+
+            if ($member->organization_id !== null) {
+                $q->orWhere(fn (Builder $public): Builder => $public
+                    ->where('is_public', true)
+                    ->where('organization_id', $member->organization_id));
+            }
+
+            if ($adminOrganizationId !== null) {
+                $q->orWhere('organization_id', $adminOrganizationId);
             }
         });
     }

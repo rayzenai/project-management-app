@@ -83,10 +83,10 @@ Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/workspace/projects` | list — visibility-scoped. `?archived=1` for archived |
-| POST | `/workspace/projects` | create. `team_ids: int[]` (required & non-empty **unless** `is_public`; non-super-admins may only attach teams they lead) and `is_public: bool` (super-admin only — ignored from others) |
+| POST | `/workspace/projects` | create. `team_ids: int[]` (required & non-empty **unless** `is_public`; all from the project's organization; leaders may only attach teams they lead) and `is_public: bool` (office admin / super-admin; public means everyone in its organization, ignored from others). A super-admin sends `organization_id`; otherwise it is the office admin's organization or that of the leader's teams |
 | GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller |
 | PATCH | `/workspace/projects/{slug}` | update. Same `team_ids` / `is_public` rules as create |
-| PATCH | `/workspace/projects/{slug}/archive` | soft-archive (leader of an attached team / super-admin) |
+| PATCH | `/workspace/projects/{slug}/archive` | soft-archive (leader of an attached team, its office admin, or a super-admin) |
 | PATCH | `/workspace/projects/{slug}/restore` | un-archive |
 
 ## Tasks
@@ -155,26 +155,45 @@ Mentions are stored canonically as `@[Display Name](member:ID)`; the resolved
 | DELETE | `/workspace/my-notes/{note}` | soft-delete |
 | POST | `/workspace/my-notes/{note}/restore` | undo |
 
-## Teams *(roster: leader/super-admin; rename + reassignment: super-admin only)*
+## Organizations *(super-admin only)*
 
-| Method | Path |
-| --- | --- |
-| GET | `/workspace/team` |
-| POST | `/workspace/teams` |
-| PATCH | `/workspace/teams/{team}` |
-| DELETE | `/workspace/teams/{team}` |
-| POST | `/workspace/teams/{team}/restore` |
-| POST | `/workspace/teams/{team}/members` |
-| DELETE | `/workspace/teams/{team}/members/{member}` |
-| PATCH | `/workspace/teams/{team}/members/{member}` (role) |
+Every team, project and member (except super-admins) belongs to one
+organization. Everything below is scoped to what the caller may see: a member
+sees their teams and teammates, a leader the same plus their teams' rosters and
+progress, an office admin their whole organization, a super-admin everything.
 
-## Members
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| GET | `/workspace/organizations` | `{ organizations }` with counts and office admins |
+| POST | `/workspace/organizations` | `name` (unique) |
+| PATCH | `/workspace/organizations/{organization}` | `name` |
+| DELETE | `/workspace/organizations/{organization}` | 422 unless it has no people, teams or projects |
+
+## Teams *(create/edit/delete/leaders: office admin of its organization or super-admin; roster: also its leaders)*
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| GET | `/workspace/team` | `{ teams (each with roster), members, organizations, canCreateTeam, canCreateMember }`; super-admin may add `?organization=` |
+| POST | `/workspace/teams` | `name`, `description`; super-admin also `organization_id` (required), `is_cross_organization` |
+| PATCH | `/workspace/teams/{team}` | `name`, `description`; `is_cross_organization` (super-admin only; refused while outsiders are on it) |
+| DELETE | `/workspace/teams/{team}` | |
+| POST | `/workspace/teams/{team}/restore` | |
+| GET | `/workspace/teams/{team}/candidates?q=` | up to 8 people who can join (min 2 characters): its organization, or anyone for a cross-organization team |
+| POST | `/workspace/teams/{team}/members` | `member_id` (an existing person; 422 if they can't join) |
+| DELETE | `/workspace/teams/{team}/members/{member}` | leaders can't remove another leader |
+| PATCH | `/workspace/teams/{team}/members/{member}` | `role`: `member` or `leader` (office admin / super-admin) |
+| GET | `/workspace/teams/{team}/progress` | `{ data: { team, members, tasks, activity, generated_at } }` for its leaders, office admin and super-admins |
+
+## Members *(create/edit/delete: office admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login),
-optional `password` (min 8), `title` and `team_ids`. Every member gets a login:
-the password you send, or a generated one if you send none. Either way the
-member is emailed their email and password; if that email fails the member is
-still created and `message` says so.
+optional `password` (min 8), `title` and `team_ids`. A super-admin also sends
+`organization_id` (required) and may send `is_office_admin`; an office admin's
+people always join their own organization. Every member gets a login: the
+password you send, or a generated one if you send none. Either way the member is
+emailed their email and password; if that email fails the member is still
+created and `message` says so. `PATCH` accepts `organization_id` and
+`is_office_admin` from a super-admin only.
 
 | Method | Path |
 | --- | --- |

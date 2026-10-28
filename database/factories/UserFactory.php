@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Member;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,6 +32,15 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
         ];
+    }
+
+    /**
+     * A login with a member in the default organization: an ordinary person
+     * in the workspace, who sees their organization's public projects.
+     */
+    public function withMember(): static
+    {
+        return $this->afterCreating(fn (User $user) => Member::factory()->linkedTo($user)->create());
     }
 
     /**

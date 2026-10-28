@@ -2,6 +2,7 @@
 
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
@@ -27,7 +28,7 @@ it('forbids a non-super-admin from deleting a team', function () {
 it('allows a super-admin to create a team', function () {
     $this->actingAs(User::factory()->create(['email' => 'boss@example.com']));
 
-    $this->post('/workspace/teams', ['name' => 'Field Ops'])->assertRedirect();
+    $this->post('/workspace/teams', ['name' => 'Field Ops', 'organization_id' => OrganizationFactory::defaultId()])->assertRedirect();
 
     expect(Team::query()->where('name', 'Field Ops')->exists())->toBeTrue();
 });

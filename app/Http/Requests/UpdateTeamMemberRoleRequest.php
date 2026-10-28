@@ -8,6 +8,10 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * Choosing a team's leaders belongs to whoever administers the team's
+ * organization (its office admin or a super-admin), not to the leaders.
+ */
 class UpdateTeamMemberRoleRequest extends FormRequest
 {
     public function authorize(): bool
@@ -17,8 +21,7 @@ class UpdateTeamMemberRoleRequest extends FormRequest
 
         return $team instanceof Team
             && $member instanceof Member
-            && WorkspaceAccess::canManageRosterOf($this->user(), $team)
-            && WorkspaceAccess::canManageMember($this->user(), $member);
+            && WorkspaceAccess::canEditTeam($this->user(), $team);
     }
 
     /**

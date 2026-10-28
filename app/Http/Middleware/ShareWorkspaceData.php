@@ -58,25 +58,34 @@ class ShareWorkspaceData
                 return null;
             }
 
-            $activeMemberIds = Member::query()->active()->pluck('id')->all();
+            /** @var array<int, list<int>> $organizationMemberIds */
+            $organizationMemberIds = [];
 
             return [
                 'projects' => Project::query()->visibleTo($request->user())->active()->orderBy('title')
                     ->with(['teams.members' => fn ($q) => $q->where('is_active', true)])
-                    ->get(['id', 'slug', 'title'])
-                    ->map(fn (Project $p): array => [
-                        'id' => $p->id,
-                        'slug' => $p->slug,
-                        'title' => $p->title,
+                    ->get(['id', 'slug', 'title', 'organization_id'])
+                    ->map(function (Project $p) use (&$organizationMemberIds): array {
                         // Members assignable within this project: its teams' active members,
-                        // or every active member when the project has no teams yet. Mirrors
+                        // or its organization's when a public project has no teams. Mirrors
                         // Member::scopeAssignableFor so the picker only offers valid assignees.
-                        'member_ids' => $p->teams->isEmpty()
-                            ? $activeMemberIds
-                            : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),
-                    ])
+                        if ($p->teams->isEmpty()) {
+                            $organizationMemberIds[$p->organization_id] ??= Member::query()->active()
+                                ->where('organization_id', $p->organization_id)
+                                ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+                        }
+
+                        return [
+                            'id' => $p->id,
+                            'slug' => $p->slug,
+                            'title' => $p->title,
+                            'member_ids' => $p->teams->isEmpty()
+                                ? $organizationMemberIds[$p->organization_id]
+                                : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),
+                        ];
+                    })
                     ->all(),
-                'team' => Member::query()->active()->orderBy('name')
+                'team' => Member::query()->visibleTo($request->user())->active()->orderBy('name')
                     ->get(['id', 'name', 'email', 'user_id'])
                     ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])
                     ->all(),
@@ -155,6 +164,14 @@ class ShareWorkspaceData
         Inertia::share('ledTeamIds', fn (): array => $request->user() !== null
             ? WorkspaceAccess::ledTeamIds($request->user())
             : []);
+
+        Inertia::share('isOfficeAdmin', fn (): bool => WorkspaceAccess::officeAdminOrganizationId($request->user()) !== null);
+
+        Inertia::share('organization', function () use ($request): ?array {
+            $organization = WorkspaceAccess::memberFor($request->user())?->organization;
+
+            return $organization === null ? null : ['id' => $organization->id, 'name' => $organization->name];
+        });
 
         return $next($request);
     }

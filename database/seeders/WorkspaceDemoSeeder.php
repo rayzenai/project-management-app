@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Member;
+use App\Models\Organization;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\ProjectContact;
@@ -78,6 +79,12 @@ class WorkspaceDemoSeeder extends Seeder
     /** @var array<string, Team> slug => team */
     private array $teams = [];
 
+    /** Where everyone works, except the super-admins (no organization). */
+    private Organization $organization;
+
+    /** A second ministry, reached only through the cross-organization team. */
+    private Organization $partner;
+
     public function run(): void
     {
         if (app()->isProduction()) {
@@ -88,6 +95,7 @@ class WorkspaceDemoSeeder extends Seeder
 
         fake()->seed(20260904);
 
+        $this->seedOrganizations();
         $this->seedPeople();
 
         // After seedPeople, so the logins it provisions keep their real names
@@ -117,6 +125,23 @@ class WorkspaceDemoSeeder extends Seeder
     }
 
     /**
+     * Two organizations: the office everyone works in, and a ministry whose
+     * district liaison sits on the cross-organization Field Ops team.
+     */
+    private function seedOrganizations(): void
+    {
+        $this->organization = Organization::query()->updateOrCreate(
+            ['slug' => 'opmcm'],
+            ['name' => 'Office of the Prime Minister and Council of Ministers'],
+        );
+
+        $this->partner = Organization::query()->updateOrCreate(
+            ['slug' => 'mohfs'],
+            ['name' => 'Ministry of Health and Food Safety'],
+        );
+    }
+
+    /**
      * Six people. Four of the three tiers are represented: one super-admin (the
      * email in PM_SUPER_ADMINS), two team leaders, three regular members, plus
      * two members with no login at all — one active, one deactivated — because
@@ -124,7 +149,7 @@ class WorkspaceDemoSeeder extends Seeder
      */
     private function seedPeople(): void
     {
-        /** @var list<array{handle: string, name: string, email: string, title: string, login: bool, active?: bool, categories?: list<string>, coordinator_role?: string}> $people */
+        /** @var list<array{handle: string, name: string, email: string, title: string, login: bool, active?: bool, office_admin?: bool, organization?: string, categories?: list<string>, coordinator_role?: string}> $people */
         $people = [
             [
                 'handle' => 'admin',
@@ -149,6 +174,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'email' => 'asha@pmopm.test',
                 'title' => 'Delivery Unit Chief',
                 'login' => true,
+                'office_admin' => true,
                 'categories' => ['digital_governance', 'service_delivery'],
                 'coordinator_role' => 'Delivery coordinator',
             ],
@@ -188,6 +214,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'email' => 'nirmala@pmopm.test',
                 'title' => 'District Liaison',
                 'login' => false,
+                'organization' => 'partner',
             ],
             [
                 'handle' => 'sujan',
@@ -226,6 +253,8 @@ class WorkspaceDemoSeeder extends Seeder
                 ['email' => $spec['email']],
                 [
                     'user_id' => $user?->getKey(),
+                    'organization_id' => $this->organizationIdFor($spec),
+                    'is_office_admin' => $spec['office_admin'] ?? false,
                     'name' => $spec['name'],
                     'title' => $spec['title'],
                     'is_active' => $spec['active'] ?? true,
@@ -234,6 +263,21 @@ class WorkspaceDemoSeeder extends Seeder
                 ],
             );
         }
+    }
+
+    /**
+     * Super-admins belong to no organization; the partner ministry's liaison
+     * to theirs; everyone else to the office.
+     *
+     * @param  array<string, mixed>  $spec
+     */
+    private function organizationIdFor(array $spec): ?int
+    {
+        if (in_array($spec['email'], (array) config('project-management.super_admins', []), true)) {
+            return null;
+        }
+
+        return ($spec['organization'] ?? null) === 'partner' ? $this->partner->id : $this->organization->id;
     }
 
     /**
@@ -272,6 +316,9 @@ class WorkspaceDemoSeeder extends Seeder
             $team = Team::query()->updateOrCreate(
                 ['slug' => $spec['slug']],
                 [
+                    'organization_id' => $this->organization->id,
+                    // Field Ops pulls in the partner ministry's district liaison.
+                    'is_cross_organization' => $spec['slug'] === 'field-ops',
                     'name' => $spec['name'],
                     'description' => $spec['description'],
                     'color' => $spec['color'],
@@ -355,6 +402,7 @@ class WorkspaceDemoSeeder extends Seeder
             $project = Project::query()->updateOrCreate(
                 ['slug' => $spec['slug']],
                 [
+                    'organization_id' => $this->organization->id,
                     'title' => $spec['title'],
                     'title_np' => $spec['title_np'],
                     'description' => $spec['description'],

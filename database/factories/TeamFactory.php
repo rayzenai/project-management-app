@@ -22,6 +22,7 @@ class TeamFactory extends Factory
             'slug' => Str::slug($name).'-'.Str::lower(Str::random(4)),
             'description' => $this->faker->optional()->sentence(),
             'color' => $this->faker->optional()->hexColor(),
+            'organization_id' => fn (): int => OrganizationFactory::defaultId(),
         ];
     }
 }

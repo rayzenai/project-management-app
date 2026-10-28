@@ -11,7 +11,7 @@ it('shares the plan day counted from the oath date', function () {
     $project = Project::factory()->create(['slug' => '100-day-plan', 'is_public' => true]);
     Task::factory()->for($project)->create(['status' => 'in_progress']);
 
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
 
     $this->get('/workspace/100-point-tracker')->assertInertia(fn (AssertableInertia $page) => $page
         ->component('PlanTracker')
@@ -25,7 +25,7 @@ it('exposes percent_complete on the project index', function () {
     Task::factory()->for($project)->create(['status' => 'in_progress']);
     Task::factory()->for($project)->create(['status' => 'not_started']);
 
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
 
     $this->get('/workspace/projects')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('projects.0.percent_complete', 33));

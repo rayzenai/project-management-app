@@ -11,19 +11,20 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class TeamController extends Controller
 {
-    public function index(TeamIndexQuery $query): Response
+    public function index(Request $request, TeamIndexQuery $query): Response
     {
-        return Inertia::render('Team/Index', $query->data());
+        return Inertia::render('Team/Index', $query->data($request));
     }
 
     public function store(StoreTeamRequest $request): RedirectResponse
     {
-        $team = Team::create($request->safe()->except('member_ids'));
+        $team = Team::create(Arr::except($request->validated(), ['member_ids']));
 
         $team->members()->sync($request->validated('member_ids', []));
 
@@ -32,7 +33,7 @@ class TeamController extends Controller
 
     public function update(UpdateTeamRequest $request, Team $team): RedirectResponse
     {
-        $team->update($request->safe()->except('member_ids'));
+        $team->update(Arr::except($request->validated(), ['member_ids']));
 
         if ($request->has('member_ids')) {
             $team->members()->sync($request->validated('member_ids', []));
@@ -43,7 +44,7 @@ class TeamController extends Controller
 
     public function destroy(Request $request, Team $team): RedirectResponse
     {
-        abort_unless(WorkspaceAccess::isSuperAdmin($request->user()), 403);
+        abort_unless(WorkspaceAccess::canEditTeam($request->user(), $team), 403);
 
         $team->delete();
 
@@ -59,7 +60,7 @@ class TeamController extends Controller
 
     public function restore(Request $request, Team $team, RestoreWorkspaceModel $service): RedirectResponse
     {
-        abort_unless(WorkspaceAccess::isSuperAdmin($request->user()), 403);
+        abort_unless(WorkspaceAccess::canEditTeam($request->user(), $team), 403);
 
         $service->execute($team);
 

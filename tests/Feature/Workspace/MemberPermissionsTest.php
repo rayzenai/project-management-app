@@ -21,7 +21,7 @@ function actAsLeaderOf(Team $team): User
     return $user;
 }
 
-it('lets a leader create a member for their own team', function () {
+it('forbids a leader from creating people, even for their own team', function () {
     $team = Team::factory()->create();
     actAsLeaderOf($team);
 
@@ -31,9 +31,10 @@ it('lets a leader create a member for their own team', function () {
         'name' => 'New Hire',
         'email' => 'new.hire@example.com',
         'team_ids' => [$team->id],
-    ])->assertRedirect();
+    ])->assertForbidden();
 
-    expect(Member::query()->where('name', 'New Hire')->exists())->toBeTrue();
+    expect(Member::query()->where('name', 'New Hire')->exists())->toBeFalse();
+    Mail::assertNothingSent();
 });
 
 it('forbids a leader creating a member for a team they do not lead', function () {

@@ -2,13 +2,35 @@
 
 namespace App\Models;
 
+use App\Support\WorkspaceAccess;
+use Carbon\CarbonImmutable;
 use Database\Factories\TeamFactory;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
+/**
+ * A group of members inside one organization (its home). A super-admin may
+ * mark it cross-organization, which lets anyone from any organization join;
+ * its projects still belong to the home organization.
+ *
+ * @property int $id
+ * @property int $organization_id
+ * @property bool $is_cross_organization
+ * @property string $name
+ * @property string $slug
+ * @property string|null $description
+ * @property string|null $color
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
+ * @property CarbonImmutable|null $deleted_at
+ * @property-read int|null $members_count
+ */
 class Team extends Model
 {
     /** @use HasFactory<TeamFactory> */
@@ -17,11 +39,23 @@ class Team extends Model
     protected $table = 'teams';
 
     protected $fillable = [
+        'organization_id',
+        'is_cross_organization',
         'name',
         'slug',
         'description',
         'color',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_cross_organization' => 'boolean',
+        ];
+    }
 
     protected static function booted(): void
     {
@@ -37,6 +71,45 @@ class Team extends Model
                 $team->slug = $slug;
             }
         });
+    }
+
+    /**
+     * Teams the user may see: all for a super-admin, every team of the
+     * organization an office admin runs, and otherwise the teams they are
+     * on. A leader never sees the other teams of their organization.
+     *
+     * @param  Builder<Team>  $query
+     * @return Builder<Team>
+     */
+    public function scopeVisibleTo(Builder $query, ?Authenticatable $user): Builder
+    {
+        if (WorkspaceAccess::isSuperAdmin($user)) {
+            return $query;
+        }
+
+        $member = WorkspaceAccess::memberFor($user);
+
+        if ($member === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId): void {
+            $q->whereHas('members', fn (Builder $m) => $m->where('members.id', $member->getKey()));
+
+            if ($adminOrganizationId !== null) {
+                $q->orWhere('organization_id', $adminOrganizationId);
+            }
+        });
+    }
+
+    /**
+     * @return BelongsTo<Organization, $this>
+     */
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
     }
 
     /**

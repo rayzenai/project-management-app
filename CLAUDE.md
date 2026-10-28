@@ -87,44 +87,71 @@ thin method to **both** controllers and a route in **both** route files.
 
 ## Authorization model — SECURITY CRITICAL
 
-`app/Support/WorkspaceAccess.php` is the single source of truth. Three tiers:
+`app/Support/WorkspaceAccess.php` is the single source of truth. The app is
+multi-tenant: an **organization** (an office or ministry) is the tenant
+boundary. Four tiers:
 
-1. **Super-admin** — the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
-   Creates/deletes/renames teams, manages every member, archives any project,
-   reassigns members between teams.
-2. **Team leader** — `member_team.role = 'leader'`. Scoped power over led teams.
-3. **Regular member** — assignable; manages only their own subtasks and notes.
+1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
+   Belongs to no organization. Manages organizations and everything in them;
+   the only one who can make a team cross-organization or a person an office
+   admin.
+2. **Office admin**: a member with `is_office_admin` (and `is_active`). Full
+   control inside their own organization: creates its teams and people, picks
+   team leaders, sees every project, can publish projects (public means
+   "everyone in this organization").
+3. **Team leader**: `member_team.role = 'leader'`. Manages the roster of the
+   teams they lead by searching people (`TeamCandidatesQuery`: their
+   organization, or anyone for a cross-organization team) and sees those
+   teams' progress page. Never edits people, never chooses leaders.
+4. **Member**: sees their teams, teammates and those teams' projects (plus
+   their organization's public projects); manages own subtasks and notes.
 
-Key methods: `isSuperAdmin`, `leadsTeam`, `canManageRosterOf`,
-`canArchiveProject`, `canCreateMemberForTeams` (a leader cannot create an
-unattached member), `canManageMember` (attributes only, never team affiliation),
-`canViewProject`, `canCreateProject`, `canManageProjectAccess`, `ledTeamIds`
-(memoized per request via a `WeakMap`; never creates a member as a side effect).
+Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
+`officeAdminOrganizationId`, `administers`, `canCreateTeam`, `canEditTeam`,
+`canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`, `canViewTeamProgress`,
+`canCreateMember`, `canManageMember`, `canViewProject` (twin of
+`Project::scopeVisibleTo`), `canCreateProject`, `canManageProjectAccess`,
+`canPublishProject`, `ledTeamIds`. Visibility scopes: `Project`, `Team` and
+`Member::scopeVisibleTo`. Memos are per user instance and flushed on every
+`RouteMatched`/`RequestHandled`.
 
 Privilege-escalation protections — do not regress:
 
-- `canManageMember` blocks managing a super-admin's linked login (blocks the
-  attach-then-password-reset takeover).
-- Team rename + member team-reassignment are super-admin only.
-- Team role changes require BOTH `canManageRosterOf` AND `canManageMember`
-  (`UpdateTeamMemberRoleRequest::authorize()`).
+- Nothing crosses organizations except through a cross-organization team.
+  `canJoinTeam` gates every roster add; teams on a project must share its
+  organization; a person cannot change organization while on its teams.
+- `canManageMember` blocks a super-admin's linked login and other office
+  admins; leaders manage no people at all (so a cross-organization leader can
+  never reset an outsider's password).
+- Organization, office-admin flag and bulk team reassignment on a member are
+  super-admin only (`UpdateMemberRequest::authorize()` 403s otherwise);
+  `is_cross_organization` and `is_public` are silently dropped for anyone not
+  allowed to set them. Read them through the FormRequest's `validated()`, not
+  `safe()`, which bypasses those overrides.
+- Mentions only notify people who can view the task's project.
 
 Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 
 ## Domain model (`app/Models`)
 
-- **Project** — slug-routed; `archived_at` soft-archive; `is_public`; scopes
-  `visibleTo`, `active`, `archived`; `hasMany Task`, `belongsToMany Team`.
+- **Organization** — the tenant; `hasMany` members, teams, projects. Deleted
+  only when empty (`DeleteOrganizationService`).
+- **Project** — slug-routed; belongs to an organization; `archived_at`
+  soft-archive; `is_public` (within its organization); scopes `visibleTo`,
+  `active`, `archived`; `hasMany Task`, `belongsToMany Team`.
 - **Task** — slug-routed (`{project_id}-{slug}`); plan fields (`item_number`,
   `category`, `deadline_type`, `responsible_ministry`, `title_np`,
   `description_np`) stored in the `metadata` jsonb column via `Attribute`
   mutators; `Task::completeStatuses()` derives "finished" from the config
   `is_complete` flags — never hardcode status strings. Lateness is derived
   (`is_late`), not a status.
-- **Subtask** — personal (`user_id`). **Member** — a person; optionally linked to
+- **Subtask** — personal (`user_id`). **Member** — a person in one organization
+  (none only for a super-admin's own member), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
   `scopeAssignableFor(Project)` is the single source of truth for assignees.
-- **Team** — auto-slugged; pivot `member_team` with `role`. **ProjectActivity** —
+- **Team** — auto-slugged; belongs to its home organization;
+  `is_cross_organization`; pivot `member_team` with `role`. Its progress page
+  (`TeamProgressQuery`: workload, Gantt, activity; polled every 15s). **ProjectActivity** —
   polymorphic audit log written only by observers. **WorkspaceNote** — personal
   stickies. **ProjectAssignment / ProjectNote / ProjectContact / TaskComment** —
   task children. **ProjectDigestSubscriber** — weekly digest recipients.

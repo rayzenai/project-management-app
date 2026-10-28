@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Member;
+use App\Models\Organization;
 use App\Models\Team;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
@@ -47,7 +48,7 @@ it('forbids a plain member from deleting a team', function () {
 it('lets a super-admin create and delete a team', function () {
     apiSuperAdmin();
 
-    $this->postJson('/api/v1/workspace/teams', ['name' => 'Field Ops'])
+    $this->postJson('/api/v1/workspace/teams', ['name' => 'Field Ops', 'organization_id' => Organization::factory()->create()->id])
         ->assertCreated()
         ->assertJsonStructure(['message', 'data']);
 
@@ -96,9 +97,23 @@ it('forbids a non-super-admin leader from renaming their team', function () {
     expect($team->fresh()->name)->toBe('Original');
 });
 
-it('lets a leader set roles within their team', function () {
+it('forbids a leader from choosing leaders (the office admin does)', function () {
     $team = Team::factory()->create();
     apiLeaderOf($team);
+    $member = Member::factory()->create();
+    $team->members()->attach($member->id);
+
+    $this->patchJson("/api/v1/workspace/teams/{$team->id}/members/{$member->id}", ['role' => 'leader'])
+        ->assertForbidden();
+
+    expect($team->fresh()->leaders()->whereKey($member->id)->exists())->toBeFalse();
+});
+
+it('lets the office admin of the team\'s organization set roles', function () {
+    $team = Team::factory()->create();
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true, 'organization_id' => $team->organization_id]);
+    Sanctum::actingAs($admin, ['*']);
     $member = Member::factory()->create();
     $team->members()->attach($member->id);
 

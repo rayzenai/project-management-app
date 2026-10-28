@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Member;
+use App\Models\Organization;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
@@ -8,10 +9,13 @@ use App\Support\WorkspaceAccess;
 
 beforeEach(fn () => config(['project-management.super_admins' => ['boss@example.com']]));
 
-it('canViewProject: public, shared-team, super-admin true; stranger false', function () {
+it('canViewProject: shared-team, super-admin, same-organization public true; strangers false', function () {
     $admin = User::factory()->create(['email' => 'boss@example.com']);
     $member = User::factory()->create();
+    $colleague = User::factory()->withMember()->create();
     $stranger = User::factory()->create();
+    $outsider = User::factory()->create();
+    Member::factory()->linkedTo($outsider)->create(['organization_id' => Organization::factory()->create()->id]);
 
     $m = Member::factory()->linkedTo($member)->create();
     $team = Team::factory()->create();
@@ -23,8 +27,11 @@ it('canViewProject: public, shared-team, super-admin true; stranger false', func
 
     expect(WorkspaceAccess::canViewProject($member, $project))->toBeTrue()
         ->and(WorkspaceAccess::canViewProject($admin, $project))->toBeTrue()
+        ->and(WorkspaceAccess::canViewProject($colleague, $project))->toBeFalse()
         ->and(WorkspaceAccess::canViewProject($stranger, $project))->toBeFalse()
-        ->and(WorkspaceAccess::canViewProject($stranger, $public))->toBeTrue();
+        ->and(WorkspaceAccess::canViewProject($colleague, $public))->toBeTrue()
+        ->and(WorkspaceAccess::canViewProject($stranger, $public))->toBeFalse()
+        ->and(WorkspaceAccess::canViewProject($outsider, $public))->toBeFalse();
 });
 
 it('canCreateProject: super-admin or a team leader only', function () {

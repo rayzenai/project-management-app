@@ -21,6 +21,7 @@ class MemberFactory extends Factory
             'email' => $this->faker->unique()->safeEmail(),
             'title' => $this->faker->optional()->jobTitle(),
             'is_active' => true,
+            'organization_id' => fn (): int => OrganizationFactory::defaultId(),
         ];
     }
 

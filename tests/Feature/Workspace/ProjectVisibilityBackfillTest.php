@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Project;
+use Database\Factories\OrganizationFactory;
 use Illuminate\Support\Facades\DB;
 
 it('the backfill migration marks pre-existing projects public', function () {
     DB::table('projects')->insert([
+        'organization_id' => OrganizationFactory::defaultId(),
         'slug' => 'legacy',
         'title' => 'Legacy',
         'is_public' => false,

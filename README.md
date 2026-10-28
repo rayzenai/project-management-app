@@ -95,6 +95,23 @@ See [`docs/api.md` → Integrating another system](docs/api.md#integrating-anoth
 | `workspace:send-deadline-reminders [--pretend]` | Heads-up / due-today / overdue notifications (scheduled daily at `PM_REMINDERS_RUN_AT`) |
 | `digest:send-weekly [--pretend]` | Weekly project digest email to subscribers |
 
+## Organizations and roles
+
+The workspace is multi-tenant. Each office or ministry is an **organization**;
+its teams, projects and people are invisible to every other organization.
+
+| Role | Who | Can |
+| --- | --- | --- |
+| Super-admin | emails in `PM_SUPER_ADMINS`, in no organization | manage organizations and everything in them; make a team cross-organization; make someone an office admin |
+| Office admin | a person marked office admin | create teams and people in their organization, choose team leaders, see all of it |
+| Team leader | `leader` on a team | add people to the team by searching (their organization, or anyone for a cross-organization team), see the team's live progress page and Gantt chart |
+| Member | everyone else | see their teams, teammates and those teams' projects |
+
+New organizations: super-admin opens **Organizations**, creates one, then adds
+its office admin from **Team** (Add person, choose the organization, tick Office
+admin). The migration that introduced organizations put existing data into one
+organization named after `APP_NAME`.
+
 ## Architecture
 
 Request flow, mirrored across the web and API surfaces:

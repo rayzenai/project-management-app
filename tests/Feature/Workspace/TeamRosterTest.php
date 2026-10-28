@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Member;
+use App\Models\Organization;
 use App\Models\Team;
 use App\Models\User;
 
@@ -22,17 +23,14 @@ it('lets a leader attach an existing member to their team', function () {
     expect($this->team->fresh()->members()->whereKey($member->id)->exists())->toBeTrue();
 });
 
-it('lets a leader create and provision a new member on their team', function () {
+it('no longer creates people from the roster: it only attaches existing ones', function () {
     $this->post("/workspace/teams/{$this->team->id}/members", [
         'name' => 'Fresh Recruit',
         'email' => 'recruit@example.com',
         'password' => 'recruit-pass-1',
-    ])->assertRedirect();
+    ])->assertSessionHasErrors('member_id');
 
-    $member = Member::query()->where('name', 'Fresh Recruit')->firstOrFail();
-
-    expect($member->user_id)->not->toBeNull()
-        ->and($this->team->fresh()->members()->whereKey($member->id)->exists())->toBeTrue();
+    expect(Member::query()->where('name', 'Fresh Recruit')->exists())->toBeFalse();
 });
 
 it('lets a leader detach a member from their team without deleting them', function () {
@@ -45,17 +43,12 @@ it('lets a leader detach a member from their team without deleting them', functi
         ->and(Member::query()->find($member->id))->not->toBeNull();
 });
 
-it('lets a leader promote and demote a team member', function () {
+it('forbids a leader from promoting or demoting (the office admin chooses leaders)', function () {
     $member = Member::factory()->create();
     $this->team->members()->attach($member->id);
 
     $this->patch("/workspace/teams/{$this->team->id}/members/{$member->id}", ['role' => 'leader'])
-        ->assertRedirect();
-
-    expect($this->team->fresh()->leaders()->whereKey($member->id)->exists())->toBeTrue();
-
-    $this->patch("/workspace/teams/{$this->team->id}/members/{$member->id}", ['role' => 'member'])
-        ->assertRedirect();
+        ->assertForbidden();
 
     expect($this->team->fresh()->leaders()->whereKey($member->id)->exists())->toBeFalse();
 });
@@ -79,12 +72,22 @@ it('forbids a leader from changing the team role of a super-admin member', funct
     expect($this->team->fresh()->leaders()->whereKey($bossMember->id)->exists())->toBeFalse();
 });
 
-it('forbids a leader from attaching an existing login-bearing member they have no authority over', function () {
-    $outsiderUser = User::factory()->create();
-    $outsider = Member::factory()->linkedTo($outsiderUser)->create();
+it('lets a leader attach anyone from their own organization', function () {
+    $colleagueUser = User::factory()->create();
+    $colleague = Member::factory()->linkedTo($colleagueUser)->create();
+
+    $this->post("/workspace/teams/{$this->team->id}/members", ['member_id' => $colleague->id])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($this->team->fresh()->members()->whereKey($colleague->id)->exists())->toBeTrue();
+});
+
+it('refuses someone from another organization on an ordinary team', function () {
+    $outsider = Member::factory()->create(['organization_id' => Organization::factory()->create()->id]);
 
     $this->post("/workspace/teams/{$this->team->id}/members", ['member_id' => $outsider->id])
-        ->assertForbidden();
+        ->assertSessionHasErrors('member_id');
 
     expect($this->team->fresh()->members()->whereKey($outsider->id)->exists())->toBeFalse();
 });

@@ -13,7 +13,7 @@ it('defaults new tasks to medium priority', function () {
 });
 
 it('updates task priority through the task endpoint', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $task = Task::factory()->create(['status' => 'in_progress']);
 
     $this->patch("/workspace/projects/{$task->project->slug}/tasks/{$task->slug}", [
@@ -24,7 +24,7 @@ it('updates task priority through the task endpoint', function () {
 });
 
 it('rejects invalid priorities', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $task = Task::factory()->create();
 
     $this->from('/workspace')
@@ -34,7 +34,7 @@ it('rejects invalid priorities', function () {
 });
 
 it('exposes priority on project page task payloads', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $project = Project::factory()->public()->create();
     Task::factory()->create(['project_id' => $project->id, 'priority' => 'high']);
 
@@ -44,7 +44,7 @@ it('exposes priority on project page task payloads', function () {
 });
 
 it('sets task priority from quick add', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withMember()->create();
     $this->actingAs($user);
     $project = Project::factory()->public()->create();
 

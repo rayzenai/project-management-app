@@ -5,6 +5,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 
@@ -30,7 +31,7 @@ it('renders the team page with teams, members, and linkable users', function () 
 it('creates a team with members', function () {
     $member = Member::factory()->create();
 
-    $this->post('/workspace/teams', ['name' => 'Field Ops', 'member_ids' => [$member->id]])
+    $this->post('/workspace/teams', ['name' => 'Field Ops', 'member_ids' => [$member->id], 'organization_id' => OrganizationFactory::defaultId()])
         ->assertRedirect();
 
     $team = Team::query()->where('name', 'Field Ops')->firstOrFail();
@@ -73,6 +74,7 @@ it('creates a member with a working login', function () {
     $team = Team::factory()->create();
 
     $this->post('/workspace/members', [
+        'organization_id' => OrganizationFactory::defaultId(),
         'name' => 'Ram Karki',
         'email' => 'ram@example.com',
         'password' => 'secret-pass-123',
@@ -92,7 +94,7 @@ it('creates a member with a working login', function () {
 it('emails a new member the email and password they sign in with', function () {
     Mail::fake();
 
-    $this->post('/workspace/members', ['name' => 'Ram Karki', 'email' => 'ram@example.com', 'password' => 'Kp7m-Qx4r-Tz9a'])
+    $this->post('/workspace/members', ['name' => 'Ram Karki', 'email' => 'ram@example.com', 'password' => 'Kp7m-Qx4r-Tz9a', 'organization_id' => OrganizationFactory::defaultId()])
         ->assertRedirect()
         ->assertSessionHas('workspace_flash.message', 'Member added. Login details emailed.');
 

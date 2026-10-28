@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 
 it('creates a member once per user and copies name and email', function () {
     $user = User::factory()->create(['name' => 'Kiran Timsina', 'email' => 'kiran@example.com']);
@@ -64,7 +65,7 @@ it('excludes inactive members from the assignable set in both modes', function (
 });
 
 it('derives a unique team slug from the name', function () {
-    $team = Team::create(['name' => 'Field Ops']);
+    $team = Team::create(['name' => 'Field Ops', 'organization_id' => OrganizationFactory::defaultId()]);
 
     expect($team->slug)->toBe('field-ops');
 });

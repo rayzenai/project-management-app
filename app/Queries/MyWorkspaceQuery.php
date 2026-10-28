@@ -86,7 +86,7 @@ class MyWorkspaceQuery
 
         $projects = Project::query()->visibleTo($user)->active()->orderBy('title')->get(['id', 'slug', 'title']);
 
-        $teamMembers = Member::query()->active()->orderBy('name')->get(['id', 'name', 'email', 'user_id']);
+        $teamMembers = Member::query()->visibleTo($user)->active()->orderBy('name')->get(['id', 'name', 'email', 'user_id']);
 
         $openTodos = $this->whereHasTask(
             Subtask::query()

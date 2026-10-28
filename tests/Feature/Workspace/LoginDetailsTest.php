@@ -4,6 +4,7 @@ use App\Mail\LoginDetails;
 use App\Models\Member;
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 
@@ -32,7 +33,7 @@ function sentLoginDetails(string $email): LoginDetails
 
 it('emails a password that signs in', function () {
     $this->actingAs(loginDetailsBoss())
-        ->post('/workspace/members', ['name' => 'Sita Sharma', 'email' => 'sita@example.com', 'password' => 'Kp7m-Qx4r-Tz9a']);
+        ->post('/workspace/members', ['name' => 'Sita Sharma', 'email' => 'sita@example.com', 'password' => 'Kp7m-Qx4r-Tz9a', 'organization_id' => OrganizationFactory::defaultId()]);
 
     $mail = sentLoginDetails('sita@example.com');
 
@@ -53,7 +54,7 @@ it('still adds the member when the email cannot be sent', function () {
     Mail::shouldReceive('to')->andThrow(new RuntimeException('SMTP down'));
 
     $this->actingAs(loginDetailsBoss())
-        ->post('/workspace/members', ['name' => 'Sita Sharma', 'email' => 'sita@example.com', 'password' => 'Kp7m-Qx4r-Tz9a'])
+        ->post('/workspace/members', ['name' => 'Sita Sharma', 'email' => 'sita@example.com', 'password' => 'Kp7m-Qx4r-Tz9a', 'organization_id' => OrganizationFactory::defaultId()])
         ->assertRedirect()
         ->assertSessionHasNoErrors()
         ->assertSessionHas('workspace_flash.success', false);
@@ -78,7 +79,7 @@ it('sends nothing when a leader is refused', function () {
 it('generates and emails a password when an API caller sends none', function () {
     Sanctum::actingAs(loginDetailsBoss(), ['*']);
 
-    $this->postJson('/api/v1/workspace/members', ['name' => 'Sita Sharma', 'email' => 'sita@example.com'])
+    $this->postJson('/api/v1/workspace/members', ['name' => 'Sita Sharma', 'email' => 'sita@example.com', 'organization_id' => OrganizationFactory::defaultId()])
         ->assertCreated()
         ->assertJsonPath('message', 'Member added. Login details emailed.');
 

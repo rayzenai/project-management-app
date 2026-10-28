@@ -26,6 +26,7 @@ class ProjectFactory extends Factory
             'is_public' => false,
             'starts_at' => null,
             'ends_at' => null,
+            'organization_id' => fn (): int => OrganizationFactory::defaultId(),
         ];
     }
 

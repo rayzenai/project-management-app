@@ -3,7 +3,7 @@
     import { Check, Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
-    import type { Project } from '../../lib/types';
+    import type { OrganizationOption, Project } from '../../lib/types';
 
     let {
         projects,
@@ -12,13 +12,22 @@
         assignableTeams = [],
         canCreate = false,
         isSuperAdmin = false,
+        canPublish = false,
+        organizations = [],
     }: {
         projects: Project[];
         archivedView?: boolean;
         archivedCount?: number;
-        assignableTeams?: { id: number; name: string; slug: string }[];
+        assignableTeams?: {
+            id: number;
+            name: string;
+            slug: string;
+            organization_id?: number;
+        }[];
         canCreate?: boolean;
         isSuperAdmin?: boolean;
+        canPublish?: boolean;
+        organizations?: OrganizationOption[];
     } = $props();
 
     // ?new=1 opens the composer straight away, so the sidebar's + can mean
@@ -34,10 +43,26 @@
         description: '',
         is_public: false,
         team_ids: [] as number[],
+        organization_id: null as number | null,
     });
 
+    // A super-admin picks the organization first; only its teams can be
+    // given access. Everyone else only ever sees their own organization's.
+    const formTeams = $derived(
+        isSuperAdmin
+            ? assignableTeams.filter(
+                  (t) => t.organization_id === form.organization_id,
+              )
+            : assignableTeams,
+    );
+
     const needsTeam = $derived(canCreate && assignableTeams.length === 0);
-    const teamForm = useForm({ name: '', description: '', color: '' });
+    const teamForm = useForm({
+        name: '',
+        description: '',
+        color: '',
+        organization_id: null as number | null,
+    });
 
     /** True once the user creates a team inside the wizard, keeps the stepper visible on step 2. */
     let teamJustCreated = $state(false);
@@ -58,6 +83,7 @@
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
+                form.organization_id = teamForm.organization_id;
                 teamForm.reset();
                 teamJustCreated = true;
                 router.reload({ only: ['assignableTeams'] });
@@ -243,6 +269,31 @@
                                 class="input"
                             ></textarea>
                         </div>
+                        {#if isSuperAdmin}
+                            <div class="mt-3">
+                                <label
+                                    for={`${uid}-team-organization`}
+                                    class="label mb-1 block">Organization</label
+                                >
+                                <select
+                                    id={`${uid}-team-organization`}
+                                    class="input"
+                                    required
+                                    bind:value={teamForm.organization_id}
+                                >
+                                    {#each organizations as organization (organization.id)}
+                                        <option value={organization.id}
+                                            >{organization.name}</option
+                                        >
+                                    {/each}
+                                </select>
+                                {#if teamForm.errors.organization_id}<p
+                                        class="mt-1 text-xs text-danger"
+                                    >
+                                        {teamForm.errors.organization_id}
+                                    </p>{/if}
+                            </div>
+                        {/if}
                         <div class="mt-4 flex justify-end">
                             <button
                                 type="submit"
@@ -297,10 +348,54 @@
                                 class="input"
                             ></textarea>
                         </div>
+                        {#if isSuperAdmin}
+                            <div class="mt-3">
+                                <label
+                                    for={`${uid}-organization`}
+                                    class="label mb-1 block">Organization</label
+                                >
+                                <select
+                                    id={`${uid}-organization`}
+                                    class="input"
+                                    required
+                                    value={form.organization_id ?? ''}
+                                    onchange={(e) => {
+                                        form.organization_id = e.currentTarget
+                                            .value
+                                            ? Number(e.currentTarget.value)
+                                            : null;
+                                        form.team_ids = [];
+                                    }}
+                                >
+                                    <option value="" disabled
+                                        >Choose an organization</option
+                                    >
+                                    {#each organizations as organization (organization.id)}
+                                        <option value={organization.id}
+                                            >{organization.name}</option
+                                        >
+                                    {/each}
+                                </select>
+                                {#if form.errors.organization_id}<p
+                                        class="mt-1 text-xs text-danger"
+                                    >
+                                        {form.errors.organization_id}
+                                    </p>{/if}
+                            </div>
+                        {/if}
                         <fieldset class="mt-4">
                             <legend class="label">Teams with access</legend>
+                            {#if isSuperAdmin && form.organization_id === null}
+                                <p class="mt-1 text-xs text-fg-muted">
+                                    Choose an organization to see its teams.
+                                </p>
+                            {:else if formTeams.length === 0}
+                                <p class="mt-1 text-xs text-fg-muted">
+                                    This organization has no teams yet.
+                                </p>
+                            {/if}
                             <div class="mt-2 flex flex-wrap gap-2">
-                                {#each assignableTeams as team (team.id)}
+                                {#each formTeams as team (team.id)}
                                     <label
                                         class="flex h-7 items-center gap-2 rounded-md border border-line px-2.5 text-[13px] text-fg"
                                     >
@@ -331,14 +426,14 @@
                                 </p>{/if}
                         </fieldset>
 
-                        {#if isSuperAdmin}
+                        {#if canPublish}
                             <label
                                 class="mt-4 flex items-center gap-2 text-fg-muted"
                             >
                                 <input
                                     type="checkbox"
                                     bind:checked={form.is_public}
-                                /> Public (visible to everyone)
+                                /> Public (everyone in its organization can see it)
                             </label>
                         {/if}
 
@@ -405,6 +500,11 @@
                                 {/if}
                                 {#if project.is_public}
                                     <span class="chip">public</span>
+                                {/if}
+                                {#if isSuperAdmin && project.organization}
+                                    <span class="truncate text-xs text-fg-faint"
+                                        >{project.organization}</span
+                                    >
                                 {/if}
                             </div>
                             {#if project.description}

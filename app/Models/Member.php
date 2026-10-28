@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Database\Factories\MemberFactory;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,8 +19,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * optionally links to a User (`user_id`, one member per user) but
  * never needs one — unlinked members are managed people who don't log in.
  *
+ * Every member belongs to an organization except a super-admin's own member.
+ * `is_office_admin` makes them the administrator of that organization.
+ *
  * @property int $id
  * @property int|null $user_id
+ * @property int|null $organization_id
+ * @property bool $is_office_admin
  * @property string $name
  * @property string|null $email
  * @property string|null $title
@@ -38,6 +45,8 @@ class Member extends Model
 
     protected $fillable = [
         'user_id',
+        'organization_id',
+        'is_office_admin',
         'name',
         'email',
         'title',
@@ -54,6 +63,7 @@ class Member extends Model
         return [
             'coordinator_categories' => 'array',
             'is_active' => 'boolean',
+            'is_office_admin' => 'boolean',
         ];
     }
 
@@ -75,6 +85,14 @@ class Member extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<Organization, $this>
+     */
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
     }
 
     /**
@@ -114,10 +132,10 @@ class Member extends Model
 
     /**
      * The single source of truth for who can be assigned within a project:
-     * the union of the project's teams' members, or every active member when
-     * the project has no teams attached yet (so nothing breaks before teams
-     * exist). Pickers, request validation, and quick-add `@name` resolution
-     * all go through this scope.
+     * the union of the project's teams' members, or, for a public project
+     * with no teams, every active member of its organization. Pickers,
+     * request validation, and quick-add `@name` resolution all go through
+     * this scope.
      *
      * @param  Builder<Member>  $query
      * @return Builder<Member>
@@ -131,8 +149,44 @@ class Member extends Model
             ->when(
                 $teamIds->isNotEmpty(),
                 fn (Builder $q) => $q->whereHas('teams', fn (Builder $t) => $t->whereIn('teams.id', $teamIds)),
+                fn (Builder $q) => $q->where('organization_id', $project->organization_id),
             )
             ->orderBy('name');
+    }
+
+    /**
+     * People the user may see in directories, pickers and rosters: everyone
+     * for a super-admin; for anyone else themselves and the people on their
+     * teams, plus, for an office admin, everyone in their organization and
+     * anyone on its teams (including outsiders on its cross-organization
+     * teams). See {@see WorkspaceAccess}.
+     *
+     * @param  Builder<Member>  $query
+     * @return Builder<Member>
+     */
+    public function scopeVisibleTo(Builder $query, ?Authenticatable $user): Builder
+    {
+        if (WorkspaceAccess::isSuperAdmin($user)) {
+            return $query;
+        }
+
+        $self = WorkspaceAccess::memberFor($user);
+
+        if ($self === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+
+        return $query->where(function (Builder $q) use ($self, $adminOrganizationId): void {
+            $q->whereKey($self->getKey())
+                ->orWhereHas('teams', fn (Builder $t) => $t->whereIn('teams.id', $self->teams()->select('teams.id')));
+
+            if ($adminOrganizationId !== null) {
+                $q->orWhere('organization_id', $adminOrganizationId)
+                    ->orWhereHas('teams', fn (Builder $t) => $t->where('teams.organization_id', $adminOrganizationId));
+            }
+        });
     }
 
     protected static function newFactory(): MemberFactory

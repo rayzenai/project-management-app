@@ -44,6 +44,8 @@ class MemberController extends Controller
 
             $member = Member::create([
                 'user_id' => $user->getKey(),
+                'organization_id' => $request->validated('organization_id'),
+                'is_office_admin' => $request->validated('is_office_admin'),
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
                 'title' => $request->validated('title'),
@@ -117,7 +119,7 @@ class MemberController extends Controller
 
     public function destroy(Request $request, Member $member): JsonResponse
     {
-        abort_unless(WorkspaceAccess::isSuperAdmin($request->user()), 403);
+        abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
         DB::transaction(function () use ($member): void {
             $user = $member->user;
@@ -130,7 +132,7 @@ class MemberController extends Controller
 
     public function restore(Request $request, Member $member, RestoreWorkspaceModel $service): JsonResponse
     {
-        abort_unless(WorkspaceAccess::isSuperAdmin($request->user()), 403);
+        abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
         $result = $service->execute($member);
 

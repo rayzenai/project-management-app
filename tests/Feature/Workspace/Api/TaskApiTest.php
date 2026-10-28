@@ -8,7 +8,7 @@ use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
-    $this->user = User::factory()->create();
+    $this->user = User::factory()->withMember()->create();
     Sanctum::actingAs($this->user, ['*']);
     // Public so the actor (a plain, non-team member) can see the project and
     // therefore act on its tasks — this suite exercises task CRUD, not visibility,
@@ -94,7 +94,7 @@ it('forbids another user from updating or deleting someone else\'s subtask', fun
         'body' => 'Owner only',
     ])->json('data.id');
 
-    Sanctum::actingAs(User::factory()->create(), ['*']);
+    Sanctum::actingAs(User::factory()->withMember()->create(), ['*']);
 
     $this->patchJson("/api/v1/workspace/subtasks/{$subtaskId}", ['body' => 'hijacked'])
         ->assertForbidden();

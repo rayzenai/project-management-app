@@ -17,10 +17,14 @@ use App\Observers\ProjectNoteObserver;
 use App\Observers\SubtaskObserver;
 use App\Observers\TaskCommentObserver;
 use App\Observers\TaskObserver;
+use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Routing\Events\RouteMatched;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -72,8 +76,9 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureWorkspace(): void
     {
-        // Super-admins hold `manage-workspace`: they create/delete teams, manage
-        // every member, and archive any project. Driven by PM_SUPER_ADMINS.
+        // Super-admins hold `manage-workspace`: they manage organizations and
+        // everything inside them. Driven by PM_SUPER_ADMINS. Office admins and
+        // team leaders are data, resolved in WorkspaceAccess.
         Gate::define('manage-workspace', function (User $user): bool {
             return in_array(
                 $user->email,
@@ -100,6 +105,11 @@ class AppServiceProvider extends ServiceProvider
 
         // Observers own every side effect of a workspace mutation: the
         // ProjectActivity audit log and the in-app notifications.
+        // WorkspaceAccess memoizes per user instance; keep that per request even
+        // when one instance serves several (tests, long-running workers).
+        Event::listen(RouteMatched::class, fn () => WorkspaceAccess::flush());
+        Event::listen(RequestHandled::class, fn () => WorkspaceAccess::flush());
+
         Task::observe(TaskObserver::class);
         ProjectNote::observe(ProjectNoteObserver::class);
         ProjectContact::observe(ProjectContactObserver::class);

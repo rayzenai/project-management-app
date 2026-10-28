@@ -64,13 +64,11 @@ it('scopes member creation and management through WorkspaceAccess', function () 
     $onTeamB = Member::factory()->create();
     $teamB->members()->attach($onTeamB->id);
 
-    // canCreateMemberForTeams
-    expect(WorkspaceAccess::canCreateMemberForTeams($super, []))->toBeTrue()
-        ->and(WorkspaceAccess::canCreateMemberForTeams($leaderUser, []))->toBeFalse()
-        ->and(WorkspaceAccess::canCreateMemberForTeams($leaderUser, [$teamA->id]))->toBeTrue()
-        ->and(WorkspaceAccess::canCreateMemberForTeams($leaderUser, [$teamA->id, $teamB->id]))->toBeFalse()
-        // canManageMember
+    // canCreateMember: whoever administers the organization; never a leader
+    expect(WorkspaceAccess::canCreateMember($super, $teamA->organization_id))->toBeTrue()
+        ->and(WorkspaceAccess::canCreateMember($leaderUser, $teamA->organization_id))->toBeFalse()
+        // canManageMember: leaders manage rosters, not people
         ->and(WorkspaceAccess::canManageMember($super, $onTeamB))->toBeTrue()
-        ->and(WorkspaceAccess::canManageMember($leaderUser, $onTeamA))->toBeTrue()
+        ->and(WorkspaceAccess::canManageMember($leaderUser, $onTeamA))->toBeFalse()
         ->and(WorkspaceAccess::canManageMember($leaderUser, $onTeamB))->toBeFalse();
 });

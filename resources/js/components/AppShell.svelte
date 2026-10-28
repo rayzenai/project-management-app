@@ -2,6 +2,7 @@
     import { inertia, page, router } from '@inertiajs/svelte';
     import {
         Bell,
+        Building2,
         Folder,
         LayoutGrid,
         LogOut,
@@ -144,7 +145,7 @@
         mobileOpen = false;
     });
 
-    const nav = [
+    const nav = $derived([
         { label: 'Home', href: '/workspace', icon: LayoutGrid },
         { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
         {
@@ -153,7 +154,16 @@
             icon: Bell,
         },
         { label: 'Team', href: '/workspace/team', icon: Users },
-    ];
+        ...(shared.isSuperAdmin
+            ? [
+                  {
+                      label: 'Organizations',
+                      href: '/workspace/organizations',
+                      icon: Building2,
+                  },
+              ]
+            : []),
+    ]);
 
     function isActive(href: string) {
         return (
@@ -515,7 +525,10 @@
                             <div class="truncate text-xs text-fg-muted">
                                 {shared.isSuperAdmin
                                     ? 'Super admin'
-                                    : user.email}
+                                    : shared.isOfficeAdmin
+                                      ? `Office admin · ${shared.organization?.name ?? ''}`
+                                      : (shared.organization?.name ??
+                                        user.email)}
                             </div>
                         </div>
                     {/if}

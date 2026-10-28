@@ -72,7 +72,7 @@ it('keeps unconsumed tokens in the title when stripping only some', function () 
 
 it('quick-adds with parsed tokens end to end', function () {
     Carbon::setTestNow('2026-06-12');
-    $user = User::factory()->create(['name' => 'Kiran Timsina']);
+    $user = User::factory()->withMember()->create(['name' => 'Kiran Timsina']);
     $sita = Member::factory()->create(['name' => 'Sita Sharma']);
     $this->actingAs($user);
     $fallback = Project::factory()->public()->create(['slug' => 'fallback', 'title' => 'Fallback']);
@@ -96,7 +96,7 @@ it('quick-adds with parsed tokens end to end', function () {
 });
 
 it('falls back to the explicit project and self-assignment when tokens do not resolve', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withMember()->create();
     $this->actingAs($user);
     $project = Project::factory()->public()->create();
 
@@ -114,7 +114,7 @@ it('falls back to the explicit project and self-assignment when tokens do not re
 });
 
 it('lets explicit picker values win over parsed tokens', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withMember()->create();
     $this->actingAs($user);
     $project = Project::factory()->public()->create();
 

@@ -8,6 +8,7 @@ use App\Http\Controllers\Workspace\MemberController;
 use App\Http\Controllers\Workspace\MyWorkspaceController;
 use App\Http\Controllers\Workspace\NoteController;
 use App\Http\Controllers\Workspace\NotificationController;
+use App\Http\Controllers\Workspace\OrganizationController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProjectController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Workspace\TaskReorderController;
 use App\Http\Controllers\Workspace\TaskSearchController;
 use App\Http\Controllers\Workspace\TeamController;
 use App\Http\Controllers\Workspace\TeamMemberController;
+use App\Http\Controllers\Workspace\TeamProgressController;
 use App\Http\Controllers\Workspace\WorkspaceNoteController;
 use App\Http\Middleware\EnsureProjectVisible;
 use App\Http\Middleware\ShareWorkspaceData;
@@ -45,7 +47,14 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         Route::post('/quick-add', QuickAddController::class)->name('quick-add');
         Route::get('/search', TaskSearchController::class)->name('search');
 
+        Route::get('/organizations', [OrganizationController::class, 'index'])->name('organizations.index');
+        Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
+        Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('organizations.update');
+        Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('organizations.destroy');
+
         Route::get('/team', [TeamController::class, 'index'])->name('team');
+        Route::get('/teams/{team}/progress', TeamProgressController::class)->name('teams.progress');
+        Route::get('/teams/{team}/candidates', [TeamMemberController::class, 'candidates'])->name('teams.candidates');
         Route::post('/teams', [TeamController::class, 'store'])->name('teams.store');
         Route::patch('/teams/{team}', [TeamController::class, 'update'])->name('teams.update');
         Route::delete('/teams/{team}', [TeamController::class, 'destroy'])->name('teams.destroy');

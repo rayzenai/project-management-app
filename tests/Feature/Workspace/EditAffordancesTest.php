@@ -5,6 +5,7 @@ namespace Tests\Feature\Workspace;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -72,7 +73,7 @@ class EditAffordancesTest extends TestCase
     public function test_a_user_who_cannot_manage_the_project_is_not_offered_the_edit_button(): void
     {
         $project = Project::factory()->create(['title' => 'IDMC Plan', 'is_public' => true]);
-        $outsider = User::factory()->create();
+        $outsider = User::factory()->withMember()->create();
 
         $this->actingAs($outsider)
             ->get(route('workspace.projects.show', ['project' => $project->slug]))
@@ -90,7 +91,7 @@ class EditAffordancesTest extends TestCase
 
     public function test_super_admin_can_update_team_name_and_description(): void
     {
-        $team = Team::create(['name' => 'IT', 'description' => 'Original.']);
+        $team = Team::create(['name' => 'IT', 'description' => 'Original.', 'organization_id' => OrganizationFactory::defaultId()]);
 
         $this->actingAs($this->superAdmin())
             ->patch(route('workspace.teams.update', ['team' => $team->id]), [
@@ -107,9 +108,9 @@ class EditAffordancesTest extends TestCase
 
     public function test_non_super_admin_cannot_update_a_team(): void
     {
-        $team = Team::create(['name' => 'IT']);
+        $team = Team::create(['name' => 'IT', 'organization_id' => OrganizationFactory::defaultId()]);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withMember()->create())
             ->patch(route('workspace.teams.update', ['team' => $team->id]), ['name' => 'Hijacked'])
             ->assertForbidden();
 

@@ -8,7 +8,7 @@ use App\Models\Team;
 use App\Models\User;
 
 it('assigns a member to a task', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $task = Task::factory()->create();
     $member = Member::factory()->create();
 
@@ -20,7 +20,7 @@ it('assigns a member to a task', function () {
 });
 
 it('rejects assigning the same member twice', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $task = Task::factory()->create();
     $member = Member::factory()->create();
     ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $member->id]);
@@ -33,7 +33,7 @@ it('rejects assigning the same member twice', function () {
 });
 
 it('rejects assigning a member outside the project teams scope', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $project = Project::factory()->public()->create();
     $task = Task::factory()->create(['project_id' => $project->id]);
 
@@ -50,7 +50,7 @@ it('rejects assigning a member outside the project teams scope', function () {
 });
 
 it('unassigns a member', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $task = Task::factory()->create();
     $member = Member::factory()->create();
     $assignment = ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $member->id]);
@@ -61,7 +61,7 @@ it('unassigns a member', function () {
 });
 
 it('quick-adds with explicit member ids', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $project = Project::factory()->public()->create();
     $member = Member::factory()->create();
 
@@ -77,7 +77,7 @@ it('quick-adds with explicit member ids', function () {
 });
 
 it('quick-add defaults the assignee to the acting user member', function () {
-    $user = User::factory()->create(['name' => 'Kiran Timsina']);
+    $user = User::factory()->withMember()->create(['name' => 'Kiran Timsina']);
     $this->actingAs($user);
     $project = Project::factory()->public()->create();
 
@@ -93,7 +93,7 @@ it('quick-add defaults the assignee to the acting user member', function () {
 });
 
 it('quick-add @name resolves an unlinked member within project scope', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $project = Project::factory()->public()->create();
     $team = Team::factory()->create();
     $project->teams()->attach($team->id);
@@ -115,7 +115,7 @@ it('quick-add @name resolves an unlinked member within project scope', function 
 });
 
 it('rejects quick-add explicit member ids outside the project scope', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $project = Project::factory()->public()->create();
     $team = Team::factory()->create();
     $project->teams()->attach($team->id);
@@ -152,7 +152,7 @@ it('scopes mine through the member link including coordinator categories', funct
 });
 
 it('exposes the member object on assignment payloads', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $member = Member::factory()->create(['name' => 'Sita Sharma']);
     $task = Task::factory()->create();
     ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $member->id]);
@@ -164,7 +164,7 @@ it('exposes the member object on assignment payloads', function () {
 });
 
 it('shares members and the current member id in quickAddContext', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withMember()->create();
     $this->actingAs($user);
     Member::factory()->create(['name' => 'Sita Sharma']);
     Member::factory()->inactive()->create(['name' => 'Gone Person']);

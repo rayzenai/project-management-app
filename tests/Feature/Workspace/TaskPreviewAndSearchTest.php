@@ -60,7 +60,7 @@ it('includes matching projects in search results', function () {
 });
 
 it('returns task ids and slugs on search hits so results can open the peek', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->withMember()->create());
     $task = Task::factory()->create(['title' => 'Hydropower licensing review']);
 
     $data = $this->getJson('/workspace/search?q=hydropower')->assertSuccessful()->json('data');

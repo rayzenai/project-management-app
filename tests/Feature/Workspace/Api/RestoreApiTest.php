@@ -26,7 +26,7 @@ it('restores a soft-deleted team for a super admin', function () {
 });
 
 it('forbids a non-admin from restoring a team', function () {
-    Sanctum::actingAs(User::factory()->create(), ['*']);
+    Sanctum::actingAs(User::factory()->withMember()->create(), ['*']);
 
     $team = Team::factory()->create();
     $team->delete();
@@ -37,7 +37,7 @@ it('forbids a non-admin from restoring a team', function () {
 });
 
 it('lets a subtask owner restore their own soft-deleted subtask', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->withMember()->create();
     Sanctum::actingAs($owner, ['*']);
 
     $project = Project::factory()->public()->create();
@@ -59,7 +59,7 @@ it('lets a subtask owner restore their own soft-deleted subtask', function () {
 });
 
 it('forbids a different user from restoring someone else\'s subtask', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->withMember()->create();
 
     $project = Project::factory()->public()->create();
     $task = Task::query()->create([
@@ -72,7 +72,7 @@ it('forbids a different user from restoring someone else\'s subtask', function (
     $subtask = Subtask::create(['task_id' => $task->id, 'user_id' => $owner->id, 'body' => 'Do it', 'position' => 1]);
     $subtask->delete();
 
-    Sanctum::actingAs(User::factory()->create(), ['*']);
+    Sanctum::actingAs(User::factory()->withMember()->create(), ['*']);
 
     $this->postJson("/api/v1/workspace/subtasks/{$subtask->id}/restore")->assertForbidden();
 
@@ -80,7 +80,7 @@ it('forbids a different user from restoring someone else\'s subtask', function (
 });
 
 it('restores a soft-deleted task under its correct project slug', function () {
-    Sanctum::actingAs(User::factory()->create(), ['*']);
+    Sanctum::actingAs(User::factory()->withMember()->create(), ['*']);
 
     $project = Project::factory()->public()->create();
     $task = Task::query()->create([
@@ -100,7 +100,7 @@ it('restores a soft-deleted task under its correct project slug', function () {
 });
 
 it('returns 404 when restoring a task under the wrong project slug', function () {
-    Sanctum::actingAs(User::factory()->create(), ['*']);
+    Sanctum::actingAs(User::factory()->withMember()->create(), ['*']);
 
     $projectA = Project::factory()->public()->create();
     $projectB = Project::factory()->public()->create();

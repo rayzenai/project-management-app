@@ -1,37 +1,72 @@
 <script lang="ts">
-    import { page, router, useForm } from '@inertiajs/svelte';
-    import { Copy, RefreshCw } from '@lucide/svelte';
+    import { inertia, page, router, useForm } from '@inertiajs/svelte';
+    import { ChartGantt, Copy, RefreshCw } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import RosterSearch from '../../components/team/RosterSearch.svelte';
     import { writeToClipboard } from '../../lib/clipboard';
     import { toast } from '../../lib/toast.svelte';
-    import type { Member, Team } from '../../lib/types';
+    import type {
+        Member,
+        OrganizationOption,
+        RosterEntry,
+        Team,
+    } from '../../lib/types';
 
-    let { teams, members }: { teams: Team[]; members: Member[] } = $props();
+    let {
+        teams,
+        members,
+        organizations = [],
+        organizationFilter = null,
+        officeAdminOrganization = null,
+        canCreateTeam = false,
+        canCreateMember = false,
+    }: {
+        teams: Team[];
+        members: Member[];
+        organizations?: OrganizationOption[];
+        organizationFilter?: number | null;
+        officeAdminOrganization?: OrganizationOption | null;
+        canCreateTeam?: boolean;
+        canCreateMember?: boolean;
+    } = $props();
 
-    // ---- Role capabilities ----
     const isSuperAdmin = $derived<boolean>(
         (page.props as any).isSuperAdmin ?? false,
     );
-    const ledTeamIds = $derived<number[]>((page.props as any).ledTeamIds ?? []);
 
-    function canManageTeam(team: Team): boolean {
-        return isSuperAdmin || ledTeamIds.includes(team.id);
+    /** The organization new teams and people land in when it is not chosen. */
+    const defaultOrganizationId = $derived(
+        organizationFilter ??
+            (organizations.length === 1 ? organizations[0].id : null),
+    );
+
+    function filterByOrganization(value: string) {
+        router.get('/workspace/team', value ? { organization: value } : {}, {
+            preserveScroll: true,
+        });
     }
 
-    function canEditMember(member: Member): boolean {
-        return (
-            isSuperAdmin ||
-            (member.team_ids ?? []).some((id) => ledTeamIds.includes(id))
-        );
-    }
-
-    // ---- Teams panel ----
+    // ---- Teams ----
     let creatingTeam = $state(false);
     let editingTeamId = $state<number | null>(null);
 
-    const teamForm = useForm({ name: '', description: '' });
-    const teamEditForm = useForm({ name: '', description: '' });
+    const teamForm = useForm({
+        name: '',
+        description: '',
+        organization_id: null as number | null,
+        is_cross_organization: false,
+    });
+    const teamEditForm = useForm({
+        name: '',
+        description: '',
+        is_cross_organization: false,
+    });
+
+    function openTeamForm() {
+        creatingTeam = !creatingTeam;
+        teamForm.organization_id = defaultOrganizationId;
+    }
 
     function createTeam(e: SubmitEvent) {
         e.preventDefault();
@@ -53,6 +88,8 @@
         editingTeamId = team.id;
         teamEditForm.name = team.name;
         teamEditForm.description = team.description ?? '';
+        teamEditForm.is_cross_organization =
+            team.is_cross_organization ?? false;
     }
 
     function saveTeam(e: SubmitEvent, team: Team) {
@@ -62,10 +99,16 @@
             return;
         }
 
-        teamEditForm.patch(`/workspace/teams/${team.id}`, {
-            preserveScroll: true,
-            onSuccess: () => (editingTeamId = null),
-        });
+        teamEditForm
+            .transform((data) =>
+                isSuperAdmin
+                    ? data
+                    : { name: data.name, description: data.description },
+            )
+            .patch(`/workspace/teams/${team.id}`, {
+                preserveScroll: true,
+                onSuccess: () => (editingTeamId = null),
+            });
     }
 
     function deleteTeam(team: Team) {
@@ -80,38 +123,25 @@
         router.delete(`/workspace/teams/${team.id}`, { preserveScroll: true });
     }
 
-    // ---- Team-scoped roster helpers ----
-    function addMemberToTeam(team: Team, member: Member) {
-        router.post(
-            `/workspace/teams/${team.id}/members`,
-            { member_id: member.id },
-            { preserveScroll: true },
-        );
-    }
-
-    function removeMemberFromTeam(team: Team, member: Member) {
-        router.delete(`/workspace/teams/${team.id}/members/${member.id}`, {
+    function removeFromTeam(team: Team, entry: RosterEntry) {
+        router.delete(`/workspace/teams/${team.id}/members/${entry.id}`, {
             preserveScroll: true,
         });
     }
 
     function setTeamRole(
         team: Team,
-        member: Member,
+        entry: RosterEntry,
         role: 'member' | 'leader',
     ) {
         router.patch(
-            `/workspace/teams/${team.id}/members/${member.id}`,
+            `/workspace/teams/${team.id}/members/${entry.id}`,
             { role },
             { preserveScroll: true },
         );
     }
 
-    function isLeaderOf(team: Team, member: Member): boolean {
-        return (team.leader_ids ?? []).includes(member.id);
-    }
-
-    // ---- Members panel ----
+    // ---- People ----
     let addingMember = $state(false);
     let editingMemberId = $state<number | null>(null);
 
@@ -147,7 +177,14 @@
         email: '',
         password: generatePassword(),
         title: '',
+        organization_id: null as number | null,
+        is_office_admin: false,
     });
+
+    function openMemberForm() {
+        addingMember = !addingMember;
+        memberForm.organization_id = defaultOrganizationId;
+    }
 
     // The login just created, shown once so the admin can try it or pass it
     // on; it never comes back from the server.
@@ -169,11 +206,14 @@
         );
         toast.show('Copied login details', { duration: 2000 });
     }
+
     const memberEditForm = useForm({
         name: '',
         email: '',
         password: '',
         title: '',
+        organization_id: null as number | null,
+        is_office_admin: false,
     });
 
     function addMember(e: SubmitEvent) {
@@ -189,30 +229,63 @@
             password: memberForm.password,
         };
 
-        memberForm.post('/workspace/members', {
-            preserveScroll: true,
-            onSuccess: () => {
-                createdLogin = login;
-                memberForm.reset();
-                memberForm.password = generatePassword();
-                addingMember = false;
-            },
-        });
+        memberForm
+            .transform((data) =>
+                isSuperAdmin
+                    ? data
+                    : {
+                          name: data.name,
+                          email: data.email,
+                          password: data.password,
+                          title: data.title,
+                      },
+            )
+            .post('/workspace/members', {
+                preserveScroll: true,
+                onSuccess: () => {
+                    createdLogin = login;
+                    memberForm.reset();
+                    memberForm.password = generatePassword();
+                    addingMember = false;
+                },
+            });
     }
 
     function startEditMember(member: Member) {
         editingMemberId = member.id;
+        memberEditForm.clearErrors();
         memberEditForm.name = member.name;
         memberEditForm.email = member.email ?? '';
         memberEditForm.password = '';
         memberEditForm.title = member.title ?? '';
+        memberEditForm.organization_id = member.organization_id ?? null;
+        memberEditForm.is_office_admin = member.is_office_admin ?? false;
     }
 
     function saveMember(member: Member) {
-        memberEditForm.patch(`/workspace/members/${member.id}`, {
-            preserveScroll: true,
-            onSuccess: () => (editingMemberId = null),
-        });
+        memberEditForm
+            .transform((data) => {
+                const base = {
+                    name: data.name,
+                    email: data.email,
+                    password: data.password,
+                    title: data.title,
+                };
+
+                // Organization and office-admin status are a super-admin's
+                // call, and a super-admin's own member has no organization.
+                return isSuperAdmin && member.organization_id
+                    ? {
+                          ...base,
+                          organization_id: data.organization_id,
+                          is_office_admin: data.is_office_admin,
+                      }
+                    : base;
+            })
+            .patch(`/workspace/members/${member.id}`, {
+                preserveScroll: true,
+                onSuccess: () => (editingMemberId = null),
+            });
     }
 
     function setMemberActive(member: Member, active: boolean) {
@@ -243,72 +316,83 @@
             .map((t) => t.name),
     );
 
-    const visibleTeams = $derived(
-        isSuperAdmin ? teams : teams.filter((t) => canManageTeam(t)),
-    );
-
-    const activeMembers = $derived(
-        members.filter((m) => m.is_active !== false),
-    );
+    const managesPeople = $derived(isSuperAdmin || canCreateMember);
 </script>
 
 <svelte:head><title>Team · Workspace</title></svelte:head>
 
-{#snippet memberIdentity(member: Member)}
-    <Avatar name={member.name} size="md" />
-    <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-            <span class="truncate font-medium text-fg">{member.name}</span>
-            {#if !member.user_id}
-                <span
-                    class="chip"
-                    title="Edit and set a password to enable login"
-                    >No login</span
-                >
-            {/if}
-            {#if member.is_active === false}
-                <span class="chip">Inactive</span>
-            {/if}
-        </div>
-        <div class="flex flex-wrap gap-x-3 text-xs text-fg-muted">
-            {#if member.title}<span class="truncate">{member.title}</span>{/if}
-            {#if member.email}<span class="truncate">{member.email}</span>{/if}
-            {#if memberTeamNames(member).length > 0}
-                <span class="truncate text-fg-faint"
-                    >{memberTeamNames(member).join(', ')}</span
-                >
-            {/if}
-        </div>
-    </div>
+{#snippet organizationSelect(
+    id: string,
+    value: number | null,
+    onchange: (value: number | null) => void,
+)}
+    <select
+        {id}
+        class="input"
+        required
+        value={value ?? ''}
+        onchange={(e) =>
+            onchange(
+                e.currentTarget.value ? Number(e.currentTarget.value) : null,
+            )}
+    >
+        <option value="" disabled>Choose an organization</option>
+        {#each organizations as organization (organization.id)}
+            <option value={organization.id}>{organization.name}</option>
+        {/each}
+    </select>
 {/snippet}
 
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
             <span class="truncate font-medium">Team</span>
+            {#if officeAdminOrganization}
+                <span class="truncate text-fg-muted"
+                    >· {officeAdminOrganization.name}</span
+                >
+            {/if}
         </div>
-        {#if isSuperAdmin}
-            <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5">
+            {#if isSuperAdmin && organizations.length > 0}
+                <select
+                    class="input h-7 w-auto max-w-56 py-0"
+                    aria-label="Show one organization"
+                    value={organizationFilter ?? ''}
+                    onchange={(e) =>
+                        filterByOrganization(e.currentTarget.value)}
+                >
+                    <option value="">All organizations</option>
+                    {#each organizations as organization (organization.id)}
+                        <option value={organization.id}
+                            >{organization.name}</option
+                        >
+                    {/each}
+                </select>
+            {/if}
+            {#if canCreateTeam}
                 <button
                     type="button"
                     class="btn"
                     aria-expanded={creatingTeam}
-                    onclick={() => (creatingTeam = !creatingTeam)}
+                    onclick={openTeamForm}
                     >{creatingTeam ? 'Cancel' : 'New team'}</button
                 >
+            {/if}
+            {#if canCreateMember}
                 <button
                     type="button"
                     class="btn-primary"
                     aria-expanded={addingMember}
-                    onclick={() => (addingMember = !addingMember)}
+                    onclick={openMemberForm}
                     >{addingMember ? 'Cancel' : 'Add person'}</button
                 >
-            </div>
-        {/if}
+            {/if}
+        </div>
     {/snippet}
 
     <div class="space-y-8">
-        {#if isSuperAdmin && creatingTeam}
+        {#if canCreateTeam && creatingTeam}
             <form onsubmit={createTeam} class="panel max-w-lg space-y-3 p-4">
                 <h2 class="section-title">New team</h2>
                 <div class="flex flex-col gap-1">
@@ -337,6 +421,41 @@
                         class="input"
                     />
                 </div>
+                {#if isSuperAdmin}
+                    <div class="flex flex-col gap-1">
+                        <label class="label" for="team-organization"
+                            >Organization</label
+                        >
+                        {@render organizationSelect(
+                            'team-organization',
+                            teamForm.organization_id,
+                            (v) => (teamForm.organization_id = v),
+                        )}
+                        {#if teamForm.errors.organization_id}
+                            <p class="text-xs text-danger">
+                                {teamForm.errors.organization_id}
+                            </p>
+                        {/if}
+                    </div>
+                    <label class="flex items-start gap-2 text-[13px] text-fg">
+                        <input
+                            type="checkbox"
+                            class="mt-0.5"
+                            bind:checked={teamForm.is_cross_organization}
+                        />
+                        <span>
+                            Cross-organization
+                            <span class="block text-xs text-fg-muted"
+                                >Its leaders can add people from any
+                                organization.</span
+                            >
+                        </span>
+                    </label>
+                {:else if officeAdminOrganization}
+                    <p class="text-xs text-fg-muted">
+                        The team belongs to {officeAdminOrganization.name}.
+                    </p>
+                {/if}
                 <div class="flex justify-end gap-1.5">
                     <button
                         type="button"
@@ -352,7 +471,7 @@
             </form>
         {/if}
 
-        {#if isSuperAdmin && addingMember}
+        {#if canCreateMember && addingMember}
             <form onsubmit={addMember} class="panel max-w-2xl space-y-3 p-4">
                 <h2 class="section-title">Add person</h2>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -428,10 +547,39 @@
                             class="input"
                         />
                     </div>
+                    {#if isSuperAdmin}
+                        <div class="flex flex-col gap-1">
+                            <label class="label" for="member-organization"
+                                >Organization</label
+                            >
+                            {@render organizationSelect(
+                                'member-organization',
+                                memberForm.organization_id,
+                                (v) => (memberForm.organization_id = v),
+                            )}
+                            {#if memberForm.errors.organization_id}
+                                <p class="text-xs text-danger">
+                                    {memberForm.errors.organization_id}
+                                </p>
+                            {/if}
+                        </div>
+                        <label
+                            class="flex items-center gap-2 self-end pb-2 text-[13px] text-fg"
+                        >
+                            <input
+                                type="checkbox"
+                                bind:checked={memberForm.is_office_admin}
+                            />
+                            Office admin of this organization
+                        </label>
+                    {/if}
                 </div>
                 <p class="text-xs text-fg-muted">
                     We email them this password too. After adding, you can copy
                     their login details to share or try yourself.
+                    {#if officeAdminOrganization}
+                        They join {officeAdminOrganization.name}.
+                    {/if}
                 </p>
                 <div class="flex justify-end gap-1.5">
                     <button
@@ -490,18 +638,19 @@
         <!-- Teams -->
         <section>
             <h2 class="section-title mb-2">
-                Teams
+                {managesPeople ? 'Teams' : 'Your teams'}
                 <span class="section-count">{teams.length}</span>
             </h2>
 
-            {#if visibleTeams.length === 0 && !creatingTeam}
+            {#if teams.length === 0 && !creatingTeam}
                 <p class="border-t border-line py-3 text-xs text-fg-muted">
-                    No teams yet. Until a project is attached to a team, every
-                    active member is assignable everywhere.
+                    {canCreateTeam
+                        ? 'No teams yet. Projects are shared with teams, so start with one.'
+                        : 'You are not on a team yet.'}
                 </p>
             {/if}
 
-            {#each visibleTeams as team (team.id)}
+            {#each teams as team (team.id)}
                 <div class="border-t border-line py-3">
                     {#if editingTeamId === team.id}
                         <form
@@ -544,6 +693,33 @@
                                     class="input"
                                 />
                             </div>
+                            {#if isSuperAdmin}
+                                <label
+                                    class="flex items-start gap-2 text-[13px] text-fg"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        class="mt-0.5"
+                                        bind:checked={
+                                            teamEditForm.is_cross_organization
+                                        }
+                                    />
+                                    <span>
+                                        Cross-organization
+                                        <span
+                                            class="block text-xs text-fg-muted"
+                                            >Its leaders can add people from any
+                                            organization.</span
+                                        >
+                                    </span>
+                                </label>
+                                {#if teamEditForm.errors.is_cross_organization}
+                                    <p class="text-xs text-danger">
+                                        {teamEditForm.errors
+                                            .is_cross_organization}
+                                    </p>
+                                {/if}
+                            {/if}
                             <div class="flex justify-end gap-1.5">
                                 <button
                                     type="button"
@@ -560,26 +736,46 @@
                             </div>
                         </form>
                     {:else}
-                        <div class="flex items-center gap-3">
+                        <div
+                            class="flex flex-wrap items-center gap-x-3 gap-y-1"
+                        >
                             <h3 class="section-title min-w-0">
                                 <span class="truncate">{team.name}</span>
                                 <span class="section-count">
-                                    {team.member_ids?.length ?? 0} member{(team
-                                        .member_ids?.length ?? 0) === 1
+                                    {team.roster?.length ?? 0} member{(team
+                                        .roster?.length ?? 0) === 1
                                         ? ''
                                         : 's'}
                                 </span>
                             </h3>
+                            {#if team.is_cross_organization}
+                                <span class="chip">Cross-organization</span>
+                            {/if}
+                            {#if isSuperAdmin && team.organization}
+                                <span class="truncate text-xs text-fg-faint"
+                                    >{team.organization}</span
+                                >
+                            {/if}
                             {#if team.description}
                                 <span
                                     class="min-w-0 truncate text-xs text-fg-muted"
                                     >{team.description}</span
                                 >
                             {/if}
-                            {#if isSuperAdmin}
-                                <div
-                                    class="ml-auto flex shrink-0 items-center gap-1"
-                                >
+                            <div
+                                class="ml-auto flex shrink-0 items-center gap-1"
+                            >
+                                {#if team.can_view_progress}
+                                    <a
+                                        href={`/workspace/teams/${team.id}/progress`}
+                                        use:inertia
+                                        class="btn-ghost"
+                                        ><ChartGantt
+                                            class="h-3.5 w-3.5"
+                                        />Progress</a
+                                    >
+                                {/if}
+                                {#if team.can_edit}
                                     <button
                                         type="button"
                                         class="btn-ghost"
@@ -593,106 +789,83 @@
                                         onclick={() => deleteTeam(team)}
                                         >Delete</button
                                     >
-                                </div>
-                            {/if}
+                                {/if}
+                            </div>
                         </div>
                     {/if}
 
-                    {#if canManageTeam(team) && members.length > 0}
-                        <div class="mt-2">
-                            {#each activeMembers as member (member.id)}
-                                {@const inTeam = (
-                                    team.member_ids ?? []
-                                ).includes(member.id)}
-                                <div class="row min-h-10 px-2 py-1">
-                                    <Avatar name={member.name} size="md" />
-                                    <div class="min-w-0 flex-1">
-                                        <div class="flex items-center gap-2">
-                                            <span
-                                                class="truncate font-medium text-fg"
-                                                >{member.name}</span
+                    <div class="mt-2">
+                        {#each team.roster ?? [] as entry (entry.id)}
+                            <div
+                                class={`row min-h-10 px-2 py-1 ${entry.is_active ? '' : 'opacity-60'}`}
+                            >
+                                <Avatar name={entry.name} size="md" />
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span
+                                            class="truncate font-medium text-fg"
+                                            >{entry.name}</span
+                                        >
+                                        {#if entry.role === 'leader' && !team.can_edit}
+                                            <span class="chip chip-accent"
+                                                >Leader</span
                                             >
-                                            {#if inTeam && isLeaderOf(team, member)}
-                                                <span class="chip chip-accent"
-                                                    >Leader</span
-                                                >
-                                            {/if}
-                                        </div>
-                                        {#if member.title || member.email}
-                                            <div
-                                                class="truncate text-xs text-fg-muted"
-                                            >
-                                                {member.title || member.email}
-                                            </div>
                                         {/if}
                                     </div>
-                                    <div
-                                        class="flex shrink-0 items-center gap-1"
-                                    >
-                                        {#if inTeam}
-                                            <select
-                                                class="input h-7 w-auto py-0"
-                                                aria-label={`Role of ${member.name} in ${team.name}`}
-                                                value={isLeaderOf(team, member)
-                                                    ? 'leader'
-                                                    : 'member'}
-                                                onchange={(e) =>
-                                                    setTeamRole(
-                                                        team,
-                                                        member,
-                                                        e.currentTarget
-                                                            .value as
-                                                            'member' | 'leader',
-                                                    )}
-                                            >
-                                                <option value="member"
-                                                    >Member</option
-                                                >
-                                                <option value="leader"
-                                                    >Leader</option
-                                                >
-                                            </select>
-                                            <button
-                                                type="button"
-                                                class="btn-ghost"
-                                                onclick={() =>
-                                                    removeMemberFromTeam(
-                                                        team,
-                                                        member,
-                                                    )}>Remove</button
-                                            >
-                                        {:else}
-                                            <button
-                                                type="button"
-                                                class="btn-ghost"
-                                                onclick={() =>
-                                                    addMemberToTeam(
-                                                        team,
-                                                        member,
-                                                    )}>Add</button
-                                            >
-                                        {/if}
+                                    <div class="truncate text-xs text-fg-muted">
+                                        {[
+                                            entry.title || entry.email,
+                                            team.is_cross_organization
+                                                ? entry.organization
+                                                : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' · ')}
                                     </div>
                                 </div>
-                            {/each}
-                        </div>
-                    {:else if members.length > 0}
-                        <div class="mt-2">
-                            {#each members.filter( (m) => (team.member_ids ?? []).includes(m.id) ) as member (member.id)}
-                                <div class="row min-h-10 px-2 py-1">
-                                    <Avatar name={member.name} size="md" />
-                                    <span class="truncate font-medium text-fg"
-                                        >{member.name}</span
-                                    >
-                                    {#if isLeaderOf(team, member)}
-                                        <span class="chip chip-accent"
-                                            >Leader</span
+                                <div class="flex shrink-0 items-center gap-1">
+                                    {#if team.can_edit}
+                                        <select
+                                            class="input h-7 w-auto py-0"
+                                            aria-label={`Role of ${entry.name} in ${team.name}`}
+                                            value={entry.role}
+                                            onchange={(e) =>
+                                                setTeamRole(
+                                                    team,
+                                                    entry,
+                                                    e.currentTarget.value as
+                                                        'member' | 'leader',
+                                                )}
+                                        >
+                                            <option value="member"
+                                                >Member</option
+                                            >
+                                            <option value="leader"
+                                                >Leader</option
+                                            >
+                                        </select>
+                                    {/if}
+                                    {#if entry.can_remove}
+                                        <button
+                                            type="button"
+                                            class="btn-ghost"
+                                            onclick={() =>
+                                                removeFromTeam(team, entry)}
+                                            >Remove</button
                                         >
                                     {/if}
                                 </div>
-                            {/each}
-                        </div>
-                    {/if}
+                            </div>
+                        {/each}
+                        {#if (team.roster ?? []).length === 0}
+                            <p class="px-2 py-1 text-xs text-fg-muted">
+                                Nobody on this team yet.
+                            </p>
+                        {/if}
+                        {#if team.can_manage_roster}
+                            <RosterSearch {team} />
+                        {/if}
+                    </div>
                 </div>
             {/each}
         </section>
@@ -700,14 +873,13 @@
         <!-- People -->
         <section>
             <h2 class="section-title mb-2">
-                People
+                {managesPeople ? 'People' : 'Your teammates'}
                 <span class="section-count">{members.length}</span>
             </h2>
 
             {#if members.length === 0 && !addingMember}
                 <p class="border-t border-line py-3 text-xs text-fg-muted">
-                    No members yet. Add anyone you assign work to; each gets a
-                    login emailed to them.
+                    Nobody here yet.
                 </p>
             {/if}
 
@@ -747,6 +919,7 @@
                                             id={`member-${member.id}-email`}
                                             type="email"
                                             bind:value={memberEditForm.email}
+                                            required
                                             class="input"
                                         />
                                         {#if memberEditForm.errors.email}
@@ -791,6 +964,39 @@
                                             </p>
                                         {/if}
                                     </div>
+                                    {#if isSuperAdmin && member.organization_id}
+                                        <div class="flex flex-col gap-1">
+                                            <label
+                                                class="label"
+                                                for={`member-${member.id}-organization`}
+                                                >Organization</label
+                                            >
+                                            {@render organizationSelect(
+                                                `member-${member.id}-organization`,
+                                                memberEditForm.organization_id,
+                                                (v) =>
+                                                    (memberEditForm.organization_id =
+                                                        v),
+                                            )}
+                                            {#if memberEditForm.errors.organization_id}
+                                                <p class="text-xs text-danger">
+                                                    {memberEditForm.errors
+                                                        .organization_id}
+                                                </p>
+                                            {/if}
+                                        </div>
+                                        <label
+                                            class="flex items-center gap-2 self-end pb-2 text-[13px] text-fg"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                bind:checked={
+                                                    memberEditForm.is_office_admin
+                                                }
+                                            />
+                                            Office admin of this organization
+                                        </label>
+                                    {/if}
                                 </div>
                                 <div
                                     class="flex items-center justify-end gap-1.5"
@@ -811,9 +1017,50 @@
                                 </div>
                             </div>
                         {:else}
-                            {@render memberIdentity(member)}
-                            <div class="flex shrink-0 items-center gap-1">
-                                {#if canEditMember(member)}
+                            <Avatar name={member.name} size="md" />
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="truncate font-medium text-fg"
+                                        >{member.name}</span
+                                    >
+                                    {#if member.is_office_admin}
+                                        <span class="chip chip-accent"
+                                            >Office admin</span
+                                        >
+                                    {/if}
+                                    {#if !member.user_id}
+                                        <span class="chip">No login</span>
+                                    {/if}
+                                    {#if member.is_active === false}
+                                        <span class="chip">Inactive</span>
+                                    {/if}
+                                </div>
+                                <div
+                                    class="flex flex-wrap gap-x-3 text-xs text-fg-muted"
+                                >
+                                    {#if member.title}<span class="truncate"
+                                            >{member.title}</span
+                                        >{/if}
+                                    {#if member.email}<span class="truncate"
+                                            >{member.email}</span
+                                        >{/if}
+                                    {#if isSuperAdmin}
+                                        <span class="truncate text-fg-faint"
+                                            >{member.organization ??
+                                                'No organization'}</span
+                                        >
+                                    {/if}
+                                    {#if memberTeamNames(member).length > 0}
+                                        <span class="truncate text-fg-faint"
+                                            >{memberTeamNames(member).join(
+                                                ', ',
+                                            )}</span
+                                        >
+                                    {/if}
+                                </div>
+                            </div>
+                            {#if member.can_manage}
+                                <div class="flex shrink-0 items-center gap-1">
                                     <button
                                         type="button"
                                         class="btn-ghost"
@@ -837,8 +1084,6 @@
                                             >Deactivate</button
                                         >
                                     {/if}
-                                {/if}
-                                {#if isSuperAdmin}
                                     <button
                                         type="button"
                                         aria-label={`Delete ${member.name}`}
@@ -846,8 +1091,8 @@
                                         onclick={() => deleteMember(member)}
                                         >Delete</button
                                     >
-                                {/if}
-                            </div>
+                                </div>
+                            {/if}
                         {/if}
                     </div>
                 {/each}

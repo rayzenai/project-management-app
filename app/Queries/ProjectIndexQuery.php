@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\TeamResource;
+use App\Models\Organization;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\Team;
@@ -27,6 +28,7 @@ class ProjectIndexQuery
 
         $projects = Project::query()
             ->visibleTo($user)
+            ->with('organization:id,name')
             ->when($archivedView, fn ($q) => $q->archived(), fn ($q) => $q->active())
             ->withCount([
                 'tasks',
@@ -44,9 +46,17 @@ class ProjectIndexQuery
                 : (int) round((int) $project->done_tasks_count / $total * 100);
         }
 
-        $assignableTeams = WorkspaceAccess::isSuperAdmin($user)
-            ? Team::query()->orderBy('name')->get()
-            : Team::query()->whereIn('id', WorkspaceAccess::ledTeamIds($user))->orderBy('name')->get();
+        // Teams the creator may give access to: any (filtered client-side by
+        // the chosen organization) for a super-admin, their organization's for
+        // an office admin, otherwise the teams they lead.
+        $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
+        $assignableTeams = Team::query()
+            ->when(! WorkspaceAccess::isSuperAdmin($user), fn ($q) => $q->where(fn ($q) => $q
+                ->whereIn('id', WorkspaceAccess::ledTeamIds($user))
+                ->when($officeAdminOf !== null, fn ($q) => $q->orWhere('organization_id', $officeAdminOf))))
+            ->with('organization:id,name')
+            ->orderBy('name')
+            ->get();
 
         return [
             'projects' => $rows,
@@ -55,6 +65,10 @@ class ProjectIndexQuery
             'assignableTeams' => TeamResource::collection($assignableTeams)->resolve(),
             'canCreate' => WorkspaceAccess::canCreateProject($user),
             'isSuperAdmin' => WorkspaceAccess::isSuperAdmin($user),
+            'canPublish' => WorkspaceAccess::isSuperAdmin($user) || $officeAdminOf !== null,
+            'organizations' => WorkspaceAccess::isSuperAdmin($user)
+                ? Organization::query()->orderBy('name')->get(['id', 'name'])->map(fn (Organization $o): array => ['id' => $o->id, 'name' => $o->name])->all()
+                : [],
         ];
     }
 }

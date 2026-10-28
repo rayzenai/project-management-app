@@ -42,7 +42,7 @@ it('keeps another team private project out of the activity tab', function () {
 });
 
 it('shows observer-written activity in the task peek', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withMember()->create();
     $this->actingAs($user);
 
     $project = Project::factory()->create(['is_public' => true]);

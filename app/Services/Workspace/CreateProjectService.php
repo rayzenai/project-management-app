@@ -21,6 +21,7 @@ class CreateProjectService
 
         try {
             $project = Project::create([
+                'organization_id' => $attributes['organization_id'],
                 'title' => $title,
                 'slug' => $this->uniqueSlug($title),
                 'title_np' => $attributes['title_np'] ?? null,

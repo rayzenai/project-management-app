@@ -9,26 +9,116 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * The single source of truth for workspace authorization. Super-admin is the
- * config-driven `manage-workspace` Gate; team-leadership is the `role` column
- * on the member_team pivot. Every controller, form request, and resource that
- * makes a role decision goes through here.
+ * The single source of truth for workspace authorization. Every controller,
+ * form request, query and resource that makes a role decision goes through
+ * here. Four tiers:
+ *
+ * - Super-admin: the config-driven `manage-workspace` Gate. Belongs to no
+ *   organization; sees and manages every organization.
+ * - Office admin: a member with `is_office_admin` (and active). Full control
+ *   inside their own organization: its teams, people, projects and leaders.
+ * - Team leader: the `role` column on the member_team pivot. Manages the
+ *   roster of the teams they lead and sees their progress.
+ * - Member: sees their teams' projects and teammates; manages own subtasks.
+ *
+ * Organizations are the tenant boundary. The only crossing is a team a
+ * super-admin marked cross-organization: anyone may join it, and its members
+ * see its projects (which stay in the team's home organization).
  */
 class WorkspaceAccess
 {
     /**
-     * Memoizes by the user instance so a project-list serialization that asks
-     * `canArchiveProject` per project does not re-query leadership each time.
-     * A WeakMap keeps this request-scoped — entries vanish with the user object,
-     * so there is no cross-request or stale-id leakage.
+     * Memoized per user instance so list serialization asking per row (e.g.
+     * `canArchiveProject` per project) does not re-query. Flushed after every
+     * request (AppServiceProvider), so a user instance reused across requests,
+     * as in tests, never sees stale roles.
      *
-     * @var \WeakMap<Authenticatable, list<int>>
+     * @var \WeakMap<Authenticatable, list<int>>|null
      */
     private static ?\WeakMap $ledTeamIdsMemo = null;
+
+    /** @var \WeakMap<Authenticatable, Member|false>|null false: the user has no member */
+    private static ?\WeakMap $memberMemo = null;
+
+    public static function flush(): void
+    {
+        self::$ledTeamIdsMemo = null;
+        self::$memberMemo = null;
+    }
 
     public static function isSuperAdmin(?Authenticatable $user): bool
     {
         return $user !== null && Gate::forUser($user)->allows('manage-workspace');
+    }
+
+    /**
+     * The member linked to the user, or null. Never creates one (unlike
+     * Member::forUser), so it is safe in authorization.
+     */
+    public static function memberFor(?Authenticatable $user): ?Member
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        self::$memberMemo ??= new \WeakMap;
+
+        if (! isset(self::$memberMemo[$user])) {
+            self::$memberMemo[$user] = Member::query()->where('user_id', $user->getAuthIdentifier())->first() ?? false;
+        }
+
+        $member = self::$memberMemo[$user];
+
+        return $member === false ? null : $member;
+    }
+
+    /**
+     * The organization the user administers, or null. A deactivated office
+     * admin keeps the flag but loses the power.
+     */
+    public static function officeAdminOrganizationId(?Authenticatable $user): ?int
+    {
+        $member = self::memberFor($user);
+
+        if ($member === null || ! $member->is_office_admin || ! $member->is_active || $member->organization_id === null) {
+            return null;
+        }
+
+        return (int) $member->organization_id;
+    }
+
+    public static function isOfficeAdminOf(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return $organizationId !== null && self::officeAdminOrganizationId($user) === (int) $organizationId;
+    }
+
+    /**
+     * Full control inside an organization: a super-admin, or its office admin.
+     */
+    public static function administers(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return self::isSuperAdmin($user) || self::isOfficeAdminOf($user, $organizationId);
+    }
+
+    public static function canManageOrganizations(?Authenticatable $user): bool
+    {
+        return self::isSuperAdmin($user);
+    }
+
+    // ---- Teams ----
+
+    public static function canCreateTeam(?Authenticatable $user): bool
+    {
+        return self::isSuperAdmin($user) || self::officeAdminOrganizationId($user) !== null;
+    }
+
+    /**
+     * Rename, describe, delete or restore a team, and choose its leaders.
+     * Whether it is cross-organization is a super-admin decision alone.
+     */
+    public static function canEditTeam(?Authenticatable $user, Team $team): bool
+    {
+        return self::administers($user, $team->organization_id);
     }
 
     public static function leadsTeam(?Authenticatable $user, Team $team): bool
@@ -36,39 +126,129 @@ class WorkspaceAccess
         return in_array($team->getKey(), self::ledTeamIds($user), true);
     }
 
+    /**
+     * Add people to a team (by searching) and take them off it.
+     */
     public static function canManageRosterOf(?Authenticatable $user, Team $team): bool
     {
-        return self::isSuperAdmin($user) || self::leadsTeam($user, $team);
+        return self::canEditTeam($user, $team) || self::leadsTeam($user, $team);
     }
 
-    public static function canViewProject(?Authenticatable $user, Project $project): bool
+    /**
+     * Leaders are chosen by the office admin: a leader may take members off
+     * their team but not another leader.
+     */
+    public static function canRemoveFromTeam(?Authenticatable $user, Team $team, Member $member): bool
     {
-        if ($project->is_public) {
+        if (self::canEditTeam($user, $team)) {
             return true;
         }
 
+        if (! self::leadsTeam($user, $team)) {
+            return false;
+        }
+
+        return ! $team->leaders()->whereKey($member->getKey())->exists();
+    }
+
+    public static function canViewTeamProgress(?Authenticatable $user, Team $team): bool
+    {
+        return self::canManageRosterOf($user, $team);
+    }
+
+    /**
+     * Whether a person may sit on a team: anyone on a cross-organization team,
+     * otherwise only people of the team's organization (and super-admins,
+     * who belong to none).
+     */
+    public static function canJoinTeam(Member $member, Team $team): bool
+    {
+        if ($team->is_cross_organization) {
+            return true;
+        }
+
+        if ($member->organization_id !== null) {
+            return (int) $member->organization_id === (int) $team->organization_id;
+        }
+
+        return $member->user !== null && self::isSuperAdmin($member->user);
+    }
+
+    // ---- Members ----
+
+    public static function canCreateMember(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return self::administers($user, $organizationId);
+    }
+
+    /**
+     * True when the user may edit this member's attributes (name, email,
+     * password, active flag) or delete them: a super-admin anyone; an office
+     * admin the people of their own organization except other office admins.
+     * Team leaders manage rosters, never people, so a cross-organization
+     * leader can never reset an outsider's password.
+     *
+     * A non-super-admin may never manage a member whose linked login is
+     * itself a super-admin; this blocks the attach-then-password-reset
+     * takeover.
+     */
+    public static function canManageMember(?Authenticatable $user, Member $member): bool
+    {
         if (self::isSuperAdmin($user)) {
             return true;
         }
 
-        if ($user === null) {
+        if ($member->user_id !== null && $member->user !== null && self::isSuperAdmin($member->user)) {
             return false;
         }
 
-        $memberId = Member::query()->where('user_id', $user->getAuthIdentifier())->value('id');
+        $organizationId = self::officeAdminOrganizationId($user);
 
-        return $memberId !== null
-            && $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $memberId))->exists();
+        if ($organizationId === null || (int) $member->organization_id !== $organizationId) {
+            return false;
+        }
+
+        return ! $member->is_office_admin || $member->getKey() === self::memberFor($user)?->getKey();
+    }
+
+    // ---- Projects ----
+
+    /**
+     * The predicate twin of Project::scopeVisibleTo; keep them in step.
+     */
+    public static function canViewProject(?Authenticatable $user, Project $project): bool
+    {
+        if (self::isSuperAdmin($user)) {
+            return true;
+        }
+
+        $member = self::memberFor($user);
+
+        if ($member === null) {
+            return false;
+        }
+
+        if (self::isOfficeAdminOf($user, $project->organization_id)) {
+            return true;
+        }
+
+        if ($project->is_public && $member->organization_id !== null && (int) $member->organization_id === (int) $project->organization_id) {
+            return true;
+        }
+
+        return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
     }
 
     public static function canCreateProject(?Authenticatable $user): bool
     {
-        return self::isSuperAdmin($user) || self::ledTeamIds($user) !== [];
+        return self::isSuperAdmin($user)
+            || self::officeAdminOrganizationId($user) !== null
+            || self::ledTeamIds($user) !== [];
     }
 
     public static function canManageProjectAccess(?Authenticatable $user, Project $project): bool
     {
-        if (self::isSuperAdmin($user)) {
+        if (self::administers($user, $project->organization_id)) {
             return true;
         }
 
@@ -84,72 +264,17 @@ class WorkspaceAccess
     }
 
     /**
-     * True when the user may create a member and attach it to the given teams:
-     * super-admins anywhere, leaders only for teams they all lead.
-     *
-     * Non-super-admins cannot create a member with NO team attachments — an
-     * empty `$teamIds` returns false for leaders. Only super-admins may create
-     * unattached members.
-     *
-     * @param  list<int>  $teamIds
+     * Making a project public opens it to its whole organization, so only
+     * the people who administer that organization may.
      */
-    public static function canCreateMemberForTeams(?Authenticatable $user, array $teamIds): bool
+    public static function canPublishProject(?Authenticatable $user, int|string|null $organizationId): bool
     {
-        if (self::isSuperAdmin($user)) {
-            return true;
-        }
-
-        if ($teamIds === []) {
-            return false;
-        }
-
-        $ledTeamIds = self::ledTeamIds($user);
-
-        foreach ($teamIds as $teamId) {
-            if (! in_array((int) $teamId, $ledTeamIds, true)) {
-                return false;
-            }
-        }
-
-        return true;
+        return self::administers($user, $organizationId);
     }
 
     /**
-     * True when the user may edit this member's attributes (name, email,
-     * password, active flag) — NOT whether they may change the member's team
-     * affiliations. Returns true if the member shares ANY team the user leads.
-     *
-     * A non-super-admin may never manage a member whose linked login is itself
-     * a super-admin — this blocks the attach-then-password-reset takeover vector
-     * even when a super-admin legitimately shares a team with the leader.
-     *
-     * Team roster add/remove decisions must go through
-     * `canManageRosterOf($user, $team)` for the specific team.
-     */
-    public static function canManageMember(?Authenticatable $user, Member $member): bool
-    {
-        if (self::isSuperAdmin($user)) {
-            return true;
-        }
-
-        // A non-super-admin may never manage a member whose linked login is
-        // itself a super-admin — blocks attach-then-password-reset takeover.
-        if ($member->user_id !== null && $member->user !== null && self::isSuperAdmin($member->user)) {
-            return false;
-        }
-
-        $ledTeamIds = self::ledTeamIds($user);
-
-        return $ledTeamIds !== []
-            && $member->teams()->whereIn('teams.id', $ledTeamIds)->exists();
-    }
-
-    /**
-     * The team ids the user's linked member leads. Does not create a member as
-     * a side effect (unlike Member::forUser), so it is safe in authorization.
-     *
-     * Memoized per user instance for the lifetime of the request to prevent
-     * N+1 queries when called repeatedly (e.g. once per project in a list).
+     * The team ids the user's linked member leads. Memoized per user instance
+     * for the request.
      *
      * @return list<int>
      */
@@ -165,7 +290,7 @@ class WorkspaceAccess
             return self::$ledTeamIdsMemo[$user];
         }
 
-        $member = Member::query()->where('user_id', $user->getAuthIdentifier())->first();
+        $member = self::memberFor($user);
 
         $ids = $member === null
             ? []

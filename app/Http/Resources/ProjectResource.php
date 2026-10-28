@@ -29,6 +29,8 @@ class ProjectResource extends JsonResource
             'description' => $this->description,
             'description_np' => $this->description_np,
             'is_public' => (bool) $this->is_public,
+            'organization_id' => $this->organization_id,
+            'organization' => $this->whenLoaded('organization', fn () => $this->organization?->name),
             'is_archived' => $this->archived_at !== null,
             'archived_at' => $this->archived_at?->toIso8601String(),
             'can_archive' => WorkspaceAccess::canArchiveProject($request->user(), $this->resource),

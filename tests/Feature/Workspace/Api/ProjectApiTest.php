@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
@@ -13,6 +14,7 @@ beforeEach(function () {
 
 it('creates a project and returns the {message, data} envelope', function () {
     $response = $this->postJson('/api/v1/workspace/projects', [
+        'organization_id' => OrganizationFactory::defaultId(),
         'title' => 'Coastal Cleanup',
         'description' => 'A tidy shoreline.',
         'is_public' => true,

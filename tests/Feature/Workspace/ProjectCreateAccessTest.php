@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
+use Database\Factories\OrganizationFactory;
 
 beforeEach(fn () => config(['project-management.super_admins' => ['boss@example.com']]));
 
@@ -68,7 +69,7 @@ it('lets a super-admin create a public project with no teams', function () {
     $admin = User::factory()->create(['email' => 'boss@example.com']);
 
     $this->actingAs($admin)->post('/workspace/projects', [
-        'title' => 'Announce', 'is_public' => true,
+        'title' => 'Announce', 'is_public' => true, 'organization_id' => OrganizationFactory::defaultId(),
     ])->assertRedirect();
 
     expect(Project::query()->where('title', 'Announce')->firstOrFail()->is_public)->toBeTrue();

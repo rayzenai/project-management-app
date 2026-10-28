@@ -82,7 +82,12 @@ class AuthController extends Controller
                 'name' => $member->name,
                 'title' => $member->title,
             ],
+            'organization' => $member?->organization === null ? null : [
+                'id' => $member->organization->id,
+                'name' => $member->organization->name,
+            ],
             'is_super_admin' => WorkspaceAccess::isSuperAdmin($user),
+            'is_office_admin' => WorkspaceAccess::officeAdminOrganizationId($user) !== null,
             'led_team_ids' => WorkspaceAccess::ledTeamIds($user),
         ];
     }

@@ -17,6 +17,24 @@ export interface Member {
     is_active?: boolean;
     team_ids?: Id[];
     led_team_ids?: Id[];
+    /** Null only for a super-admin's own member. */
+    organization_id?: Id | null;
+    organization?: string | null;
+    is_office_admin?: boolean;
+    /** The viewer may edit, deactivate or delete this person. */
+    can_manage?: boolean;
+}
+
+/** A person as listed on one team, with what the viewer may do there. */
+export interface RosterEntry {
+    id: Id;
+    name: string;
+    email?: string | null;
+    title?: string | null;
+    organization?: string | null;
+    is_active: boolean;
+    role: 'leader' | 'member';
+    can_remove: boolean;
 }
 
 export interface Team {
@@ -28,6 +46,26 @@ export interface Team {
     members_count?: number;
     member_ids?: Id[];
     leader_ids?: Id[];
+    organization_id?: Id;
+    organization?: string | null;
+    is_cross_organization?: boolean;
+    can_edit?: boolean;
+    can_manage_roster?: boolean;
+    can_view_progress?: boolean;
+    roster?: RosterEntry[];
+}
+
+export interface OrganizationOption {
+    id: Id;
+    name: string;
+}
+
+export interface Organization extends OrganizationOption {
+    slug: string;
+    members_count?: number;
+    teams_count?: number;
+    projects_count?: number;
+    office_admins?: { id: Id; name: string; email?: string | null }[];
 }
 
 export interface ProjectSummary {
@@ -40,6 +78,8 @@ export interface ProjectSummary {
 
 export interface Project extends ProjectSummary {
     title_np?: string | null;
+    organization_id?: Id;
+    organization?: string | null;
     team_ids?: Id[];
     description?: string | null;
     description_np?: string | null;
@@ -278,6 +318,9 @@ export interface SharedProps {
     completeStatus?: string;
     quickAddContext?: QuickAddContext | null;
     isSuperAdmin?: boolean;
+    isOfficeAdmin?: boolean;
+    /** The viewer's organization; null for a super-admin. */
+    organization?: OrganizationOption | null;
     ledTeamIds?: Id[];
     unreadNotifications?: number;
     themeCatalogue?: ThemeCatalogue;

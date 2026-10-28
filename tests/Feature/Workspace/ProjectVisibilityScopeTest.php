@@ -46,14 +46,11 @@ it('hides teamless private projects from non-admins', function () {
     expect(Project::query()->visibleTo($user)->pluck('id'))->not->toContain($orphan->id);
 });
 
-it('shows only public projects to a guest (null user)', function () {
-    $public = Project::factory()->create(['is_public' => true]);
+it('shows a guest (null user) nothing, not even public projects', function () {
+    Project::factory()->create(['is_public' => true]);
 
     $private = Project::factory()->create(['is_public' => false]);
     $private->teams()->attach(Team::factory()->create()->id);
 
-    $visible = Project::query()->visibleTo(null)->pluck('id');
-
-    expect($visible)->toContain($public->id)
-        ->and($visible)->not->toContain($private->id);
+    expect(Project::query()->visibleTo(null)->pluck('id'))->toBeEmpty();
 });
