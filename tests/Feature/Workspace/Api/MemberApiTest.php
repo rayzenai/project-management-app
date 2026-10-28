@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
@@ -44,8 +45,11 @@ it('lets a leader create a member for their own team', function () {
     $team = Team::factory()->create();
     memberApiLeaderOf($team);
 
+    Mail::fake();
+
     $this->postJson('/api/v1/workspace/members', [
         'name' => 'New Hire',
+        'email' => 'new.hire@example.com',
         'team_ids' => [$team->id],
     ])->assertCreated()
         ->assertJsonStructure(['message', 'data' => ['id', 'name']]);

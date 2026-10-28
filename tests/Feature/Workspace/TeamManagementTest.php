@@ -1,9 +1,11 @@
 <?php
 
+use App\Mail\LoginDetails;
 use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 
 beforeEach(function () {
@@ -87,23 +89,23 @@ it('creates a member with a working login', function () {
         ->and(auth()->validate(['email' => 'ram@example.com', 'password' => 'secret-pass-123']))->toBeTrue();
 });
 
-it('creates a member without a login when no password is given', function () {
-    $usersBefore = User::query()->count();
+it('emails a new member the email and password they sign in with', function () {
+    Mail::fake();
 
-    $this->post('/workspace/members', ['name' => 'Ram Karki', 'title' => 'Engineer'])
+    $this->post('/workspace/members', ['name' => 'Ram Karki', 'email' => 'ram@example.com', 'password' => 'Kp7m-Qx4r-Tz9a'])
         ->assertRedirect()
-        ->assertSessionHasNoErrors();
+        ->assertSessionHas('workspace_flash.message', 'Member added. Login details emailed.');
 
-    $member = Member::query()->where('name', 'Ram Karki')->firstOrFail();
-
-    expect($member->user_id)->toBeNull()
-        ->and(User::query()->count())->toBe($usersBefore);
+    Mail::assertSent(LoginDetails::class, fn (LoginDetails $mail): bool => $mail->hasTo('ram@example.com')
+        && $mail->password === 'Kp7m-Qx4r-Tz9a');
 });
 
-it('requires an email when a password is given', function () {
+it('requires an email', function () {
     $this->from('/workspace/team')
-        ->post('/workspace/members', ['name' => 'Ram Karki', 'password' => 'secret-pass-123'])
+        ->post('/workspace/members', ['name' => 'Ram Karki'])
         ->assertSessionHasErrors('email');
+
+    expect(Member::query()->where('name', 'Ram Karki')->exists())->toBeFalse();
 });
 
 it('rejects an email already used by another login', function () {

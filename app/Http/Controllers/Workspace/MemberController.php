@@ -7,48 +7,53 @@ use App\Http\Requests\UpdateMemberRequest;
 use App\Models\Member;
 use App\Models\User;
 use App\Services\Workspace\RestoreWorkspaceModel;
+use App\Services\Workspace\SendLoginDetailsService;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
- * A member optionally carries a login: providing a password (on create or
- * later via edit) provisions a host user with the member's email, edits keep
- * the two in sync, and deleting a member removes its login too.
+ * A member carries a login: create provisions a host user with the member's
+ * email and emails them the password, edits keep the two in sync (and can
+ * give a login to a member from before logins were required), and deleting a
+ * member removes its login too.
  */
 class MemberController extends Controller
 {
-    public function store(StoreMemberRequest $request): RedirectResponse
+    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails): RedirectResponse
     {
-        $withLogin = $request->filled('password');
+        $password = $request->validated('password') ?: Str::password(14, symbols: false);
 
-        DB::transaction(function () use ($request, $withLogin): void {
-            $userId = null;
-
-            if ($withLogin) {
-                $userId = User::create([
-                    'name' => $request->validated('name'),
-                    'email' => $request->validated('email'),
-                    'password' => Hash::make($request->validated('password')),
-                ])->getKey();
-            }
+        $user = DB::transaction(function () use ($request, $password): User {
+            $user = User::create([
+                'name' => $request->validated('name'),
+                'email' => $request->validated('email'),
+                'password' => Hash::make($password),
+            ]);
 
             $member = Member::create([
-                'user_id' => $userId,
+                'user_id' => $user->getKey(),
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
                 'title' => $request->validated('title'),
             ]);
 
             $member->teams()->sync($request->validated('team_ids', []));
+
+            return $user;
         });
 
+        $sent = $loginDetails->execute($user, $password, $request->user());
+
         return back()->with('workspace_flash', [
-            'success' => true,
-            'message' => $withLogin ? 'Member added — they can sign in now.' : 'Member added.',
+            'success' => $sent->success,
+            'message' => $sent->success
+                ? "Member added. {$sent->message}"
+                : 'Member added, but the email failed. Share the password yourself.',
         ]);
     }
 

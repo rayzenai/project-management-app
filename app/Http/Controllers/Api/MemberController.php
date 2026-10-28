@@ -9,43 +9,41 @@ use App\Http\Resources\MemberResource;
 use App\Models\Member;
 use App\Models\User;
 use App\Services\Workspace\RestoreWorkspaceModel;
+use App\Services\Workspace\SendLoginDetailsService;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * JSON sibling of the Workspace\MemberController. Reuses the same FormRequests
  * (authorization) and mirrors its login-provisioning mutation logic, differing
  * only in the response shape.
  *
- * A member optionally carries a login: providing a password (on create or
- * later via edit) provisions a host user with the member's email, edits keep
- * the two in sync, and deleting a member removes its login too.
+ * A member carries a login: create provisions a host user with the member's
+ * email and emails them the password (generated when the caller sends none),
+ * edits keep the two in sync, and deleting a member removes its login too.
  */
 class MemberController extends Controller
 {
     use RespondsWithServiceResult;
 
-    public function store(StoreMemberRequest $request): JsonResponse
+    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails): JsonResponse
     {
-        $withLogin = $request->filled('password');
+        $password = $request->validated('password') ?: Str::password(14, symbols: false);
 
-        $member = DB::transaction(function () use ($request, $withLogin): Member {
-            $userId = null;
-
-            if ($withLogin) {
-                $userId = User::create([
-                    'name' => $request->validated('name'),
-                    'email' => $request->validated('email'),
-                    'password' => Hash::make($request->validated('password')),
-                ])->getKey();
-            }
+        $member = DB::transaction(function () use ($request, $password): Member {
+            $user = User::create([
+                'name' => $request->validated('name'),
+                'email' => $request->validated('email'),
+                'password' => Hash::make($password),
+            ]);
 
             $member = Member::create([
-                'user_id' => $userId,
+                'user_id' => $user->getKey(),
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
                 'title' => $request->validated('title'),
@@ -56,8 +54,14 @@ class MemberController extends Controller
             return $member;
         });
 
+        /** @var User $user */
+        $user = $member->user;
+        $sent = $loginDetails->execute($user, $password, $request->user());
+
         return response()->json([
-            'message' => $withLogin ? 'Member added — they can sign in now.' : 'Member added.',
+            'message' => $sent->success
+                ? "Member added. {$sent->message}"
+                : 'Member added, but the email failed.',
             'data' => new MemberResource($member->load('teams:id')),
         ], 201);
     }

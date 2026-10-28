@@ -15,9 +15,10 @@ class StoreMemberRequest extends FormRequest
     }
 
     /**
-     * A password provisions a login (host users row) for the member, in which
-     * case the email it signs in with is mandatory. Without a password the
-     * member is assignable but cannot sign in — upgradeable later via edit.
+     * Every member gets a login (host users row) that signs in with this
+     * email. The web form always sends the password it showed the admin; an
+     * API caller may leave it out and one is generated. Either way the member
+     * is emailed both (SendLoginDetailsService).
      *
      * @return array<string, mixed>
      */
@@ -25,7 +26,7 @@ class StoreMemberRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'required_with:password', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:8'],
             'title' => ['nullable', 'string', 'max:255'],
             'team_ids' => ['nullable', 'array'],

@@ -170,6 +170,12 @@ Mentions are stored canonically as `@[Display Name](member:ID)`; the resolved
 
 ## Members
 
+`POST /workspace/members` takes `name`, `email` (required, not already a login),
+optional `password` (min 8), `title` and `team_ids`. Every member gets a login:
+the password you send, or a generated one if you send none. Either way the
+member is emailed their email and password; if that email fails the member is
+still created and `message` says so.
+
 | Method | Path |
 | --- | --- |
 | POST | `/workspace/members` |

@@ -1,7 +1,10 @@
 <script lang="ts">
     import { page, router, useForm } from '@inertiajs/svelte';
+    import { Copy, RefreshCw } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import { writeToClipboard } from '../../lib/clipboard';
+    import { toast } from '../../lib/toast.svelte';
     import type { Member, Team } from '../../lib/types';
 
     let { teams, members }: { teams: Team[]; members: Member[] } = $props();
@@ -112,12 +115,60 @@
     let addingMember = $state(false);
     let editingMemberId = $state<number | null>(null);
 
+    // Readable aloud or over the phone: no 0/O or 1/l/I, three groups of four.
+    const PASSWORD_ALPHABET =
+        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+    function generatePassword(): string {
+        const picks = new Uint32Array(12);
+
+        for (;;) {
+            crypto.getRandomValues(picks);
+            const chars = Array.from(
+                picks,
+                (n) => PASSWORD_ALPHABET[n % PASSWORD_ALPHABET.length],
+            );
+            const password = [0, 4, 8]
+                .map((i) => chars.slice(i, i + 4).join(''))
+                .join('-');
+
+            if (
+                /[A-Z]/.test(password) &&
+                /[a-z]/.test(password) &&
+                /\d/.test(password)
+            ) {
+                return password;
+            }
+        }
+    }
+
     const memberForm = useForm({
         name: '',
         email: '',
-        password: '',
+        password: generatePassword(),
         title: '',
     });
+
+    // The login just created, shown once so the admin can try it or pass it
+    // on; it never comes back from the server.
+    let createdLogin = $state<{
+        name: string;
+        email: string;
+        password: string;
+    } | null>(null);
+
+    const loginUrl = `${window.location.origin}/workspace/login`;
+
+    function copyLogin() {
+        if (!createdLogin) {
+            return;
+        }
+
+        writeToClipboard(
+            `Sign in at ${loginUrl}\nEmail: ${createdLogin.email}\nPassword: ${createdLogin.password}`,
+        );
+        toast.show('Copied login details', { duration: 2000 });
+    }
     const memberEditForm = useForm({
         name: '',
         email: '',
@@ -132,10 +183,18 @@
             return;
         }
 
+        const login = {
+            name: memberForm.name.trim(),
+            email: memberForm.email.trim(),
+            password: memberForm.password,
+        };
+
         memberForm.post('/workspace/members', {
             preserveScroll: true,
             onSuccess: () => {
+                createdLogin = login;
                 memberForm.reset();
+                memberForm.password = generatePassword();
                 addingMember = false;
             },
         });
@@ -313,16 +372,12 @@
                         {/if}
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="label" for="member-email"
-                            >Email {memberForm.password
-                                ? ''
-                                : '(optional)'}</label
-                        >
+                        <label class="label" for="member-email">Email</label>
                         <input
                             id="member-email"
                             type="email"
                             bind:value={memberForm.email}
-                            required={!!memberForm.password}
+                            required
                             class="input"
                         />
                         {#if memberForm.errors.email}
@@ -333,16 +388,29 @@
                     </div>
                     <div class="flex flex-col gap-1">
                         <label class="label" for="member-password"
-                            >Password (optional)</label
+                            >Password</label
                         >
-                        <input
-                            id="member-password"
-                            type="password"
-                            bind:value={memberForm.password}
-                            minlength="8"
-                            autocomplete="new-password"
-                            class="input"
-                        />
+                        <div class="flex items-center gap-1">
+                            <input
+                                id="member-password"
+                                type="text"
+                                bind:value={memberForm.password}
+                                required
+                                minlength="8"
+                                autocomplete="off"
+                                spellcheck="false"
+                                class="input font-mono"
+                            />
+                            <button
+                                type="button"
+                                class="btn-icon shrink-0"
+                                title="Generate another password"
+                                aria-label="Generate another password"
+                                onclick={() =>
+                                    (memberForm.password = generatePassword())}
+                                ><RefreshCw class="h-4 w-4" /></button
+                            >
+                        </div>
                         {#if memberForm.errors.password}
                             <p class="text-xs text-danger">
                                 {memberForm.errors.password}
@@ -362,8 +430,8 @@
                     </div>
                 </div>
                 <p class="text-xs text-fg-muted">
-                    Set a password to give them a login right away, or leave it
-                    blank and upgrade them later from Edit.
+                    We email them this password too. After adding, you can copy
+                    their login details to share or try yourself.
                 </p>
                 <div class="flex justify-end gap-1.5">
                     <button
@@ -374,11 +442,49 @@
                     <button
                         type="submit"
                         disabled={memberForm.processing ||
-                            !memberForm.name.trim()}
+                            !memberForm.name.trim() ||
+                            !memberForm.email.trim() ||
+                            memberForm.password.length < 8}
                         class="btn-primary">Add person</button
                     >
                 </div>
             </form>
+        {/if}
+
+        {#if createdLogin}
+            <div class="panel max-w-2xl space-y-3 p-4">
+                <h2 class="section-title">
+                    {createdLogin.name} can sign in now
+                </h2>
+                <dl
+                    class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]"
+                >
+                    <dt class="text-fg-muted">Sign in at</dt>
+                    <dd class="min-w-0 truncate font-mono">{loginUrl}</dd>
+                    <dt class="text-fg-muted">Email</dt>
+                    <dd class="min-w-0 truncate font-mono">
+                        {createdLogin.email}
+                    </dd>
+                    <dt class="text-fg-muted">Password</dt>
+                    <dd class="min-w-0 font-mono break-all select-all">
+                        {createdLogin.password}
+                    </dd>
+                </dl>
+                <p class="text-xs text-fg-muted">
+                    The same details went to their email. This is the only time
+                    the password is shown; Edit can set a new one.
+                </p>
+                <div class="flex justify-end gap-1.5">
+                    <button
+                        type="button"
+                        class="btn-ghost"
+                        onclick={() => (createdLogin = null)}>Done</button
+                    >
+                    <button type="button" class="btn" onclick={copyLogin}
+                        ><Copy class="h-3.5 w-3.5" />Copy login details</button
+                    >
+                </div>
+            </div>
         {/if}
 
         <!-- Teams -->
@@ -600,8 +706,8 @@
 
             {#if members.length === 0 && !addingMember}
                 <p class="border-t border-line py-3 text-xs text-fg-muted">
-                    No members yet. Add anyone you assign work to, and give them
-                    a password now or upgrade them to a login later.
+                    No members yet. Add anyone you assign work to; each gets a
+                    login emailed to them.
                 </p>
             {/if}
 

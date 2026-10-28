@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
@@ -24,8 +25,11 @@ it('lets a leader create a member for their own team', function () {
     $team = Team::factory()->create();
     actAsLeaderOf($team);
 
+    Mail::fake();
+
     $this->post('/workspace/members', [
         'name' => 'New Hire',
+        'email' => 'new.hire@example.com',
         'team_ids' => [$team->id],
     ])->assertRedirect();
 
