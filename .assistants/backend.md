@@ -39,17 +39,18 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
    manages organizations and everything inside them. Only this tier can mark a
    team cross-organization or make a person an office admin.
 2. **Office admin** — active member with `is_office_admin`. Full control inside
-   their organization: teams, people, leaders, projects and publication.
-3. **Team leader** — `member_team.role = 'leader'`. Searches/adds/removes the
-   roster of led teams and sees those teams' progress; never edits people or
-   chooses leaders.
-4. **Member** — sees their teams, teammates and team projects plus public
+   their organization: people, projects, managers, rosters and publication.
+3. **Project manager** — the one `member_team.role = 'leader'` on a project's
+   own team. Edits/archives that project, manages its roster and sees its
+   progress; never edits people, chooses managers or creates projects.
+4. **Member** — sees their teams, teammates and projects plus public
    projects in their organization; manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (read-only),
-`officeAdminOrganizationId`, `administers`, `canCreateTeam`, `canEditTeam`,
+`officeAdminOrganizationId`, `administers`, `canEditTeam` (choose the manager),
 `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
-`canViewTeamProgress`, `canCreateMember`, `canManageMember`, `canViewProject`,
+`canViewTeamProgress`, `canViewProjectProgress`, `canCreateMember`,
+`canManageMember`, `canViewProject`,
 `canCreateProject`, `canManageProjectAccess`, `canPublishProject`,
 `ledTeamIds`. `Project::scopeVisibleTo` is the query twin of `canViewProject`;
 `Team` and `Member` also expose `visibleTo`. Per-user `WeakMap` memos flush on
@@ -59,10 +60,17 @@ Do-not-regress protections: ordinary teams, projects and people never cross
 organizations; every roster add goes through `canJoinTeam`; project teams must
 share the project's organization; organization changes cannot strand a person
 on foreign ordinary teams. `canManageMember` blocks a super-admin's linked
-login and other office admins; leaders cannot reset anyone's password. Only a
+login, reserved super-admin emails and other office admins; managers cannot
+reset anyone's password. `StoreMemberRequest`/`UpdateMemberRequest` also block
+non-super-admins from assigning a reserved email (`isSuperAdminEmail`). Only a
 super-admin may change a person's organization/office-admin flag/bulk teams or
-a team's cross-organization flag. Mention notifications only reach project
-viewers.
+a team's cross-organization flag. Project `manager_id`, `is_public` and
+`is_cross_organization` are capability-filtered by `validated()`. Appoint through
+`AppointProjectManagerService`: the previous manager stays as a member; the
+current manager cannot be removed or demoted, only replaced. `project_team`
+is unique on each column; a partial unique index allows one leader per team.
+`NotifiesMentions::mentionableIds` filters stored mentions to eligible people;
+mention notifications only reach project viewers.
 
 ## Domain model
 
@@ -71,14 +79,23 @@ viewers.
   empty.
 - **Project** — belongs to an organization; slug-routed, `archived_at`
   soft-archive, `is_public` within that organization; scopes
-  `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team; derived
-  `code` attribute (uppercased initials of the title's words, max 4, fallback
+  `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team (one each).
+  `team()`/`ensureTeam()`/`manager()` expose its own team and manager;
+  `CreateProjectService` creates both atomically, with required `manager_id`.
+  Derived `code` attribute (uppercased initials of the title's words, max 4, fallback
   `P{id}`) exposed on Project/Task resources so tasks render as `CODE-123`.
 - **Task** — slug-routed `{project_id}-{slug}`; 100-point-plan fields
   (`item_number`, `category`, `deadline_type`, `responsible_ministry`,
   `title_np`, `description_np`) live in the `metadata` jsonb via `Attribute`
   mutators; `Task::completeStatuses()` derives "finished" from config
   `is_complete` flags; `is_late` is derived, not a status.
+- **TaskDependency** — finish-to-start link (`task_id` waits for
+  `depends_on_task_id`); `Task::dependencies()`/`dependents()` expose the graph.
+  `StoreTaskDependencyRequest` rejects self-links, duplicates, other projects
+  and cycles (`TaskDependency::reaches`). Add/remove services and paired
+  controllers serve `POST/DELETE tasks/{task}/dependencies[/{dependsOn}]`.
+  `TaskResource` emits references when loaded; `QuickAddTaskService` accepts
+  initial dependency ids, ignoring tasks outside the chosen project.
 - **Subtask** — personal (`user_id`). **Member** — belongs to one organization
   (except a super-admin's own member), optionally links to a `User`, and may be
   an office admin. `Member::forUser` `firstOrCreate`s (never call in
@@ -86,14 +103,21 @@ viewers.
   assignees. Creating a person also creates a login and synchronously emails
   its supplied/generated password via `SendLoginDetailsService`; passwords are
   never queued.
-- **Team** — belongs to a home organization, is auto-slugged, may be
+- **Team** — made with its project and named after it (`Team::project()`);
+  belongs to the same organization, is auto-slugged, may be
   `is_cross_organization`, and uses pivot `member_team.role`. Candidate search
-  is limited to the home organization unless cross-organization.
-- **TeamProgressQuery** — leader/admin view of member workload, up to 500 active
-  project tasks for a Gantt chart, and recent activity; the web page polls its
-  `progress` prop every 15 seconds while visible.
-- **ProjectActivity** — polymorphic audit log, written only by the six
-  observers. Surfaced through `App\Queries\ActivityFeedQuery` on the activity
+  is limited to the home organization unless cross-organization. No standalone
+  team CRUD routes; `TeamIndexQuery` serves the People directory, while roster
+  endpoints remain under `teams/{team}`.
+- **ProjectProgressQuery + ProgressReport** — manager/admin report at
+  `projects/{project:slug}/progress` on both surfaces, authorized by
+  `canViewProjectProgress`. Includes eligible people and former teammates still
+  assigned work, up to 500 project tasks (including dependency ids), workload
+  and recent activity. The web polls `progress` every 15s while visible; old
+  web team-progress links redirect here. No team-progress API remains.
+- **ProjectActivity** — polymorphic audit log, written only by the seven
+  observers (including `TaskDependencyObserver`). Surfaced through
+  `App\Queries\ActivityFeedQuery` on the activity
   tab of the notifications screen (`/workspace/notifications?tab=activity`);
   visibility rides on the task's project via `visibleTo` — never filter the
   feed on `->public()` (observers write `is_public = false`).

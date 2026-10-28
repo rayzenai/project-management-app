@@ -13,15 +13,15 @@ app/
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
     Resources/             # JsonResources ($wrap = null)
   Mail/                    # weekly digest + new-member login-details mailables
-  Models/                  # Organization, Project, Task, Subtask, Team, Member, User, TaskComment,
+  Models/                  # Organization, Project, Task, TaskDependency, Subtask, Team, Member, User, TaskComment,
                            # ProjectAssignment/Note/Contact/Activity/DigestSubscriber,
                            # WorkspaceNote, UserPreference
   Notifications/           # TaskAssigned, TaskStatusChanged, MentionedInComment,
                            # TaskDeadlineDue + Concerns/BuildsWorkspaceNotification
-  Observers/               # six observers — sole writers of the activity log
+  Observers/               # seven observers — sole writers of the activity log
   Providers/AppServiceProvider.php  # manage-workspace Gate, morph map, observer registry
   Queries/                 # heavy reads (ProjectShow, OrganizationIndex,
-                           # TeamIndex/Candidates/Progress, ...)
+                           # TeamIndex/Candidates, ProjectProgress + ProgressReport, ...)
   Services/Workspace/      # action services returning ServiceResult (+ Concerns/NotifiesMentions)
   Support/                 # WorkspaceAccess (ALL role decisions), ServiceResult,
                            # QuickAddParser, MentionParser, ApiResponser
@@ -35,16 +35,19 @@ config/
   themes.php               # system/light/dark token sets
 database/
   migrations/              # all workspace tables (former package filenames preserved)
-                           # including Nepal-time shift + organization tenancy backfill
+                           # including Nepal-time shift, tenancy backfill, task dependencies,
+                           # and one-team-per-project / one-leader-per-team constraints
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
 resources/
   js/app.ts                # single Inertia entry
   js/pages/                # Home, MyWorkspace, PlanTracker, Auth/, Notifications/,
-                           # Organizations/Index, Projects/{Index,Show}, Tasks/Show,
-                           # Team/{Index,Progress}
+                           # Organizations/Index, Projects/{Index,Show,Progress}, Tasks/Show,
+                           # Team/Index (People directory)
   js/components/           # shared UI (AppShell, ThemeToggle, StatusGlyph, QuickAdd*, ...)
-                           # plus project/ views and team/RosterSearch
-  js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils
+                           # plus project/ views + ProjectTeamPanel, ProgressReport,
+                           # team/{RosterSearch,GanttChart,TaskReportDrawer}, task dependency UI
+  js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils,
+                           # dependencies (board ordering/links), schedule (Gantt planning)
   css/app.css              # --ws-* tokens, Tailwind @theme mapping, component classes
   views/app.blade.php      # single root view
   views/emails/            # HTML + text login-details templates

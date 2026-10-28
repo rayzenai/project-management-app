@@ -8,20 +8,26 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - `tests/Feature/Workspace/**` — web-surface feature tests (visibility,
   permissions, quick-add, notifications, soft-delete/restore, reminders,
   seeder, plan tracker, appearance, login-detail email, organizations,
-  team progress, multi-tenant isolation).
+  project progress, task dependencies, multi-tenant isolation).
 - `tests/Feature/Workspace/Api/**` — API-surface twins (`AuthApiTest`,
   `ProjectApiTest`, `TaskApiTest`, `TaskCommentApiTest`, `MemberApiTest`,
   `TeamRosterApiTest`, `NotificationApiTest`, `RestoreApiTest`).
 - `tests/Feature/` root — cross-cutting (WorkspaceAccessTest, theme tokens,
   user preferences, api-token command, seeders).
 - `tests/Unit/` — parsers (MentionParser).
+- `ProjectProgressTest` covers both surfaces, access gates and legacy web
+  redirects; `TaskDependencyTest` covers web/API links, cycle/scope validation,
+  audit logging, quick-add and graph props. `OneTeamPerProjectMigrationTest`
+  covers folding existing teams into project-owned teams with one leader.
+  `ProjectCreateAccessTest`/`ProjectUpdateAccessTest` and `TenancyTest` cover
+  manager appointment, roster protections and reserved super-admin emails.
 
 ## Running
 
 ```bash
 composer test                                        # full gate
 php artisan test --compact tests/Feature/Workspace   # one directory
-php artisan test --compact --filter=TeamPermissions  # one test/group
+php artisan test --compact --filter=ProjectProgress  # one test/group
 ```
 
 Output is JSON-rewritten by `laravel/pao`; empty JSON means a PHP fatal —

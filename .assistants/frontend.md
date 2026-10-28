@@ -7,10 +7,10 @@ Single Inertia entry `resources/js/app.ts`; single root view
 
 `Home`, `MyWorkspace`, `PlanTracker`, `Auth/`, `Notifications/` (two tabs:
 personal inbox + workspace activity feed, `?tab=activity`),
-`Organizations/Index` (super-admin tenant CRUD), `Projects/Index`,
+`Organizations/Index` (super-admin tenant CRUD), `Projects/Index` (grouped by manager),
 `Projects/Show` (list/board/people views via `components/project/`),
-`Tasks/Show`, `Team/Index` (organization-aware directory/rosters), and
-`Team/Progress` (workload, Gantt, activity; polls every 15s while visible).
+`Tasks/Show`, `Team/Index` (organization-aware People directory), and
+`Projects/Progress` (workload, Gantt, activity; polls every 15s while visible).
 Pages wrap themselves in `AppShell` and supply the 44px top bar through its
 `bar` snippet (breadcrumb left, actions right); `flush` drops content padding
 for full-bleed registers/boards. The sidebar collapses to an icon rail (`[`
@@ -30,13 +30,23 @@ Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
 `TaskCode` (mono `CODE-123` id chip from project code + item number),
 `TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`, `AssigneePicker/Stack`,
 `DateChip`, `StatusChip/Badge`, `CompleteCheckbox`.
+Dependencies: `TaskDependencies` in the task page/Peek, `DependsOnPicker` in
+quick-add, and `project/DependencyChips` on board cards/list rows.
 Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
 `lib/notesBoard.svelte.ts`, `lib/noteColors.ts`.
-Teams: `team/RosterSearch` performs debounced server-side eligible-person
-search; `lib/clipboard.ts` provides Clipboard API + legacy fallback for copied
-login details.
+Teams: `project/ProjectTeamPanel` manages the project's roster in its People
+tab; `team/RosterSearch` performs debounced server-side eligible-person search.
+`lib/clipboard.ts` provides Clipboard API + legacy fallback for copied login
+details in the People directory.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
 TaskTableRow,ProjectFilters,ProjectSummaryStrip,ProjectEditForm,ColumnComposer}`.
+`BoardView` uses pointer drag/drop: dropping onto a card adds a dependency;
+`lib/dependencies.ts` keeps waiting tasks below prerequisites and draws dotted
+links, including cross-column links.
+Progress: `ProgressReport` combines workload, activity and `team/GanttChart`;
+the chart supports persisted zoom/grouping, dependency arrows and task
+selection into read-only `team/TaskReportDrawer`. `lib/schedule.ts` plans
+finish-to-start dates after prerequisites without changing stored dates.
 
 ## Theming
 
