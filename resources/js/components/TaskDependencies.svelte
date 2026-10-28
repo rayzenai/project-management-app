@@ -14,12 +14,15 @@
         projectSlug,
         projectCode,
         candidates,
+        onchanged,
     }: {
         task: Task;
         projectSlug: string;
         projectCode: string;
         /** The rest of the project's tasks. */
         candidates: TaskRef[];
+        /** After a link is added or removed, e.g. to refresh a slide-over. */
+        onchanged?: () => void;
     } = $props();
 
     const uid = $props.id();
@@ -73,9 +76,11 @@
             { depends_on_task_id: candidate.id },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     query = '';
                     adding = false;
+                    onchanged?.();
                 },
                 onFinish: () => (busy = false),
             },
@@ -85,7 +90,11 @@
     function remove(dependency: TaskRef) {
         router.delete(
             `/workspace/tasks/${task.id}/dependencies/${dependency.id}`,
-            { preserveScroll: true },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => onchanged?.(),
+            },
         );
     }
 </script>

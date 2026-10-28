@@ -125,3 +125,31 @@ it('hands the dependencies to the Gantt and the task page', function () {
             ->where('task.dependents.0.title', 'Build')
             ->has('dependencyCandidates', 2));
 });
+
+it('creates a task that already waits for others, ignoring tasks of another project', function () {
+    $elsewhere = Task::factory()->create(['project_id' => Project::factory()->create()->id]);
+
+    $this->actingAs($this->user)->post('/workspace/quick-add', [
+        'project_id' => $this->project->id,
+        'title' => 'Launch',
+        'depends_on_task_ids' => [$this->b->id, $this->c->id, $elsewhere->id],
+    ])->assertSessionHasNoErrors();
+
+    $launch = Task::query()->where('title', 'Launch')->firstOrFail();
+
+    expect($launch->dependencies()->pluck('tasks.id')->sort()->values()->all())->toBe([$this->b->id, $this->c->id]);
+});
+
+it('gives the board and the task preview what each task waits for and holds up', function () {
+    dependOn($this->b, $this->a);
+
+    $this->actingAs($this->user)->get("/workspace/projects/{$this->project->slug}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('tasks', fn ($tasks) => collect($tasks)->firstWhere('title', 'Design')['dependencies'][0]['title'] === 'Survey'
+                && collect($tasks)->firstWhere('title', 'Survey')['dependents'][0]['title'] === 'Design'));
+
+    $this->actingAs($this->user)->getJson("/workspace/tasks/{$this->b->id}/preview")
+        ->assertOk()
+        ->assertJsonPath('data.task.dependencies.0.title', 'Survey')
+        ->assertJsonCount(2, 'data.dependency_candidates');
+});

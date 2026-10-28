@@ -30,6 +30,7 @@ class QuickAddController extends Controller
             user: $request->user(),
             status: $request->input('status'),
             description: $request->input('description'),
+            dependsOnTaskIds: array_values(array_map('intval', (array) ($request->input('depends_on_task_ids') ?: []))),
         );
 
         return $this->respondWithResult(

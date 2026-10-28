@@ -26,6 +26,7 @@ final readonly class QuickAddDispatcher
 
     /**
      * @param  list<int>  $explicitAssigneeIds  Picker-selected members; win over parsed @tokens.
+     * @param  list<int>  $dependsOnTaskIds  Tasks the new one waits for (same project only).
      */
     public function dispatch(
         string $rawTitle,
@@ -36,6 +37,7 @@ final readonly class QuickAddDispatcher
         Authenticatable $user,
         ?string $status = null,
         ?string $description = null,
+        array $dependsOnTaskIds = [],
     ): ServiceResult {
         $tokens = QuickAddParser::parse($rawTitle);
         $consumed = [];
@@ -88,6 +90,7 @@ final readonly class QuickAddDispatcher
             authorUserId: $user->getAuthIdentifier(),
             status: $status,
             description: $description,
+            dependsOnTaskIds: $dependsOnTaskIds,
         );
     }
 

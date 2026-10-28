@@ -6,6 +6,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\Task;
+use App\Models\TaskDependency;
 use App\Support\ServiceResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -21,6 +22,7 @@ class QuickAddTaskService
 {
     /**
      * @param  array<int, int>  $assigneeMemberIds  list of member IDs to assign; the controller defaults to the acting user's member
+     * @param  array<int, int>  $dependsOnTaskIds  tasks the new one waits for; any outside the project are ignored
      */
     public function execute(
         Project $project,
@@ -31,6 +33,7 @@ class QuickAddTaskService
         ?int $authorUserId = null,
         ?string $status = null,
         ?string $description = null,
+        array $dependsOnTaskIds = [],
     ): ServiceResult {
         $title = trim($title);
         if ($title === '') {
@@ -55,7 +58,7 @@ class QuickAddTaskService
         }
 
         try {
-            return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $deadline, $priority, $status, $description): ServiceResult {
+            return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $deadline, $priority, $status, $description, $dependsOnTaskIds): ServiceResult {
                 $itemNumber = $this->nextItemNumber($project->id);
                 $sortOrder = ((int) Task::query()->where('project_id', $project->id)->max('sort_order')) + 100;
 
@@ -79,6 +82,14 @@ class QuickAddTaskService
                         'priority' => $priority ?: 'medium',
                         'personal_progress' => 0,
                     ]);
+                }
+
+                // Only tasks of its own project; a #token may have moved it to
+                // another project than the one the picker's tasks came from.
+                $waitsFor = Task::query()->where('project_id', $project->id)->whereIn('id', $dependsOnTaskIds)->pluck('id');
+
+                foreach ($waitsFor as $dependsOnId) {
+                    TaskDependency::create(['task_id' => $task->id, 'depends_on_task_id' => $dependsOnId]);
                 }
 
                 return ServiceResult::success(

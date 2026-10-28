@@ -24,7 +24,15 @@
     const OTHER = '__other__';
 
     let dragState = $state<{ id: number; fromStatus: string } | null>(null);
-    let hoverTarget = $state<{ status: string; index: number } | null>(null);
+    let hoverTarget = $state<{
+        status: string;
+        index: number;
+        nestId?: number;
+    } | null>(null);
+    /** The card the dragged one is held over, to make it wait for that task. */
+    let nestTarget = $state<{ id: number; ok: boolean; label: string } | null>(
+        null,
+    );
     let pendingMove = $state<{
         taskId: number;
         toStatus: string;
@@ -156,11 +164,17 @@
         }
 
         const rect = press.el.getBoundingClientRect();
-        ghost = press.el.cloneNode(true) as HTMLElement;
+        // The wrapper follows the pointer; the card inside it tilts, and
+        // shrinks around the pointer when held over another card.
+        const card = press.el.cloneNode(true) as HTMLElement;
+        card.removeAttribute('tabindex');
+        card.className = press.el.className;
+        card.style.cssText = `width:${rect.width}px;margin:0;opacity:.95;box-shadow:0 12px 32px rgba(0,0,0,.18);rotate:1.5deg;transform-origin:${press.offsetX}px ${press.offsetY}px;transition:${reducedMotion() ? 'none' : 'scale 160ms ease, opacity 160ms ease'};`;
+        ghost = document.createElement('div');
         ghost.setAttribute('aria-hidden', 'true');
-        ghost.removeAttribute('tabindex');
-        ghost.className = press.el.className;
-        ghost.style.cssText = `position:fixed;left:0;top:0;width:${rect.width}px;margin:0;pointer-events:none;z-index:60;opacity:.95;box-shadow:0 12px 32px rgba(0,0,0,.18);transition:none;will-change:transform;`;
+        ghost.style.cssText =
+            'position:fixed;left:0;top:0;pointer-events:none;z-index:60;will-change:transform;';
+        ghost.appendChild(card);
         document.body.appendChild(ghost);
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'grabbing';
@@ -174,14 +188,19 @@
             return;
         }
 
-        ghost.style.transform = `translate(${x - press.offsetX}px, ${y - press.offsetY}px) rotate(1.5deg)`;
+        ghost.style.transform = `translate(${x - press.offsetX}px, ${y - press.offsetY}px)`;
     }
 
-    /** Which column and slot the pointer is over, from real element geometry. */
+    /**
+     * Which column and slot the pointer is over, from real element geometry.
+     * The middle half of another card means "drop it in": the dragged task
+     * will wait for that one (`nestId`). Its top and bottom quarters, and the
+     * gaps, mean "move it here".
+     */
     function targetAt(
         x: number,
         y: number,
-    ): { status: string; index: number } | null {
+    ): { status: string; index: number; nestId?: number } | null {
         const under = document.elementFromPoint(x, y);
         const column = under?.closest<HTMLElement>('[data-column]');
         const status = column?.dataset.column;
@@ -196,13 +215,170 @@
 
         for (const card of cards) {
             const r = card.getBoundingClientRect();
+            const index = Number(card.dataset.cardIndex);
 
-            if (y < r.top + r.height / 2) {
-                return { status, index: Number(card.dataset.cardIndex) };
+            if (y < r.top + r.height / 4) {
+                return { status, index };
+            }
+
+            if (y <= r.bottom - r.height / 4) {
+                const id = Number(card.dataset.taskId);
+
+                if (id !== dragState?.id && x >= r.left && x <= r.right) {
+                    return { status, index, nestId: id };
+                }
+
+                return {
+                    status,
+                    index: y < r.top + r.height / 2 ? index : index + 1,
+                };
+            }
+
+            if (y < r.bottom) {
+                return { status, index: index + 1 };
             }
         }
 
         return { status, index: cards.length };
+    }
+
+    function reducedMotion(): boolean {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function codeOf(task: Task): string {
+        return task.item_number !== null && task.item_number !== undefined
+            ? `${project.code}-${task.item_number}`
+            : `#${task.id}`;
+    }
+
+    /** Whether `from` already waits for `to`, directly or through others. */
+    function waitsFor(from: number, to: number): boolean {
+        const seen: number[] = [];
+        let frontier = [from];
+
+        while (frontier.length > 0) {
+            if (frontier.includes(to)) {
+                return true;
+            }
+
+            seen.push(...frontier);
+            frontier = frontier
+                .flatMap(
+                    (id) =>
+                        tasks
+                            .find((t) => t.id === id)
+                            ?.dependencies?.map((d) => d.id) ?? [],
+                )
+                .filter((id) => !seen.includes(id));
+        }
+
+        return false;
+    }
+
+    /** What letting go over another card would do, in words. */
+    function describeNest(
+        draggedId: number,
+        targetId: number,
+    ): { id: number; ok: boolean; label: string } {
+        const dragged = tasks.find((t) => t.id === draggedId);
+        const target = tasks.find((t) => t.id === targetId);
+        const a = dragged ? codeOf(dragged) : 'This task';
+        const b = target ? codeOf(target) : 'that task';
+
+        if (dragged?.dependencies?.some((d) => d.id === targetId)) {
+            return {
+                id: targetId,
+                ok: false,
+                label: `${a} already waits for ${b}`,
+            };
+        }
+
+        if (waitsFor(targetId, draggedId)) {
+            return {
+                id: targetId,
+                ok: false,
+                label: `${b} already waits for ${a}`,
+            };
+        }
+
+        return { id: targetId, ok: true, label: `${a} will wait for ${b}` };
+    }
+
+    /** The ghost shrinks while held over a card, as if going into it. */
+    function shrinkGhost(on: boolean) {
+        const card = ghost?.firstElementChild as HTMLElement | null;
+
+        if (card) {
+            card.style.scale = on ? '0.55' : '1';
+            card.style.opacity = on ? '0.8' : '0.95';
+        }
+    }
+
+    /**
+     * The let-go: the ghost flies into the middle of the card and vanishes,
+     * and the card gives a small pulse as it takes it in.
+     */
+    function absorb(
+        el: HTMLElement | null,
+        targetId: number,
+        origin: { x: number; y: number },
+    ) {
+        const card = boardEl?.querySelector<HTMLElement>(
+            `[data-task-id="${targetId}"]`,
+        );
+
+        if (!el || !card || reducedMotion()) {
+            el?.remove();
+
+            return;
+        }
+
+        const r = card.getBoundingClientRect();
+
+        const inner = el.firstElementChild as HTMLElement | null;
+
+        el.style.transition = 'transform 260ms cubic-bezier(.3,.7,.2,1)';
+
+        if (inner) {
+            inner.style.transition =
+                'scale 260ms ease-in, opacity 260ms ease-in';
+        }
+
+        requestAnimationFrame(() => {
+            el.style.transform = `translate(${r.left + r.width / 2 - origin.x}px, ${r.top + r.height / 2 - origin.y}px)`;
+
+            if (inner) {
+                inner.style.scale = '0.06';
+                inner.style.opacity = '0';
+            }
+        });
+        setTimeout(() => el.remove(), 300);
+        card.animate(
+            [
+                { transform: 'scale(1)' },
+                { transform: 'scale(1.035)' },
+                { transform: 'scale(1)' },
+            ],
+            { duration: 360, delay: 180, easing: 'ease-out' },
+        );
+    }
+
+    /** The dragged task now waits for the one it was dropped into. */
+    function link(taskId: number, dependsOnId: number) {
+        router.post(
+            `/workspace/tasks/${taskId}/dependencies`,
+            { depends_on_task_id: dependsOnId },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onError: (errors) =>
+                    toast.error(
+                        (errors as Record<string, string>).depends_on_task_id ??
+                            'Could not link the tasks',
+                    ),
+            },
+        );
     }
 
     function edgeScroll(x: number) {
@@ -237,7 +413,19 @@
 
         event.preventDefault();
         moveGhost(event.clientX, event.clientY);
-        hoverTarget = targetAt(event.clientX, event.clientY);
+
+        const target = targetAt(event.clientX, event.clientY);
+
+        if (target?.nestId !== undefined && dragState) {
+            nestTarget = describeNest(dragState.id, target.nestId);
+            hoverTarget = null;
+            shrinkGhost(true);
+        } else {
+            nestTarget = null;
+            hoverTarget = target;
+            shrinkGhost(false);
+        }
+
         edgeScroll(event.clientX);
     }
 
@@ -250,11 +438,36 @@
 
         const target = targetAt(event.clientX, event.clientY) ?? hoverTarget;
         const state = dragState;
+        const verdict =
+            target?.nestId !== undefined
+                ? describeNest(state.id, target.nestId)
+                : null;
+        const flying = ghost;
+        const origin = press
+            ? { x: press.offsetX, y: press.offsetY }
+            : { x: 0, y: 0 };
+
+        // Keep the ghost for the drop-in animation; release() would remove it.
+        if (verdict?.ok) {
+            ghost = null;
+        }
+
         release();
 
         // The click that follows pointerup must not open the peek.
         justDragged = true;
         setTimeout(() => (justDragged = false), 0);
+
+        if (verdict) {
+            if (verdict.ok) {
+                absorb(flying, verdict.id, origin);
+                link(state.id, verdict.id);
+            } else {
+                toast.error(verdict.label);
+            }
+
+            return;
+        }
 
         if (target) {
             drop(state, target);
@@ -285,6 +498,7 @@
         press = null;
         dragState = null;
         hoverTarget = null;
+        nestTarget = null;
     }
 
     function swallowClickAfterDrag(event: MouseEvent) {
@@ -401,6 +615,9 @@
                             projectCode={project.code}
                             {index}
                             isDragging={dragState?.id === task.id}
+                            nest={nestTarget?.id === task.id
+                                ? nestTarget
+                                : null}
                             onpointerdown={droppable
                                 ? (e) => onCardPointerDown(task, e)
                                 : undefined}

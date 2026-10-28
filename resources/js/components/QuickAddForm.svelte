@@ -8,8 +8,10 @@
         Priority,
         QuickAddProject,
         SharedProps,
+        TaskOption,
     } from '../lib/types';
     import AssigneePicker from './AssigneePicker.svelte';
+    import DependsOnPicker from './DependsOnPicker.svelte';
     import PillGroup from './PillGroup.svelte';
     import StatusGlyph from './StatusGlyph.svelte';
     import TokenInput from './TokenInput.svelte';
@@ -178,6 +180,10 @@
             payload.description = data.description.trim();
         }
 
+        if (dependsOn.length > 0) {
+            payload.depends_on_task_ids = dependsOn.map((t) => t.id);
+        }
+
         // One-off creates from the dialog land on the new task's project board.
         // "Create another" stays put so a run of tasks isn't interrupted.
         if (variant === 'overlay' && !keepOpen) {
@@ -214,6 +220,8 @@
 
         untrack(() => {
             seededProjectId = pid;
+            // Dependencies only live inside one project.
+            dependsOn = [];
             form.assignee_member_ids = form.assignee_member_ids.filter((id) =>
                 projectMemberIds.has(id),
             );
@@ -247,6 +255,8 @@
     });
 
     let advanced = $state(false);
+    /** Tasks the new one waits for (same project). */
+    let dependsOn = $state<TaskOption[]>([]);
     let selfAutoSeeded = $state(false);
     let tokenInput = $state<{ focus: () => void } | null>(null);
     let keepOpen = $state(false);
@@ -272,6 +282,7 @@
             preserveScroll: true,
             onSuccess: () => {
                 form.reset('title', 'deadline_at', 'description');
+                dependsOn = [];
                 // Re-seed the default assignee (self when eligible) for the next task.
                 form.assignee_member_ids =
                     selfEligible && currentMemberId !== null
@@ -473,6 +484,12 @@
                 {@render fields()}
                 {@render priorityPicker()}
                 <div class="sm:col-span-3">{@render statusPicker()}</div>
+                <div class="sm:col-span-3">
+                    <DependsOnPicker
+                        projectSlug={selectedProject?.slug ?? null}
+                        bind:selected={dependsOn}
+                    />
+                </div>
             </div>
         {/if}
     {:else}
@@ -507,6 +524,13 @@
             class="grid grid-cols-1 items-start gap-x-8 gap-y-4 border-b border-line px-5 py-4 sm:grid-cols-2"
         >
             {@render fields()}
+        </div>
+
+        <div class="border-b border-line px-5 py-4">
+            <DependsOnPicker
+                projectSlug={selectedProject?.slug ?? null}
+                bind:selected={dependsOn}
+            />
         </div>
 
         <div

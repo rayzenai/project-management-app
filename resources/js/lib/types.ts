@@ -279,6 +279,8 @@ export interface TaskPreview {
     activity: ActivityEntry[];
     team: Member[];
     comments_count: number;
+    /** The rest of the task's project, for the dependency picker. */
+    dependency_candidates?: TaskRef[];
 }
 
 /** A task in a dependency list or picker (TaskResource::reference). */
@@ -293,6 +295,14 @@ export interface TaskRef {
     is_late: boolean;
     deadline_at: string | null;
     completed_at: string | null;
+}
+
+/** A task offered in a picker (e.g. "depends on" in the new-task form). */
+export interface TaskOption {
+    id: number;
+    title: string;
+    item_number: number | null;
+    status: string;
 }
 
 /** One person's workload on a team's progress page (GET /workspace/teams/{team}/progress). */

@@ -19,7 +19,7 @@ class ProjectShowQuery
      */
     public function data(Project $project): array
     {
-        $project->load(['teams:id', 'tasks' => fn ($q) => $q->with('assignments.member')->withCount(['notes', 'contacts'])]);
+        $project->load(['teams:id', 'tasks' => fn ($q) => $q->with(['assignments.member', 'dependencies', 'dependents'])->withCount(['notes', 'contacts'])]);
 
         return [
             'project' => (new ProjectResource($project))->resolve(),

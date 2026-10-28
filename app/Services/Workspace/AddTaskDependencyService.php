@@ -17,7 +17,7 @@ class AddTaskDependencyService
                 'depends_on_task_id' => $dependsOnId,
             ]);
 
-            return ServiceResult::success($dependency, 'Dependency added.');
+            return ServiceResult::success($dependency, 'Now waits for "'.$dependency->dependsOn?->title.'".');
         } catch (Throwable $e) {
             report($e);
 

@@ -27,7 +27,8 @@ class TaskPreviewQuery
      *     contacts: array<int, array<string, mixed>>,
      *     activity: array<int, array<string, mixed>>,
      *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
-     *     comments_count: int
+     *     comments_count: int,
+     *     dependency_candidates: array<int, array<string, mixed>>
      * }
      */
     public function data(Task $task): array
@@ -64,6 +65,9 @@ class TaskPreviewQuery
             'activity' => $activity->all(),
             'team' => $team->all(),
             'comments_count' => (int) $task->comments_count,
+            // What the task could be made to depend on: the rest of its project.
+            'dependency_candidates' => $task->project->tasks()->whereKeyNot($task->id)->get()
+                ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
         ];
     }
 }

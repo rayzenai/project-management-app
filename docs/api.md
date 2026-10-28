@@ -76,7 +76,7 @@ Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
 | GET | `/workspace/my` | the caller's focused tasks, open todos, assigned work |
 | GET | `/workspace/plan-tracker` | the 100-point plan tracker (`config/government.php`) |
 | GET | `/workspace/search?q=` | task search across active projects |
-| POST | `/workspace/quick-add` | `{ text }` natural-language task capture |
+| POST | `/workspace/quick-add` | `{ text }` natural-language task capture; optional `depends_on_task_ids: int[]` (tasks of other projects are ignored) |
 
 ## Projects
 
@@ -99,7 +99,7 @@ Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
 | PATCH | `/workspace/projects/{slug}/tasks/{taskSlug}` | update (status, fields) |
 | DELETE | `/workspace/projects/{slug}/tasks/{taskSlug}` | soft-delete |
 | POST | `/workspace/projects/{slug}/tasks/{taskSlug}/restore` | undo delete |
-| GET | `/workspace/tasks/{task}/preview` | lightweight peek (incl. `comments_count`) |
+| GET | `/workspace/tasks/{task}/preview` | lightweight peek (incl. `comments_count`, and `dependency_candidates`: the project's other tasks) |
 
 Task statuses come from `config/project-management.php` (`not_started`,
 `unclear`, `in_progress`, `done`, `failed`); `done` is the only complete status.

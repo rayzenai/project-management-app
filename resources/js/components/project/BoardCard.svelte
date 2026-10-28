@@ -6,6 +6,7 @@
     import DateChip from '../DateChip.svelte';
     import PriorityFlag from '../PriorityFlag.svelte';
     import TaskCode from '../TaskCode.svelte';
+    import DependencyChips from './DependencyChips.svelte';
 
     let {
         task,
@@ -13,6 +14,7 @@
         projectCode = null,
         index,
         isDragging,
+        nest = null,
         onpointerdown,
     }: {
         task: Task;
@@ -21,6 +23,11 @@
         projectCode?: string | null;
         index: number;
         isDragging: boolean;
+        /**
+         * Another card is being dragged onto this one: whether letting go
+         * would make it wait for this task, and the sentence saying so.
+         */
+        nest?: { ok: boolean; label: string } | null;
         /** Board-level pointer drag; undefined for non-droppable columns. */
         onpointerdown?: (e: PointerEvent) => void;
     } = $props();
@@ -35,6 +42,7 @@
 <div
     role="listitem"
     data-card-index={index}
+    data-task-id={task.id}
     {onpointerdown}
     onclick={() => peek.open({ id: task.id, slug: task.slug })}
     onkeydown={(e) => {
@@ -44,8 +52,14 @@
         }
     }}
     tabindex="0"
-    class={`group cursor-grab touch-pan-y rounded-lg border border-line bg-raised px-4 py-3.5 transition select-none hover:border-accent active:cursor-grabbing ${
+    class={`group relative cursor-grab touch-pan-y rounded-lg border bg-raised px-4 py-3.5 transition select-none hover:border-accent active:cursor-grabbing ${
         isDragging ? 'opacity-40' : ''
+    } ${
+        nest
+            ? nest.ok
+                ? 'border-accent bg-accent-soft ring-2 ring-accent/40'
+                : 'border-danger ring-2 ring-danger/30'
+            : 'border-line'
     }`}
 >
     <div class="flex h-5 items-center justify-between gap-2">
@@ -62,8 +76,23 @@
         </div>
     {/if}
 
+    {#if (task.dependencies ?? []).length > 0 || (task.dependents ?? []).length > 0}
+        <div class="mt-2">
+            <DependencyChips {task} {projectCode} />
+        </div>
+    {/if}
+
     <div class="mt-2.5 flex items-center gap-1.5">
         <DateChip {task} {projectSlug} size="sm" ghost />
         <PriorityFlag {task} {projectSlug} quiet />
     </div>
+
+    {#if nest}
+        <div
+            class={`pointer-events-none absolute inset-x-2 -bottom-3 truncate rounded-md px-2 py-1 text-center text-xs font-medium text-white ${nest.ok ? 'bg-accent' : 'bg-danger'}`}
+            role="status"
+        >
+            {nest.label}
+        </div>
+    {/if}
 </div>

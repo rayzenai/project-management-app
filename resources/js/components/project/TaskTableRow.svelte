@@ -8,6 +8,7 @@
     import DateChip from '../DateChip.svelte';
     import PriorityFlag from '../PriorityFlag.svelte';
     import StatusChip from '../StatusChip.svelte';
+    import DependencyChips from './DependencyChips.svelte';
 
     let { task, project }: { task: Task; project: Project } = $props();
 
@@ -57,6 +58,9 @@
                 {task.notes_count}
             </span>
         {/if}
+        <span class="min-w-0 shrink">
+            <DependencyChips {task} projectCode={project.code} />
+        </span>
         {#if task.contacts_count}
             <span
                 class="inline-flex shrink-0 items-center gap-0.5 font-mono text-[11px] text-fg-faint tabular-nums"

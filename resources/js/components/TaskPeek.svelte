@@ -22,6 +22,7 @@
     import PriorityFlag from './PriorityFlag.svelte';
     import ProgressRing from './ProgressRing.svelte';
     import StatusChip from './StatusChip.svelte';
+    import TaskDependencies from './TaskDependencies.svelte';
 
     const NOTE_TYPES: { value: string; label: string }[] = [
         { value: 'general', label: 'General note' },
@@ -779,6 +780,16 @@
                         {/if}
                     {/if}
                 </dl>
+
+                {#if preview && task}
+                    <TaskDependencies
+                        {task}
+                        {projectSlug}
+                        projectCode={task.project?.code ?? ''}
+                        candidates={preview.dependency_candidates ?? []}
+                        onchanged={revalidate}
+                    />
+                {/if}
 
                 <section class="mt-8">
                     <h3 class="section-title text-[15px]">

@@ -29,6 +29,9 @@ class QuickAddTaskRequest extends FormRequest
             'priority' => ['nullable', 'in:low,medium,high,urgent'],
             'status' => ['nullable', 'string', Rule::in(array_keys((array) config('project-management.statuses')))],
             'description' => ['nullable', 'string', 'max:5000'],
+            // Tasks the new one waits for; ones outside its project are ignored.
+            'depends_on_task_ids' => ['nullable', 'array'],
+            'depends_on_task_ids.*' => ['integer', Rule::exists('tasks', 'id')->whereNull('deleted_at')],
             // Web only: land on the new task's project board instead of back
             // where you were. Ignored by the API surface.
             'redirect_to_project' => ['nullable', 'boolean'],
