@@ -56,7 +56,7 @@ it('shows the people who run the project its tasks and everyone\'s workload on i
     projectProgressTask($this->project, ['status' => 'not_started'], [$former]);
 
     $elsewhere = Project::factory()->create(['organization_id' => $this->organization->id]);
-    $elsewhere->teams()->attach($this->team->id);
+    $elsewhere->ensureTeam()->members()->attach($this->worker->id);
     projectProgressTask($elsewhere, ['title' => 'Another project\'s work'], [$this->worker]);
 
     $this->actingAs($this->leader)->get("/workspace/projects/{$this->project->slug}/progress")
@@ -99,6 +99,16 @@ it('opens the project\'s progress to its organization\'s office admin and super-
 
     $this->actingAs($admin)->get("/workspace/projects/{$this->project->slug}/progress")->assertOk();
     $this->actingAs(User::factory()->create(['email' => 'boss@example.com']))->get("/workspace/projects/{$this->project->slug}/progress")->assertOk();
+});
+
+it('sends old team progress links to the project\'s progress', function () {
+    $this->actingAs($this->leader)->get("/workspace/teams/{$this->team->id}/progress")
+        ->assertRedirect("/workspace/projects/{$this->project->slug}/progress");
+
+    $plain = User::factory()->create();
+    $this->team->members()->attach(Member::factory()->linkedTo($plain)->create(['organization_id' => $this->organization->id])->id);
+
+    $this->actingAs($plain)->get("/workspace/teams/{$this->team->id}/progress")->assertNotFound();
 });
 
 it('keeps the project\'s progress from plain members, other leaders and other organizations', function () {

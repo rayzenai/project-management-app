@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Models\Project;
-use App\Models\Team;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -36,13 +35,19 @@ class ProjectResource extends JsonResource
             'can_archive' => WorkspaceAccess::canArchiveProject($request->user(), $this->resource),
             'can_manage_access' => WorkspaceAccess::canManageProjectAccess($request->user(), $this->resource),
             'can_view_progress' => WorkspaceAccess::canViewProjectProgress($request->user(), $this->resource),
-            'teams' => $this->whenLoaded('teams', fn () => $this->teams->map(fn (Team $t): array => [
-                'id' => $t->id,
-                'name' => $t->name,
-                'slug' => $t->slug,
-            ])->all()),
+            // Choosing the manager is the office admin's (or a super-admin's).
+            'can_choose_manager' => WorkspaceAccess::administers($request->user(), $this->organization_id),
+            'team' => $this->whenLoaded('teams', fn (): ?array => ($team = $this->team()) === null ? null : [
+                'id' => $team->id,
+                'is_cross_organization' => (bool) $team->is_cross_organization,
+                'members_count' => $team->members_count ?? $team->members()->count(),
+            ]),
+            'manager' => $this->whenLoaded('teams', fn (): ?array => ($manager = $this->manager()) === null ? null : [
+                'id' => $manager->id,
+                'name' => $manager->name,
+                'title' => $manager->title,
+            ]),
             'tasks_count' => $this->whenCounted('tasks'),
-            'team_ids' => $this->whenLoaded('teams', fn () => $this->teams->map(fn (Team $t): int => $t->id)->all()),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

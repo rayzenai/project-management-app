@@ -111,7 +111,7 @@ it('hands the dependencies to the Gantt and the task page', function () {
     dependOn($this->b, $this->a);
     dependOn($this->c, $this->b);
 
-    $this->actingAs($this->user)->get("/workspace/teams/{$this->team->id}/progress")
+    $this->actingAs($this->user)->get("/workspace/projects/{$this->project->slug}/progress")
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('progress.tasks', fn ($tasks) => collect($tasks)->mapWithKeys(fn ($t) => [$t['title'] => $t['depends_on']])->all() === [
                 'Survey' => [],

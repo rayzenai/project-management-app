@@ -1,15 +1,26 @@
 <script lang="ts">
     import { router, useForm } from '@inertiajs/svelte';
-    import { Check, Plus } from '@lucide/svelte';
+    import { Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
+    import AssigneePicker from '../../components/AssigneePicker.svelte';
+    import Avatar from '../../components/Avatar.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
+    import { formatDate } from '../../lib/format';
     import type { OrganizationOption, Project } from '../../lib/types';
+
+    interface ManagerCandidate {
+        id: number;
+        name: string;
+        email: string | null;
+        title: string | null;
+        organization_id: number;
+    }
 
     let {
         projects,
         archivedView = false,
         archivedCount = 0,
-        assignableTeams = [],
+        managerCandidates = [],
         canCreate = false,
         isSuperAdmin = false,
         canPublish = false,
@@ -18,12 +29,8 @@
         projects: Project[];
         archivedView?: boolean;
         archivedCount?: number;
-        assignableTeams?: {
-            id: number;
-            name: string;
-            slug: string;
-            organization_id?: number;
-        }[];
+        /** Who may manage a new project: active people of its organization. */
+        managerCandidates?: ManagerCandidate[];
         canCreate?: boolean;
         isSuperAdmin?: boolean;
         canPublish?: boolean;
@@ -37,68 +44,47 @@
             new URLSearchParams(window.location.search).has('new'),
     );
     const uid = $props.id();
-    const form = useForm({
-        title: '',
-        title_np: '',
-        description: '',
-        is_public: false,
-        team_ids: [] as number[],
-        organization_id: null as number | null,
-    });
 
-    // A super-admin picks the organization first; only its teams can be
-    // given access. Everyone else only ever sees their own organization's.
-    const formTeams = $derived(
+    // Seeded once; read inside a function so the one-time capture is deliberate.
+    function seed() {
+        return {
+            title: '',
+            title_np: '',
+            description: '',
+            is_public: false,
+            manager_id: null as number | null,
+            // With a single organization there is nothing to choose.
+            organization_id:
+                organizations.length === 1
+                    ? organizations[0].id
+                    : (null as number | null),
+        };
+    }
+
+    const form = useForm(seed());
+    /** The picked manager: the searchable picker works on a list of ids. */
+    let managerIds = $state<number[]>([]);
+
+    // A super-admin picks the organization first; the manager comes from it.
+    const formManagers = $derived(
         isSuperAdmin
-            ? assignableTeams.filter(
-                  (t) => t.organization_id === form.organization_id,
+            ? managerCandidates.filter(
+                  (m) => m.organization_id === form.organization_id,
               )
-            : assignableTeams,
+            : managerCandidates,
     );
-
-    const needsTeam = $derived(canCreate && assignableTeams.length === 0);
-    const teamForm = useForm({
-        name: '',
-        description: '',
-        color: '',
-        organization_id: null as number | null,
-    });
-
-    /** True once the user creates a team inside the wizard, keeps the stepper visible on step 2. */
-    let teamJustCreated = $state(false);
-    /** Show the two-step stepper only inside the no-team wizard flow, not for the normal project form. */
-    const showStepper = $derived(needsTeam || teamJustCreated);
-
-    function toggleCreating() {
-        creating = !creating;
-
-        if (!creating) {
-            teamJustCreated = false;
-        }
-    }
-
-    function createTeam(e: SubmitEvent) {
-        e.preventDefault();
-        teamForm.post('/workspace/teams', {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                form.organization_id = teamForm.organization_id;
-                teamForm.reset();
-                teamJustCreated = true;
-                router.reload({ only: ['assignableTeams'] });
-            },
-        });
-    }
 
     function submit(e: SubmitEvent) {
         e.preventDefault();
-        form.post('/workspace/projects', {
+        form.transform((data) => ({
+            ...data,
+            manager_id: managerIds[0] ?? null,
+        })).post('/workspace/projects', {
             preserveScroll: true,
             onSuccess: () => {
                 form.reset();
+                managerIds = [];
                 creating = false;
-                teamJustCreated = false;
             },
         });
     }
@@ -127,6 +113,56 @@
         );
     }
 
+    // The portfolio: projects grouped under their manager, managers by name,
+    // projects still waiting for one last.
+    const groups = $derived.by(() => {
+        const byManager: {
+            key: string;
+            manager: Project['manager'];
+            projects: Project[];
+        }[] = [];
+
+        for (const project of projects) {
+            const key = project.manager ? `m${project.manager.id}` : 'none';
+            let group = byManager.find((g) => g.key === key);
+
+            if (!group) {
+                group = { key, manager: project.manager ?? null, projects: [] };
+                byManager.push(group);
+            }
+
+            group.projects.push(project);
+        }
+
+        return byManager.sort((a, b) =>
+            a.manager && b.manager
+                ? a.manager.name.localeCompare(b.manager.name)
+                : a.manager
+                  ? -1
+                  : 1,
+        );
+    });
+
+    function summary(list: Project[]): string {
+        const open = list.reduce((n, p) => n + (p.open_tasks_count ?? 0), 0);
+        const overdue = list.reduce(
+            (n, p) => n + (p.overdue_tasks_count ?? 0),
+            0,
+        );
+        const parts = [
+            `${list.length} ${list.length === 1 ? 'project' : 'projects'}`,
+            `${open} open`,
+        ];
+
+        if (overdue > 0) {
+            parts.push(`${overdue} overdue`);
+        }
+
+        return parts.join(' · ');
+    }
+
+    const showArchiveColumn = $derived(projects.some((p) => p.can_archive));
+
     const tabBase =
         'inline-flex h-10 items-center gap-2 border-b-2 px-2.5 font-medium';
     const tabOn = 'border-accent text-fg';
@@ -143,14 +179,16 @@
         {#if canCreate}
             <div class="flex items-center gap-1.5">
                 {#if creating}
-                    <button type="button" class="btn" onclick={toggleCreating}
-                        >Cancel</button
+                    <button
+                        type="button"
+                        class="btn"
+                        onclick={() => (creating = !creating)}>Cancel</button
                     >
                 {:else}
                     <button
                         type="button"
                         class="btn-primary"
-                        onclick={toggleCreating}
+                        onclick={() => (creating = !creating)}
                     >
                         <Plus class="h-3.5 w-3.5" />
                         New project
@@ -182,276 +220,129 @@
     <div class="px-4 py-5 lg:px-8 lg:py-6">
         {#if creating}
             <div class="mb-6 max-w-2xl border-b border-line pb-6">
-                {#if showStepper}
-                    <ol
-                        class="mb-5 flex items-center gap-3 text-xs font-medium"
-                    >
-                        <li
-                            class="flex items-center gap-2 {needsTeam
-                                ? 'text-fg'
-                                : 'text-fg-muted'}"
-                        >
-                            <span
-                                class="inline-grid h-5 w-5 place-items-center rounded-sm font-mono text-[11px] {needsTeam
-                                    ? 'bg-accent text-white'
-                                    : 'bg-success-soft text-success'}"
-                            >
-                                {#if needsTeam}
-                                    1
-                                {:else}
-                                    <Check class="h-3 w-3" />
-                                {/if}
-                            </span>
-                            Create a team
-                        </li>
-                        <li
-                            class="h-px w-8 {needsTeam
-                                ? 'bg-line'
-                                : 'bg-success'}"
-                            aria-hidden="true"
-                        ></li>
-                        <li
-                            class="flex items-center gap-2 {needsTeam
-                                ? 'text-fg-faint'
-                                : 'text-fg'}"
-                        >
-                            <span
-                                class="inline-grid h-5 w-5 place-items-center rounded-sm font-mono text-[11px] {needsTeam
-                                    ? 'bg-surface-alt text-fg-faint'
-                                    : 'bg-accent text-white'}"
-                            >
-                                2
-                            </span>
-                            Create the project
-                        </li>
-                    </ol>
-                {/if}
-
-                {#if needsTeam}
-                    <form onsubmit={createTeam}>
-                        <h2 class="text-[15px] font-semibold text-fg">
-                            Create a team first
-                        </h2>
-                        <p class="mt-1 text-fg-muted">
-                            Projects belong to teams, and you don't have one
-                            yet. Create your first team below, then continue to
-                            the project form.
-                        </p>
-                        <div class="mt-4">
-                            <label
-                                for={`${uid}-team-name`}
-                                class="label mb-1 block">Team name</label
+                <form onsubmit={submit}>
+                    <h2 class="mb-4 text-[15px] font-semibold text-fg">
+                        New project
+                    </h2>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                            <label for={`${uid}-title`} class="label mb-1 block"
+                                >Title</label
                             >
                             <input
-                                id={`${uid}-team-name`}
+                                id={`${uid}-title`}
                                 type="text"
-                                bind:value={teamForm.name}
+                                bind:value={form.title}
                                 required
-                                placeholder="e.g. Mayor's Office, Engineering, Comms"
                                 class="input"
                             />
-                            {#if teamForm.errors.name}<p
-                                    class="mt-1 text-xs text-danger"
-                                >
-                                    {teamForm.errors.name}
-                                </p>{/if}
                         </div>
+                        <div>
+                            <label
+                                for={`${uid}-title-np`}
+                                class="label mb-1 block">Title (Nepali)</label
+                            >
+                            <input
+                                id={`${uid}-title-np`}
+                                type="text"
+                                bind:value={form.title_np}
+                                class="input font-np"
+                            />
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label
+                            for={`${uid}-description`}
+                            class="label mb-1 block">Description</label
+                        >
+                        <textarea
+                            id={`${uid}-description`}
+                            bind:value={form.description}
+                            rows="2"
+                            class="input"
+                        ></textarea>
+                    </div>
+                    {#if isSuperAdmin}
                         <div class="mt-3">
                             <label
-                                for={`${uid}-team-desc`}
-                                class="label mb-1 block"
-                                >Description (optional)</label
+                                for={`${uid}-organization`}
+                                class="label mb-1 block">Organization</label
                             >
-                            <textarea
-                                id={`${uid}-team-desc`}
-                                bind:value={teamForm.description}
-                                rows="2"
+                            <select
+                                id={`${uid}-organization`}
                                 class="input"
-                            ></textarea>
-                        </div>
-                        {#if isSuperAdmin}
-                            <div class="mt-3">
-                                <label
-                                    for={`${uid}-team-organization`}
-                                    class="label mb-1 block">Organization</label
-                                >
-                                <select
-                                    id={`${uid}-team-organization`}
-                                    class="input"
-                                    required
-                                    bind:value={teamForm.organization_id}
-                                >
-                                    {#each organizations as organization (organization.id)}
-                                        <option value={organization.id}
-                                            >{organization.name}</option
-                                        >
-                                    {/each}
-                                </select>
-                                {#if teamForm.errors.organization_id}<p
-                                        class="mt-1 text-xs text-danger"
-                                    >
-                                        {teamForm.errors.organization_id}
-                                    </p>{/if}
-                            </div>
-                        {/if}
-                        <div class="mt-4 flex justify-end">
-                            <button
-                                type="submit"
-                                disabled={teamForm.processing}
-                                class="btn-primary"
-                                >Create team and continue</button
+                                required
+                                value={form.organization_id ?? ''}
+                                onchange={(e) => {
+                                    form.organization_id = e.currentTarget.value
+                                        ? Number(e.currentTarget.value)
+                                        : null;
+                                    managerIds = [];
+                                }}
                             >
-                        </div>
-                    </form>
-                {:else}
-                    <form onsubmit={submit}>
-                        <h2 class="mb-4 text-[15px] font-semibold text-fg">
-                            New project
-                        </h2>
-                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div>
-                                <label
-                                    for={`${uid}-title`}
-                                    class="label mb-1 block">Title</label
+                                <option value="" disabled
+                                    >Choose an organization</option
                                 >
-                                <input
-                                    id={`${uid}-title`}
-                                    type="text"
-                                    bind:value={form.title}
-                                    required
-                                    class="input"
-                                />
-                            </div>
-                            <div>
-                                <label
-                                    for={`${uid}-title-np`}
-                                    class="label mb-1 block"
-                                    >Title (Nepali)</label
-                                >
-                                <input
-                                    id={`${uid}-title-np`}
-                                    type="text"
-                                    bind:value={form.title_np}
-                                    class="input font-np"
-                                />
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <label
-                                for={`${uid}-description`}
-                                class="label mb-1 block">Description</label
-                            >
-                            <textarea
-                                id={`${uid}-description`}
-                                bind:value={form.description}
-                                rows="2"
-                                class="input"
-                            ></textarea>
-                        </div>
-                        {#if isSuperAdmin}
-                            <div class="mt-3">
-                                <label
-                                    for={`${uid}-organization`}
-                                    class="label mb-1 block">Organization</label
-                                >
-                                <select
-                                    id={`${uid}-organization`}
-                                    class="input"
-                                    required
-                                    value={form.organization_id ?? ''}
-                                    onchange={(e) => {
-                                        form.organization_id = e.currentTarget
-                                            .value
-                                            ? Number(e.currentTarget.value)
-                                            : null;
-                                        form.team_ids = [];
-                                    }}
-                                >
-                                    <option value="" disabled
-                                        >Choose an organization</option
+                                {#each organizations as organization (organization.id)}
+                                    <option value={organization.id}
+                                        >{organization.name}</option
                                     >
-                                    {#each organizations as organization (organization.id)}
-                                        <option value={organization.id}
-                                            >{organization.name}</option
-                                        >
-                                    {/each}
-                                </select>
-                                {#if form.errors.organization_id}<p
-                                        class="mt-1 text-xs text-danger"
-                                    >
-                                        {form.errors.organization_id}
-                                    </p>{/if}
-                            </div>
-                        {/if}
-                        <fieldset class="mt-4">
-                            <legend class="label">Teams with access</legend>
-                            {#if isSuperAdmin && form.organization_id === null}
-                                <p class="mt-1 text-xs text-fg-muted">
-                                    Choose an organization to see its teams.
-                                </p>
-                            {:else if formTeams.length === 0}
-                                <p class="mt-1 text-xs text-fg-muted">
-                                    This organization has no teams yet.
-                                </p>
-                            {/if}
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                {#each formTeams as team (team.id)}
-                                    <label
-                                        class="flex h-7 items-center gap-2 rounded-md border border-line px-2.5 text-[13px] text-fg"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            value={team.id}
-                                            checked={form.team_ids.includes(
-                                                team.id,
-                                            )}
-                                            onchange={(e) => {
-                                                const id = team.id;
-                                                form.team_ids = e.currentTarget
-                                                    .checked
-                                                    ? [...form.team_ids, id]
-                                                    : form.team_ids.filter(
-                                                          (t) => t !== id,
-                                                      );
-                                            }}
-                                        />
-                                        {team.name}
-                                    </label>
                                 {/each}
-                            </div>
-                            {#if form.errors.team_ids}<p
+                            </select>
+                            {#if form.errors.organization_id}<p
                                     class="mt-1 text-xs text-danger"
                                 >
-                                    {form.errors.team_ids}
+                                    {form.errors.organization_id}
                                 </p>{/if}
-                        </fieldset>
-
-                        {#if canPublish}
-                            <label
-                                class="mt-4 flex items-center gap-2 text-fg-muted"
-                            >
-                                <input
-                                    type="checkbox"
-                                    bind:checked={form.is_public}
-                                /> Public (everyone in its organization can see it)
-                            </label>
-                        {/if}
-
-                        <div class="mt-4 flex items-center gap-2">
-                            <div class="flex-1"></div>
-                            <button
-                                type="submit"
-                                disabled={form.processing}
-                                class="btn-primary">Create</button
-                            >
                         </div>
-                        {#if form.errors.title}<p
-                                class="mt-2 text-xs text-danger"
+                    {/if}
+                    <div class="mt-3">
+                        <span class="label mb-1 block">Project manager</span>
+                        {#if isSuperAdmin && form.organization_id === null}
+                            <p class="text-xs text-fg-muted">
+                                Choose an organization first.
+                            </p>
+                        {:else}
+                            <AssigneePicker
+                                team={formManagers}
+                                bind:selectedIds={managerIds}
+                                placeholder="Search or choose who manages it"
+                            />
+                        {/if}
+                        <p class="mt-1 text-xs text-fg-muted">
+                            The project gets its own team, led by its manager,
+                            who then adds the people.
+                        </p>
+                        {#if form.errors.manager_id}<p
+                                class="mt-1 text-xs text-danger"
                             >
-                                {form.errors.title}
+                                {form.errors.manager_id}
                             </p>{/if}
-                    </form>
-                {/if}
+                    </div>
+
+                    {#if canPublish}
+                        <label
+                            class="mt-4 flex items-center gap-2 text-fg-muted"
+                        >
+                            <input
+                                type="checkbox"
+                                bind:checked={form.is_public}
+                            /> Public (everyone in its organization can see it)
+                        </label>
+                    {/if}
+
+                    <div class="mt-4 flex items-center gap-2">
+                        <div class="flex-1"></div>
+                        <button
+                            type="submit"
+                            disabled={form.processing}
+                            class="btn-primary">Create</button
+                        >
+                    </div>
+                    {#if form.errors.title}<p class="mt-2 text-xs text-danger">
+                            {form.errors.title}
+                        </p>{/if}
+                </form>
             </div>
         {/if}
 
@@ -468,85 +359,137 @@
         {:else}
             <div class="-mx-4 lg:-mx-8">
                 <div
-                    class="col-head flex items-center gap-3 border-b border-line px-4 pb-1.5 lg:px-8"
+                    class="col-head hidden items-center gap-3 border-b border-line px-4 pb-1.5 sm:flex lg:px-8"
                 >
                     <span class="w-4"></span>
                     <span class="flex-1">Name</span>
-                    <span class="w-14 text-right">Tasks</span>
-                    {#if projects.some((p) => p.can_archive)}
+                    <span class="w-14 text-right">Team</span>
+                    <span class="w-14 text-right">Open</span>
+                    <span class="w-16 text-right">Overdue</span>
+                    <span class="w-28 text-right">Next deadline</span>
+                    {#if showArchiveColumn}
                         <span class="w-[72px]"></span>
                     {/if}
                 </div>
-                {#each projects as project (project.id)}
-                    <a
-                        href={`/workspace/projects/${project.slug}`}
-                        class={`row group min-h-10 py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
+                {#each groups as group (group.key)}
+                    <div
+                        class="group-head flex items-center gap-2.5 border-b border-line bg-surface-alt px-4 py-2 lg:px-8"
                     >
-                        <ProgressRing
-                            percent={project.percent_complete ?? 0}
-                            class={archivedView ? 'opacity-50' : ''}
-                        />
-                        <div class="min-w-0 flex-1">
-                            <div class="flex min-w-0 items-baseline gap-2.5">
+                        {#if group.manager}
+                            <Avatar name={group.manager.name} size="md" />
+                            <span class="truncate font-medium text-fg"
+                                >{group.manager.name}</span
+                            >
+                            {#if group.manager.title}
                                 <span
-                                    class={`truncate font-medium group-hover:text-accent ${archivedView ? 'text-fg-muted' : 'text-fg'}`}
-                                    >{project.title}</span
+                                    class="hidden truncate text-xs text-fg-muted sm:inline"
+                                    >{group.manager.title}</span
                                 >
-                                {#if project.title_np}
+                            {/if}
+                        {:else}
+                            <span class="font-medium text-warn"
+                                >No manager yet</span
+                            >
+                        {/if}
+                        <span class="ml-auto shrink-0 text-xs text-fg-muted"
+                            >{summary(group.projects)}</span
+                        >
+                    </div>
+                    {#each group.projects as project (project.id)}
+                        <a
+                            href={`/workspace/projects/${project.slug}`}
+                            class={`row group min-h-10 py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
+                        >
+                            <ProgressRing
+                                percent={project.percent_complete ?? 0}
+                                class={archivedView ? 'opacity-50' : ''}
+                            />
+                            <div class="min-w-0 flex-1">
+                                <div
+                                    class="flex min-w-0 items-baseline gap-2.5"
+                                >
                                     <span
-                                        class="font-np truncate text-xs text-fg-muted"
-                                        >{project.title_np}</span
+                                        class={`truncate font-medium group-hover:text-accent ${archivedView ? 'text-fg-muted' : 'text-fg'}`}
+                                        >{project.title}</span
                                     >
-                                {/if}
-                                {#if project.is_public}
-                                    <span class="chip">public</span>
-                                {/if}
-                                {#if isSuperAdmin && project.organization}
-                                    <span class="truncate text-xs text-fg-faint"
-                                        >{project.organization}</span
+                                    <span
+                                        class="shrink-0 font-mono text-xs text-fg-muted tabular-nums"
+                                        >{project.percent_complete ?? 0}%</span
                                     >
+                                    {#if project.title_np}
+                                        <span
+                                            class="font-np truncate text-xs text-fg-muted"
+                                            >{project.title_np}</span
+                                        >
+                                    {/if}
+                                    {#if project.is_public}
+                                        <span class="chip">public</span>
+                                    {/if}
+                                    {#if isSuperAdmin && project.organization}
+                                        <span
+                                            class="truncate text-xs text-fg-faint"
+                                            >{project.organization}</span
+                                        >
+                                    {/if}
+                                </div>
+                                {#if project.description}
+                                    <p
+                                        class="mt-0.5 line-clamp-1 text-xs text-fg-muted"
+                                    >
+                                        {project.description}
+                                    </p>
                                 {/if}
                             </div>
-                            {#if project.description}
-                                <p
-                                    class="mt-0.5 line-clamp-1 text-xs text-fg-muted"
+                            <span
+                                class="hidden w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
+                                title="People on its team"
+                                >{project.team?.members_count ?? 0}</span
+                            >
+                            <span
+                                class="hidden w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
+                                >{project.open_tasks_count ?? 0}</span
+                            >
+                            <span
+                                class={`hidden w-16 shrink-0 text-right font-mono text-xs tabular-nums sm:inline ${(project.overdue_tasks_count ?? 0) > 0 ? 'text-danger' : 'text-fg-faint'}`}
+                                >{project.overdue_tasks_count ?? 0}</span
+                            >
+                            <span
+                                class="hidden w-28 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
+                                >{project.next_deadline_at
+                                    ? formatDate(project.next_deadline_at)
+                                    : ''}</span
+                            >
+                            {#if project.can_archive}
+                                <span
+                                    class="flex w-[72px] shrink-0 justify-end"
                                 >
-                                    {project.description}
-                                </p>
+                                    {#if project.is_archived}
+                                        <button
+                                            type="button"
+                                            class="btn"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                restore(project);
+                                            }}>Restore</button
+                                        >
+                                    {:else}
+                                        <button
+                                            type="button"
+                                            class="btn-ghost"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                archive(project);
+                                            }}>Archive</button
+                                        >
+                                    {/if}
+                                </span>
+                            {:else if showArchiveColumn}
+                                <span class="w-[72px] shrink-0"></span>
                             {/if}
-                        </div>
-                        <span
-                            class="w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums"
-                            >{project.tasks_count ?? 0}</span
-                        >
-                        {#if project.can_archive}
-                            <span class="flex w-[72px] shrink-0 justify-end">
-                                {#if project.is_archived}
-                                    <button
-                                        type="button"
-                                        class="btn"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            restore(project);
-                                        }}>Restore</button
-                                    >
-                                {:else}
-                                    <button
-                                        type="button"
-                                        class="btn-ghost"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            archive(project);
-                                        }}>Archive</button
-                                    >
-                                {/if}
-                            </span>
-                        {:else if projects.some((p) => p.can_archive)}
-                            <span class="w-[72px] shrink-0"></span>
-                        {/if}
-                    </a>
+                        </a>
+                    {/each}
                 {/each}
             </div>
         {/if}

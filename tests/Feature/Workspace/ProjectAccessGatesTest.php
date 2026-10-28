@@ -34,7 +34,7 @@ it('canViewProject: shared-team, super-admin, same-organization public true; str
         ->and(WorkspaceAccess::canViewProject($outsider, $public))->toBeFalse();
 });
 
-it('canCreateProject: super-admin or a team leader only', function () {
+it('canCreateProject: super-admin or office admin, never a project manager', function () {
     $admin = User::factory()->create(['email' => 'boss@example.com']);
     $leaderUser = User::factory()->create();
     $plain = User::factory()->create();
@@ -43,7 +43,7 @@ it('canCreateProject: super-admin or a team leader only', function () {
     Team::factory()->create()->members()->attach($leader->id, ['role' => 'leader']);
 
     expect(WorkspaceAccess::canCreateProject($admin))->toBeTrue()
-        ->and(WorkspaceAccess::canCreateProject($leaderUser))->toBeTrue()
+        ->and(WorkspaceAccess::canCreateProject($leaderUser))->toBeFalse()
         ->and(WorkspaceAccess::canCreateProject($plain))->toBeFalse();
 });
 

@@ -1,22 +1,25 @@
 <?php
 
 use App\Http\Resources\ProjectResource;
+use App\Models\Member;
 use App\Models\Project;
-use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
 
 beforeEach(fn () => config(['project-management.super_admins' => ['boss@example.com']]));
 
-it('includes teams and can_manage_access', function () {
+it('includes its team, manager and can_manage_access', function () {
     $admin = User::factory()->create(['email' => 'boss@example.com']);
     $project = Project::factory()->create();
-    $team = Team::factory()->create(['name' => 'IT']);
-    $project->teams()->attach($team->id);
+    $team = $project->ensureTeam();
+    $team->members()->attach(Member::factory()->create(['name' => 'Meera Manager'])->id, ['role' => 'leader']);
     $project->load('teams');
 
     $array = (new ProjectResource($project))->toArray(Request::create('/')->setUserResolver(fn () => $admin));
 
     expect($array['can_manage_access'])->toBeTrue()
-        ->and(collect($array['teams'])->pluck('name'))->toContain('IT');
+        ->and($array['can_choose_manager'])->toBeTrue()
+        ->and($array['team']['id'])->toBe($team->id)
+        ->and($array['team']['members_count'])->toBe(1)
+        ->and($array['manager']['name'])->toBe('Meera Manager');
 });

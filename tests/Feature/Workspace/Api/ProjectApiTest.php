@@ -2,7 +2,6 @@
 
 use App\Models\Member;
 use App\Models\Project;
-use App\Models\Team;
 use App\Models\User;
 use Database\Factories\OrganizationFactory;
 use Laravel\Sanctum\Sanctum;
@@ -18,6 +17,7 @@ it('creates a project and returns the {message, data} envelope', function () {
         'title' => 'Coastal Cleanup',
         'description' => 'A tidy shoreline.',
         'is_public' => true,
+        'manager_id' => Member::factory()->create(['organization_id' => OrganizationFactory::defaultId()])->id,
     ]);
 
     $response->assertCreated()
@@ -28,21 +28,23 @@ it('creates a project and returns the {message, data} envelope', function () {
     expect($response->json('data.slug'))->toBeString()->not->toBeEmpty();
 });
 
-it('ignores is_public in a JSON body from a non-super-admin', function () {
-    $leaderUser = User::factory()->create();
-    $leader = Member::factory()->linkedTo($leaderUser)->create();
-    $team = Team::factory()->create();
-    $team->members()->attach($leader->id, ['role' => 'leader']);
+it('ignores is_public and the manager in a JSON body from a project\'s manager', function () {
+    $managerUser = User::factory()->create();
+    $manager = Member::factory()->linkedTo($managerUser)->create();
+    $project = Project::factory()->create(['title' => 'JSON Sneaky']);
+    $team = $project->ensureTeam();
+    $team->members()->attach($manager->id, ['role' => 'leader']);
+    $friend = Member::factory()->create(['organization_id' => $project->organization_id]);
 
-    Sanctum::actingAs($leaderUser, ['*']);
+    Sanctum::actingAs($managerUser, ['*']);
 
-    $this->postJson('/api/v1/workspace/projects', [
-        'title' => 'JSON Sneaky',
-        'team_ids' => [$team->id],
+    $this->patchJson("/api/v1/workspace/projects/{$project->slug}", [
         'is_public' => true,
-    ])->assertCreated();
+        'manager_id' => $friend->id,
+    ])->assertOk();
 
-    expect(Project::query()->where('title', 'JSON Sneaky')->firstOrFail()->is_public)->toBeFalse();
+    expect($project->fresh()->is_public)->toBeFalse()
+        ->and($project->fresh()->manager()?->id)->toBe($manager->id);
 });
 
 it('shows a project by slug', function () {

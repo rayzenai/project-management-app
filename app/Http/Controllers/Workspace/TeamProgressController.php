@@ -3,24 +3,22 @@
 namespace App\Http\Controllers\Workspace;
 
 use App\Models\Team;
-use App\Queries\TeamProgressQuery;
 use App\Support\WorkspaceAccess;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
- * A team's live progress page (members' workload, Gantt chart, activity),
- * for its leaders and whoever administers its organization. The page polls
- * this same URL for fresh `progress` props.
+ * A team's progress is its project's: old links land there.
  */
 class TeamProgressController extends Controller
 {
-    public function __invoke(Request $request, Team $team, TeamProgressQuery $query): Response
+    public function __invoke(Request $request, Team $team): RedirectResponse
     {
-        abort_unless(WorkspaceAccess::canViewTeamProgress($request->user(), $team), 403);
+        $project = $team->project();
 
-        return Inertia::render('Team/Progress', ['progress' => $query->data($team)]);
+        abort_unless($project !== null && WorkspaceAccess::canViewProjectProgress($request->user(), $project), 404);
+
+        return redirect()->route('workspace.projects.progress', $project->slug);
     }
 }

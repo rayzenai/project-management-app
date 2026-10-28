@@ -1,28 +1,30 @@
 <?php
 
 use App\Models\Member;
+use App\Models\Organization;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
 
 beforeEach(fn () => config(['project-management.super_admins' => ['boss@example.com']]));
 
-it('lets a leader of an attached team change its teams', function () {
-    $leaderUser = User::factory()->create();
-    $leader = Member::factory()->linkedTo($leaderUser)->create();
-    $teamA = Team::factory()->create();
-    $teamB = Team::factory()->create();
-    $teamA->members()->attach($leader->id, ['role' => 'leader']);
-    $teamB->members()->attach($leader->id, ['role' => 'leader']);
+it('lets the project\'s manager edit its details but never choose its manager', function () {
+    $managerUser = User::factory()->create();
+    $manager = Member::factory()->linkedTo($managerUser)->create();
+    $project = Project::factory()->create(['title' => 'Before']);
+    $project->ensureTeam()->members()->attach($manager->id, ['role' => 'leader']);
+    $friend = Member::factory()->create(['organization_id' => $project->organization_id]);
 
-    $project = Project::factory()->create();
-    $project->teams()->attach($teamA->id);
+    $this->actingAs($managerUser)->patch("/workspace/projects/{$project->slug}", [
+        'title' => 'After',
+        'manager_id' => $friend->id,
+    ])->assertRedirect()->assertSessionHasNoErrors();
 
-    $this->actingAs($leaderUser)->patch("/workspace/projects/{$project->slug}", [
-        'team_ids' => [$teamA->id, $teamB->id],
-    ])->assertRedirect();
+    $project = $project->fresh();
 
-    expect($project->fresh()->teams()->pluck('teams.id'))->toContain($teamB->id);
+    expect($project->title)->toBe('After')
+        ->and($project->manager()?->id)->toBe($manager->id)
+        ->and($project->team()->members()->whereKey($friend->id)->exists())->toBeFalse();
 });
 
 it('forbids updating a project the user cannot manage', function () {
@@ -37,21 +39,42 @@ it('forbids updating a project the user cannot manage', function () {
         ->assertForbidden();
 });
 
-it('forbids a leader from granting access to a team they do not lead', function () {
-    $leaderUser = User::factory()->create();
-    $leader = Member::factory()->linkedTo($leaderUser)->create();
-    $teamA = Team::factory()->create();
-    $otherTeam = Team::factory()->create();
-    $teamA->members()->attach($leader->id, ['role' => 'leader']);
-
+it('lets the office admin hand a project to a new manager, keeping the old one on the team', function () {
+    $adminUser = User::factory()->create();
     $project = Project::factory()->create();
-    $project->teams()->attach($teamA->id);
+    Member::factory()->linkedTo($adminUser)->create(['organization_id' => $project->organization_id, 'is_office_admin' => true]);
+    $team = $project->ensureTeam();
+    $old = Member::factory()->create(['organization_id' => $project->organization_id]);
+    $team->members()->attach($old->id, ['role' => 'leader']);
+    $new = Member::factory()->create(['organization_id' => $project->organization_id]);
+    $outsider = Member::factory()->create(['organization_id' => Organization::factory()->create()->id]);
 
-    $this->actingAs($leaderUser)->patch("/workspace/projects/{$project->slug}", [
-        'team_ids' => [$teamA->id, $otherTeam->id],
-    ])->assertSessionHasErrors('team_ids');
+    $this->actingAs($adminUser)->from("/workspace/projects/{$project->slug}")
+        ->patch("/workspace/projects/{$project->slug}", ['manager_id' => $outsider->id])
+        ->assertSessionHasErrors('manager_id');
 
-    expect($project->fresh()->teams()->pluck('teams.id')->all())->toBe([$teamA->id]);
+    $this->patch("/workspace/projects/{$project->slug}", ['manager_id' => $new->id])
+        ->assertSessionHasNoErrors();
+
+    expect($project->fresh()->manager()?->id)->toBe($new->id)
+        ->and($team->leaders()->pluck('members.id')->all())->toBe([$new->id])
+        ->and($team->members()->whereKey($old->id)->exists())->toBeTrue();
+});
+
+it('makes someone the manager through the team role too, and never leaves a project without one', function () {
+    $adminUser = User::factory()->create();
+    $project = Project::factory()->create();
+    Member::factory()->linkedTo($adminUser)->create(['organization_id' => $project->organization_id, 'is_office_admin' => true]);
+    $team = $project->ensureTeam();
+    $old = Member::factory()->create(['organization_id' => $project->organization_id]);
+    $new = Member::factory()->create(['organization_id' => $project->organization_id]);
+    $team->members()->attach([$old->id => ['role' => 'leader'], $new->id => ['role' => 'member']]);
+    $this->actingAs($adminUser)->from("/workspace/projects/{$project->slug}");
+
+    $this->patch("/workspace/teams/{$team->id}/members/{$new->id}", ['role' => 'leader'])->assertSessionHasNoErrors();
+    $this->patch("/workspace/teams/{$team->id}/members/{$new->id}", ['role' => 'member'])->assertSessionHasErrors('role');
+
+    expect($team->leaders()->pluck('members.id')->all())->toBe([$new->id]);
 });
 
 it('lets a super-admin set is_public on update', function () {

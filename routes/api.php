@@ -24,7 +24,6 @@ use App\Http\Controllers\Api\TaskReorderController;
 use App\Http\Controllers\Api\TaskSearchController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TeamMemberController;
-use App\Http\Controllers\Api\TeamProgressController;
 use App\Http\Controllers\Api\ThemeController;
 use App\Http\Controllers\Api\WorkspaceNoteController;
 use App\Http\Middleware\EnsureProjectVisible;
@@ -66,12 +65,7 @@ Route::prefix('v1')->name('api.')->group(function () {
 
             // Teams
             Route::get('/team', [TeamController::class, 'index'])->name('team');
-            Route::get('/teams/{team}/progress', TeamProgressController::class)->name('teams.progress');
             Route::get('/teams/{team}/candidates', [TeamMemberController::class, 'candidates'])->name('teams.candidates');
-            Route::post('/teams', [TeamController::class, 'store'])->name('teams.store');
-            Route::patch('/teams/{team}', [TeamController::class, 'update'])->name('teams.update');
-            Route::delete('/teams/{team}', [TeamController::class, 'destroy'])->name('teams.destroy');
-            Route::post('/teams/{team}/restore', [TeamController::class, 'restore'])->name('teams.restore')->withTrashed();
             Route::post('/teams/{team}/members', [TeamMemberController::class, 'store'])->name('teams.members.store');
             Route::delete('/teams/{team}/members/{member}', [TeamMemberController::class, 'destroy'])->name('teams.members.destroy');
             Route::patch('/teams/{team}/members/{member}', [TeamMemberController::class, 'updateRole'])->name('teams.members.role');

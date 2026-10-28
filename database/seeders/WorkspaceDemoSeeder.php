@@ -27,8 +27,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * A full demo workspace: six logins across the three authorization tiers, three
- * teams, four projects and a task set that covers every status in
+ * A full demo workspace: six logins across the three authorization tiers, four
+ * projects (each with its own team and manager) and a task set that covers every status in
  * config('project-management.statuses') plus the states the UI derives rather
  * than stores — overdue, completed-late, rolling, no deadline, and each of the
  * four freshness buckets (moved / fresh / stalled / cold).
@@ -76,9 +76,6 @@ class WorkspaceDemoSeeder extends Seeder
     /** @var array<string, Member> handle => member (everyone) */
     private array $members = [];
 
-    /** @var array<string, Team> slug => team */
-    private array $teams = [];
-
     /** Where everyone works, except the super-admins (no organization). */
     private Organization $organization;
 
@@ -103,8 +100,6 @@ class WorkspaceDemoSeeder extends Seeder
         // Still called, to cover any PM_SUPER_ADMINS entry not seeded above.
         $this->call(WorkspaceSuperadminSeeder::class);
 
-        $this->seedTeams();
-
         // Assignment and status notifications are re-emitted by the observers as
         // the tasks are rebuilt below, so clear the previous run's first. Unlike
         // the activity log they hang off the user, not the task, so nothing
@@ -126,7 +121,7 @@ class WorkspaceDemoSeeder extends Seeder
 
     /**
      * Two organizations: the office everyone works in, and a ministry whose
-     * district liaison sits on the cross-organization Field Ops team.
+     * district liaison sits on Ward Service Upgrade's cross-organization team.
      */
     private function seedOrganizations(): void
     {
@@ -281,70 +276,16 @@ class WorkspaceDemoSeeder extends Seeder
     }
 
     /**
-     * Three teams. Deepak leads Field Ops while sitting as a plain member on
-     * Reform Desk, which is the shape every `leadsTeam` / `canManageRosterOf`
-     * decision has to get right.
-     */
-    private function seedTeams(): void
-    {
-        /** @var list<array{slug: string, name: string, description: string, color: string, roster: array<string, string>}> $teams */
-        $teams = [
-            [
-                'slug' => 'delivery-unit',
-                'name' => 'Delivery Unit',
-                'description' => 'Tracks the flagship commitments end to end.',
-                'color' => '#3B82F6',
-                'roster' => ['asha' => 'leader', 'chhaya' => 'member', 'admin' => 'member', 'namrata' => 'member'],
-            ],
-            [
-                'slug' => 'reform-desk',
-                'name' => 'Reform Desk',
-                'description' => 'Legal and administrative reform workstream.',
-                'color' => '#8B5CF6',
-                'roster' => ['bikash' => 'leader', 'deepak' => 'member', 'eliza' => 'member', 'namrata' => 'member'],
-            ],
-            [
-                'slug' => 'field-ops',
-                'name' => 'Field Ops',
-                'description' => 'District-level verification and follow-up.',
-                'color' => '#059669',
-                'roster' => ['deepak' => 'leader', 'nirmala' => 'member', 'sujan' => 'member', 'namrata' => 'member'],
-            ],
-        ];
-
-        foreach ($teams as $spec) {
-            $team = Team::query()->updateOrCreate(
-                ['slug' => $spec['slug']],
-                [
-                    'organization_id' => $this->organization->id,
-                    // Field Ops pulls in the partner ministry's district liaison.
-                    'is_cross_organization' => $spec['slug'] === 'field-ops',
-                    'name' => $spec['name'],
-                    'description' => $spec['description'],
-                    'color' => $spec['color'],
-                ],
-            );
-
-            $roster = [];
-
-            foreach ($spec['roster'] as $handle => $role) {
-                $roster[$this->members[$handle]->getKey()] = ['role' => $role];
-            }
-
-            $team->members()->sync($roster);
-
-            $this->teams[$spec['slug']] = $team;
-        }
-    }
-
-    /**
      * Four projects: the flagship plan, a private in-flight programme, a public
-     * one owned by a single team, and an archived one so the archive filters
-     * have something to show.
+     * one with a cross-organization team, and an archived one so the archive
+     * filters have something to show. Each has its own team led by its
+     * manager; Deepak manages Ward Service Upgrade while sitting as a plain
+     * member on two others, the shape every `leadsTeam` / `canManageRosterOf`
+     * decision has to get right.
      */
     private function seedProjects(): void
     {
-        /** @var list<array{slug: string, title: string, title_np: ?string, description: string, is_public: bool, archived: bool, starts_in: int, ends_in: int, teams: list<string>, tasks: list<array<string, mixed>>}> $projects */
+        /** @var list<array{slug: string, title: string, title_np: ?string, description: string, is_public: bool, archived: bool, starts_in: int, ends_in: int, manager: string, team: list<string>, tasks: list<array<string, mixed>>}> $projects */
         $projects = [
             [
                 'slug' => '100-day-plan',
@@ -355,7 +296,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'archived' => false,
                 'starts_in' => -160,
                 'ends_in' => -60,
-                'teams' => ['delivery-unit', 'reform-desk'],
+                'manager' => 'asha',
+                'team' => ['bikash', 'chhaya', 'admin', 'namrata', 'deepak', 'eliza'],
                 'tasks' => $this->flagshipTasks(),
             ],
             [
@@ -367,7 +309,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'archived' => false,
                 'starts_in' => -40,
                 'ends_in' => 140,
-                'teams' => ['reform-desk'],
+                'manager' => 'bikash',
+                'team' => ['deepak', 'eliza', 'namrata'],
                 'tasks' => $this->secondaryTasks(100, 'digital_governance', 'Ministry of Communication and IT'),
             ],
             [
@@ -379,7 +322,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'archived' => false,
                 'starts_in' => -20,
                 'ends_in' => 90,
-                'teams' => ['field-ops'],
+                'manager' => 'deepak',
+                'team' => ['nirmala', 'sujan', 'namrata'],
                 'tasks' => $this->secondaryTasks(200, 'service_delivery', 'Ministry of Federal Affairs'),
             ],
             [
@@ -391,7 +335,8 @@ class WorkspaceDemoSeeder extends Seeder
                 'archived' => true,
                 'starts_in' => -300,
                 'ends_in' => -120,
-                'teams' => ['delivery-unit'],
+                'manager' => 'asha',
+                'team' => ['chhaya', 'admin', 'namrata'],
                 'tasks' => $this->secondaryTasks(300, 'admin_reform', 'National Archives'),
             ],
         ];
@@ -415,9 +360,24 @@ class WorkspaceDemoSeeder extends Seeder
             $project->archived_at = $spec['archived'] ? $today->subDays(30)->setTime(9, 0) : null;
             $project->save();
 
-            $project->teams()->sync(
-                collect($spec['teams'])->map(fn (string $slug): int => $this->teams[$slug]->getKey())->all(),
+            $team = Team::query()->updateOrCreate(
+                ['slug' => $spec['slug']],
+                [
+                    'organization_id' => $this->organization->id,
+                    // Its district liaison comes from the partner ministry.
+                    'is_cross_organization' => $spec['slug'] === 'ward-service-upgrade',
+                    'name' => $spec['title'],
+                ],
             );
+
+            $roster = [$this->members[$spec['manager']]->getKey() => ['role' => 'leader']];
+
+            foreach ($spec['team'] as $handle) {
+                $roster[$this->members[$handle]->getKey()] = ['role' => 'member'];
+            }
+
+            $team->members()->sync($roster);
+            $project->teams()->sync([$team->getKey()]);
 
             $this->resetTasks($project);
 

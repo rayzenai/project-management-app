@@ -55,6 +55,28 @@ export interface Team {
     roster?: RosterEntry[];
 }
 
+/** A person on a project's team, as the project page lists them. */
+export interface ProjectTeamMember {
+    id: Id;
+    name: string;
+    email?: string | null;
+    title?: string | null;
+    organization?: string | null;
+    is_active: boolean;
+    is_manager: boolean;
+    can_remove: boolean;
+}
+
+/** A project's own team on its page, with what the viewer may do there. */
+export interface ProjectTeam {
+    id: Id;
+    is_cross_organization: boolean;
+    members: ProjectTeamMember[];
+    /** Add and remove people: its manager, office admin, super-admin. */
+    can_manage: boolean;
+    can_choose_manager: boolean;
+}
+
 export interface OrganizationOption {
     id: Id;
     name: string;
@@ -80,7 +102,6 @@ export interface Project extends ProjectSummary {
     title_np?: string | null;
     organization_id?: Id;
     organization?: string | null;
-    team_ids?: Id[];
     description?: string | null;
     description_np?: string | null;
     is_public?: boolean;
@@ -89,9 +110,22 @@ export interface Project extends ProjectSummary {
     can_archive?: boolean;
     can_manage_access?: boolean;
     can_view_progress?: boolean;
+    /** Choosing the manager is the office admin's (or a super-admin's). */
+    can_choose_manager?: boolean;
+    /** The project's own team. */
+    team?: {
+        id: Id;
+        is_cross_organization: boolean;
+        members_count: number;
+    } | null;
+    /** Its team's one leader; null until one is chosen. */
+    manager?: { id: Id; name: string; title: string | null } | null;
     tasks_count?: number;
     /** Present on the project index only. */
     percent_complete?: number;
+    open_tasks_count?: number;
+    overdue_tasks_count?: number;
+    next_deadline_at?: string | null;
     created_at?: string;
     updated_at?: string;
 }

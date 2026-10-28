@@ -127,16 +127,13 @@ class WorkspaceAccess
         return self::isSuperAdmin($user);
     }
 
-    // ---- Teams ----
-
-    public static function canCreateTeam(?Authenticatable $user): bool
-    {
-        return self::isSuperAdmin($user) || self::officeAdminOrganizationId($user) !== null;
-    }
+    // ---- Project teams ----
+    // A team is a project's own (one each); its one leader is the project's
+    // manager. Teams are made with their project, never on their own.
 
     /**
-     * Rename, describe, delete or restore a team, and choose its leaders.
-     * Whether it is cross-organization is a super-admin decision alone.
+     * Choose a project team's manager. Whether the team takes people from
+     * other organizations is a super-admin decision alone.
      */
     public static function canEditTeam(?Authenticatable $user, Team $team): bool
     {
@@ -149,7 +146,8 @@ class WorkspaceAccess
     }
 
     /**
-     * Add people to a team (by searching) and take them off it.
+     * Add people to a team (by searching) and take them off it: the
+     * project's manager, or whoever administers its organization.
      */
     public static function canManageRosterOf(?Authenticatable $user, Team $team): bool
     {
@@ -157,8 +155,8 @@ class WorkspaceAccess
     }
 
     /**
-     * Leaders are chosen by the office admin: a leader may take members off
-     * their team but not another leader.
+     * The manager is chosen by the office admin: a manager may take members
+     * off their team but not the manager.
      */
     public static function canRemoveFromTeam(?Authenticatable $user, Team $team, Member $member): bool
     {
@@ -267,11 +265,13 @@ class WorkspaceAccess
         return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
     }
 
+    /**
+     * Creating a project means choosing its manager, which is the office
+     * admin's (or a super-admin's) call.
+     */
     public static function canCreateProject(?Authenticatable $user): bool
     {
-        return self::isSuperAdmin($user)
-            || self::officeAdminOrganizationId($user) !== null
-            || self::ledTeamIds($user) !== [];
+        return self::isSuperAdmin($user) || self::officeAdminOrganizationId($user) !== null;
     }
 
     public static function canManageProjectAccess(?Authenticatable $user, Project $project): bool

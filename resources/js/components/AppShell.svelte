@@ -153,7 +153,7 @@
             href: '/workspace/notifications',
             icon: Bell,
         },
-        { label: 'Team', href: '/workspace/team', icon: Users },
+        { label: 'People', href: '/workspace/team', icon: Users },
         ...(shared.isSuperAdmin
             ? [
                   {

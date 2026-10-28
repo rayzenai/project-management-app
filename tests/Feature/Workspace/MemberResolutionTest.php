@@ -19,26 +19,20 @@ it('creates a member once per user and copies name and email', function () {
         ->and($member->user_id)->toBe($user->id);
 });
 
-it('scopes assignable members to the project teams union', function () {
+it('scopes assignable members to the project\'s team', function () {
     $project = Project::factory()->create();
-    $teamA = Team::factory()->create();
-    $teamB = Team::factory()->create();
     $offTeam = Team::factory()->create();
 
-    $inA = Member::factory()->create(['name' => 'Ana']);
-    $inB = Member::factory()->create(['name' => 'Bal']);
-    $inBoth = Member::factory()->create(['name' => 'Cam']);
+    $inTeam = Member::factory()->create(['name' => 'Ana']);
+    $manager = Member::factory()->create(['name' => 'Bal']);
     $outside = Member::factory()->create(['name' => 'Dev']);
 
-    $teamA->members()->attach([$inA->id, $inBoth->id]);
-    $teamB->members()->attach([$inB->id, $inBoth->id]);
+    $project->ensureTeam()->members()->attach([$inTeam->id => ['role' => 'member'], $manager->id => ['role' => 'leader']]);
     $offTeam->members()->attach($outside->id);
-
-    $project->teams()->attach([$teamA->id, $teamB->id]);
 
     $names = Member::assignableFor($project)->pluck('name')->all();
 
-    expect($names)->toBe(['Ana', 'Bal', 'Cam']);
+    expect($names)->toBe(['Ana', 'Bal']);
 });
 
 it('falls back to all active members of its organization when a public project has no teams', function () {

@@ -3,37 +3,11 @@
 use App\Models\Project;
 use App\Models\Subtask;
 use App\Models\Task;
-use App\Models\Team;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
-});
-
-it('restores a soft-deleted team for a super admin', function () {
-    $admin = User::factory()->create(['email' => 'boss@example.com']);
-    Sanctum::actingAs($admin, ['*']);
-
-    $team = Team::factory()->create();
-    $team->delete();
-
-    $this->postJson("/api/v1/workspace/teams/{$team->id}/restore")
-        ->assertSuccessful()
-        ->assertJsonPath('data.id', $team->id);
-
-    expect($team->fresh()->trashed())->toBeFalse();
-});
-
-it('forbids a non-admin from restoring a team', function () {
-    Sanctum::actingAs(User::factory()->withMember()->create(), ['*']);
-
-    $team = Team::factory()->create();
-    $team->delete();
-
-    $this->postJson("/api/v1/workspace/teams/{$team->id}/restore")->assertForbidden();
-
-    expect($team->fresh()->trashed())->toBeTrue();
 });
 
 it('lets a subtask owner restore their own soft-deleted subtask', function () {

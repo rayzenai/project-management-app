@@ -14,21 +14,26 @@
         ProjectFiltersState,
     } from '../../components/project/ProjectFilters.svelte';
     import ProjectSummaryStrip from '../../components/project/ProjectSummaryStrip.svelte';
+    import ProjectTeamPanel from '../../components/project/ProjectTeamPanel.svelte';
     import { peek } from '../../lib/peek.svelte';
     import { quickAdd } from '../../lib/quickAdd.svelte';
     import type {
         Member,
         Project,
+        ProjectTeam,
         SharedProps,
         Task,
-        Team,
     } from '../../lib/types';
 
     let {
         project,
         tasks,
-        teams = [],
-    }: { project: Project; tasks: Task[]; teams?: Team[] } = $props();
+        team = null,
+    }: {
+        project: Project;
+        tasks: Task[];
+        team?: ProjectTeam | null;
+    } = $props();
 
     let editing = $state(false);
 
@@ -264,7 +269,6 @@
         <div class="border-b border-line px-6 py-7 lg:px-8">
             <ProjectEditForm
                 {project}
-                {teams}
                 isSuperAdmin={shared.isSuperAdmin ?? false}
                 onclose={() => (editing = false)}
             />
@@ -286,6 +290,12 @@
                 Add task
             </button>
         </div>
+        {#if team}
+            <!-- A new project starts by gathering its team. -->
+            <div class="border-t border-line px-6 py-7 lg:px-8">
+                <ProjectTeamPanel {team} projectTitle={project.title} />
+            </div>
+        {/if}
     {:else}
         <div
             class="flex h-14 items-center gap-1 overflow-x-auto border-b border-line px-6 lg:px-8"
@@ -316,9 +326,8 @@
             />
         </div>
 
-        <!-- Project context: the title block, then the metric cards. Team
-             attachment lives in Edit project — it changes who is assignable, so
-             it is configuration, not a filter. -->
+        <!-- Project context: the title block, then the metric cards. Its
+             team lives on the People tab. -->
         <div class="flex flex-col gap-4 border-b border-line px-6 py-5 lg:px-8">
             <div>
                 <h1 class="text-[17px] font-semibold tracking-[-0.02em]">
@@ -334,6 +343,24 @@
                         {project.description}
                     </p>
                 {/if}
+                <p class="mt-1.5 text-[13px] text-fg-muted">
+                    {#if project.manager}
+                        Managed by <span class="text-fg"
+                            >{project.manager.name}</span
+                        >
+                    {:else}
+                        <span class="text-warn">No manager yet</span>
+                    {/if}
+                    {#if team}
+                        ·
+                        <button
+                            type="button"
+                            class="hover:text-fg"
+                            onclick={() => (activeTab = 'people')}
+                            >Team of {team.members.length}</button
+                        >
+                    {/if}
+                </p>
             </div>
 
             <ProjectSummaryStrip {tasks} {statuses} />
@@ -359,8 +386,15 @@
             {#if filteredTasks.length > 0}
                 <ListView {project} tasks={filteredTasks} {statuses} />
             {/if}
-        {:else if filteredTasks.length > 0}
-            <PeopleView {project} tasks={filteredTasks} {statuses} />
+        {:else}
+            {#if team}
+                <div class="border-b border-line px-6 py-6 lg:px-8">
+                    <ProjectTeamPanel {team} projectTitle={project.title} />
+                </div>
+            {/if}
+            {#if filteredTasks.length > 0}
+                <PeopleView {project} tasks={filteredTasks} {statuses} />
+            {/if}
         {/if}
     {/if}
 </AppShell>

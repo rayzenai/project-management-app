@@ -3,18 +3,19 @@
 namespace App\Queries;
 
 use App\Http\Resources\ProjectResource;
-use App\Http\Resources\TeamResource;
+use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\Team;
 use App\Support\WorkspaceAccess;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 /**
  * Assembles the project list payload shared by the Inertia web index and the
- * JSON API index. Single source of truth for visibility scoping, active/archived
- * filtering, the archived-count badge, and the create-form context.
+ * JSON API index: each project with its manager, team size and how its work
+ * stands (the page groups them by manager), the archived-count badge, and
+ * the create-form context.
  */
 class ProjectIndexQuery
 {
@@ -25,15 +26,23 @@ class ProjectIndexQuery
     {
         $user = $request->user();
         $archivedView = $request->boolean('archived');
+        $today = CarbonImmutable::today();
 
         $projects = Project::query()
             ->visibleTo($user)
-            ->with('organization:id,name')
+            ->with(['organization:id,name', 'teams' => fn ($q) => $q->withCount('members')->with('leaders')])
             ->when($archivedView, fn ($q) => $q->archived(), fn ($q) => $q->active())
             ->withCount([
                 'tasks',
                 'tasks as done_tasks_count' => fn ($q) => $q->whereIn('status', Task::completeStatuses()),
+                'tasks as overdue_tasks_count' => fn ($q) => $q
+                    ->whereNotIn('status', [...Task::completeStatuses(), 'failed'])
+                    ->whereNotNull('deadline_at')
+                    ->where('deadline_at', '<', $today),
             ])
+            ->withMin(['tasks as next_deadline_at' => fn ($q) => $q
+                ->whereNotIn('status', Task::completeStatuses())
+                ->where('deadline_at', '>=', $today)], 'deadline_at')
             ->orderBy('title')
             ->get();
 
@@ -44,29 +53,36 @@ class ProjectIndexQuery
             $rows[$i]['percent_complete'] = $total === 0
                 ? 0
                 : (int) round((int) $project->done_tasks_count / $total * 100);
+            $rows[$i]['open_tasks_count'] = $total - (int) $project->done_tasks_count;
+            $rows[$i]['overdue_tasks_count'] = (int) $project->overdue_tasks_count;
+            $next = $project->getAttribute('next_deadline_at');
+            $rows[$i]['next_deadline_at'] = $next === null ? null : CarbonImmutable::parse((string) $next)->toIso8601String();
         }
 
-        // Teams the creator may give access to: any (filtered client-side by
-        // the chosen organization) for a super-admin, their organization's for
-        // an office admin, otherwise the teams they lead.
+        $isSuperAdmin = WorkspaceAccess::isSuperAdmin($user);
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
-        $assignableTeams = Team::query()
-            ->when(! WorkspaceAccess::isSuperAdmin($user), fn ($q) => $q->where(fn ($q) => $q
-                ->whereIn('id', WorkspaceAccess::ledTeamIds($user))
-                ->when($officeAdminOf !== null, fn ($q) => $q->orWhere('organization_id', $officeAdminOf))))
-            ->with('organization:id,name')
+        $canCreate = WorkspaceAccess::canCreateProject($user);
+
+        // Who may manage a new project: active people of the organization it
+        // lands in (a super-admin's list is narrowed by the chosen one).
+        $managerCandidates = ! $canCreate ? [] : Member::query()
+            ->active()
+            ->whereNotNull('organization_id')
+            ->when(! $isSuperAdmin, fn ($q) => $q->where('organization_id', $officeAdminOf))
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'email', 'title', 'organization_id'])
+            ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'title' => $m->title, 'organization_id' => $m->organization_id])
+            ->all();
 
         return [
             'projects' => $rows,
             'archivedView' => $archivedView,
             'archivedCount' => Project::query()->visibleTo($user)->archived()->count(),
-            'assignableTeams' => TeamResource::collection($assignableTeams)->resolve(),
-            'canCreate' => WorkspaceAccess::canCreateProject($user),
-            'isSuperAdmin' => WorkspaceAccess::isSuperAdmin($user),
-            'canPublish' => WorkspaceAccess::isSuperAdmin($user) || $officeAdminOf !== null,
-            'organizations' => WorkspaceAccess::isSuperAdmin($user)
+            'managerCandidates' => $managerCandidates,
+            'canCreate' => $canCreate,
+            'isSuperAdmin' => $isSuperAdmin,
+            'canPublish' => $isSuperAdmin || $officeAdminOf !== null,
+            'organizations' => $isSuperAdmin
                 ? Organization::query()->orderBy('name')->get(['id', 'name'])->map(fn (Organization $o): array => ['id' => $o->id, 'name' => $o->name])->all()
                 : [],
         ];

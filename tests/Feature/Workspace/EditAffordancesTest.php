@@ -5,7 +5,6 @@ namespace Tests\Feature\Workspace;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
-use Database\Factories\OrganizationFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -87,33 +86,5 @@ class EditAffordancesTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame('IDMC Plan', $project->refresh()->title);
-    }
-
-    public function test_super_admin_can_update_team_name_and_description(): void
-    {
-        $team = Team::create(['name' => 'IT', 'description' => 'Original.', 'organization_id' => OrganizationFactory::defaultId()]);
-
-        $this->actingAs($this->superAdmin())
-            ->patch(route('workspace.teams.update', ['team' => $team->id]), [
-                'name' => 'IT & Digital',
-                'description' => 'Runs the systems.',
-            ])
-            ->assertRedirect();
-
-        $team->refresh();
-
-        $this->assertSame('IT & Digital', $team->name);
-        $this->assertSame('Runs the systems.', $team->description);
-    }
-
-    public function test_non_super_admin_cannot_update_a_team(): void
-    {
-        $team = Team::create(['name' => 'IT', 'organization_id' => OrganizationFactory::defaultId()]);
-
-        $this->actingAs(User::factory()->withMember()->create())
-            ->patch(route('workspace.teams.update', ['team' => $team->id]), ['name' => 'Hijacked'])
-            ->assertForbidden();
-
-        $this->assertSame('IT', $team->refresh()->name);
     }
 }

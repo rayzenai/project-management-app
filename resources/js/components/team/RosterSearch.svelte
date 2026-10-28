@@ -1,10 +1,15 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { Search } from '@lucide/svelte';
-    import type { Team } from '../../lib/types';
+    import type { Id } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
 
-    let { team }: { team: Team } = $props();
+    let {
+        team,
+    }: {
+        /** The team to add to; outsiders are offered when it is cross-organization. */
+        team: { id: Id; name: string; is_cross_organization?: boolean };
+    } = $props();
 
     interface Candidate {
         id: number;

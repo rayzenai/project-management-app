@@ -23,10 +23,14 @@ the same `app/Services/Workspace/*` action service.
 - **Error:** `{ "message": string, "errors": { field: message } }` — `401`
   unauthenticated, `403` forbidden, `404` not found, `422` validation.
 - **Authorization** is enforced server-side via `App\Support\WorkspaceAccess`
-  (three tiers: super-admin → team-leader → member). Clients mirror role gating
-  in the UI only.
-- **Project visibility:** a project is visible to a user iff `is_public` OR the
-  user's member is in a team attached to the project OR the user is a super-admin.
+  (super-admin → office admin → project manager → member). Clients mirror role
+  gating in the UI only.
+- **Projects and teams:** every project has exactly one team of its own, made
+  with it, and that team's one leader is the project's **manager**. People on
+  several projects sit on several project teams.
+- **Project visibility:** a project is visible to a user iff it is public within
+  their organization, OR the user is on its team, OR they are its organization's
+  office admin, OR a super-admin.
   Implemented as `Project::scopeVisibleTo($user)` and enforced on the project
   index, project/task `show` (403 otherwise), dashboard, My Workspace, search,
   and the quick-add picker.
@@ -83,11 +87,12 @@ Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/workspace/projects` | list — visibility-scoped. `?archived=1` for archived |
-| POST | `/workspace/projects` | create. `team_ids: int[]` (required & non-empty **unless** `is_public`; all from the project's organization; leaders may only attach teams they lead) and `is_public: bool` (office admin / super-admin; public means everyone in its organization, ignored from others). A super-admin sends `organization_id`; otherwise it is the office admin's organization or that of the leader's teams |
+| GET | `/workspace/projects` | each project also carries `manager { id, name, title }`, `team { id, is_cross_organization, members_count }`, `percent_complete`, `open_tasks_count`, `overdue_tasks_count`, `next_deadline_at`; plus `managerCandidates` for the create form |
+| POST | `/workspace/projects` | create (office admin or super-admin). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization). A super-admin sends `organization_id`; otherwise it is the office admin's organization |
 | GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller |
-| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. For leaders of its teams, its office admin and super-admins (`project.can_view_progress`) |
-| PATCH | `/workspace/projects/{slug}` | update. Same `team_ids` / `is_public` rules as create |
-| PATCH | `/workspace/projects/{slug}/archive` | soft-archive (leader of an attached team, its office admin, or a super-admin) |
+| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. For its manager, its office admin and super-admins (`project.can_view_progress`) |
+| PATCH | `/workspace/projects/{slug}` | update (its manager, office admin or super-admin). `manager_id` (office admin / super-admin; the old manager stays on the team), `is_public` (office admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team); dropped silently for anyone else. The team keeps the project's title |
+| PATCH | `/workspace/projects/{slug}/archive` | soft-archive (its manager, its office admin, or a super-admin) |
 | PATCH | `/workspace/projects/{slug}/restore` | un-archive |
 
 ## Tasks
@@ -158,9 +163,9 @@ Mentions are stored canonically as `@[Display Name](member:ID)`; the resolved
 
 ## Organizations *(super-admin only)*
 
-Every team, project and member (except super-admins) belongs to one
+Every project (and its team) and member (except super-admins) belongs to one
 organization. Everything below is scoped to what the caller may see: a member
-sees their teams and teammates, a leader the same plus their teams' rosters and
+sees their projects and teammates, a manager the same plus their projects'
 progress, an office admin their whole organization, a super-admin everything.
 
 | Method | Path | Body / notes |
@@ -170,20 +175,18 @@ progress, an office admin their whole organization, a super-admin everything.
 | PATCH | `/workspace/organizations/{organization}` | `name` |
 | DELETE | `/workspace/organizations/{organization}` | 422 unless it has no people, teams or projects |
 
-## Teams *(create/edit/delete/leaders: office admin of its organization or super-admin; roster: also its leaders)*
+## Project teams *(roster: the project's manager, its office admin or a super-admin; choosing the manager: office admin or super-admin)*
+
+A team is made with its project and never on its own; `GET /workspace/projects/{slug}`
+returns it as `team { id, is_cross_organization, members: [{ id, name, email, title, organization, is_active, is_manager, can_remove }], can_manage, can_choose_manager }`.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/team` | `{ teams (each with roster), members, organizations, canCreateTeam, canCreateMember }`; super-admin may add `?organization=` |
-| POST | `/workspace/teams` | `name`, `description`; super-admin also `organization_id` (required), `is_cross_organization` |
-| PATCH | `/workspace/teams/{team}` | `name`, `description`; `is_cross_organization` (super-admin only; refused while outsiders are on it) |
-| DELETE | `/workspace/teams/{team}` | |
-| POST | `/workspace/teams/{team}/restore` | |
+| GET | `/workspace/team` | the People directory: `{ teams (each with its project and roster), members, organizations, canCreateMember }`; super-admin may add `?organization=` |
 | GET | `/workspace/teams/{team}/candidates?q=` | up to 8 people who can join (min 2 characters): its organization, or anyone for a cross-organization team |
 | POST | `/workspace/teams/{team}/members` | `member_id` (an existing person; 422 if they can't join) |
-| DELETE | `/workspace/teams/{team}/members/{member}` | leaders can't remove another leader |
-| PATCH | `/workspace/teams/{team}/members/{member}` | `role`: `member` or `leader` (office admin / super-admin) |
-| GET | `/workspace/teams/{team}/progress` | `{ data: { team, members, tasks, activity, generated_at } }` for its leaders, office admin and super-admins |
+| DELETE | `/workspace/teams/{team}/members/{member}` | 422 for the manager: make someone else manager first |
+| PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member); `role: member` on the manager is a 422 |
 
 ## Members *(create/edit/delete: office admin of their organization or super-admin)*
 
@@ -208,8 +211,8 @@ created and `message` says so. `PATCH` accepts `organization_id` and
 Finish-to-start, within one project: the task cannot start until the other is
 finished. Loops are refused. Task payloads carry `dependencies` and `dependents`
 (each `{ id, slug, title, item_number, status, status_label, is_complete,
-is_late, deadline_at, completed_at }`), and the team progress payload gives each
-task `depends_on: int[]`.
+is_late, deadline_at, completed_at }`), and the project progress payload gives
+each task `depends_on: int[]`.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
@@ -221,7 +224,7 @@ task `depends_on: int[]`.
 Any system that can send HTTPS requests can drive the workspace through the JSON
 API above. It acts **as a user**, so authorization follows that user's role: give
 it a dedicated service account (a normal user, created via the seeder or the
-member UI) and add that account to the teams whose projects it should touch, or
+member UI) and add that account to the teams of the projects it should touch, or
 list its email in `PM_SUPER_ADMINS` if it needs everything.
 
 ### 1. Issue a token

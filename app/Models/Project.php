@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $updated_at
  * @property-read int|null $tasks_count
  * @property-read int|null $done_tasks_count
+ * @property-read int|null $overdue_tasks_count
  * @property-read non-empty-string $code
  */
 class Project extends Model
@@ -108,11 +109,48 @@ class Project extends Model
     }
 
     /**
+     * The link to the project's team. The pivot is unique on both sides, so a
+     * project has exactly one team and a team serves exactly one project;
+     * the visibility scopes query through this relation.
+     *
      * @return BelongsToMany<Team, $this>
      */
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class)->withTimestamps();
+    }
+
+    /**
+     * The project's own team, created with it.
+     */
+    public function team(): ?Team
+    {
+        return $this->teams->first();
+    }
+
+    /**
+     * The project's team, made now if it has none yet (named after it, in
+     * its organization).
+     */
+    public function ensureTeam(): Team
+    {
+        $team = $this->team();
+
+        if ($team === null) {
+            $team = Team::create(['name' => $this->title, 'organization_id' => $this->organization_id]);
+            $this->teams()->attach($team->id);
+            $this->unsetRelation('teams');
+        }
+
+        return $team;
+    }
+
+    /**
+     * The project's manager: its team's one leader, if one has been chosen.
+     */
+    public function manager(): ?Member
+    {
+        return $this->team()?->leaders->first();
     }
 
     /**

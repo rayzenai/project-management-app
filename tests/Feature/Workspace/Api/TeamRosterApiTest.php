@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Member;
-use App\Models\Organization;
 use App\Models\Team;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
@@ -27,37 +26,6 @@ function apiLeaderOf(Team $team): User
 
     return $user;
 }
-
-it('forbids a plain member from creating a team', function () {
-    Sanctum::actingAs(User::factory()->create(), ['*']);
-
-    $this->postJson('/api/v1/workspace/teams', ['name' => 'Sneaky'])->assertForbidden();
-
-    expect(Team::query()->where('name', 'Sneaky')->exists())->toBeFalse();
-});
-
-it('forbids a plain member from deleting a team', function () {
-    Sanctum::actingAs(User::factory()->create(), ['*']);
-    $team = Team::factory()->create();
-
-    $this->deleteJson("/api/v1/workspace/teams/{$team->id}")->assertForbidden();
-
-    expect(Team::query()->find($team->id))->not->toBeNull();
-});
-
-it('lets a super-admin create and delete a team', function () {
-    apiSuperAdmin();
-
-    $this->postJson('/api/v1/workspace/teams', ['name' => 'Field Ops', 'organization_id' => Organization::factory()->create()->id])
-        ->assertCreated()
-        ->assertJsonStructure(['message', 'data']);
-
-    $team = Team::query()->where('name', 'Field Ops')->firstOrFail();
-
-    $this->deleteJson("/api/v1/workspace/teams/{$team->id}")->assertOk();
-
-    expect(Team::query()->find($team->id))->toBeNull();
-});
 
 it('lets a leader manage the roster of their own team', function () {
     $team = Team::factory()->create();
@@ -85,16 +53,6 @@ it('forbids a leader from managing the roster of a team they do not lead', funct
         ->assertForbidden();
 
     expect($foreign->fresh()->members()->whereKey($member->id)->exists())->toBeFalse();
-});
-
-it('forbids a non-super-admin leader from renaming their team', function () {
-    $team = Team::factory()->create(['name' => 'Original']);
-    apiLeaderOf($team);
-
-    $this->patchJson("/api/v1/workspace/teams/{$team->id}", ['name' => 'Hacked'])
-        ->assertForbidden();
-
-    expect($team->fresh()->name)->toBe('Original');
 });
 
 it('forbids a leader from choosing leaders (the office admin does)', function () {

@@ -2,16 +2,16 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Team;
+use App\Models\Member;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * A project belongs to one organization: the one a super-admin picks, an
- * office admin's own, or, for a team leader, the organization of the teams
- * they give access to. Every team on it must belong to that organization.
+ * A project belongs to one organization (the one a super-admin picks, or an
+ * office admin's own) and is created with its team, led by the manager
+ * chosen here: an active person of that organization.
  */
 class StoreProjectRequest extends FormRequest
 {
@@ -35,8 +35,7 @@ class StoreProjectRequest extends FormRequest
                 Rule::requiredIf(fn (): bool => WorkspaceAccess::isSuperAdmin($this->user())),
                 'nullable', 'integer', Rule::exists('organizations', 'id'),
             ],
-            'team_ids' => ['array'],
-            'team_ids.*' => ['integer', Rule::exists('teams', 'id')->whereNull('deleted_at')],
+            'manager_id' => ['required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
         ];
     }
 
@@ -47,29 +46,10 @@ class StoreProjectRequest extends FormRequest
                 return;
             }
 
-            $teamIds = $this->teamIds();
-            $organizationId = $this->organizationId();
+            $manager = Member::query()->find($this->integer('manager_id'));
 
-            if (! $this->isPublic() && $teamIds === []) {
-                $validator->errors()->add('team_ids', 'Select at least one team, or make the project public.');
-
-                return;
-            }
-
-            $teams = Team::query()->whereIn('id', $teamIds)->get();
-
-            if ($teams->contains(fn (Team $team): bool => (int) $team->organization_id !== $organizationId)) {
-                $validator->errors()->add('team_ids', "Teams must belong to the project's organization.");
-
-                return;
-            }
-
-            if (! WorkspaceAccess::administers($this->user(), $organizationId)) {
-                $led = WorkspaceAccess::ledTeamIds($this->user());
-
-                if (array_diff($teamIds, $led) !== []) {
-                    $validator->errors()->add('team_ids', 'You can only grant access to teams you lead.');
-                }
+            if ($manager === null || ! $manager->is_active || (int) $manager->organization_id !== $this->organizationId()) {
+                $validator->errors()->add('manager_id', "The manager must be an active person of the project's organization.");
             }
         });
     }
@@ -80,33 +60,7 @@ class StoreProjectRequest extends FormRequest
             return $this->integer('organization_id') ?: null;
         }
 
-        $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($this->user());
-
-        if ($officeAdminOf !== null) {
-            return $officeAdminOf;
-        }
-
-        $teamOrganization = Team::query()->whereIn('id', $this->teamIds())->value('organization_id');
-
-        return $teamOrganization === null ? null : (int) $teamOrganization;
-    }
-
-    /**
-     * Public means open to the whole organization, so only its office admin
-     * or a super-admin may publish.
-     */
-    private function isPublic(): bool
-    {
-        return $this->boolean('is_public')
-            && WorkspaceAccess::canPublishProject($this->user(), $this->organizationId());
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function teamIds(): array
-    {
-        return array_values(array_map('intval', (array) $this->input('team_ids', [])));
+        return WorkspaceAccess::officeAdminOrganizationId($this->user());
     }
 
     public function validated($key = null, $default = null): mixed
@@ -114,7 +68,8 @@ class StoreProjectRequest extends FormRequest
         $data = parent::validated();
         $data['organization_id'] = $this->organizationId();
 
-        if (! $this->isPublic()) {
+        // Public opens it to the whole organization: its administrators' call.
+        if (! $this->boolean('is_public') || ! WorkspaceAccess::canPublishProject($this->user(), $this->organizationId())) {
             unset($data['is_public']);
         }
 

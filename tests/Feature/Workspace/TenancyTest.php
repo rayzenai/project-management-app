@@ -141,47 +141,56 @@ it('lets a super-admin see everything and narrow the team page to one organizati
 
 // ---- Teams ----
 
-it('keeps an office admin\'s new team in their own organization and never cross-organization', function () {
+it('keeps an office admin\'s new project and its team in their own organization, never cross-organization', function () {
+    $manager = Member::factory()->create(['organization_id' => $this->orgA->id]);
+
     $this->actingAs(tenancyOfficeAdmin($this->orgA))
-        ->post('/workspace/teams', ['name' => 'Desk', 'organization_id' => $this->orgB->id, 'is_cross_organization' => true])
+        ->post('/workspace/projects', ['title' => 'Desk', 'manager_id' => $manager->id, 'organization_id' => $this->orgB->id, 'is_cross_organization' => true])
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
-    $team = Team::query()->where('name', 'Desk')->firstOrFail();
+    $project = Project::query()->where('title', 'Desk')->firstOrFail();
 
-    expect($team->organization_id)->toBe($this->orgA->id)
-        ->and($team->is_cross_organization)->toBeFalse();
+    expect($project->organization_id)->toBe($this->orgA->id)
+        ->and($project->team()->organization_id)->toBe($this->orgA->id)
+        ->and($project->team()->is_cross_organization)->toBeFalse();
 });
 
-it('forbids an office admin from touching another organization\'s team', function () {
-    $foreign = tenancyTeam($this->orgB, ['name' => 'Theirs']);
+it('forbids an office admin from touching another organization\'s project or choosing its manager', function () {
+    $foreign = Project::factory()->create(['organization_id' => $this->orgB->id, 'title' => 'Theirs']);
+    $team = $foreign->ensureTeam();
+    $person = Member::factory()->create(['organization_id' => $this->orgB->id]);
+    $team->members()->attach($person->id);
     $this->actingAs(tenancyOfficeAdmin($this->orgA));
 
-    $this->patch("/workspace/teams/{$foreign->id}", ['name' => 'Mine now'])->assertForbidden();
-    $this->delete("/workspace/teams/{$foreign->id}")->assertForbidden();
+    $this->patch("/workspace/projects/{$foreign->slug}", ['title' => 'Mine now'])->assertForbidden();
+    $this->patch("/workspace/teams/{$team->id}/members/{$person->id}", ['role' => 'leader'])->assertForbidden();
 
-    expect($foreign->fresh()->name)->toBe('Theirs');
+    expect($foreign->fresh()->title)->toBe('Theirs')
+        ->and($foreign->fresh()->manager())->toBeNull();
 });
 
-it('lets only a super-admin switch a team to cross-organization', function () {
-    $team = tenancyTeam($this->orgA);
+it('lets only a super-admin open a project\'s team to other organizations', function () {
+    $project = Project::factory()->create(['organization_id' => $this->orgA->id]);
 
     $this->actingAs(tenancyOfficeAdmin($this->orgA))
-        ->patch("/workspace/teams/{$team->id}", ['is_cross_organization' => true]);
-    expect($team->fresh()->is_cross_organization)->toBeFalse();
+        ->patch("/workspace/projects/{$project->slug}", ['is_cross_organization' => true]);
+    expect($project->fresh()->ensureTeam()->is_cross_organization)->toBeFalse();
 
     $this->actingAs(tenancyBoss())
-        ->patch("/workspace/teams/{$team->id}", ['is_cross_organization' => true])
+        ->patch("/workspace/projects/{$project->slug}", ['is_cross_organization' => true])
         ->assertSessionHasNoErrors();
-    expect($team->fresh()->is_cross_organization)->toBeTrue();
+    expect($project->fresh()->team()->is_cross_organization)->toBeTrue();
 });
 
-it('will not switch cross-organization off while outsiders are on the team', function () {
-    $team = tenancyTeam($this->orgA, ['is_cross_organization' => true]);
+it('will not close a project\'s team to other organizations while outsiders are on it', function () {
+    $project = Project::factory()->create(['organization_id' => $this->orgA->id]);
+    $team = $project->ensureTeam();
+    $team->update(['is_cross_organization' => true]);
     $team->members()->attach(Member::factory()->create(['organization_id' => $this->orgB->id])->id);
 
     $this->actingAs(tenancyBoss())
-        ->patch("/workspace/teams/{$team->id}", ['is_cross_organization' => false])
+        ->patch("/workspace/projects/{$project->slug}", ['is_cross_organization' => false])
         ->assertSessionHasErrors('is_cross_organization');
 
     expect($team->fresh()->is_cross_organization)->toBeTrue();
@@ -235,22 +244,22 @@ it('refuses the candidate search to anyone who cannot manage the roster', functi
     $this->actingAs(tenancyOfficeAdmin($this->orgB))->getJson("/workspace/teams/{$team->id}/candidates?q=si")->assertForbidden();
 });
 
-it('lets a leader take a member off the team but not another leader', function () {
-    $leader = tenancyPerson($this->orgA);
+it('lets a manager take a member off the team, but nobody takes the manager off', function () {
+    $manager = tenancyPerson($this->orgA);
     $team = tenancyTeam($this->orgA);
-    $team->members()->attach(tenancyMemberOf($leader)->id, ['role' => 'leader']);
-    $coLeader = Member::factory()->create(['organization_id' => $this->orgA->id]);
+    $team->members()->attach(tenancyMemberOf($manager)->id, ['role' => 'leader']);
     $plain = Member::factory()->create(['organization_id' => $this->orgA->id]);
-    $team->members()->attach([$coLeader->id => ['role' => 'leader'], $plain->id => ['role' => 'member']]);
+    $team->members()->attach($plain->id);
 
-    $this->actingAs($leader);
-    $this->delete("/workspace/teams/{$team->id}/members/{$coLeader->id}")->assertForbidden();
+    $this->actingAs($manager);
     $this->delete("/workspace/teams/{$team->id}/members/{$plain->id}")->assertRedirect();
+    $this->delete("/workspace/teams/{$team->id}/members/".tenancyMemberOf($manager)->id)->assertForbidden();
 
     $this->actingAs(tenancyOfficeAdmin($this->orgA))
-        ->delete("/workspace/teams/{$team->id}/members/{$coLeader->id}")->assertRedirect();
+        ->delete("/workspace/teams/{$team->id}/members/".tenancyMemberOf($manager)->id)
+        ->assertSessionHasErrors('member');
 
-    expect($team->members()->pluck('members.id')->all())->toBe([tenancyMemberOf($leader)->id]);
+    expect($team->members()->pluck('members.id')->all())->toBe([tenancyMemberOf($manager)->id]);
 });
 
 it('lets an office admin choose leaders only in their own organization', function () {
@@ -357,35 +366,33 @@ it('will not move a person to another organization while they sit on its teams',
 it('takes the office admin\'s powers away while they are deactivated', function () {
     $admin = tenancyOfficeAdmin($this->orgA);
     tenancyMemberOf($admin)->update(['is_active' => false]);
+    $manager = Member::factory()->create(['organization_id' => $this->orgA->id]);
 
-    $this->actingAs($admin)->post('/workspace/teams', ['name' => 'Ghost'])->assertForbidden();
+    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Ghost', 'manager_id' => $manager->id])->assertForbidden();
 });
 
 // ---- Projects ----
 
-it('puts a leader\'s new project in their teams\' organization, unpublished', function () {
-    $leader = tenancyPerson($this->orgA);
-    $team = tenancyTeam($this->orgA);
-    $team->members()->attach(tenancyMemberOf($leader)->id, ['role' => 'leader']);
+it('leaves creating projects to office admins, not to project managers', function () {
+    $manager = tenancyPerson($this->orgA);
+    tenancyTeam($this->orgA)->members()->attach(tenancyMemberOf($manager)->id, ['role' => 'leader']);
 
-    $this->actingAs($leader)->post('/workspace/projects', [
-        'title' => 'Leader Project', 'team_ids' => [$team->id], 'is_public' => true, 'organization_id' => $this->orgB->id,
-    ])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post('/workspace/projects', [
+        'title' => 'Manager Project', 'manager_id' => tenancyMemberOf($manager)->id,
+    ])->assertForbidden();
 
-    $project = Project::query()->where('title', 'Leader Project')->firstOrFail();
-
-    expect($project->organization_id)->toBe($this->orgA->id)
-        ->and($project->is_public)->toBeFalse();
+    expect(Project::query()->where('title', 'Manager Project')->exists())->toBeFalse();
 });
 
-it('lets an office admin publish within their organization but not borrow another\'s team', function () {
+it('lets an office admin publish within their organization but not hand a project to another\'s person', function () {
     $admin = tenancyOfficeAdmin($this->orgA);
-    $foreignTeam = tenancyTeam($this->orgB);
+    $own = Member::factory()->create(['organization_id' => $this->orgA->id]);
+    $foreign = Member::factory()->create(['organization_id' => $this->orgB->id]);
 
-    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Notice Board', 'is_public' => true])
+    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Notice Board', 'is_public' => true, 'manager_id' => $own->id])
         ->assertSessionHasNoErrors();
-    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Borrowed', 'team_ids' => [$foreignTeam->id]])
-        ->assertSessionHasErrors('team_ids');
+    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Borrowed', 'manager_id' => $foreign->id])
+        ->assertSessionHasErrors('manager_id');
 
     expect(Project::query()->where('title', 'Notice Board')->firstOrFail())
         ->organization_id->toBe($this->orgA->id)
@@ -393,18 +400,21 @@ it('lets an office admin publish within their organization but not borrow anothe
         ->and(Project::query()->where('title', 'Borrowed')->exists())->toBeFalse();
 });
 
-it('makes a super-admin name the organization and match its teams', function () {
-    $teamB = tenancyTeam($this->orgB);
+it('makes a super-admin name the organization and pick its manager from it', function () {
+    $managerB = Member::factory()->create(['organization_id' => $this->orgB->id]);
     $this->actingAs(tenancyBoss());
 
-    $this->post('/workspace/projects', ['title' => 'Nowhere', 'team_ids' => [$teamB->id]])
+    $this->post('/workspace/projects', ['title' => 'Nowhere', 'manager_id' => $managerB->id])
         ->assertSessionHasErrors('organization_id');
-    $this->post('/workspace/projects', ['title' => 'Mismatch', 'team_ids' => [$teamB->id], 'organization_id' => $this->orgA->id])
-        ->assertSessionHasErrors('team_ids');
-    $this->post('/workspace/projects', ['title' => 'Right', 'team_ids' => [$teamB->id], 'organization_id' => $this->orgB->id])
+    $this->post('/workspace/projects', ['title' => 'Mismatch', 'manager_id' => $managerB->id, 'organization_id' => $this->orgA->id])
+        ->assertSessionHasErrors('manager_id');
+    $this->post('/workspace/projects', ['title' => 'Right', 'manager_id' => $managerB->id, 'organization_id' => $this->orgB->id])
         ->assertSessionHasNoErrors();
 
-    expect(Project::query()->where('title', 'Right')->firstOrFail()->organization_id)->toBe($this->orgB->id);
+    $project = Project::query()->where('title', 'Right')->firstOrFail();
+
+    expect($project->organization_id)->toBe($this->orgB->id)
+        ->and($project->manager()?->id)->toBe($managerB->id);
 });
 
 // ---- Crossing over ----
@@ -499,16 +509,23 @@ it('never lets an office admin give a login to a person carrying a super-admin\'
     expect(User::query()->where('email', 'second.boss@example.com')->exists())->toBeFalse();
 });
 
-it('lists only the project\'s organization\'s teams on a project page', function () {
+it('shows a project\'s own team on its page, manager first', function () {
     $admin = tenancyOfficeAdmin($this->orgA);
-    $mine = tenancyTeam($this->orgA, ['name' => 'Ours']);
-    tenancyTeam($this->orgB, ['name' => 'Theirs']);
     $project = Project::factory()->create(['organization_id' => $this->orgA->id]);
-    $project->teams()->attach($mine->id);
+    $team = $project->ensureTeam();
+    $team->members()->attach([
+        Member::factory()->create(['organization_id' => $this->orgA->id, 'name' => 'Aarav Member'])->id => ['role' => 'member'],
+        Member::factory()->create(['organization_id' => $this->orgA->id, 'name' => 'Zoya Manager'])->id => ['role' => 'leader'],
+    ]);
 
     $this->actingAs($admin)->get("/workspace/projects/{$project->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('teams', fn ($teams) => collect($teams)->pluck('name')->all() === ['Ours']));
+            ->where('team.members', fn ($members) => collect($members)->map(fn ($m) => [$m['name'], $m['is_manager'], $m['can_remove']])->all() === [
+                ['Zoya Manager', true, false],
+                ['Aarav Member', false, true],
+            ])
+            ->where('team.can_choose_manager', true)
+            ->where('project.manager.name', 'Zoya Manager'));
 });
 
 it('drops mentions of people who cannot see the task before storing them', function () {

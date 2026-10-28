@@ -89,26 +89,32 @@ thin method to **both** controllers and a route in **both** route files.
 
 `app/Support/WorkspaceAccess.php` is the single source of truth. The app is
 multi-tenant: an **organization** (an office or ministry) is the tenant
-boundary. Four tiers:
+boundary. Every project has exactly one team of its own (made with it,
+never on its own), and that team's one leader is the project's **manager**.
+Office roles (senior dev, QA, ...) are not modeled: a person's free-text
+`title` carries them. Four tiers:
 
 1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
    Belongs to no organization. Manages organizations and everything in them;
-   the only one who can make a team cross-organization or a person an office
-   admin.
+   the only one who can open a project's team to other organizations or make
+   a person an office admin.
 2. **Office admin**: a member with `is_office_admin` (and `is_active`). Full
-   control inside their own organization: creates its teams and people, picks
-   team leaders, sees every project, can publish projects (public means
-   "everyone in this organization").
-3. **Team leader**: `member_team.role = 'leader'`. Manages the roster of the
-   teams they lead by searching people (`TeamCandidatesQuery`: their
-   organization, or anyone for a cross-organization team) and sees those
-   teams' progress page. Never edits people, never chooses leaders.
-4. **Member**: sees their teams, teammates and those teams' projects (plus
-   their organization's public projects); manages own subtasks and notes.
+   control inside their own organization: creates its people and projects,
+   chooses each project's manager, sees every project, can publish projects
+   (public means "everyone in this organization").
+3. **Project manager**: `member_team.role = 'leader'` on a project's team (a
+   partial unique index allows one per team). Edits and archives their
+   projects, manages their teams' rosters by searching people
+   (`TeamCandidatesQuery`: their organization, or anyone for a
+   cross-organization team) and sees their projects' progress. Never edits
+   people, never chooses managers, never creates projects.
+4. **Member**: sees their projects and teammates (plus their organization's
+   public projects); manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
-`officeAdminOrganizationId`, `administers`, `canCreateTeam`, `canEditTeam`,
-`canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`, `canViewTeamProgress`,
+`officeAdminOrganizationId`, `administers`, `canEditTeam` (choose the
+manager), `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
+`canViewTeamProgress`, `canViewProjectProgress`,
 `canCreateMember`, `canManageMember`, `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canManageProjectAccess`,
 `canPublishProject`, `ledTeamIds`. Visibility scopes: `Project`, `Team` and
@@ -117,16 +123,21 @@ Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
 
 Privilege-escalation protections — do not regress:
 
-- Nothing crosses organizations except through a cross-organization team.
-  `canJoinTeam` gates every roster add; teams on a project must share its
-  organization; a person cannot change organization while on its teams.
+- Nothing crosses organizations except through a cross-organization project
+  team. `canJoinTeam` gates every roster add and every new manager; a
+  project's team shares its organization; a person cannot change
+  organization while on its teams.
+- `project_team` is unique on both columns and `member_team` holds one
+  `leader` per team: never attach a second team to a project or a second
+  leader to a team; appoint through `AppointProjectManagerService`. The
+  manager cannot be removed or demoted, only replaced.
 - `canManageMember` blocks a super-admin's linked login and other office
-  admins; leaders manage no people at all (so a cross-organization leader can
-  never reset an outsider's password).
+  admins; managers manage no people at all (so a cross-organization manager
+  can never reset an outsider's password).
 - Organization, office-admin flag and bulk team reassignment on a member are
   super-admin only (`UpdateMemberRequest::authorize()` 403s otherwise);
-  `is_cross_organization` and `is_public` are silently dropped for anyone not
-  allowed to set them. Read them through the FormRequest's `validated()`, not
+  `manager_id`, `is_cross_organization` and `is_public` on a project are
+  silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
   `safe()`, which bypasses those overrides.
 - Mentions only notify people who can view the task's project.
 
@@ -157,12 +168,15 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   (none only for a super-admin's own member), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
   `scopeAssignableFor(Project)` is the single source of truth for assignees.
-- **Team** — auto-slugged; belongs to its home organization;
-  `is_cross_organization`; pivot `member_team` with `role`. Its progress page
-  (`TeamProgressQuery`: workload, Gantt, activity; polled every 15s) is a
-  report, as is a project's (`ProjectProgressQuery`, for whoever passes
-  `canViewProjectProgress`); both build on `ProgressReport` and render
-  `components/ProgressReport.svelte`. `components/team/GanttChart.svelte` selects, and
+- **Team** — a project's own (`Project::team()`, `ensureTeam()`,
+  `manager()`; `Team::project()`), named after it; auto-slugged; belongs to
+  its organization; `is_cross_organization`; pivot `member_team` with `role`.
+  Managed from the project's People tab (`ProjectTeamPanel.svelte`); the
+  Team page is the People directory. A project's progress page
+  (`ProjectProgressQuery` on `ProgressReport`, for whoever passes
+  `canViewProjectProgress`; old team progress links redirect there) is a
+  report polled every 15s: `components/ProgressReport.svelte`,
+  `components/team/GanttChart.svelte` selects, and
   `TaskReportDrawer.svelte` shows the task read-only (never the editable Peek). **ProjectActivity** —
   polymorphic audit log written only by observers. **WorkspaceNote** — personal
   stickies. **ProjectAssignment / ProjectNote / ProjectContact / TaskComment** —

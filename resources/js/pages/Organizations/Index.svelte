@@ -187,9 +187,6 @@
                                             'person',
                                             'people',
                                         )} · {count(
-                                            organization.teams_count,
-                                            'team',
-                                        )} · {count(
                                             organization.projects_count,
                                             'project',
                                         )}</span

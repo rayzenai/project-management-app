@@ -1,17 +1,11 @@
 <script lang="ts">
-    import { inertia, page, router, useForm } from '@inertiajs/svelte';
-    import { ChartGantt, Copy, RefreshCw } from '@lucide/svelte';
+    import { page, router, useForm } from '@inertiajs/svelte';
+    import { Copy, RefreshCw } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
-    import RosterSearch from '../../components/team/RosterSearch.svelte';
     import { writeToClipboard } from '../../lib/clipboard';
     import { toast } from '../../lib/toast.svelte';
-    import type {
-        Member,
-        OrganizationOption,
-        RosterEntry,
-        Team,
-    } from '../../lib/types';
+    import type { Member, OrganizationOption, Team } from '../../lib/types';
 
     let {
         teams,
@@ -19,7 +13,6 @@
         organizations = [],
         organizationFilter = null,
         officeAdminOrganization = null,
-        canCreateTeam = false,
         canCreateMember = false,
     }: {
         teams: Team[];
@@ -27,7 +20,6 @@
         organizations?: OrganizationOption[];
         organizationFilter?: number | null;
         officeAdminOrganization?: OrganizationOption | null;
-        canCreateTeam?: boolean;
         canCreateMember?: boolean;
     } = $props();
 
@@ -35,7 +27,7 @@
         (page.props as any).isSuperAdmin ?? false,
     );
 
-    /** The organization new teams and people land in when it is not chosen. */
+    /** The organization new people land in when it is not chosen. */
     const defaultOrganizationId = $derived(
         organizationFilter ??
             (organizations.length === 1 ? organizations[0].id : null),
@@ -45,100 +37,6 @@
         router.get('/workspace/team', value ? { organization: value } : {}, {
             preserveScroll: true,
         });
-    }
-
-    // ---- Teams ----
-    let creatingTeam = $state(false);
-    let editingTeamId = $state<number | null>(null);
-
-    const teamForm = useForm({
-        name: '',
-        description: '',
-        organization_id: null as number | null,
-        is_cross_organization: false,
-    });
-    const teamEditForm = useForm({
-        name: '',
-        description: '',
-        is_cross_organization: false,
-    });
-
-    function openTeamForm() {
-        creatingTeam = !creatingTeam;
-        teamForm.organization_id = defaultOrganizationId;
-    }
-
-    function createTeam(e: SubmitEvent) {
-        e.preventDefault();
-
-        if (!teamForm.name.trim()) {
-            return;
-        }
-
-        teamForm.post('/workspace/teams', {
-            preserveScroll: true,
-            onSuccess: () => {
-                teamForm.reset();
-                creatingTeam = false;
-            },
-        });
-    }
-
-    function startEditTeam(team: Team) {
-        editingTeamId = team.id;
-        teamEditForm.name = team.name;
-        teamEditForm.description = team.description ?? '';
-        teamEditForm.is_cross_organization =
-            team.is_cross_organization ?? false;
-    }
-
-    function saveTeam(e: SubmitEvent, team: Team) {
-        e.preventDefault();
-
-        if (!teamEditForm.name.trim()) {
-            return;
-        }
-
-        teamEditForm
-            .transform((data) =>
-                isSuperAdmin
-                    ? data
-                    : { name: data.name, description: data.description },
-            )
-            .patch(`/workspace/teams/${team.id}`, {
-                preserveScroll: true,
-                onSuccess: () => (editingTeamId = null),
-            });
-    }
-
-    function deleteTeam(team: Team) {
-        if (
-            !confirm(
-                `Delete team "${team.name}"? Members are kept; only the grouping is removed.`,
-            )
-        ) {
-            return;
-        }
-
-        router.delete(`/workspace/teams/${team.id}`, { preserveScroll: true });
-    }
-
-    function removeFromTeam(team: Team, entry: RosterEntry) {
-        router.delete(`/workspace/teams/${team.id}/members/${entry.id}`, {
-            preserveScroll: true,
-        });
-    }
-
-    function setTeamRole(
-        team: Team,
-        entry: RosterEntry,
-        role: 'member' | 'leader',
-    ) {
-        router.patch(
-            `/workspace/teams/${team.id}/members/${entry.id}`,
-            { role },
-            { preserveScroll: true },
-        );
     }
 
     // ---- People ----
@@ -310,6 +208,7 @@
         });
     }
 
+    // The projects a person works on: each project's team carries its name.
     const memberTeamNames = $derived((member: Member) =>
         teams
             .filter((t) => (member.team_ids ?? []).includes(t.id))
@@ -319,7 +218,7 @@
     const managesPeople = $derived(isSuperAdmin || canCreateMember);
 </script>
 
-<svelte:head><title>Team · Workspace</title></svelte:head>
+<svelte:head><title>People · Workspace</title></svelte:head>
 
 {#snippet organizationSelect(
     id: string,
@@ -346,7 +245,7 @@
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
-            <span class="truncate font-medium">Team</span>
+            <span class="truncate font-medium">People</span>
             {#if officeAdminOrganization}
                 <span class="truncate text-fg-muted"
                     >· {officeAdminOrganization.name}</span
@@ -370,15 +269,6 @@
                     {/each}
                 </select>
             {/if}
-            {#if canCreateTeam}
-                <button
-                    type="button"
-                    class="btn"
-                    aria-expanded={creatingTeam}
-                    onclick={openTeamForm}
-                    >{creatingTeam ? 'Cancel' : 'New team'}</button
-                >
-            {/if}
             {#if canCreateMember}
                 <button
                     type="button"
@@ -392,85 +282,6 @@
     {/snippet}
 
     <div class="space-y-8">
-        {#if canCreateTeam && creatingTeam}
-            <form onsubmit={createTeam} class="panel max-w-lg space-y-3 p-4">
-                <h2 class="section-title">New team</h2>
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="team-name">Name</label>
-                    <input
-                        id="team-name"
-                        type="text"
-                        bind:value={teamForm.name}
-                        required
-                        class="input"
-                    />
-                    {#if teamForm.errors.name}
-                        <p class="text-xs text-danger">
-                            {teamForm.errors.name}
-                        </p>
-                    {/if}
-                </div>
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="team-description"
-                        >Description (optional)</label
-                    >
-                    <input
-                        id="team-description"
-                        type="text"
-                        bind:value={teamForm.description}
-                        class="input"
-                    />
-                </div>
-                {#if isSuperAdmin}
-                    <div class="flex flex-col gap-1">
-                        <label class="label" for="team-organization"
-                            >Organization</label
-                        >
-                        {@render organizationSelect(
-                            'team-organization',
-                            teamForm.organization_id,
-                            (v) => (teamForm.organization_id = v),
-                        )}
-                        {#if teamForm.errors.organization_id}
-                            <p class="text-xs text-danger">
-                                {teamForm.errors.organization_id}
-                            </p>
-                        {/if}
-                    </div>
-                    <label class="flex items-start gap-2 text-[13px] text-fg">
-                        <input
-                            type="checkbox"
-                            class="mt-0.5"
-                            bind:checked={teamForm.is_cross_organization}
-                        />
-                        <span>
-                            Cross-organization
-                            <span class="block text-xs text-fg-muted"
-                                >Its leaders can add people from any
-                                organization.</span
-                            >
-                        </span>
-                    </label>
-                {:else if officeAdminOrganization}
-                    <p class="text-xs text-fg-muted">
-                        The team belongs to {officeAdminOrganization.name}.
-                    </p>
-                {/if}
-                <div class="flex justify-end gap-1.5">
-                    <button
-                        type="button"
-                        class="btn-ghost"
-                        onclick={() => (creatingTeam = false)}>Cancel</button
-                    >
-                    <button
-                        type="submit"
-                        disabled={teamForm.processing || !teamForm.name.trim()}
-                        class="btn-primary">Create team</button
-                    >
-                </div>
-            </form>
-        {/if}
-
         {#if canCreateMember && addingMember}
             <form onsubmit={addMember} class="panel max-w-2xl space-y-3 p-4">
                 <h2 class="section-title">Add person</h2>
@@ -634,241 +445,6 @@
                 </div>
             </div>
         {/if}
-
-        <!-- Teams -->
-        <section>
-            <h2 class="section-title mb-2">
-                {managesPeople ? 'Teams' : 'Your teams'}
-                <span class="section-count">{teams.length}</span>
-            </h2>
-
-            {#if teams.length === 0 && !creatingTeam}
-                <p class="border-t border-line py-3 text-xs text-fg-muted">
-                    {canCreateTeam
-                        ? 'No teams yet. Projects are shared with teams, so start with one.'
-                        : 'You are not on a team yet.'}
-                </p>
-            {/if}
-
-            {#each teams as team (team.id)}
-                <div class="border-t border-line py-3">
-                    {#if editingTeamId === team.id}
-                        <form
-                            onsubmit={(e) => saveTeam(e, team)}
-                            class="max-w-lg space-y-3"
-                        >
-                            <div class="flex flex-col gap-1">
-                                <label
-                                    class="label"
-                                    for={`team-${team.id}-name`}>Name</label
-                                >
-                                <input
-                                    id={`team-${team.id}-name`}
-                                    type="text"
-                                    bind:value={teamEditForm.name}
-                                    required
-                                    class="input"
-                                    onkeydown={(e) => {
-                                        if (e.key === 'Escape') {
-                                            editingTeamId = null;
-                                        }
-                                    }}
-                                />
-                                {#if teamEditForm.errors.name}
-                                    <p class="text-xs text-danger">
-                                        {teamEditForm.errors.name}
-                                    </p>
-                                {/if}
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <label
-                                    class="label"
-                                    for={`team-${team.id}-description`}
-                                    >Description (optional)</label
-                                >
-                                <input
-                                    id={`team-${team.id}-description`}
-                                    type="text"
-                                    bind:value={teamEditForm.description}
-                                    class="input"
-                                />
-                            </div>
-                            {#if isSuperAdmin}
-                                <label
-                                    class="flex items-start gap-2 text-[13px] text-fg"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        class="mt-0.5"
-                                        bind:checked={
-                                            teamEditForm.is_cross_organization
-                                        }
-                                    />
-                                    <span>
-                                        Cross-organization
-                                        <span
-                                            class="block text-xs text-fg-muted"
-                                            >Its leaders can add people from any
-                                            organization.</span
-                                        >
-                                    </span>
-                                </label>
-                                {#if teamEditForm.errors.is_cross_organization}
-                                    <p class="text-xs text-danger">
-                                        {teamEditForm.errors
-                                            .is_cross_organization}
-                                    </p>
-                                {/if}
-                            {/if}
-                            <div class="flex justify-end gap-1.5">
-                                <button
-                                    type="button"
-                                    class="btn-ghost"
-                                    onclick={() => (editingTeamId = null)}
-                                    >Cancel</button
-                                >
-                                <button
-                                    type="submit"
-                                    disabled={teamEditForm.processing ||
-                                        !teamEditForm.name.trim()}
-                                    class="btn-primary">Save</button
-                                >
-                            </div>
-                        </form>
-                    {:else}
-                        <div
-                            class="flex flex-wrap items-center gap-x-3 gap-y-1"
-                        >
-                            <h3 class="section-title min-w-0">
-                                <span class="truncate">{team.name}</span>
-                                <span class="section-count">
-                                    {team.roster?.length ?? 0} member{(team
-                                        .roster?.length ?? 0) === 1
-                                        ? ''
-                                        : 's'}
-                                </span>
-                            </h3>
-                            {#if team.is_cross_organization}
-                                <span class="chip">Cross-organization</span>
-                            {/if}
-                            {#if isSuperAdmin && team.organization}
-                                <span class="truncate text-xs text-fg-faint"
-                                    >{team.organization}</span
-                                >
-                            {/if}
-                            {#if team.description}
-                                <span
-                                    class="min-w-0 truncate text-xs text-fg-muted"
-                                    >{team.description}</span
-                                >
-                            {/if}
-                            <div
-                                class="ml-auto flex shrink-0 items-center gap-1"
-                            >
-                                {#if team.can_view_progress}
-                                    <a
-                                        href={`/workspace/teams/${team.id}/progress`}
-                                        use:inertia
-                                        class="btn-ghost"
-                                        ><ChartGantt
-                                            class="h-3.5 w-3.5"
-                                        />Progress</a
-                                    >
-                                {/if}
-                                {#if team.can_edit}
-                                    <button
-                                        type="button"
-                                        class="btn-ghost"
-                                        onclick={() => startEditTeam(team)}
-                                        >Edit</button
-                                    >
-                                    <button
-                                        type="button"
-                                        aria-label={`Delete ${team.name}`}
-                                        class="btn-danger"
-                                        onclick={() => deleteTeam(team)}
-                                        >Delete</button
-                                    >
-                                {/if}
-                            </div>
-                        </div>
-                    {/if}
-
-                    <div class="mt-2">
-                        {#each team.roster ?? [] as entry (entry.id)}
-                            <div
-                                class={`row min-h-10 px-2 py-1 ${entry.is_active ? '' : 'opacity-60'}`}
-                            >
-                                <Avatar name={entry.name} size="md" />
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="truncate font-medium text-fg"
-                                            >{entry.name}</span
-                                        >
-                                        {#if entry.role === 'leader' && !team.can_edit}
-                                            <span class="chip chip-accent"
-                                                >Leader</span
-                                            >
-                                        {/if}
-                                    </div>
-                                    <div class="truncate text-xs text-fg-muted">
-                                        {[
-                                            entry.title || entry.email,
-                                            team.is_cross_organization
-                                                ? entry.organization
-                                                : null,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ')}
-                                    </div>
-                                </div>
-                                <div class="flex shrink-0 items-center gap-1">
-                                    {#if team.can_edit}
-                                        <select
-                                            class="input h-7 w-auto py-0"
-                                            aria-label={`Role of ${entry.name} in ${team.name}`}
-                                            value={entry.role}
-                                            onchange={(e) =>
-                                                setTeamRole(
-                                                    team,
-                                                    entry,
-                                                    e.currentTarget.value as
-                                                        'member' | 'leader',
-                                                )}
-                                        >
-                                            <option value="member"
-                                                >Member</option
-                                            >
-                                            <option value="leader"
-                                                >Leader</option
-                                            >
-                                        </select>
-                                    {/if}
-                                    {#if entry.can_remove}
-                                        <button
-                                            type="button"
-                                            class="btn-ghost"
-                                            onclick={() =>
-                                                removeFromTeam(team, entry)}
-                                            >Remove</button
-                                        >
-                                    {/if}
-                                </div>
-                            </div>
-                        {/each}
-                        {#if (team.roster ?? []).length === 0}
-                            <p class="px-2 py-1 text-xs text-fg-muted">
-                                Nobody on this team yet.
-                            </p>
-                        {/if}
-                        {#if team.can_manage_roster}
-                            <RosterSearch {team} />
-                        {/if}
-                    </div>
-                </div>
-            {/each}
-        </section>
 
         <!-- People -->
         <section>

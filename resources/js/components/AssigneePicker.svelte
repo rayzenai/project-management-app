@@ -22,6 +22,14 @@
     let query = $state('');
     let rootEl = $state<HTMLDivElement | null>(null);
     let triggerEl = $state<HTMLDivElement | null>(null);
+    let searchEl = $state<HTMLInputElement | null>(null);
+
+    // Opening the list puts the cursor in its search field: type to narrow.
+    $effect(() => {
+        if (open) {
+            searchEl?.focus();
+        }
+    });
 
     /**
      * `restoreFocus` matters: the search field lives inside the list, so closing
@@ -144,10 +152,21 @@
         >
             <div class="px-1 pt-1 pb-1.5">
                 <input
+                    bind:this={searchEl}
                     type="text"
                     bind:value={query}
                     placeholder="Search people"
                     class="input"
+                    onkeydown={(e) => {
+                        // Enter takes the first match instead of submitting the form.
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+
+                            if (filtered[0]) {
+                                toggle(filtered[0].id);
+                            }
+                        }
+                    }}
                 />
             </div>
             <ul class="max-h-56 overflow-auto">

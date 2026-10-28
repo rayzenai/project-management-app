@@ -11,9 +11,10 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Http\Request;
 
 /**
- * Assembles the team roster payload shared by the Inertia web index and the
- * JSON API index. Single source of truth for the teams + members assembly,
- * scoped to what the caller may see (Team / Member `visibleTo`).
+ * Assembles the People page payload shared by the Inertia web index and the
+ * JSON API index: the people the caller may see, and the project teams they
+ * may see (each a project's own, carrying that project), scoped through
+ * Team / Member `visibleTo`.
  *
  * Each team carries its own `roster` so a cross-organization team can show
  * its outside members without putting them in the caller's people list.
@@ -34,7 +35,7 @@ class TeamIndexQuery
             ->visibleTo($user)
             ->when($organizationFilter, fn ($q) => $q->where('organization_id', $organizationFilter))
             ->withCount('members')
-            ->with(['members' => fn ($q) => $q->with('organization:id,name')->orderBy('name'), 'organization:id,name'])
+            ->with(['members' => fn ($q) => $q->with('organization:id,name')->orderBy('name'), 'organization:id,name', 'projects:id,slug,title,archived_at'])
             ->orderBy('name')
             ->get();
 
@@ -50,6 +51,12 @@ class TeamIndexQuery
         foreach ($teams as $i => $team) {
             $canEdit = WorkspaceAccess::canEditTeam($user, $team);
             $canManageRoster = WorkspaceAccess::canManageRosterOf($user, $team);
+            $project = $team->project();
+            $teamRows[$i]['project'] = $project === null ? null : [
+                'slug' => $project->slug,
+                'title' => $project->title,
+                'is_archived' => $project->archived_at !== null,
+            ];
 
             $teamRows[$i]['roster'] = $team->members->map(function (Member $member) use ($canEdit, $canManageRoster): array {
                 /** @var object{role: string} $pivot */
@@ -64,9 +71,8 @@ class TeamIndexQuery
                     'organization' => $member->organization?->name,
                     'is_active' => (bool) $member->is_active,
                     'role' => $isLeader ? 'leader' : 'member',
-                    // Leaders are the office admin's call: a leader may take
-                    // members off the team but not another leader.
-                    'can_remove' => $canEdit || ($canManageRoster && ! $isLeader),
+                    // The manager leaves only once someone else manages.
+                    'can_remove' => ! $isLeader && ($canEdit || $canManageRoster),
                 ];
             })->values()->all();
         }
@@ -83,7 +89,6 @@ class TeamIndexQuery
             'officeAdminOrganization' => $officeAdminOf === null
                 ? null
                 : Organization::query()->whereKey($officeAdminOf)->first(['id', 'name'])?->only(['id', 'name']),
-            'canCreateTeam' => WorkspaceAccess::canCreateTeam($user),
             'canCreateMember' => $isSuperAdmin || $officeAdminOf !== null,
         ];
     }

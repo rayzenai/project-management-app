@@ -1,16 +1,13 @@
 <script lang="ts">
     import { useForm } from '@inertiajs/svelte';
-    import type { Project, Team } from '../../lib/types';
+    import type { Project } from '../../lib/types';
 
     let {
         project,
-        teams = [],
         isSuperAdmin = false,
         onclose,
     }: {
         project: Project;
-        /** Every team in the workspace; the attached ones scope the assignee picker. */
-        teams?: Team[];
         isSuperAdmin?: boolean;
         onclose: () => void;
     } = $props();
@@ -27,7 +24,7 @@
             description: project.description ?? '',
             description_np: project.description_np ?? '',
             is_public: project.is_public ?? false,
-            team_ids: [...(project.team_ids ?? [])],
+            is_cross_organization: project.team?.is_cross_organization ?? false,
         };
     }
 
@@ -101,40 +98,20 @@
         {/if}
     </div>
 
-    {#if teams.length > 0}
-        <div class="flex flex-col gap-1.5">
-            <span class="label">Teams</span>
-            <p class="text-xs text-fg-faint">
-                Attached teams scope who can be assigned. With none attached,
-                everyone is assignable.
-            </p>
-            <div class="flex flex-wrap items-center gap-1.5">
-                {#each teams as team (team.id)}
-                    {@const attached = form.team_ids.includes(team.id)}
-                    <button
-                        type="button"
-                        aria-pressed={attached}
-                        class={`btn ${attached ? 'border-accent/40 bg-accent-soft text-accent hover:bg-accent-soft' : ''}`}
-                        onclick={() =>
-                            (form.team_ids = attached
-                                ? form.team_ids.filter((id) => id !== team.id)
-                                : [...form.team_ids, team.id])}
-                    >
-                        {team.name}
-                    </button>
-                {/each}
-            </div>
-            {#if form.errors.team_ids}
-                <p class="text-xs text-danger">{form.errors.team_ids}</p>
-            {/if}
-        </div>
-    {/if}
-
     {#if isSuperAdmin}
         <label class="flex items-center gap-2 text-fg-muted">
             <input type="checkbox" bind:checked={form.is_public} />
             Public (visible to everyone)
         </label>
+        <label class="flex items-center gap-2 text-fg-muted">
+            <input type="checkbox" bind:checked={form.is_cross_organization} />
+            Its team can take people from other organizations
+        </label>
+        {#if form.errors.is_cross_organization}
+            <p class="text-xs text-danger">
+                {form.errors.is_cross_organization}
+            </p>
+        {/if}
     {/if}
 
     <div class="flex items-center justify-end gap-1.5">

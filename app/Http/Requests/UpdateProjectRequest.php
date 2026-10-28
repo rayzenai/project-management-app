@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
 use App\Support\WorkspaceAccess;
@@ -9,6 +10,12 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
+/**
+ * Its manager edits the project's details. Choosing the manager and making
+ * it public belong to whoever administers its organization; letting people
+ * from other organizations onto its team is a super-admin's call. Anyone
+ * else's values for those are dropped (read them through `validated()`).
+ */
 class UpdateProjectRequest extends FormRequest
 {
     public function authorize(): bool
@@ -30,45 +37,78 @@ class UpdateProjectRequest extends FormRequest
             'description' => ['sometimes', 'nullable', 'string'],
             'description_np' => ['sometimes', 'nullable', 'string'],
             'is_public' => ['sometimes', 'nullable', 'boolean'],
-            'team_ids' => ['sometimes', 'array'],
-            'team_ids.*' => ['integer', Rule::exists('teams', 'id')->whereNull('deleted_at')],
+            'manager_id' => ['sometimes', 'required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
+            'is_cross_organization' => ['sometimes', 'boolean'],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            /** @var Project $project */
-            $project = $this->route('project');
-
-            if ($validator->errors()->isNotEmpty() || ! $this->has('team_ids')) {
+            if ($validator->errors()->isNotEmpty()) {
                 return;
             }
 
-            $teamIds = array_values(array_map('intval', (array) $this->input('team_ids', [])));
-            $foreign = Team::query()->whereIn('id', $teamIds)->where('organization_id', '!=', $project->organization_id)->exists();
+            $project = $this->project();
+            $current = $project->team();
+            // The team as it will be after this request, for who may join it.
+            $team = new Team([
+                'organization_id' => $project->organization_id,
+                'is_cross_organization' => $this->crossOrganization($current),
+            ]);
 
-            if ($foreign) {
-                $validator->errors()->add('team_ids', "Teams must belong to the project's organization.");
+            if ($this->has('manager_id') && WorkspaceAccess::administers($this->user(), $project->organization_id)) {
+                $manager = Member::query()->with('user')->find($this->integer('manager_id'));
 
-                return;
+                if ($manager === null || ! $manager->is_active || ! WorkspaceAccess::canJoinTeam($manager, $team)) {
+                    $validator->errors()->add('manager_id', "The manager must be an active person who can join the project's team.");
+
+                    return;
+                }
             }
 
-            if (! WorkspaceAccess::administers($this->user(), $project->organization_id)
-                && array_diff($teamIds, WorkspaceAccess::ledTeamIds($this->user())) !== []) {
-                $validator->errors()->add('team_ids', 'You can only grant access to teams you lead.');
+            foreach ($current?->members()->with('user')->get() ?? [] as $member) {
+                if (! WorkspaceAccess::canJoinTeam($member, $team)) {
+                    $validator->errors()->add('is_cross_organization', "{$member->name} belongs to another organization. Take them off the team first.");
+
+                    return;
+                }
             }
         });
+    }
+
+    private function project(): Project
+    {
+        /** @var Project $project */
+        $project = $this->route('project');
+
+        return $project;
+    }
+
+    private function crossOrganization(?Team $team): bool
+    {
+        if (WorkspaceAccess::isSuperAdmin($this->user()) && $this->has('is_cross_organization')) {
+            return $this->boolean('is_cross_organization');
+        }
+
+        return (bool) $team?->is_cross_organization;
     }
 
     public function validated($key = null, $default = null): mixed
     {
         $data = parent::validated();
-        /** @var Project $project */
-        $project = $this->route('project');
+        $project = $this->project();
 
         if (! WorkspaceAccess::canPublishProject($this->user(), $project->organization_id)) {
             unset($data['is_public']);
+        }
+
+        if (! WorkspaceAccess::administers($this->user(), $project->organization_id)) {
+            unset($data['manager_id']);
+        }
+
+        if (! WorkspaceAccess::isSuperAdmin($this->user())) {
+            unset($data['is_cross_organization']);
         }
 
         return data_get($data, $key, $default);

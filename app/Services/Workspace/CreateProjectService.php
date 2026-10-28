@@ -2,13 +2,20 @@
 
 namespace App\Services\Workspace;
 
+use App\Models\Member;
 use App\Models\Project;
 use App\Support\ServiceResult;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
+/**
+ * Creates a project together with its team, led by its manager.
+ */
 class CreateProjectService
 {
+    public function __construct(private AppointProjectManagerService $appoint) {}
+
     /**
      * @param  array<string, mixed>  $attributes
      */
@@ -20,19 +27,26 @@ class CreateProjectService
         }
 
         try {
-            $project = Project::create([
-                'organization_id' => $attributes['organization_id'],
-                'title' => $title,
-                'slug' => $this->uniqueSlug($title),
-                'title_np' => $attributes['title_np'] ?? null,
-                'description' => $attributes['description'] ?? null,
-                'description_np' => $attributes['description_np'] ?? null,
-                'is_public' => (bool) ($attributes['is_public'] ?? false),
-            ]);
+            $project = DB::transaction(function () use ($attributes, $title): Project {
+                $project = Project::create([
+                    'organization_id' => $attributes['organization_id'],
+                    'title' => $title,
+                    'slug' => $this->uniqueSlug($title),
+                    'title_np' => $attributes['title_np'] ?? null,
+                    'description' => $attributes['description'] ?? null,
+                    'description_np' => $attributes['description_np'] ?? null,
+                    'is_public' => (bool) ($attributes['is_public'] ?? false),
+                ]);
 
-            if (array_key_exists('team_ids', $attributes)) {
-                $project->teams()->sync($attributes['team_ids'] ?? []);
-            }
+                $team = $project->ensureTeam();
+                $manager = Member::query()->find((int) ($attributes['manager_id'] ?? 0));
+
+                if ($manager !== null) {
+                    $this->appoint->execute($team, $manager);
+                }
+
+                return $project;
+            });
 
             return ServiceResult::success($project, 'Project created.');
         } catch (Throwable $e) {

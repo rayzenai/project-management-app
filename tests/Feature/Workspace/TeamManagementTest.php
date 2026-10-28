@@ -28,48 +28,6 @@ it('renders the team page with teams, members, and linkable users', function () 
             ->where('members.0.name', 'Sita Sharma'));
 });
 
-it('creates a team with members', function () {
-    $member = Member::factory()->create();
-
-    $this->post('/workspace/teams', ['name' => 'Field Ops', 'member_ids' => [$member->id], 'organization_id' => OrganizationFactory::defaultId()])
-        ->assertRedirect();
-
-    $team = Team::query()->where('name', 'Field Ops')->firstOrFail();
-
-    expect($team->slug)->toBe('field-ops')
-        ->and($team->members()->pluck('members.id')->all())->toBe([$member->id]);
-});
-
-it('rejects a team without a name', function () {
-    $this->from('/workspace/team')
-        ->post('/workspace/teams', ['name' => ''])
-        ->assertSessionHasErrors('name');
-});
-
-it('renames a team and syncs its members', function () {
-    $team = Team::factory()->create(['name' => 'Old']);
-    $keep = Member::factory()->create();
-    $drop = Member::factory()->create();
-    $team->members()->attach([$keep->id, $drop->id]);
-
-    $this->patch("/workspace/teams/{$team->id}", ['name' => 'New Name', 'member_ids' => [$keep->id]])
-        ->assertRedirect();
-
-    expect($team->fresh()->name)->toBe('New Name')
-        ->and($team->members()->pluck('members.id')->all())->toBe([$keep->id]);
-});
-
-it('deletes a team without deleting its members', function () {
-    $team = Team::factory()->create();
-    $member = Member::factory()->create();
-    $team->members()->attach($member->id);
-
-    $this->delete("/workspace/teams/{$team->id}")->assertRedirect();
-
-    expect(Team::query()->find($team->id))->toBeNull()
-        ->and(Member::query()->find($member->id))->not->toBeNull();
-});
-
 it('creates a member with a working login', function () {
     $team = Team::factory()->create();
 
@@ -167,31 +125,27 @@ it('deletes a member and its login together', function () {
         ->and(User::query()->find($user->id))->toBeNull();
 });
 
-it('syncs project teams and narrows the assignable set', function () {
-    $project = Project::factory()->create();
-    $team = Team::factory()->create();
+it('narrows who can be assigned to the project\'s team, which keeps the project\'s name', function () {
+    $project = Project::factory()->create(['title' => 'Old Title']);
     $inTeam = Member::factory()->create(['name' => 'Ana']);
-    $team->members()->attach($inTeam->id);
+    $project->ensureTeam()->members()->attach($inTeam->id);
     Member::factory()->create(['name' => 'Outsider']);
 
-    $this->patch("/workspace/projects/{$project->slug}", ['team_ids' => [$team->id]])
-        ->assertRedirect();
+    expect(Member::assignableFor($project)->pluck('name')->all())->toBe(['Ana']);
 
-    expect($project->teams()->pluck('teams.id')->all())->toBe([$team->id])
-        ->and(Member::assignableFor($project)->pluck('name')->all())->toBe(['Ana']);
+    $this->patch("/workspace/projects/{$project->slug}", ['title' => 'New Title'])->assertRedirect();
 
-    $this->patch("/workspace/projects/{$project->slug}", ['team_ids' => []])->assertRedirect();
-
-    expect($project->fresh()->teams()->count())->toBe(0);
+    expect($project->fresh()->team()->name)->toBe('New Title');
 });
 
-it('exposes project team ids on the project page', function () {
+it('exposes the project\'s team and manager on the project page', function () {
     $project = Project::factory()->create();
-    $team = Team::factory()->create();
-    $project->teams()->attach($team->id);
+    $manager = Member::factory()->create(['name' => 'Meera Manager']);
+    $project->ensureTeam()->members()->attach($manager->id, ['role' => 'leader']);
 
     $this->get("/workspace/projects/{$project->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('project.team_ids', [$team->id])
-            ->has('teams'));
+            ->where('project.team.id', $project->team()->id)
+            ->where('project.manager.name', 'Meera Manager')
+            ->where('team.members.0.is_manager', true));
 });

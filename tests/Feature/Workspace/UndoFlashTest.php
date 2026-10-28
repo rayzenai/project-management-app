@@ -6,7 +6,6 @@ use App\Models\ProjectAssignment;
 use App\Models\ProjectNote;
 use App\Models\Subtask;
 use App\Models\Task;
-use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkspaceNote;
 
@@ -14,16 +13,6 @@ beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
     $this->admin = User::factory()->create(['email' => 'boss@example.com']);
     $this->actingAs($this->admin);
-});
-
-it('flashes an undo descriptor pointing at the team restore route', function () {
-    $team = Team::factory()->create();
-
-    $response = $this->delete("/workspace/teams/{$team->id}");
-
-    $response->assertRedirect();
-    $response->assertSessionHas('workspace_flash.undo.label', 'Undo');
-    $response->assertSessionHas('workspace_flash.undo.url', route('workspace.teams.restore', $team));
 });
 
 it('flashes an undo descriptor pointing at the member restore route', function () {

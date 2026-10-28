@@ -138,6 +138,14 @@ class Team extends Model
         return $this->belongsToMany(Project::class)->withTimestamps();
     }
 
+    /**
+     * The one project this team works on (see {@see Project::teams()}).
+     */
+    public function project(): ?Project
+    {
+        return $this->projects->first();
+    }
+
     protected static function newFactory(): TeamFactory
     {
         return TeamFactory::new();
