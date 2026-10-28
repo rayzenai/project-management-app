@@ -11,6 +11,7 @@ vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
 php artisan test --compact tests/Feature/Workspace   # scoped test runs
 php artisan db:seed --class=WorkspaceDemoSeeder      # demo data (non-prod)
+./deploy.sh                                          # SDOC web + scheduler (VPN required)
 ```
 
 `laravel/pao` rewrites pint/phpstan/pest output to JSON; on a PHP fatal the
@@ -25,12 +26,19 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
 - All role/permission checks route through `App\Support\WorkspaceAccess`; never
   re-implement inline. Changes to it require happy + failure +
   privilege-escalation tests.
+- Organizations are the tenant boundary. Nothing crosses them except membership
+  in a team explicitly marked cross-organization by a super-admin.
+- Sensitive capability-filtered fields (`organization_id`, office-admin/team
+  flags, project publication) must be read through the FormRequest's
+  overridden `validated()`, not `safe()`.
 - Audit trail written only by observers via `ProjectActivityRecorder`.
 - New polymorphic subjects must be added to the morph map in
   `AppServiceProvider` (strict morph map: `user`, `task`, `task-comment`, ...).
 - Slugs in routes, never numeric ids, for projects/tasks.
 - Never hardcode task status strings — derive from config
   (`Task::completeStatuses()`); lateness is derived, not a status.
+- The app and PostgreSQL connection are fixed to `Asia/Kathmandu`;
+  date/time behavior must not depend on a host or environment timezone.
 
 ## Frontend
 
@@ -46,3 +54,10 @@ Write once: FormRequest (authorize + validate) → action Service (ServiceResult
 → JsonResource. Then add a thin method to **both** controllers
 (`Workspace\...` and `Api\...`) and a route in **both** route files.
 `Api\SubtaskController` is the canonical reference.
+
+## Production
+
+`tasks.sdoc.gov.np` runs the Docker image in SDOC Dokploy as `tasks-web` plus
+`tasks-scheduler`; there is no queue worker (`QUEUE_CONNECTION=sync`). Deploys
+are manual because the panel is private: push `main`, then run `./deploy.sh`
+over the SDOC VPN. The script waits for build, rollout and `/up` health.

@@ -6,18 +6,24 @@ Single Inertia entry `resources/js/app.ts`; single root view
 ## Pages (`resources/js/pages`)
 
 `Home`, `MyWorkspace`, `PlanTracker`, `Auth/`, `Notifications/` (two tabs:
-personal inbox + workspace activity feed, `?tab=activity`), `Projects/Index`,
+personal inbox + workspace activity feed, `?tab=activity`),
+`Organizations/Index` (super-admin tenant CRUD), `Projects/Index`,
 `Projects/Show` (list/board/people views via `components/project/`),
-`Tasks/Show`, `Team/Index`. Pages wrap themselves in `AppShell` and supply the
-44px top bar through its `bar` snippet (breadcrumb left, actions right);
-`flush` drops content padding for full-bleed registers/boards. The sidebar
-collapses to an icon rail (`[` shortcut, persisted in localStorage).
+`Tasks/Show`, `Team/Index` (organization-aware directory/rosters), and
+`Team/Progress` (workload, Gantt, activity; polls every 15s while visible).
+Pages wrap themselves in `AppShell` and supply the 44px top bar through its
+`bar` snippet (breadcrumb left, actions right); `flush` drops content padding
+for full-bleed registers/boards. The sidebar collapses to an icon rail (`[`
+shortcut, persisted in localStorage); Organizations appears only for
+super-admins.
 
 ## Key components (`resources/js/components`)
 
 Primitives: `StatusGlyph` (ring / dashed ring / amber half disc / green check /
 red cross), `PriorityBars`, `Avatar` (squircle initials), `ProgressRing`.
-Shell + chrome: `AppShell`, `CommandPalette`, `Popover`, `Toasts`.
+Shell + chrome: `AppShell`, `CommandPalette`, `Popover`, `Toasts`, and
+`ThemeToggle` (top-bar light/dark switch that saves through preferences and
+uses `applyAppearance` for the immediate transition).
 Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 `lib/quickAddTokens.ts` (server twin: `App\Support\QuickAddParser`).
 Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
@@ -26,6 +32,9 @@ Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
 `DateChip`, `StatusChip/Badge`, `CompleteCheckbox`.
 Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
 `lib/notesBoard.svelte.ts`, `lib/noteColors.ts`.
+Teams: `team/RosterSearch` performs debounced server-side eligible-person
+search; `lib/clipboard.ts` provides Clipboard API + legacy fallback for copied
+login details.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
 TaskTableRow,ProjectFilters,ProjectSummaryStrip,ProjectEditForm,ColumnComposer}`.
 

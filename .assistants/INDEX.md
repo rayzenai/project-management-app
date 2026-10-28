@@ -1,14 +1,15 @@
 # .assistants — PMOPM project map
 
-- **generated-from:** `69bf56d24c423ab62f6aa27a42655412e03ab4fe`
+- **generated-from:** `c163e87e6454dbe266a97b693761907b81ab624e`
 
 Agent-readable map of this repo. Read alongside `CLAUDE.md` (binding rules);
 these files are orientation, not rules.
 
 **What this app is:** PMOPM — a standalone Laravel 13 + Inertia + Svelte 5
-project/task tracking workspace (projects → tasks → subtasks, teams, members,
-notes, contacts, activity log, in-app notifications, weekly digest, 100-point
-plan tracker) with a parallel Sanctum JSON API for external systems. The former
+multi-tenant project/task tracking workspace (organizations → teams/projects →
+tasks → subtasks, members, notes, contacts, activity log, in-app notifications,
+weekly digest, 100-point plan tracker) with a parallel Sanctum JSON API for
+external systems. The former
 `rayzenai/project-management` package is retired; all code lives under `App\`.
 
 ## Modules

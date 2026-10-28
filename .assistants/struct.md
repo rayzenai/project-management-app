@@ -12,15 +12,16 @@ app/
     Middleware/            # ShareWorkspaceData, EnsureProjectVisible, HandleInertiaRequests
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
     Resources/             # JsonResources ($wrap = null)
-  Mail/                    # weekly digest mailable
-  Models/                  # Project, Task, Subtask, Team, Member, User, TaskComment,
+  Mail/                    # weekly digest + new-member login-details mailables
+  Models/                  # Organization, Project, Task, Subtask, Team, Member, User, TaskComment,
                            # ProjectAssignment/Note/Contact/Activity/DigestSubscriber,
                            # WorkspaceNote, UserPreference
   Notifications/           # TaskAssigned, TaskStatusChanged, MentionedInComment,
                            # TaskDeadlineDue + Concerns/BuildsWorkspaceNotification
   Observers/               # six observers — sole writers of the activity log
   Providers/AppServiceProvider.php  # manage-workspace Gate, morph map, observer registry
-  Queries/                 # heavy read queries per page/endpoint (ProjectShowQuery, ...)
+  Queries/                 # heavy reads (ProjectShow, OrganizationIndex,
+                           # TeamIndex/Candidates/Progress, ...)
   Services/Workspace/      # action services returning ServiceResult (+ Concerns/NotifiesMentions)
   Support/                 # WorkspaceAccess (ALL role decisions), ServiceResult,
                            # QuickAddParser, MentionParser, ApiResponser
@@ -34,18 +35,24 @@ config/
   themes.php               # system/light/dark token sets
 database/
   migrations/              # all workspace tables (former package filenames preserved)
+                           # including Nepal-time shift + organization tenancy backfill
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
 resources/
   js/app.ts                # single Inertia entry
   js/pages/                # Home, MyWorkspace, PlanTracker, Auth/, Notifications/,
-                           # Projects/{Index,Show}, Tasks/Show, Team/Index
-  js/components/           # shared UI (AppShell, StatusGlyph, QuickAdd*, ...) + project/ views
-  js/lib/                  # applyTheme, quickAdd, toast, peek, types, utils
+                           # Organizations/Index, Projects/{Index,Show}, Tasks/Show,
+                           # Team/{Index,Progress}
+  js/components/           # shared UI (AppShell, ThemeToggle, StatusGlyph, QuickAdd*, ...)
+                           # plus project/ views and team/RosterSearch
+  js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils
   css/app.css              # --ws-* tokens, Tailwind @theme mapping, component classes
   views/app.blade.php      # single root view
+  views/emails/            # HTML + text login-details templates
 tests/
   Feature/Workspace/       # web-surface feature tests
   Feature/Workspace/Api/   # API-surface feature tests
   Unit/                    # parser units
 docs/api.md                # HTTP API reference + external-integration guide
+deploy.sh                  # SDOC Dokploy web/scheduler deploy + health verification
+Dockerfile, dock.sh        # production image and local image runner
 ```

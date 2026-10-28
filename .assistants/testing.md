@@ -7,7 +7,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 
 - `tests/Feature/Workspace/**` — web-surface feature tests (visibility,
   permissions, quick-add, notifications, soft-delete/restore, reminders,
-  seeder, plan tracker, appearance).
+  seeder, plan tracker, appearance, login-detail email, organizations,
+  team progress, multi-tenant isolation).
 - `tests/Feature/Workspace/Api/**` — API-surface twins (`AuthApiTest`,
   `ProjectApiTest`, `TaskApiTest`, `TaskCommentApiTest`, `MemberApiTest`,
   `TeamRosterApiTest`, `NotificationApiTest`, `RestoreApiTest`).
@@ -30,6 +31,9 @@ rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&1`.
 
 - Any change to `WorkspaceAccess` or an action service needs happy-path +
   failure-path + privilege-escalation tests.
+- Tenant changes must prove both isolation and the deliberate
+  cross-organization-team exception across super-admin, office-admin, leader
+  and member roles (`TenancyTest` is the broad regression suite).
 - New features touch both surfaces, so test both (web dir + Api dir).
 - Frontend gate: `npm run lint && npm run format && npm run types:check &&
   npm run build` (no JS test suite).
