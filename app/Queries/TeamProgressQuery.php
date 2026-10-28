@@ -20,7 +20,8 @@ use Illuminate\Support\Collection;
  * team's projects is not shown here.
  *
  * Gantt bars run from when a task was created to when it was finished, or to
- * its deadline while it is open. Tasks carry no planned start date.
+ * its deadline while it is open. Tasks carry no planned start date; the chart
+ * moves a waiting task's start to after the work it depends on (`depends_on`).
  */
 class TeamProgressQuery
 {
@@ -39,7 +40,7 @@ class TeamProgressQuery
 
         $tasks = Task::query()
             ->whereIn('project_id', $team->projects()->whereNull('archived_at')->select('projects.id'))
-            ->with(['project:id,slug,title', 'assignments.member:id,name'])
+            ->with(['project:id,slug,title', 'assignments.member:id,name', 'dependencies' => fn ($q) => $q->select('tasks.id')])
             ->orderBy('project_id')
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -105,6 +106,8 @@ class TeamProgressQuery
                 'end' => $end?->toDateString(),
                 'deadline_at' => $task->deadline_at?->toIso8601String(),
                 'completed_at' => $task->completed_at?->toIso8601String(),
+                // Finish-to-start: the ids of tasks this one waits for.
+                'depends_on' => $task->dependencies->pluck('id')->map(fn ($id): int => (int) $id)->values()->all(),
                 'assignees' => $task->assignments
                     ->map(fn (ProjectAssignment $a): array => [
                         'id' => $a->member_id,

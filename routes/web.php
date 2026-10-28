@@ -16,6 +16,7 @@ use App\Http\Controllers\Workspace\QuickAddController;
 use App\Http\Controllers\Workspace\SubtaskController;
 use App\Http\Controllers\Workspace\TaskCommentController;
 use App\Http\Controllers\Workspace\TaskController;
+use App\Http\Controllers\Workspace\TaskDependencyController;
 use App\Http\Controllers\Workspace\TaskPreviewController;
 use App\Http\Controllers\Workspace\TaskReorderController;
 use App\Http\Controllers\Workspace\TaskSearchController;
@@ -116,6 +117,8 @@ Route::middleware(['auth', ShareWorkspaceData::class])
 
             Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index'])->name('tasks.comments.index');
             Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store'])->name('tasks.comments.store');
+            Route::post('/tasks/{task}/dependencies', [TaskDependencyController::class, 'store'])->name('tasks.dependencies.store');
+            Route::delete('/tasks/{task}/dependencies/{dependsOn}', [TaskDependencyController::class, 'destroy'])->name('tasks.dependencies.destroy');
             Route::patch('/comments/{comment}', [TaskCommentController::class, 'update'])->name('comments.update');
             Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy'])->name('comments.destroy');
             Route::post('/comments/{comment}/restore', [TaskCommentController::class, 'restore'])->name('comments.restore')->withTrashed();

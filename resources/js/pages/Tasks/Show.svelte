@@ -17,6 +17,7 @@
     import PriorityFlag from '../../components/PriorityFlag.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
     import StatusChip from '../../components/StatusChip.svelte';
+    import TaskDependencies from '../../components/TaskDependencies.svelte';
     import { formatDate } from '../../lib/format';
     import type {
         Comment,
@@ -27,6 +28,7 @@
         Project,
         Subtask,
         Task,
+        TaskRef,
     } from '../../lib/types';
 
     let {
@@ -37,6 +39,7 @@
         subtasks,
         comments,
         team,
+        dependencyCandidates = [],
     }: {
         project: Project;
         task: Task;
@@ -45,6 +48,7 @@
         subtasks: Subtask[];
         comments: Comment[];
         team: Member[];
+        dependencyCandidates?: TaskRef[];
         statuses: { value: string; label: string }[];
     } = $props();
 
@@ -804,6 +808,13 @@
                     />
                 </dd>
             </dl>
+
+            <TaskDependencies
+                {task}
+                projectSlug={project.slug}
+                projectCode={project.code ?? ''}
+                candidates={dependencyCandidates}
+            />
 
             {#if hasPlan}
                 <h3 class="section-title mt-5 mb-1">Plan</h3>

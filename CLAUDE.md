@@ -145,6 +145,11 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   mutators; `Task::completeStatuses()` derives "finished" from the config
   `is_complete` flags — never hardcode status strings. Lateness is derived
   (`is_late`), not a status.
+- **TaskDependency** — finish-to-start (`task_id` waits for
+  `depends_on_task_id`), same project only, no loops
+  (`TaskDependency::reaches`); `Task::dependencies()` / `dependents()`;
+  logged by `TaskDependencyObserver`. The Gantt draws them as arrows and
+  `resources/js/lib/schedule.ts` moves waiting work after what it waits for.
 - **Subtask** — personal (`user_id`). **Member** — a person in one organization
   (none only for a super-admin's own member), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).

@@ -33,7 +33,7 @@ class TaskShowQuery
      */
     public function data(Project $project, Task $task, int $userId): array
     {
-        $task->load(['assignments.member', 'notes.user', 'contacts', 'project']);
+        $task->load(['assignments.member', 'notes.user', 'contacts', 'project', 'dependencies', 'dependents']);
 
         $team = Member::assignableFor($project)->get(['id', 'name', 'email', 'user_id']);
 
@@ -55,6 +55,9 @@ class TaskShowQuery
             'subtasks' => SubtaskResource::collection($mySubtasks)->resolve(),
             'comments' => TaskCommentResource::collection($comments)->resolve(),
             'team' => $team->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])->all(),
+            // What this task could be made to depend on: the rest of its project.
+            'dependencyCandidates' => $project->tasks()->whereKeyNot($task->id)->get()
+                ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
         ];
     }
 }

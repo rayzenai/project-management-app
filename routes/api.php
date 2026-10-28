@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\QuickAddController;
 use App\Http\Controllers\Api\SubtaskController;
 use App\Http\Controllers\Api\TaskCommentController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TaskDependencyController;
 use App\Http\Controllers\Api\TaskPreviewController;
 use App\Http\Controllers\Api\TaskReorderController;
 use App\Http\Controllers\Api\TaskSearchController;
@@ -116,6 +117,8 @@ Route::prefix('v1')->name('api.')->group(function () {
                 // Comments
                 Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index'])->name('tasks.comments.index');
                 Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store'])->name('tasks.comments.store');
+                Route::post('/tasks/{task}/dependencies', [TaskDependencyController::class, 'store'])->name('tasks.dependencies.store');
+                Route::delete('/tasks/{task}/dependencies/{dependsOn}', [TaskDependencyController::class, 'destroy'])->name('tasks.dependencies.destroy');
                 Route::patch('/comments/{comment}', [TaskCommentController::class, 'update'])->name('comments.update');
                 Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy'])->name('comments.destroy');
                 Route::post('/comments/{comment}/restore', [TaskCommentController::class, 'restore'])->name('comments.restore')->withTrashed();

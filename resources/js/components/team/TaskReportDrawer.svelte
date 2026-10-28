@@ -5,6 +5,14 @@
     import { SvelteMap } from 'svelte/reactivity';
     import { fly } from 'svelte/transition';
     import { formatTimeAgo } from '../../lib/format';
+    import {
+        DAY,
+        dayOf,
+        daysBetween,
+        planTasks,
+        startOfToday,
+        taskCode as codeOf,
+    } from '../../lib/schedule';
     import type {
         Assignment,
         Priority,
@@ -25,17 +33,20 @@
      */
     let {
         task,
+        tasks = [],
         statuses = [],
         refreshKey,
         onclose,
+        onselect,
     }: {
         task: ProgressTask | null;
+        /** Every task on the chart, to name the work this one waits for. */
+        tasks?: ProgressTask[];
         statuses?: Status[];
         refreshKey: string;
         onclose: () => void;
+        onselect?: (task: ProgressTask) => void;
     } = $props();
-
-    const DAY = 86_400_000;
 
     const cache = new SvelteMap<number, TaskPreview>();
     let preview = $state<TaskPreview | null>(null);
@@ -118,6 +129,50 @@
         }
     });
 
+    // ---- What it waits for, and what waits for it ----
+    const plans = $derived.by(() => planTasks(tasks, today));
+
+    const links = $derived.by(() => {
+        if (!task) {
+            return null;
+        }
+
+        const byId = (id: number) => tasks.find((t) => t.id === id);
+        const plan = plans[task.id];
+        const pick = (ids: number[]) =>
+            ids.map(byId).filter((t): t is ProgressTask => t !== undefined);
+
+        return {
+            dependsOn: pick(task.depends_on),
+            holdingUp: tasks.filter((t) => t.depends_on.includes(task.id)),
+            waitingOn: pick(plan?.waitingOn ?? []),
+            blockedBy: pick(plan?.blockedBy ?? []),
+            shifted: plan?.shifted ?? false,
+        };
+    });
+
+    function linkNote(other: ProgressTask): { text: string; tone: string } {
+        if (other.is_complete) {
+            return { text: 'Done', tone: 'text-success' };
+        }
+
+        if (other.is_late && other.status !== 'failed') {
+            const due = other.deadline_at ? dayOf(other.deadline_at) : today;
+
+            return {
+                text: `${plural(daysBetween(due, today), 'day')} late`,
+                tone: 'text-danger',
+            };
+        }
+
+        return other.deadline_at
+            ? {
+                  text: `due ${fullDate.format(dayOf(other.deadline_at))}`,
+                  tone: 'text-fg-muted',
+              }
+            : { text: `${other.progress}%`, tone: 'text-fg-muted' };
+    }
+
     const details = $derived(
         task && preview && preview.task.id === task.id ? preview : null,
     );
@@ -130,25 +185,10 @@
     }
 
     // ---- Dates ----
-    function dayOf(iso: string): number {
-        const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-
-        return new Date(y, m - 1, d).getTime();
-    }
-
-    function daysBetween(from: number, to: number): number {
-        return Math.round((to - from) / DAY);
-    }
-
     const today = $derived.by(() => {
         void refreshKey;
-        const now = new Date();
 
-        return new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-        ).getTime();
+        return startOfToday();
     });
 
     const fullDate = new Intl.DateTimeFormat(undefined, {
@@ -276,12 +316,6 @@
             .join(' · ');
     }
 
-    function taskCode(t: ProgressTask): string {
-        return t.item_number !== null
-            ? `${t.project.code}-${t.item_number}`
-            : t.project.code;
-    }
-
     const HATCH =
         'repeating-linear-gradient(-45deg, color-mix(in srgb, var(--ws-danger) 55%, transparent) 0 2px, transparent 2px 6px)';
 </script>
@@ -301,7 +335,7 @@
         >
             <span
                 class="shrink-0 font-mono text-[11.5px] text-fg-faint tabular-nums"
-                >{taskCode(task)}</span
+                >{codeOf(task)}</span
             >
             <span class="min-w-0 flex-1 truncate text-fg-muted"
                 >{task.project.title}</span
@@ -353,6 +387,20 @@
                             >
                         {/if}
                     </div>
+                    {#if links && links.blockedBy.length > 0}
+                        <p class="mt-2 text-[13px] text-danger">
+                            Held past its deadline by {links.blockedBy
+                                .map((t) => codeOf(t))
+                                .join(', ')}, which it waits for.
+                        </p>
+                    {:else if links && links.shifted}
+                        <p class="mt-2 text-[13px] text-fg-muted">
+                            Waiting: it can start once {links.waitingOn
+                                .map((t) => codeOf(t))
+                                .join(', ')}
+                            {links.waitingOn.length === 1 ? 'is' : 'are'} done.
+                        </p>
+                    {/if}
                 </section>
 
                 <section class="panel p-4">
@@ -469,6 +517,52 @@
                         <dd>{details.task.responsible_ministry}</dd>
                     {/if}
                 </dl>
+
+                {#if links && (links.dependsOn.length > 0 || links.holdingUp.length > 0)}
+                    <section class="space-y-4">
+                        {#each [{ title: 'Waits for', items: links.dependsOn }, { title: 'Holding up', items: links.holdingUp }] as list (list.title)}
+                            {#if list.items.length > 0}
+                                <div>
+                                    <h3 class="section-title mb-1.5">
+                                        {list.title}
+                                        <span class="section-count"
+                                            >{list.items.length}</span
+                                        >
+                                    </h3>
+                                    <ul>
+                                        {#each list.items as other (other.id)}
+                                            {@const note = linkNote(other)}
+                                            <li>
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-hover"
+                                                    onclick={() =>
+                                                        onselect?.(other)}
+                                                >
+                                                    <StatusGlyph
+                                                        status={other.status}
+                                                    />
+                                                    <span
+                                                        class="shrink-0 font-mono text-[11px] text-fg-faint tabular-nums"
+                                                        >{codeOf(other)}</span
+                                                    >
+                                                    <span
+                                                        class="min-w-0 flex-1 truncate text-fg"
+                                                        >{other.title}</span
+                                                    >
+                                                    <span
+                                                        class={`shrink-0 text-xs ${note.tone}`}
+                                                        >{note.text}</span
+                                                    >
+                                                </button>
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                </div>
+                            {/if}
+                        {/each}
+                    </section>
+                {/if}
 
                 {#if details?.task.status_note}
                     <section>

@@ -357,7 +357,9 @@
 
 <TaskReportDrawer
     task={selectedTask}
+    tasks={progress.tasks}
     {statuses}
+    onselect={(task) => (selectedId = task.id)}
     refreshKey={progress.generated_at}
     onclose={() => (selectedId = null)}
 />

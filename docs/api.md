@@ -202,6 +202,19 @@ created and `message` says so. `PATCH` accepts `organization_id` and
 | DELETE | `/workspace/members/{member}` |
 | POST | `/workspace/members/{member}/restore` |
 
+## Task dependencies *(anyone who can see the task's project)*
+
+Finish-to-start, within one project: the task cannot start until the other is
+finished. Loops are refused. Task payloads carry `dependencies` and `dependents`
+(each `{ id, slug, title, item_number, status, status_label, is_complete,
+is_late, deadline_at, completed_at }`), and the team progress payload gives each
+task `depends_on: int[]`.
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| POST | `/workspace/tasks/{task}/dependencies` | `depends_on_task_id`; 422 for itself, another project, a duplicate or a loop; answers with the task |
+| DELETE | `/workspace/tasks/{task}/dependencies/{dependsOn}` | 404 if it was not a dependency |
+
 ## Integrating another system
 
 Any system that can send HTTPS requests can drive the workspace through the JSON

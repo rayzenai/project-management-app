@@ -157,6 +157,9 @@ export interface Task {
     notes_count?: number;
     contacts_count?: number;
     comments_count?: number;
+    /** Tasks this one waits for, and tasks waiting for it (same project). */
+    dependencies?: TaskRef[];
+    dependents?: TaskRef[];
     created_at?: string;
     updated_at?: string;
 }
@@ -278,6 +281,20 @@ export interface TaskPreview {
     comments_count: number;
 }
 
+/** A task in a dependency list or picker (TaskResource::reference). */
+export interface TaskRef {
+    id: number;
+    slug: string;
+    title: string;
+    item_number: number | null;
+    status: string;
+    status_label: string;
+    is_complete: boolean;
+    is_late: boolean;
+    deadline_at: string | null;
+    completed_at: string | null;
+}
+
 /** One person's workload on a team's progress page (GET /workspace/teams/{team}/progress). */
 export interface ProgressMember {
     id: number;
@@ -314,6 +331,8 @@ export interface ProgressTask {
     end: string | null;
     deadline_at: string | null;
     completed_at: string | null;
+    /** Ids of tasks this one cannot start before (finish-to-start). */
+    depends_on: number[];
     assignees: { id: number; name: string; in_team: boolean }[];
 }
 

@@ -2,6 +2,15 @@
     import { ChevronRight, LocateFixed, X } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import { MediaQuery, SvelteSet } from 'svelte/reactivity';
+    import {
+        DAY,
+        dayOf,
+        daysBetween,
+        planTasks,
+        startOfToday,
+        taskCode,
+    } from '../../lib/schedule';
+    import type { TaskPlan } from '../../lib/schedule';
     import type { ProgressMember, ProgressTask, Status } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
     import PillGroup from '../PillGroup.svelte';
@@ -10,6 +19,8 @@
     /**
      * The team's tasks on a timeline. A report: clicking a bar or a row
      * selects the task (the page shows it read-only), nothing here edits.
+     * Arrows link each task to the work it waits for (finish-to-start); red
+     * ones are the unfinished work pushing a task past its deadline.
      */
     let {
         tasks,
@@ -32,8 +43,13 @@
         onclearmember: () => void;
     } = $props();
 
-    const DAY = 86_400_000;
+    const uid = $props.id();
     const HEADER_HEIGHT = 52;
+    /**
+     * Row height in pixels, group headings included. Set on the rows in px,
+     * not with h-* (rem-based), so the arrows drawn in px always line up.
+     */
+    const ROW = 34;
 
     /** Pixels per day for each zoom; "fit" squeezes the whole span into view. */
     const PX_PER_DAY: Record<string, number> = {
@@ -42,9 +58,12 @@
         months: 3.2,
     };
 
-    // Stripes for overdue time, drawn in the theme's danger colour.
+    // Stripes for overdue time, drawn in the theme's danger colour, and for
+    // time a task will slip because of the work it waits for, in warn.
     const HATCH =
         'repeating-linear-gradient(-45deg, color-mix(in srgb, var(--ws-danger) 55%, transparent) 0 2px, transparent 2px 6px)';
+    const SLIP =
+        'repeating-linear-gradient(-45deg, color-mix(in srgb, var(--ws-warn) 70%, transparent) 0 2px, transparent 2px 6px)';
 
     // ---- Viewer preferences, remembered in this browser only ----
     function remembered(key: string, allowed: string[], fallback: string) {
@@ -76,27 +95,37 @@
     const wide = new MediaQuery('(min-width: 768px)', true);
     const labelWidth = $derived(wide.current ? 320 : 210);
 
-    // ---- Dates (local days, as the server sends YYYY-MM-DD) ----
-    function dayOf(iso: string): number {
-        const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-
-        return new Date(y, m - 1, d).getTime();
-    }
-
-    function daysBetween(from: number, to: number): number {
-        return Math.round((to - from) / DAY);
-    }
-
     // Recomputed with each live refresh, so a page left open overnight moves on.
     const today = $derived.by(() => {
         void tasks;
-        const now = new Date();
 
-        return new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-        ).getTime();
+        return startOfToday();
+    });
+
+    /** Where every task sits once dependencies are taken into account. */
+    const plans = $derived(planTasks(tasks, today));
+
+    /** Who waits for each task: the reverse of `depends_on`. */
+    const dependentsOf = $derived.by(() => {
+        const out: Record<number, number[]> = {};
+
+        for (const task of tasks) {
+            for (const id of task.depends_on) {
+                (out[id] ??= []).push(task.id);
+            }
+        }
+
+        return out;
+    });
+
+    const taskById = $derived.by(() => {
+        const out: Record<number, ProgressTask> = {};
+
+        for (const task of tasks) {
+            out[task.id] = task;
+        }
+
+        return out;
     });
 
     const fullDate = new Intl.DateTimeFormat(undefined, {
@@ -119,6 +148,7 @@
 
     interface Bar {
         task: ProgressTask;
+        plan: TaskPlan;
         from: number;
         to: number;
         start: number;
@@ -132,13 +162,9 @@
     }
 
     function toBar(task: ProgressTask): Bar {
-        const start = task.start ? dayOf(task.start) : today;
-        const deadline = task.deadline_at ? dayOf(task.deadline_at) : null;
-        const completed = task.completed_at ? dayOf(task.completed_at) : null;
+        const plan = plans[task.id];
+        const { start, end, deadline, completed } = plan;
         const failed = task.status === 'failed';
-        const end = task.is_complete
-            ? (completed ?? deadline ?? start)
-            : (deadline ?? Math.max(today, start));
         const openLate =
             !task.is_complete &&
             !failed &&
@@ -159,7 +185,8 @@
 
         return {
             task,
-            start,
+            plan,
+            start: plan.opened,
             from: Math.min(start, end),
             to: Math.max(start, end),
             deadline,
@@ -167,7 +194,7 @@
             state,
             openEnded: !task.is_complete && !failed && deadline === null,
             daysLate: openLate
-                ? daysBetween(deadline!, today)
+                ? daysBetween(deadline ?? today, today)
                 : task.is_complete && completed !== null && deadline !== null
                   ? Math.max(0, daysBetween(deadline, completed))
                   : 0,
@@ -182,9 +209,27 @@
         };
     }
 
-    /** The last day a bar reaches, overdue stripes included. */
+    /** The last day a bar reaches, overdue and slip stripes included. */
     function reach(bar: Bar): number {
-        return bar.state === 'late' ? Math.max(bar.to, today) : bar.to;
+        return bar.state === 'done' || bar.state === 'failed'
+            ? bar.to
+            : Math.max(bar.to, bar.plan.finish);
+    }
+
+    /**
+     * Days an open task will run past its bar because of the work it waits
+     * for: drawn after the bar (and after any overdue stripes) to its
+     * earliest possible finish.
+     */
+    function slip(bar: Bar): { from: number; to: number } | null {
+        if (bar.state === 'done' || bar.state === 'failed') {
+            return null;
+        }
+
+        const from =
+            Math.max(bar.to, bar.state === 'late' ? today : bar.to) + DAY;
+
+        return bar.plan.finish >= from ? { from, to: bar.plan.finish } : null;
     }
 
     function dueSoon(task: ProgressTask): boolean {
@@ -416,6 +461,58 @@
         );
     }
 
+    /**
+     * Rows in reading order for dependencies: by start date, except that a
+     * task always comes after the tasks it waits for, placed straight after
+     * the last of them so each chain reads top to bottom without crossings.
+     */
+    function chainOrder(rows: Bar[]): Bar[] {
+        const sorted = [...rows].sort(byStart);
+        const inGroup: Record<number, boolean> = {};
+        const waitsFor: Record<number, number[]> = {};
+        const waitedOnBy: Record<number, Bar[]> = {};
+
+        for (const row of sorted) {
+            inGroup[row.task.id] = true;
+        }
+
+        for (const row of sorted) {
+            waitsFor[row.task.id] = row.task.depends_on.filter(
+                (id) => inGroup[id],
+            );
+
+            for (const id of waitsFor[row.task.id]) {
+                (waitedOnBy[id] ??= []).push(row);
+            }
+        }
+
+        const placed: Record<number, boolean> = {};
+        const out: Bar[] = [];
+
+        function place(row: Bar) {
+            if (
+                placed[row.task.id] ||
+                waitsFor[row.task.id].some((id) => !placed[id])
+            ) {
+                return;
+            }
+
+            placed[row.task.id] = true;
+            out.push(row);
+
+            for (const next of waitedOnBy[row.task.id] ?? []) {
+                place(next);
+            }
+        }
+
+        for (const row of sorted) {
+            place(row);
+        }
+
+        // Only reachable through a loop, which the server refuses.
+        return [...out, ...sorted.filter((row) => !placed[row.task.id])];
+    }
+
     const groups = $derived.by((): Group[] => {
         const buckets: Record<
             string,
@@ -476,7 +573,7 @@
 
         return order.map((key) => {
             const bucket = buckets[key];
-            const rows = [...bucket.rows].sort(byStart);
+            const rows = chainOrder(bucket.rows);
 
             return {
                 key,
@@ -522,6 +619,146 @@
         }
     }
 
+    // ---- Dependency arrows ----
+    /** Top of each visible row, keyed by group and task, as laid out below. */
+    const layout = $derived.by(() => {
+        const tops: Record<string, number> = {};
+        let y = 0;
+
+        for (const group of groups) {
+            y += ROW;
+
+            if (collapsed.has(group.key)) {
+                continue;
+            }
+
+            for (const row of group.rows) {
+                tops[`${group.key}:${row.task.id}`] = y;
+                y += ROW;
+            }
+        }
+
+        return { tops, height: y };
+    });
+
+    function px(time: number): number {
+        return (pos(time) / 100) * scaleWidth;
+    }
+
+    /**
+     * Down from just inside the end of the earlier bar to the waiting task's
+     * row, then right into its start. When the waiting task starts before the
+     * earlier one ends, the arrow leaves from the end and goes round along
+     * the line between the rows instead.
+     */
+    function elbow(
+        start: number,
+        end: number,
+        y1: number,
+        x2: number,
+        y2: number,
+    ): string {
+        const half = 9;
+        const below = y2 > y1;
+        const x1 = end - Math.min(8, Math.max(2, (end - start) / 2));
+
+        if (x2 >= x1 + 6) {
+            return `M${x1} ${below ? y1 + half : y1 - half} V${y2} H${x2 - 2}`;
+        }
+
+        const between = below ? y2 - ROW / 2 : y2 + ROW / 2;
+
+        return `M${end} ${y1} H${end + 8} V${between} H${x2 - 8} V${y2} H${x2 - 2}`;
+    }
+
+    type LinkTone = 'done' | 'waiting' | 'blocking';
+
+    /**
+     * One arrow per dependency whose two tasks sit in the same group: from the
+     * end of the earlier task (overdue stripes included) to the start of the
+     * task waiting for it. Red when that unfinished work pushes the waiting
+     * task past its deadline, faint once it is done, blue around the task
+     * that is open in the panel.
+     */
+    const links = $derived.by(() => {
+        const out: {
+            key: string;
+            d: string;
+            tone: LinkTone;
+            active: boolean;
+        }[] = [];
+
+        if (!range || scaleWidth === 0) {
+            return out;
+        }
+
+        for (const group of groups) {
+            if (collapsed.has(group.key)) {
+                continue;
+            }
+
+            const inGroup: Record<number, Bar> = {};
+
+            for (const row of group.rows) {
+                inGroup[row.task.id] = row;
+            }
+
+            for (const row of group.rows) {
+                for (const id of row.task.depends_on) {
+                    const before = inGroup[id];
+
+                    if (!before) {
+                        continue;
+                    }
+
+                    out.push({
+                        key: `${group.key}:${id}>${row.task.id}`,
+                        d: elbow(
+                            px(before.from),
+                            px(reach(before) + DAY),
+                            layout.tops[`${group.key}:${id}`] + ROW / 2,
+                            px(row.from),
+                            layout.tops[`${group.key}:${row.task.id}`] +
+                                ROW / 2,
+                        ),
+                        tone: before.task.is_complete
+                            ? 'done'
+                            : row.plan.blockedBy.includes(id)
+                              ? 'blocking'
+                              : 'waiting',
+                        active: selectedId === id || selectedId === row.task.id,
+                    });
+                }
+            }
+        }
+
+        // Highlighted arrows last, so they draw over the rest.
+        return out.sort((a, b) => Number(a.active) - Number(b.active));
+    });
+
+    // Written out in full so Tailwind generates them.
+    const MARKER_FILL: Record<string, string> = {
+        'fg-faint': 'fill-fg-faint',
+        'fg-muted': 'fill-fg-muted',
+        danger: 'fill-danger',
+        accent: 'fill-accent',
+    };
+
+    const LINK_STROKE: Record<LinkTone, string> = {
+        done: 'stroke-fg-faint',
+        waiting: 'stroke-fg-muted',
+        blocking: 'stroke-danger',
+    };
+
+    /** Short names for a list of task ids, for the hover card. */
+    function names(ids: number[]): string {
+        return ids
+            .map((id) => taskById[id])
+            .filter((t): t is ProgressTask => t !== undefined)
+            .map((t) => taskCode(t))
+            .join(', ');
+    }
+
     // ---- Bar presentation ----
     function barClass(bar: Bar): string {
         const edge = bar.openEnded
@@ -554,6 +791,60 @@
     }
 
     function caption(bar: Bar): { text: string; tone: string }[] {
+        const waiting = dependencyCaption(bar);
+
+        return waiting ? [...statusCaption(bar), waiting] : statusCaption(bar);
+    }
+
+    /**
+     * "blocked by X" when unfinished work it waits for pushes it past its
+     * deadline; "waits for X" while it is waiting but still on time.
+     */
+    function dependencyCaption(
+        bar: Bar,
+    ): { text: string; tone: string } | null {
+        const { blockedBy, waitingOn } = bar.plan;
+        const ids = blockedBy.length > 0 ? blockedBy : waitingOn;
+
+        if (ids.length === 0) {
+            return null;
+        }
+
+        const first = taskById[ids[0]];
+        const name = `${first ? taskCode(first) : 'another task'}${ids.length > 1 ? ` +${ids.length - 1}` : ''}`;
+
+        return blockedBy.length > 0
+            ? { text: `blocked by ${name}`, tone: 'text-danger' }
+            : { text: `waits for ${name}`, tone: 'text-fg-muted' };
+    }
+
+    /**
+     * Where a bar's caption fits: after it (and its stripes); otherwise inside
+     * the unfilled part of the bar; only as a last resort before it, which is
+     * where dependency arrows come in.
+     */
+    function captionPlace(bar: Bar): 'right' | 'inside' | 'left' {
+        const parts = caption(bar);
+        // Geist Mono at 11px is about 6.6px a character, plus the separators.
+        const width =
+            parts.reduce((sum, part) => sum + part.text.length, 0) * 6.6 +
+            (parts.length - 1) * 14 +
+            12;
+
+        if (px(reach(bar) + DAY) + width <= scaleWidth) {
+            return 'right';
+        }
+
+        const filled =
+            bar.state === 'done' || bar.state === 'failed'
+                ? 1
+                : bar.task.progress / 100;
+        const free = (px(bar.to + DAY) - px(bar.from)) * (1 - filled);
+
+        return free >= width ? 'inside' : 'left';
+    }
+
+    function statusCaption(bar: Bar): { text: string; tone: string }[] {
         const percent = {
             text: `${bar.task.progress}%`,
             tone: 'text-fg-muted',
@@ -609,12 +900,6 @@
 
                 return [percent];
         }
-    }
-
-    function taskCode(task: ProgressTask): string {
-        return task.item_number !== null
-            ? `${task.project.code}-${task.item_number}`
-            : task.project.code;
     }
 
     function describe(bar: Bar): string {
@@ -831,6 +1116,38 @@
         <span class="inline-flex items-center gap-1.5"
             ><span class="h-3 w-px bg-accent"></span>Today</span
         >
+        <span class="inline-flex items-center gap-1.5">
+            <svg width="22" height="10" aria-hidden="true">
+                <path
+                    d="M1 2 H7 V8 H17"
+                    fill="none"
+                    class="stroke-fg-muted"
+                    stroke-width="1.25"
+                />
+                <path d="M17 5 L21 8 L17 11 z" class="fill-fg-muted" />
+            </svg>Waits for</span
+        >
+        <span class="inline-flex items-center gap-1.5">
+            <svg width="22" height="10" aria-hidden="true">
+                <path
+                    d="M1 2 H7 V8 H17"
+                    fill="none"
+                    class="stroke-danger"
+                    stroke-width="1.5"
+                />
+                <path d="M17 5 L21 8 L17 11 z" class="fill-danger" />
+            </svg>Holding it past its deadline</span
+        >
+        <span class="inline-flex items-center gap-1.5"
+            ><span
+                class="h-2.5 w-5 rounded-sm bg-warn-soft"
+                style:background-image={SLIP}
+            ></span>Will slip, waiting for late work</span
+        >
+        <span class="inline-flex items-center gap-1.5"
+            ><span class="w-5 border-t border-dashed border-fg-faint"
+            ></span>Waiting since opened</span
+        >
     </div>
 
     {#if !range}
@@ -939,10 +1256,65 @@
                     {/each}
                 </div>
 
+                <!-- Dependency arrows, under the bars -->
+                {#if links.length > 0}
+                    <svg
+                        class="pointer-events-none absolute overflow-visible"
+                        style:left={`${labelWidth}px`}
+                        style:top={`${HEADER_HEIGHT}px`}
+                        width={scaleWidth}
+                        height={layout.height}
+                        aria-hidden="true"
+                    >
+                        <defs>
+                            {#each ['fg-faint', 'fg-muted', 'danger', 'accent'] as color (color)}
+                                <marker
+                                    id={`${uid}-arrow-${color}`}
+                                    viewBox="0 0 6 6"
+                                    refX="5"
+                                    refY="3"
+                                    markerWidth="6"
+                                    markerHeight="6"
+                                    orient="auto"
+                                >
+                                    <path
+                                        d="M0 0 L6 3 L0 6 z"
+                                        class={MARKER_FILL[color]}
+                                    />
+                                </marker>
+                            {/each}
+                        </defs>
+                        {#each links as link (link.key)}
+                            {@const color = link.active
+                                ? 'accent'
+                                : link.tone === 'blocking'
+                                  ? 'danger'
+                                  : link.tone === 'done'
+                                    ? 'fg-faint'
+                                    : 'fg-muted'}
+                            <path
+                                data-link={link.key}
+                                d={link.d}
+                                fill="none"
+                                class={link.active
+                                    ? 'stroke-accent'
+                                    : LINK_STROKE[link.tone]}
+                                stroke-width={link.active ||
+                                link.tone === 'blocking'
+                                    ? 1.75
+                                    : 1.25}
+                                stroke-linejoin="round"
+                                marker-end={`url(#${uid}-arrow-${color})`}
+                            />
+                        {/each}
+                    </svg>
+                {/if}
+
                 {#each groups as group (group.key)}
                     {@const open = !collapsed.has(group.key)}
                     <div
-                        class="grid h-9 border-b border-line bg-surface-alt/70"
+                        class="grid border-b border-line bg-surface-alt/70"
+                        style:height={`${ROW}px`}
                         style:grid-template-columns={columns}
                     >
                         <button
@@ -990,10 +1362,11 @@
                             {@const selected = selectedId === bar.task.id}
                             {@const end =
                                 pos(reach(bar)) + span(reach(bar), reach(bar))}
-                            {@const flip = end > 82}
+                            {@const place = captionPlace(bar)}
                             <div
                                 data-task-row={bar.task.id}
-                                class="group grid h-9 border-b border-line-soft"
+                                class="group grid border-b border-line-soft"
+                                style:height={`${ROW}px`}
                                 style:grid-template-columns={columns}
                             >
                                 <button
@@ -1031,13 +1404,33 @@
                                 <div
                                     class={`relative ${selected ? 'bg-accent-soft/50' : 'group-hover:bg-hover/50'}`}
                                 >
-                                    {#if bar.state === 'late'}
+                                    {#if bar.plan.shifted}
+                                        <!-- Opened earlier, but waiting for the work it depends on -->
+                                        <div
+                                            class="absolute top-1/2 border-t border-dashed border-fg-faint"
+                                            style:left={`${pos(bar.plan.opened)}%`}
+                                            style:width={`${pos(bar.from) - pos(bar.plan.opened)}%`}
+                                            title={`Opened ${fullDate.format(bar.plan.opened)}; waiting for ${names(bar.plan.waitingOn)}`}
+                                        ></div>
+                                    {/if}
+                                    {#if bar.state === 'late' && today > bar.to}
                                         <!-- Overdue: from the deadline to today -->
                                         <div
                                             class="absolute top-1/2 h-[18px] -translate-y-1/2 rounded-r-md bg-danger-soft"
                                             style:left={`${pos(bar.to + DAY)}%`}
                                             style:width={`${span(bar.to + DAY, today)}%`}
                                             style:background-image={HATCH}
+                                        ></div>
+                                    {/if}
+                                    {#if slip(bar)}
+                                        {@const pushed = slip(bar)!}
+                                        <!-- Will slip: pushed back by the work it waits for -->
+                                        <div
+                                            class="absolute top-1/2 h-[18px] -translate-y-1/2 rounded-r-md bg-warn-soft"
+                                            style:left={`${pos(pushed.from)}%`}
+                                            style:width={`${span(pushed.from, pushed.to)}%`}
+                                            style:background-image={SLIP}
+                                            title={`Can finish ${fullDate.format(pushed.to)} at the earliest, after ${names(bar.plan.waitingOn)}`}
                                         ></div>
                                     {/if}
                                     {#if bar.state === 'done' && bar.deadline !== null && bar.deadline !== bar.to}
@@ -1070,12 +1463,14 @@
                                     </button>
                                     <div
                                         class="pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center gap-1 font-mono text-[11px] whitespace-nowrap tabular-nums"
-                                        style:left={flip
-                                            ? undefined
-                                            : `calc(${end}% + 6px)`}
-                                        style:right={flip
-                                            ? `calc(${100 - pos(bar.from)}% + 6px)`
+                                        style:left={place === 'right'
+                                            ? `calc(${end}% + 6px)`
                                             : undefined}
+                                        style:right={place === 'inside'
+                                            ? `calc(${100 - pos(bar.to + DAY)}% + 6px)`
+                                            : place === 'left'
+                                              ? `calc(${100 - pos(bar.from)}% + 6px)`
+                                              : undefined}
                                     >
                                         {#each caption(bar) as part, i (i)}
                                             {#if i > 0}<span
@@ -1181,6 +1576,23 @@
                 <dd class="truncate">
                     {bar.task.assignees.map((a) => a.name).join(', ')}
                 </dd>
+            {/if}
+            {#if bar.task.depends_on.length > 0}
+                <dt class="text-fg-muted">Waits for</dt>
+                <dd>
+                    {names(bar.task.depends_on)}
+                    {#if bar.plan.blockedBy.length > 0}<span
+                            class="block text-danger"
+                            >{names(bar.plan.blockedBy)} will push it past its deadline</span
+                        >{:else if bar.plan.shifted}<span
+                            class="block text-fg-muted"
+                            >can start {fullDate.format(bar.plan.start)}</span
+                        >{/if}
+                </dd>
+            {/if}
+            {#if (dependentsOf[bar.task.id] ?? []).length > 0}
+                <dt class="text-fg-muted">Holding up</dt>
+                <dd>{names(dependentsOf[bar.task.id] ?? [])}</dd>
             {/if}
         </dl>
     </div>

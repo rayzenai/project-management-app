@@ -32,7 +32,7 @@ class TaskPreviewQuery
      */
     public function data(Task $task): array
     {
-        $task->loadMissing(['project', 'notes.user', 'contacts', 'assignments.member', 'subtasks.user']);
+        $task->loadMissing(['project', 'notes.user', 'contacts', 'assignments.member', 'subtasks.user', 'dependencies', 'dependents']);
         $task->loadCount('comments');
 
         // No ->public() here: ProjectActivityRecorder always writes is_public

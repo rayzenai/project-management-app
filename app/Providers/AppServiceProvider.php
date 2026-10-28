@@ -9,6 +9,7 @@ use App\Models\ProjectNote;
 use App\Models\Subtask;
 use App\Models\Task;
 use App\Models\TaskComment;
+use App\Models\TaskDependency;
 use App\Models\Team;
 use App\Models\User;
 use App\Observers\ProjectAssignmentObserver;
@@ -16,6 +17,7 @@ use App\Observers\ProjectContactObserver;
 use App\Observers\ProjectNoteObserver;
 use App\Observers\SubtaskObserver;
 use App\Observers\TaskCommentObserver;
+use App\Observers\TaskDependencyObserver;
 use App\Observers\TaskObserver;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
@@ -95,6 +97,7 @@ class AppServiceProvider extends ServiceProvider
             'user' => User::class,
             'task' => Task::class,
             'task-comment' => TaskComment::class,
+            'task-dependency' => TaskDependency::class,
             'project-note' => ProjectNote::class,
             'project-contact' => ProjectContact::class,
             'subtask' => Subtask::class,
@@ -116,5 +119,6 @@ class AppServiceProvider extends ServiceProvider
         Subtask::observe(SubtaskObserver::class);
         ProjectAssignment::observe(ProjectAssignmentObserver::class);
         TaskComment::observe(TaskCommentObserver::class);
+        TaskDependency::observe(TaskDependencyObserver::class);
     }
 }

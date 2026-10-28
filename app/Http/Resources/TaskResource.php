@@ -18,6 +18,27 @@ class TaskResource extends JsonResource
     public static $wrap = null;
 
     /**
+     * The short form of a task used in dependency lists and pickers.
+     *
+     * @return array{id: int, slug: string, title: string, item_number: int|null, status: string, status_label: string, is_complete: bool, is_late: bool, deadline_at: string|null, completed_at: string|null}
+     */
+    public static function reference(Task $task): array
+    {
+        return [
+            'id' => $task->id,
+            'slug' => $task->slug,
+            'title' => $task->title,
+            'item_number' => $task->item_number,
+            'status' => $task->status,
+            'status_label' => $task->status_label,
+            'is_complete' => $task->isComplete(),
+            'is_late' => (bool) $task->is_late,
+            'deadline_at' => $task->deadline_at?->toDateString(),
+            'completed_at' => $task->completed_at?->toIso8601String(),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -66,6 +87,10 @@ class TaskResource extends JsonResource
                 fn () => AssignmentResource::collection($this->assignments)->resolve(),
             ),
             'assignments_count' => $this->whenCounted('assignments'),
+            // Finish-to-start links within the project: what this task waits
+            // for, and what waits for it.
+            'dependencies' => $this->whenLoaded('dependencies', fn () => $this->dependencies->map(fn (Task $t): array => self::reference($t))->values()->all()),
+            'dependents' => $this->whenLoaded('dependents', fn () => $this->dependents->map(fn (Task $t): array => self::reference($t))->values()->all()),
             'notes_count' => $this->whenCounted('notes'),
             'contacts_count' => $this->whenCounted('contacts'),
             'created_at' => $this->created_at?->toIso8601String(),
