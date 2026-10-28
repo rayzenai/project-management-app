@@ -41,8 +41,8 @@ it('scopes assignable members to the project teams union', function () {
     expect($names)->toBe(['Ana', 'Bal', 'Cam']);
 });
 
-it('falls back to all active members when the project has no teams', function () {
-    $project = Project::factory()->create();
+it('falls back to all active members of its organization when a public project has no teams', function () {
+    $project = Project::factory()->public()->create();
     Member::factory()->create(['name' => 'Ana']);
     Member::factory()->create(['name' => 'Bal']);
 
@@ -50,7 +50,7 @@ it('falls back to all active members when the project has no teams', function ()
 });
 
 it('excludes inactive members from the assignable set in both modes', function () {
-    $project = Project::factory()->create();
+    $project = Project::factory()->public()->create();
     $team = Team::factory()->create();
 
     $active = Member::factory()->create(['name' => 'Ana']);

@@ -55,8 +55,10 @@ it('blocks quick-add via #project token targeting a project the user cannot view
             'title' => "Sneaky task #{$hidden->slug}",
         ])->assertRedirect('/workspace');
 
+    // The hidden project is not even matched (its existence stays private);
+    // the token is plain text and the task lands in the picked project.
     expect(Task::query()->where('project_id', $hidden->id)->count())->toBe(0)
-        ->and(Task::query()->where('project_id', $visible->id)->count())->toBe(0);
+        ->and(Task::query()->where('project_id', $visible->id)->count())->toBe(1);
 });
 
 it('blocks quick-add via the api when the project is not viewable', function () {

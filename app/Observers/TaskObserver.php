@@ -6,6 +6,7 @@ use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Notifications\TaskStatusChanged;
 use App\Services\ProjectActivityRecorder;
+use App\Support\WorkspaceAccess;
 
 class TaskObserver
 {
@@ -129,12 +130,13 @@ class TaskObserver
         $actorName = auth()->user()->name ?? 'Someone';
         $statusLabel = $item->status_label ?? $item->status;
 
-        $item->loadMissing('assignments.member.user');
+        $item->loadMissing(['assignments.member.user', 'project']);
 
         $item->assignments
             ->pluck('member.user')
             ->filter()
             ->reject(fn ($user) => $user->id === $actorId)
+            ->filter(fn ($user) => WorkspaceAccess::canViewProject($user, $item->project))
             ->unique('id')
             ->each(fn ($user) => $user->notify(new TaskStatusChanged($item, $statusLabel, $actorName)));
     }

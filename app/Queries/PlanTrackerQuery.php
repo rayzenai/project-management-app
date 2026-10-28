@@ -5,6 +5,7 @@ namespace App\Queries;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Project;
+use App\Support\WorkspaceAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 
@@ -21,6 +22,9 @@ class PlanTrackerQuery
     public function get(Request $request): array
     {
         $project = Project::query()->where('slug', '100-day-plan')->firstOrFail();
+
+        // The plan belongs to one organization like any project.
+        abort_unless(WorkspaceAccess::canViewProject($request->user(), $project), 403);
 
         $tasks = $project->tasks()
             ->with(['assignments.member', 'project'])

@@ -53,6 +53,12 @@ class StoreMemberRequest extends FormRequest
                 return;
             }
 
+            if (! WorkspaceAccess::isSuperAdmin($this->user()) && WorkspaceAccess::isSuperAdminEmail($this->input('email'))) {
+                $validator->errors()->add('email', 'This email is reserved for a super-admin.');
+
+                return;
+            }
+
             $organizationId = $this->organizationId();
 
             foreach (Team::query()->whereIn('id', (array) $this->input('team_ids', []))->get() as $team) {

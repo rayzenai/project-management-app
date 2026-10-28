@@ -16,7 +16,7 @@ class UpdateTaskCommentService
     {
         try {
             $existing = $comment->mentioned_member_ids ?? [];
-            $new = MentionParser::memberIds($body);
+            $new = $this->mentionableIds($comment->task, MentionParser::memberIds($body));
             $added = array_values(array_diff($new, $existing));
 
             $comment->update(['body' => $body, 'mentioned_member_ids' => $new]);

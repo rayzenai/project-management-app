@@ -42,7 +42,7 @@ final readonly class QuickAddDispatcher
 
         // A missing or archived project is a message, not a 404: the picker can
         // hold a stale id, and findOrFail would drop the whole modal.
-        $project = $this->resolveProject($tokens, $consumed)
+        $project = $this->resolveProject($tokens, $consumed, $user)
             ?? ($projectId === null ? null : Project::query()->active()->find($projectId));
 
         if ($project === null) {
@@ -95,7 +95,7 @@ final readonly class QuickAddDispatcher
      * @param  list<Token>  $tokens
      * @param  list<Token>  $consumed
      */
-    private function resolveProject(array $tokens, array &$consumed): ?Project
+    private function resolveProject(array $tokens, array &$consumed, Authenticatable $user): ?Project
     {
         foreach ($tokens as $token) {
             if ($token['type'] !== 'project') {
@@ -104,11 +104,15 @@ final readonly class QuickAddDispatcher
 
             $needle = mb_strtolower($token['value']);
 
-            $project = Project::query()->active()->whereRaw('LOWER(slug) = ?', [$needle])->first()
-                ?? Project::query()->active()->whereRaw('LOWER(slug) LIKE ?', [$needle.'%'])->orderBy('title')->first()
-                ?? Project::query()->active()->whereRaw('LOWER(title) LIKE ?', [$needle.'%'])->orderBy('title')->first()
-                ?? Project::query()->active()->whereRaw('LOWER(slug) LIKE ?', ['%'.$needle.'%'])->orderBy('title')->first()
-                ?? Project::query()->active()->whereRaw('LOWER(title) LIKE ?', ['%'.$needle.'%'])->orderBy('title')->first();
+            // Only projects the user can see, so a #token never matches (or
+            // confirms the existence of) another organization's project.
+            $candidates = fn () => Project::query()->visibleTo($user)->active();
+
+            $project = $candidates()->whereRaw('LOWER(slug) = ?', [$needle])->first()
+                ?? $candidates()->whereRaw('LOWER(slug) LIKE ?', [$needle.'%'])->orderBy('title')->first()
+                ?? $candidates()->whereRaw('LOWER(title) LIKE ?', [$needle.'%'])->orderBy('title')->first()
+                ?? $candidates()->whereRaw('LOWER(slug) LIKE ?', ['%'.$needle.'%'])->orderBy('title')->first()
+                ?? $candidates()->whereRaw('LOWER(title) LIKE ?', ['%'.$needle.'%'])->orderBy('title')->first();
 
             if ($project) {
                 $consumed[] = $token;

@@ -133,7 +133,8 @@ class Member extends Model
     /**
      * The single source of truth for who can be assigned within a project:
      * the union of the project's teams' members, or, for a public project
-     * with no teams, every active member of its organization. Pickers,
+     * with no teams, every active member of its organization (a private
+     * project with no teams has nobody to assign). Pickers,
      * request validation, and quick-add `@name` resolution all go through
      * this scope.
      *
@@ -149,7 +150,9 @@ class Member extends Model
             ->when(
                 $teamIds->isNotEmpty(),
                 fn (Builder $q) => $q->whereHas('teams', fn (Builder $t) => $t->whereIn('teams.id', $teamIds)),
-                fn (Builder $q) => $q->where('organization_id', $project->organization_id),
+                fn (Builder $q) => $project->is_public
+                    ? $q->where('organization_id', $project->organization_id)
+                    : $q->whereRaw('1 = 0'),
             )
             ->orderBy('name');
     }

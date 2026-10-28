@@ -13,6 +13,34 @@ use Illuminate\Support\Str;
 trait NotifiesMentions
 {
     /**
+     * The mentioned members who may see the task: a login that can view its
+     * project, or a person without a login who could be assigned to it. The
+     * rest are dropped before storing, so a hand-made `@[x](member:ID)` can
+     * neither notify an outsider nor reveal their name.
+     *
+     * @param  list<int>  $memberIds
+     * @return list<int>
+     */
+    private function mentionableIds(Task $task, array $memberIds): array
+    {
+        if ($memberIds === []) {
+            return [];
+        }
+
+        $assignable = Member::assignableFor($task->project)->whereIn('id', $memberIds)->pluck('id')->all();
+
+        return array_values(array_filter($memberIds, function (int $id) use ($assignable, $task): bool {
+            if (in_array($id, $assignable, true)) {
+                return true;
+            }
+
+            $user = Member::query()->with('user')->find($id)?->user;
+
+            return $user !== null && WorkspaceAccess::canViewProject($user, $task->project);
+        }));
+    }
+
+    /**
      * Notify each mentioned member that has a linked login and can see the
      * task, excluding the author. The comment box only offers the project's
      * people; this holds for hand-made requests too, so a mention never

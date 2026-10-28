@@ -16,7 +16,7 @@ class CreateTaskCommentService
     public function execute(Task $task, User $author, string $body): ServiceResult
     {
         try {
-            $ids = MentionParser::memberIds($body);
+            $ids = $this->mentionableIds($task, MentionParser::memberIds($body));
 
             $comment = $task->comments()->create([
                 'user_id' => $author->id,

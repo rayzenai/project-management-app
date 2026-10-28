@@ -24,7 +24,7 @@ class ProjectShowQuery
         return [
             'project' => (new ProjectResource($project))->resolve(),
             'tasks' => TaskResource::collection($project->tasks)->resolve(),
-            'teams' => TeamResource::collection(Team::query()->orderBy('name')->get())->resolve(),
+            'teams' => TeamResource::collection(Team::query()->where('organization_id', $project->organization_id)->orderBy('name')->get())->resolve(),
         ];
     }
 }

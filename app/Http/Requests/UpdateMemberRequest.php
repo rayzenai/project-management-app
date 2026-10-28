@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Models\Team;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -54,8 +55,10 @@ class UpdateMemberRequest extends FormRequest
     }
 
     /**
-     * Moving someone to another organization would leave them on teams they
-     * can no longer join, so it waits until they are off those teams.
+     * Only a super-admin may hand out a super-admin's email (the Gate matches
+     * on email). Moving someone to another organization would leave them on
+     * teams they can no longer join, so it waits until they are off those
+     * teams.
      */
     public function withValidator(Validator $validator): void
     {
@@ -63,7 +66,32 @@ class UpdateMemberRequest extends FormRequest
             /** @var Member $member */
             $member = $this->route('member');
 
-            if ($validator->errors()->isNotEmpty() || ! $this->has('organization_id')) {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            if ($this->has('email') && ! WorkspaceAccess::isSuperAdmin($this->user())
+                && WorkspaceAccess::isSuperAdminEmail($this->input('email'))
+                && mb_strtolower((string) $this->input('email')) !== mb_strtolower((string) $member->email)) {
+                $validator->errors()->add('email', 'This email is reserved for a super-admin.');
+
+                return;
+            }
+
+            if ($this->has('team_ids')) {
+                $moved = $member->replicate();
+                $moved->organization_id = $this->has('organization_id') ? $this->integer('organization_id') : $member->organization_id;
+
+                foreach (Team::query()->whereIn('id', (array) $this->input('team_ids', []))->get() as $team) {
+                    if (! WorkspaceAccess::canJoinTeam($moved, $team)) {
+                        $validator->errors()->add('team_ids', "{$team->name} belongs to another organization.");
+
+                        return;
+                    }
+                }
+            }
+
+            if (! $this->has('organization_id')) {
                 return;
             }
 

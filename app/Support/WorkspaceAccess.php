@@ -52,6 +52,28 @@ class WorkspaceAccess
     }
 
     /**
+     * Whether an email is one PM_SUPER_ADMINS grants super-admin to. Only a
+     * super-admin may give a login such an email: the Gate matches on email,
+     * so anyone else doing it would be minting a super-admin.
+     */
+    public static function isSuperAdminEmail(?string $email): bool
+    {
+        if ($email === null || $email === '') {
+            return false;
+        }
+
+        $needle = mb_strtolower(trim($email));
+
+        foreach ((array) config('project-management.super_admins', []) as $superAdmin) {
+            if (mb_strtolower(trim((string) $superAdmin)) === $needle) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * The member linked to the user, or null. Never creates one (unlike
      * Member::forUser), so it is safe in authorization.
      */
@@ -199,6 +221,12 @@ class WorkspaceAccess
         }
 
         if ($member->user_id !== null && $member->user !== null && self::isSuperAdmin($member->user)) {
+            return false;
+        }
+
+        // Nor a person carrying a super-admin's email without a login yet:
+        // giving them one would mint a super-admin.
+        if (self::isSuperAdminEmail($member->email)) {
             return false;
         }
 

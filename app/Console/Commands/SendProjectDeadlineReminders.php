@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Task;
 use App\Notifications\TaskDeadlineDue;
+use App\Support\WorkspaceAccess;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -24,7 +25,7 @@ class SendProjectDeadlineReminders extends Command
 
         $tasks = Task::incomplete()
             ->whereNotNull('deadline_at')
-            ->with('assignments.member.user')
+            ->with(['assignments.member.user', 'project'])
             ->lazy();
 
         $sent = 0;
@@ -50,7 +51,10 @@ class SendProjectDeadlineReminders extends Command
                 continue;
             }
 
-            $users = $task->assignments->pluck('member.user')->filter()->unique('id');
+            // Someone moved off the project's teams keeps the assignment row
+            // but no longer sees the task, so they get no reminder either.
+            $users = $task->assignments->pluck('member.user')->filter()->unique('id')
+                ->filter(fn ($user) => WorkspaceAccess::canViewProject($user, $task->project));
 
             foreach ($users as $user) {
                 $sent++;

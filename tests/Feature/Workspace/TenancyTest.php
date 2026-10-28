@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
 use App\Notifications\MentionedInComment;
+use App\Notifications\TaskStatusChanged;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
@@ -463,4 +464,118 @@ it('applies the same organization rules over the API', function () {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('member_id');
     $this->getJson('/api/v1/workspace/team')->assertOk()->assertJsonCount(1, 'teams');
+});
+
+it('never lets an office admin hand out a super-admin\'s email', function () {
+    config(['project-management.super_admins' => ['boss@example.com', 'second.boss@example.com']]);
+    $colleague = Member::factory()->withUser()->create(['organization_id' => $this->orgA->id]);
+    $this->actingAs(tenancyOfficeAdmin($this->orgA));
+
+    $this->post('/workspace/members', [
+        'name' => 'Imposter', 'email' => 'Second.Boss@example.com', 'password' => 'Kp7m-Qx4r-Tz9a',
+    ])->assertSessionHasErrors('email');
+    $this->patch("/workspace/members/{$colleague->id}", ['email' => 'second.boss@example.com'])
+        ->assertSessionHasErrors('email');
+
+    expect(User::query()->where('email', 'like', '%second.boss%')->exists())->toBeFalse()
+        ->and($colleague->fresh()->email)->not->toBe('second.boss@example.com');
+});
+
+it('shows the plan tracker only to people who can see the plan', function () {
+    $plan = Project::factory()->create(['slug' => '100-day-plan', 'organization_id' => $this->orgA->id, 'is_public' => true]);
+
+    $this->actingAs(tenancyPerson($this->orgA))->get('/workspace/100-point-tracker')->assertOk();
+    $this->actingAs(tenancyPerson($this->orgB))->get('/workspace/100-point-tracker')->assertForbidden();
+});
+
+it('never lets an office admin give a login to a person carrying a super-admin\'s email', function () {
+    config(['project-management.super_admins' => ['boss@example.com', 'second.boss@example.com']]);
+    $placeholder = Member::factory()->create(['organization_id' => $this->orgA->id, 'email' => 'second.boss@example.com', 'user_id' => null]);
+
+    $this->actingAs(tenancyOfficeAdmin($this->orgA))
+        ->patch("/workspace/members/{$placeholder->id}", ['password' => 'Kp7m-Qx4r-Tz9a'])
+        ->assertForbidden();
+
+    expect(User::query()->where('email', 'second.boss@example.com')->exists())->toBeFalse();
+});
+
+it('lists only the project\'s organization\'s teams on a project page', function () {
+    $admin = tenancyOfficeAdmin($this->orgA);
+    $mine = tenancyTeam($this->orgA, ['name' => 'Ours']);
+    tenancyTeam($this->orgB, ['name' => 'Theirs']);
+    $project = Project::factory()->create(['organization_id' => $this->orgA->id]);
+    $project->teams()->attach($mine->id);
+
+    $this->actingAs($admin)->get("/workspace/projects/{$project->slug}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('teams', fn ($teams) => collect($teams)->pluck('name')->all() === ['Ours']));
+});
+
+it('drops mentions of people who cannot see the task before storing them', function () {
+    $author = tenancyPerson($this->orgA);
+    $team = tenancyTeam($this->orgA);
+    $team->members()->attach(tenancyMemberOf($author)->id);
+    $project = Project::factory()->create(['organization_id' => $this->orgA->id]);
+    $project->teams()->attach($team->id);
+    $task = Task::factory()->create(['project_id' => $project->id]);
+    $mate = Member::factory()->create(['organization_id' => $this->orgA->id]);
+    $team->members()->attach($mate->id);
+    $stranger = Member::factory()->create(['organization_id' => $this->orgB->id, 'name' => 'Secret Name']);
+
+    $this->actingAs($author)->post("/workspace/tasks/{$task->id}/comments", [
+        'body' => "Hi @[Mate](member:{$mate->id}) and @[Guess](member:{$stranger->id})",
+    ])->assertSessionHasNoErrors();
+
+    expect($task->comments()->sole()->mentioned_member_ids)->toBe([$mate->id]);
+});
+
+it('stops telling an assignee about a task once they can no longer see it', function () {
+    Notification::fake();
+    $team = tenancyTeam($this->orgA);
+    $project = Project::factory()->create(['organization_id' => $this->orgA->id]);
+    $project->teams()->attach($team->id);
+    $task = Task::factory()->create(['project_id' => $project->id, 'status' => 'in_progress']);
+    $stayer = tenancyPerson($this->orgA);
+    $leaver = tenancyPerson($this->orgA);
+    $team->members()->attach([tenancyMemberOf($stayer)->id, tenancyMemberOf($leaver)->id]);
+    foreach ([$stayer, $leaver] as $user) {
+        $task->assignments()->create(['member_id' => tenancyMemberOf($user)->id]);
+    }
+    $team->members()->detach(tenancyMemberOf($leaver)->id);
+
+    $task->update(['status' => 'done']);
+
+    Notification::assertSentTo($stayer, TaskStatusChanged::class);
+    Notification::assertNotSentTo($leaver, TaskStatusChanged::class);
+});
+
+it('never matches another organization\'s project from a quick-add #token', function () {
+    $person = tenancyPerson($this->orgA);
+    $foreign = Project::factory()->create(['organization_id' => $this->orgB->id, 'slug' => 'budget-review', 'title' => 'Budget Review', 'is_public' => true]);
+
+    $this->actingAs($person)->from('/workspace')
+        ->post('/workspace/quick-add', ['title' => 'Check numbers #budget-review'])
+        ->assertRedirect('/workspace');
+
+    expect(Task::query()->where('project_id', $foreign->id)->exists())->toBeFalse();
+});
+
+it('keeps a super-admin from putting someone on another organization\'s ordinary team', function () {
+    $person = Member::factory()->create(['organization_id' => $this->orgA->id]);
+    $teamB = tenancyTeam($this->orgB);
+
+    $this->actingAs(tenancyBoss())
+        ->patch("/workspace/members/{$person->id}", ['team_ids' => [$teamB->id]])
+        ->assertSessionHasErrors('team_ids');
+
+    expect($person->teams()->exists())->toBeFalse();
+});
+
+it('has nobody to assign on a private project without teams', function () {
+    Member::factory()->create(['organization_id' => $this->orgA->id]);
+    $private = Project::factory()->create(['organization_id' => $this->orgA->id, 'is_public' => false]);
+    $public = Project::factory()->create(['organization_id' => $this->orgA->id, 'is_public' => true]);
+
+    expect(Member::assignableFor($private)->count())->toBe(0)
+        ->and(Member::assignableFor($public)->count())->toBeGreaterThan(0);
 });
