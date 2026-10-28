@@ -20,6 +20,20 @@ it('shares configured false for a fresh user and true after saving via the web r
             ->where('appearance.email_notifications', false));
 });
 
+it('saves only the theme when the top-bar toggle sends just the theme', function () {
+    $user = User::factory()->create();
+    $user->preferences()->create(['theme' => 'system', 'email_notifications' => false]);
+
+    $this->actingAs($user)->patch('/workspace/preferences', ['theme' => 'dark'])
+        ->assertRedirect();
+
+    $this->actingAs($user->fresh())->get('/workspace')
+        ->assertInertia(fn ($page) => $page
+            ->where('appearance.theme', 'dark')
+            ->where('appearance.mode', 'dark')
+            ->where('appearance.email_notifications', false));
+});
+
 it('validates the theme on the web preferences route', function () {
     $user = User::factory()->create();
 

@@ -278,3 +278,53 @@
         color: var(--ws-warn);
     }
 }
+
+/* ThemeToggle's circular reveal: the new theme grows from the control while
+   its landscape stays live above it (ported from sdoc). */
+:root.theme-reveal::view-transition,
+:root.theme-reveal::view-transition-group(*),
+:root.theme-reveal::view-transition-image-pair(*),
+:root.theme-reveal::view-transition-old(*),
+:root.theme-reveal::view-transition-new(*) {
+    pointer-events: none;
+}
+:root.theme-reveal::view-transition-group(*) {
+    animation: none;
+}
+:root.theme-reveal::view-transition-image-pair(root) {
+    isolation: isolate;
+}
+:root.theme-reveal::view-transition-old(root),
+:root.theme-reveal::view-transition-new(root) {
+    mix-blend-mode: normal;
+    animation: none;
+}
+:root.theme-reveal::view-transition-old(root) {
+    z-index: 1;
+}
+:root.theme-reveal::view-transition-new(root) {
+    z-index: 2;
+    animation: theme-daybreak 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:root.theme-reveal::view-transition-group(theme-toggle) {
+    z-index: 3;
+}
+:root.theme-reveal::view-transition-old(theme-toggle) {
+    display: none;
+}
+:root.theme-reveal::view-transition-new(theme-toggle) {
+    animation: none;
+}
+@keyframes theme-daybreak {
+    from {
+        clip-path: circle(0px at var(--theme-x) var(--theme-y));
+    }
+    to {
+        clip-path: circle(var(--theme-radius) at var(--theme-x) var(--theme-y));
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    :root.theme-reveal::view-transition-new(root) {
+        animation: none;
+    }
+}

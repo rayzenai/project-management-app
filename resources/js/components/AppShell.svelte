@@ -28,6 +28,7 @@
     import CommandPalette from './CommandPalette.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
     import TaskPeek from './TaskPeek.svelte';
+    import ThemeToggle from './ThemeToggle.svelte';
     import Toasts from './Toasts.svelte';
     import WorkspaceNotesBoard from './WorkspaceNotesBoard.svelte';
 
@@ -559,8 +560,9 @@
                 {#if bar}
                     {@render bar()}
                 {:else}
-                    <div class="truncate font-medium">{title}</div>
+                    <div class="flex-1 truncate font-medium">{title}</div>
                 {/if}
+                <ThemeToggle />
             </div>
 
             <main
