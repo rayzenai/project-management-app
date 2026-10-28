@@ -13,3 +13,5 @@ storage/framework/cache/data/*
 storage/framework/sessions/*
 storage/framework/views/*
 tests
+# Production database downloads: dock.sh builds from this working tree
+dumps

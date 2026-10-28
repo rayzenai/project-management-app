@@ -27,6 +27,11 @@ yarn-error.log
 /.vscode
 /.zed
 .env.docker
+# Production env for the SDOC VM deployment (tasks.sdoc.gov.np); lives in Dokploy
+.env.sdoc
+# Production database downloads (personal data) and their script
+dump_tasks.sh
+/dumps/
 
 # Dokploy API credentials (never commit)
 .dokploy.env

@@ -145,15 +145,41 @@ Run that exact image locally against your own Postgres and Redis:
 ./dock.sh down
 ```
 
-Deployed as three Dokploy applications off this one image (`./deploy.sh`
-triggers them):
+The original PMOPM instance ran as three Dokploy applications off this one image
+on a separate server (`202.45.146.44`): `pmopm-api` (image default, runs
+migrations via AUTORUN), `pmopm-scheduler` and `pmopm-queue`. Its GitHub push
+webhooks still exist. Workers need `AUTORUN_ENABLED=false` (so they don't race
+the web app's migrations) and a disabled Swarm healthcheck (they don't run
+nginx). See `~/rayzen/DOKPLOY.md` §4 for the full playbook.
 
-| Application | Command | Notes |
-| --- | --- | --- |
-| `pmopm-api` | (image default) | The only app with a domain; runs migrations via AUTORUN |
-| `pmopm-scheduler` | `php artisan schedule:work` | `workspace:prune-trashed` daily + `workspace:send-deadline-reminders` at `PM_REMINDERS_RUN_AT` |
-| `pmopm-queue` | `php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600` | |
+### Production: SDOC instance (`https://tasks.sdoc.gov.np`)
 
-Both workers need `AUTORUN_ENABLED=false` (so they don't race the web app's
-migrations) and a disabled Swarm healthcheck (they don't run nginx). See
-`~/rayzen/DOKPLOY.md` §4 for the full playbook.
+Production runs on the SDOC VM's own Dokploy (private
+`10.5.23.138`, VPN only; dashboard via `~/rayzen/sdoc/open_dokploy.sh`), project
+`tasks` / `production`. It replaced the Kaneo trial (since deleted) on 27 Oct 2026.
+
+| Service | Notes |
+| --- | --- |
+| `tasks-web` (`esMcfCXzNzINE0Z8bATg1`) | This Dockerfile, `main` over HTTPS (public repo), port 8080, domain `tasks.sdoc.gov.np` with Let's Encrypt |
+| `tasks-scheduler` (`gXpBWLno7vIpZgTwq4p9z`) | `php artisan schedule:work`, `AUTORUN_ENABLED=false`, healthcheck NONE |
+| `tasks-postgres` | PostgreSQL 18.6, database/user `tasks` |
+| `tasks-redis` | Redis 8.2, password, 128 MB `volatile-lru`, AOF |
+
+No queue worker: nothing is queued, so `QUEUE_CONNECTION=sync`. Mail uses
+SDOC's SMTP account (`no-reply@sdoc.gov.np`). The production env is in Dokploy
+and in the gitignored, owner-only `.env.sdoc`, which also holds the seeded
+super-admin password. The app always runs on Nepal time (`Asia/Kathmandu`,
+fixed in `config/app.php` and the pgsql connection), so the reminders fire at
+`PM_REMINDERS_RUN_AT` Nepal time.
+
+GitHub webhooks cannot reach the panel, so deploys are manual. Both scripts need
+the SDOC VPN and read the VM's credentials from the sibling `../sdoc` checkout
+(`ssh.txt`, `dokploy-access.txt`):
+
+```bash
+git push origin main     # Dokploy builds origin/main, not this checkout
+./deploy.sh              # web (migrates at boot), then scheduler; waits for build, rollout and /up
+./deploy.sh web          # one service
+./dump_tasks.sh          # production DB → dumps/tasks-<timestamp>.dump (gitignored)
+./dump_tasks.sh --restore-latest   # replace the local .env database with the last dump
+```

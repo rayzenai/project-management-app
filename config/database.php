@@ -97,6 +97,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Same zone as config/app.php, so CURRENT_TIMESTAMP defaults match app writes.
+            'timezone' => 'Asia/Kathmandu',
         ],
 
         'sqlsrv' => [

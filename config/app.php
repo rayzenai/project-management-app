@@ -60,12 +60,14 @@ return [
     |--------------------------------------------------------------------------
     |
     | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | will be used by the PHP date and date-time functions. Always Nepal
+    | time (UTC+05:45): deadlines, "today", and the scheduled reminders all
+    | follow it. Deliberately not read from env. The pgsql connection in
+    | config/database.php sets the same zone for database-side defaults.
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Kathmandu',
 
     /*
     |--------------------------------------------------------------------------
