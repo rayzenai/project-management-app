@@ -151,7 +151,9 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   `scopeAssignableFor(Project)` is the single source of truth for assignees.
 - **Team** — auto-slugged; belongs to its home organization;
   `is_cross_organization`; pivot `member_team` with `role`. Its progress page
-  (`TeamProgressQuery`: workload, Gantt, activity; polled every 15s). **ProjectActivity** —
+  (`TeamProgressQuery`: workload, Gantt, activity; polled every 15s) is a
+  report: `components/team/GanttChart.svelte` selects, and
+  `TaskReportDrawer.svelte` shows the task read-only (never the editable Peek). **ProjectActivity** —
   polymorphic audit log written only by observers. **WorkspaceNote** — personal
   stickies. **ProjectAssignment / ProjectNote / ProjectContact / TaskComment** —
   task children. **ProjectDigestSubscriber** — weekly digest recipients.

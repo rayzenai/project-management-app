@@ -278,6 +278,70 @@ export interface TaskPreview {
     comments_count: number;
 }
 
+/** One person's workload on a team's progress page (GET /workspace/teams/{team}/progress). */
+export interface ProgressMember {
+    id: number;
+    name: string;
+    title: string | null;
+    organization: string | null;
+    role: 'leader' | 'member';
+    is_active: boolean;
+    assigned: number;
+    open: number;
+    done: number;
+    overdue: number;
+    due_this_week: number;
+    /** Average of their own progress per task, finished tasks counting 100; null with no tasks. */
+    progress: number | null;
+    last_active_at: string | null;
+}
+
+/** A task as the team Gantt chart lays it out. Dates are YYYY-MM-DD (start, end) or ISO. */
+export interface ProgressTask {
+    id: number;
+    slug: string;
+    title: string;
+    item_number: number | null;
+    project: { slug: string; title: string; code: string };
+    status: string;
+    priority: string;
+    progress: number;
+    is_complete: boolean;
+    is_late: boolean;
+    /** When the task was opened. */
+    start: string | null;
+    /** When it was finished, or its deadline while open. */
+    end: string | null;
+    deadline_at: string | null;
+    completed_at: string | null;
+    assignees: { id: number; name: string; in_team: boolean }[];
+}
+
+export interface ProgressActivity {
+    id: number;
+    description: string;
+    user_name: string | null;
+    task_title: string | null;
+    task_slug: string | null;
+    project_slug: string | null;
+    happened_at: string | null;
+}
+
+export interface TeamProgress {
+    team: {
+        id: number;
+        name: string;
+        description: string | null;
+        organization: string | null;
+        is_cross_organization: boolean;
+    };
+    members: ProgressMember[];
+    tasks: ProgressTask[];
+    truncated: boolean;
+    activity: ProgressActivity[];
+    generated_at: string;
+}
+
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
 export interface QuickAddProject extends ProjectSummary {
     member_ids?: Id[];
