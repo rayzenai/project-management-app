@@ -35,6 +35,7 @@ class ProjectResource extends JsonResource
             'archived_at' => $this->archived_at?->toIso8601String(),
             'can_archive' => WorkspaceAccess::canArchiveProject($request->user(), $this->resource),
             'can_manage_access' => WorkspaceAccess::canManageProjectAccess($request->user(), $this->resource),
+            'can_view_progress' => WorkspaceAccess::canViewProjectProgress($request->user(), $this->resource),
             'teams' => $this->whenLoaded('teams', fn () => $this->teams->map(fn (Team $t): array => [
                 'id' => $t->id,
                 'name' => $t->name,

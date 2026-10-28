@@ -14,6 +14,7 @@
         projectCode = null,
         index,
         isDragging,
+        related = false,
         nest = null,
         onpointerdown,
     }: {
@@ -23,6 +24,8 @@
         projectCode?: string | null;
         index: number;
         isDragging: boolean;
+        /** Linked by a dependency to the card being hovered or focused. */
+        related?: boolean;
         /**
          * Another card is being dragged onto this one: whether letting go
          * would make it wait for this task, and the sentence saying so.
@@ -59,7 +62,9 @@
             ? nest.ok
                 ? 'border-accent bg-accent-soft ring-2 ring-accent/40'
                 : 'border-danger ring-2 ring-danger/30'
-            : 'border-line'
+            : related
+              ? 'border-accent'
+              : 'border-line'
     }`}
 >
     <div class="flex h-5 items-center justify-between gap-2">

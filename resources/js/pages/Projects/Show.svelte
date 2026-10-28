@@ -1,5 +1,6 @@
 <script lang="ts">
     import { inertia, page, router } from '@inertiajs/svelte';
+    import { ChartGantt } from '@lucide/svelte';
     import { onMount } from 'svelte';
     import { SvelteMap, SvelteSet } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
@@ -206,6 +207,14 @@
             {/if}
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
+            {#if project.can_view_progress}
+                <a
+                    href={`/workspace/projects/${project.slug}/progress`}
+                    use:inertia
+                    class="btn-ghost"
+                    ><ChartGantt class="h-3.5 w-3.5" />Progress</a
+                >
+            {/if}
             {#if project.can_manage_access && !project.is_archived}
                 <button
                     type="button"

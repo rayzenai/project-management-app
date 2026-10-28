@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PlanTrackerController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ProjectProgressController;
 use App\Http\Controllers\Api\QuickAddController;
 use App\Http\Controllers\Api\SubtaskController;
 use App\Http\Controllers\Api\TaskCommentController;
@@ -85,6 +86,7 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
             Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
             Route::get('/projects/{project:slug}', [ProjectController::class, 'show'])->name('projects.show');
+            Route::get('/projects/{project:slug}/progress', ProjectProgressController::class)->name('projects.progress');
             Route::patch('/projects/{project:slug}', [ProjectController::class, 'update'])->name('projects.update');
             Route::patch('/projects/{project:slug}/archive', [ProjectController::class, 'archive'])->name('projects.archive');
             Route::patch('/projects/{project:slug}/restore', [ProjectController::class, 'restore'])->name('projects.restore');

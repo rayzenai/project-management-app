@@ -85,6 +85,7 @@ Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
 | GET | `/workspace/projects` | list — visibility-scoped. `?archived=1` for archived |
 | POST | `/workspace/projects` | create. `team_ids: int[]` (required & non-empty **unless** `is_public`; all from the project's organization; leaders may only attach teams they lead) and `is_public: bool` (office admin / super-admin; public means everyone in its organization, ignored from others). A super-admin sends `organization_id`; otherwise it is the office admin's organization or that of the leader's teams |
 | GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller |
+| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. For leaders of its teams, its office admin and super-admins (`project.can_view_progress`) |
 | PATCH | `/workspace/projects/{slug}` | update. Same `team_ids` / `is_public` rules as create |
 | PATCH | `/workspace/projects/{slug}/archive` | soft-archive (leader of an attached team, its office admin, or a super-admin) |
 | PATCH | `/workspace/projects/{slug}/restore` | un-archive |

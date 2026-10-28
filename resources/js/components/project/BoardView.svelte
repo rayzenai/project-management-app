@@ -1,7 +1,15 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { Plus } from '@lucide/svelte';
+    import { flip } from 'svelte/animate';
     import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+    import {
+        allowedSlots,
+        linkPaths,
+        orderByDependencies,
+        prerequisitesOf,
+    } from '../../lib/dependencies';
+    import type { CardBox, LinkKind } from '../../lib/dependencies';
     import { toast } from '../../lib/toast.svelte';
     import type { Project, Status, Task } from '../../lib/types';
     import StatusGlyph from '../StatusGlyph.svelte';
@@ -41,6 +49,8 @@
     let composerOpenFor = $state<string | null>(null);
 
     const knownValues = $derived(new SvelteSet(statuses.map((s) => s.value)));
+    /** Every task each one waits for, directly or through others. */
+    const prerequisites = $derived(prerequisitesOf(tasks));
     const columnDefs = $derived.by(() => {
         const defs = statuses.map((s) => ({
             value: s.value,
@@ -101,6 +111,11 @@
                         .filter((t): t is Task => t !== undefined),
                 );
             }
+        }
+
+        // A task always sits below the tasks it waits for.
+        for (const [key, list] of map) {
+            map.set(key, orderByDependencies(list, prerequisites));
         }
 
         return map;
@@ -180,6 +195,7 @@
         document.body.style.cursor = 'grabbing';
 
         dragState = { id: press.task.id, fromStatus: press.task.status };
+        focusId = null;
         moveGhost(event.clientX, event.clientY);
     }
 
@@ -252,30 +268,6 @@
             : `#${task.id}`;
     }
 
-    /** Whether `from` already waits for `to`, directly or through others. */
-    function waitsFor(from: number, to: number): boolean {
-        const seen: number[] = [];
-        let frontier = [from];
-
-        while (frontier.length > 0) {
-            if (frontier.includes(to)) {
-                return true;
-            }
-
-            seen.push(...frontier);
-            frontier = frontier
-                .flatMap(
-                    (id) =>
-                        tasks
-                            .find((t) => t.id === id)
-                            ?.dependencies?.map((d) => d.id) ?? [],
-                )
-                .filter((id) => !seen.includes(id));
-        }
-
-        return false;
-    }
-
     /** What letting go over another card would do, in words. */
     function describeNest(
         draggedId: number,
@@ -294,7 +286,7 @@
             };
         }
 
-        if (waitsFor(targetId, draggedId)) {
+        if (prerequisites.get(targetId)?.has(draggedId)) {
             return {
                 id: targetId,
                 ok: false,
@@ -303,6 +295,26 @@
         }
 
         return { id: targetId, ok: true, label: `${a} will wait for ${b}` };
+    }
+
+    /** Keeps a move below what the dragged task waits for and above what waits for it. */
+    function clampSlot<T extends { status: string; index: number }>(
+        target: T,
+    ): T {
+        if (!dragState) {
+            return target;
+        }
+
+        const { min, max } = allowedSlots(
+            columns.get(target.status) ?? [],
+            dragState.id,
+            prerequisites,
+        );
+
+        return {
+            ...target,
+            index: Math.min(Math.max(target.index, min), max),
+        };
     }
 
     /** The ghost shrinks while held over a card, as if going into it. */
@@ -422,7 +434,7 @@
             shrinkGhost(true);
         } else {
             nestTarget = null;
-            hoverTarget = target;
+            hoverTarget = target ? clampSlot(target) : null;
             shrinkGhost(false);
         }
 
@@ -436,7 +448,8 @@
             return; // a plain click: the card's own click handler opens the peek
         }
 
-        const target = targetAt(event.clientX, event.clientY) ?? hoverTarget;
+        const at = targetAt(event.clientX, event.clientY) ?? hoverTarget;
+        const target = at && at.nestId === undefined ? clampSlot(at) : at;
         const state = dragState;
         const verdict =
             target?.nestId !== undefined
@@ -510,6 +523,178 @@
 
     $effect(() => release);
 
+    /*
+     * Dependency lines: a dotted line from each task to the task waiting for
+     * it, drawn under the cards. Hovering or focusing a card picks out its own
+     * lines, set moving, and the cards at their other ends.
+     */
+    const TONES = ['idle', 'late', 'done', 'focus'] as const;
+    type Tone = (typeof TONES)[number];
+    const STROKE: Record<Tone, string> = {
+        idle: 'stroke-fg-muted',
+        late: 'stroke-danger',
+        done: 'stroke-fg-faint',
+        focus: 'stroke-accent',
+    };
+    const FILL: Record<Tone, string> = {
+        idle: 'fill-fg-muted',
+        late: 'fill-danger',
+        done: 'fill-fg-faint',
+        focus: 'fill-accent',
+    };
+    /** Cards slide to new places for 220ms; lines are drawn once they land. */
+    const SLIDE_MS = 220;
+
+    const uid = $props.id();
+    let lines = $state<
+        {
+            from: number;
+            to: number;
+            tone: Tone;
+            kind: LinkKind;
+            d: string;
+            stub: string | null;
+        }[]
+    >([]);
+    let settling = $state(true);
+    let focusId = $state<number | null>(null);
+    let layout = '';
+
+    const touches = (line: { from: number; to: number }) =>
+        line.from === focusId || line.to === focusId;
+    const relatedIds = $derived(
+        focusId === null
+            ? []
+            : lines.flatMap((l) =>
+                  l.from === focusId
+                      ? [l.to]
+                      : l.to === focusId
+                        ? [l.from]
+                        : [],
+              ),
+    );
+    // Under the cards: everything but a picked-out far link, which is drawn
+    // whole over the cards instead. The picked-out lines last, on top.
+    const underLines = $derived(
+        focusId === null
+            ? lines
+            : [
+                  ...lines.filter((l) => !touches(l)),
+                  ...lines.filter((l) => touches(l) && l.kind !== 'far'),
+              ],
+    );
+    const overLines = $derived(
+        focusId === null
+            ? []
+            : lines.filter((l) => touches(l) && l.kind === 'far'),
+    );
+
+    /** A card's place in the board's scrolling content, ignoring transforms. */
+    function offsetIn(el: HTMLElement, root: HTMLElement) {
+        let left = 0;
+        let top = 0;
+        let node: HTMLElement | null = el;
+
+        while (node && node !== root) {
+            left += node.offsetLeft;
+            top += node.offsetTop;
+            node = node.offsetParent as HTMLElement | null;
+        }
+
+        return { left, top };
+    }
+
+    function measureLines() {
+        const board = boardEl;
+
+        if (!board) {
+            return;
+        }
+
+        const cards: CardBox[] = Array.from(
+            board.querySelectorAll<HTMLElement>('[data-task-id]'),
+            (el) => ({
+                id: Number(el.dataset.taskId),
+                col: columnDefs.findIndex(
+                    (def) =>
+                        def.value ===
+                        el.closest<HTMLElement>('[data-column]')?.dataset
+                            .column,
+                ),
+                ...offsetIn(el, board),
+                width: el.offsetWidth,
+                height: el.offsetHeight,
+            }),
+        );
+
+        lines = linkPaths(
+            cards,
+            tasks.flatMap((t) =>
+                (t.dependencies ?? []).map((d) => ({
+                    from: d.id,
+                    to: t.id,
+                    tone: (d.is_complete
+                        ? 'done'
+                        : d.is_late
+                          ? 'late'
+                          : 'idle') as Tone,
+                })),
+            ),
+        );
+    }
+
+    $effect(() => {
+        const board = boardEl;
+
+        if (!board) {
+            return;
+        }
+
+        // Hide the lines while cards slide to new places, then redraw.
+        const next = [...columns.values()]
+            .map((list) => list.map((t) => t.id).join(','))
+            .join('|');
+        const moved = next !== layout;
+        layout = next;
+
+        if (moved) {
+            settling = true;
+        }
+
+        const timer = setTimeout(
+            () => {
+                measureLines();
+                settling = false;
+            },
+            moved && !reducedMotion() ? SLIDE_MS + 20 : 0,
+        );
+        let frame = 0;
+        const resized = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(measureLines);
+        });
+        board
+            .querySelectorAll('[data-task-id]')
+            .forEach((el) => resized.observe(el));
+
+        return () => {
+            clearTimeout(timer);
+            cancelAnimationFrame(frame);
+            resized.disconnect();
+        };
+    });
+
+    function focusFrom(event: Event) {
+        if (dragState) {
+            return;
+        }
+
+        const id = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+            '[data-task-id]',
+        )?.dataset.taskId;
+        focusId = id ? Number(id) : null;
+    }
+
     function unchangedOrder(orderedIds: number[], status: string): boolean {
         const current = (columns.get(status) ?? []).map((t) => t.id);
 
@@ -560,11 +745,77 @@
     }
 </script>
 
+{#snippet dependencyLine(line: (typeof lines)[number], d: string)}
+    {@const tone = focusId !== null && touches(line) ? 'focus' : line.tone}
+    <path
+        {d}
+        fill="none"
+        class={`${STROKE[tone]} transition-opacity duration-150 ${focusId !== null && tone !== 'focus' ? 'opacity-25' : ''}`}
+        class:dep-flow={tone === 'focus'}
+        stroke-width="2"
+        stroke-dasharray="0.5 4.5"
+        stroke-linecap="round"
+        marker-start={`url(#${uid}-dot-${tone})`}
+        marker-end={`url(#${uid}-head-${tone})`}
+    />
+{/snippet}
+
+<!-- Hover only picks out dependency lines; keyboard focus does the same. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
     bind:this={boardEl}
     onclickcapture={swallowClickAfterDrag}
-    class="flex min-h-0 flex-1 overflow-x-auto border-t border-line bg-surface-alt px-3 py-7"
+    onpointerover={focusFrom}
+    onpointerleave={() => (focusId = null)}
+    onfocusin={focusFrom}
+    onfocusout={() => (focusId = null)}
+    class="relative flex min-h-0 flex-1 overflow-x-auto border-t border-line bg-surface-alt px-3 py-7"
 >
+    <svg
+        class={`pointer-events-none absolute top-0 left-0 overflow-visible transition-opacity duration-200 ${settling || dragState ? 'opacity-0' : ''}`}
+        width="1"
+        height="1"
+        aria-hidden="true"
+    >
+        <defs>
+            {#each TONES as tone (tone)}
+                <marker
+                    id={`${uid}-head-${tone}`}
+                    viewBox="0 0 8 8"
+                    refX="7.5"
+                    refY="4"
+                    markerWidth="8"
+                    markerHeight="8"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto"
+                >
+                    <path
+                        d="M1.5 1 L7.5 4 L1.5 7"
+                        fill="none"
+                        class={STROKE[tone]}
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </marker>
+                <marker
+                    id={`${uid}-dot-${tone}`}
+                    viewBox="0 0 6 6"
+                    refX="3"
+                    refY="3"
+                    markerWidth="6"
+                    markerHeight="6"
+                    markerUnits="userSpaceOnUse"
+                >
+                    <circle cx="3" cy="3" r="2.25" class={FILL[tone]} />
+                </marker>
+            {/each}
+        </defs>
+        {#each underLines as line (`${line.from}-${line.to}`)}
+            {@render dependencyLine(line, line.stub ?? line.d)}
+        {/each}
+    </svg>
+
     {#each columnDefs as def, columnIndex (def.value)}
         {@const colTasks = columns.get(def.value) ?? []}
         {@const isHover = hoverTarget?.status === def.value}
@@ -604,24 +855,32 @@
                     </p>
                 {:else}
                     {#each colTasks as task, index (task.id)}
-                        {#if isHover && hoverTarget?.index === index}
-                            <div
-                                class="-mb-1 h-0.5 rounded-full bg-accent"
-                            ></div>
-                        {/if}
-                        <BoardCard
-                            {task}
-                            projectSlug={project.slug}
-                            projectCode={project.code}
-                            {index}
-                            isDragging={dragState?.id === task.id}
-                            nest={nestTarget?.id === task.id
-                                ? nestTarget
-                                : null}
-                            onpointerdown={droppable
-                                ? (e) => onCardPointerDown(task, e)
-                                : undefined}
-                        />
+                        <div
+                            class="flex flex-col gap-3.5"
+                            animate:flip={{
+                                duration: reducedMotion() ? 0 : SLIDE_MS,
+                            }}
+                        >
+                            {#if isHover && hoverTarget?.index === index}
+                                <div
+                                    class="-mb-1 h-0.5 rounded-full bg-accent"
+                                ></div>
+                            {/if}
+                            <BoardCard
+                                {task}
+                                projectSlug={project.slug}
+                                projectCode={project.code}
+                                {index}
+                                isDragging={dragState?.id === task.id}
+                                related={relatedIds.includes(task.id)}
+                                nest={nestTarget?.id === task.id
+                                    ? nestTarget
+                                    : null}
+                                onpointerdown={droppable
+                                    ? (e) => onCardPointerDown(task, e)
+                                    : undefined}
+                            />
+                        </div>
                     {/each}
                     {#if isHover && hoverTarget?.index === colTasks.length}
                         <div class="-mt-1 h-0.5 rounded-full bg-accent"></div>
@@ -638,4 +897,35 @@
             </div>
         </div>
     {/each}
+
+    <!-- A picked-out far link, drawn whole across the cards between. -->
+    <svg
+        class={`pointer-events-none absolute top-0 left-0 z-10 overflow-visible ${settling || dragState ? 'opacity-0' : ''}`}
+        width="1"
+        height="1"
+        aria-hidden="true"
+    >
+        {#each overLines as line (`${line.from}-${line.to}`)}
+            {@render dependencyLine(line, line.d)}
+        {/each}
+    </svg>
 </div>
+
+<style>
+    /* A picked-out line's dots run toward the task that waits. */
+    .dep-flow {
+        animation: dep-flow 0.7s linear infinite;
+    }
+
+    @keyframes dep-flow {
+        to {
+            stroke-dashoffset: -5;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .dep-flow {
+            animation: none;
+        }
+    }
+</style>

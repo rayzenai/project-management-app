@@ -286,6 +286,15 @@ class WorkspaceAccess
             && $project->teams()->whereIn('teams.id', $ledTeamIds)->exists();
     }
 
+    /**
+     * The project's progress report (everyone's workload and activity on it)
+     * is for the people who run the project, as a team's is for its leaders.
+     */
+    public static function canViewProjectProgress(?Authenticatable $user, Project $project): bool
+    {
+        return self::canManageProjectAccess($user, $project);
+    }
+
     public static function canArchiveProject(?Authenticatable $user, Project $project): bool
     {
         return self::canManageProjectAccess($user, $project);

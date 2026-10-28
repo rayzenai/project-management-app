@@ -150,6 +150,9 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   (`TaskDependency::reaches`); `Task::dependencies()` / `dependents()`;
   logged by `TaskDependencyObserver`. The Gantt draws them as arrows and
   `resources/js/lib/schedule.ts` moves waiting work after what it waits for.
+  On the board (`resources/js/lib/dependencies.ts`) a task always sits below
+  what it waits for in its column, dotted lines join them, and dropping a
+  card onto another links them.
 - **Subtask** — personal (`user_id`). **Member** — a person in one organization
   (none only for a super-admin's own member), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
@@ -157,7 +160,9 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 - **Team** — auto-slugged; belongs to its home organization;
   `is_cross_organization`; pivot `member_team` with `role`. Its progress page
   (`TeamProgressQuery`: workload, Gantt, activity; polled every 15s) is a
-  report: `components/team/GanttChart.svelte` selects, and
+  report, as is a project's (`ProjectProgressQuery`, for whoever passes
+  `canViewProjectProgress`); both build on `ProgressReport` and render
+  `components/ProgressReport.svelte`. `components/team/GanttChart.svelte` selects, and
   `TaskReportDrawer.svelte` shows the task read-only (never the editable Peek). **ProjectActivity** —
   polymorphic audit log written only by observers. **WorkspaceNote** — personal
   stickies. **ProjectAssignment / ProjectNote / ProjectContact / TaskComment** —

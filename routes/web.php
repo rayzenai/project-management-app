@@ -12,6 +12,7 @@ use App\Http\Controllers\Workspace\OrganizationController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProjectController;
+use App\Http\Controllers\Workspace\ProjectProgressController;
 use App\Http\Controllers\Workspace\QuickAddController;
 use App\Http\Controllers\Workspace\SubtaskController;
 use App\Http\Controllers\Workspace\TaskCommentController;
@@ -72,6 +73,7 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
         Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
         Route::get('/projects/{project:slug}', [ProjectController::class, 'show'])->name('projects.show');
+        Route::get('/projects/{project:slug}/progress', ProjectProgressController::class)->name('projects.progress');
         Route::patch('/projects/{project:slug}', [ProjectController::class, 'update'])->name('projects.update');
         Route::patch('/projects/{project:slug}/archive', [ProjectController::class, 'archive'])->name('projects.archive');
         Route::patch('/projects/{project:slug}/restore', [ProjectController::class, 'restore'])->name('projects.restore');

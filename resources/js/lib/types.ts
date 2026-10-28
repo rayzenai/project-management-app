@@ -88,6 +88,7 @@ export interface Project extends ProjectSummary {
     archived_at?: string | null;
     can_archive?: boolean;
     can_manage_access?: boolean;
+    can_view_progress?: boolean;
     tasks_count?: number;
     /** Present on the project index only. */
     percent_complete?: number;
@@ -356,7 +357,16 @@ export interface ProgressActivity {
     happened_at: string | null;
 }
 
-export interface TeamProgress {
+/** The body of a live progress page, a team's or a project's. */
+export interface ProgressReport {
+    members: ProgressMember[];
+    tasks: ProgressTask[];
+    truncated: boolean;
+    activity: ProgressActivity[];
+    generated_at: string;
+}
+
+export interface TeamProgress extends ProgressReport {
     team: {
         id: number;
         name: string;
@@ -364,11 +374,18 @@ export interface TeamProgress {
         organization: string | null;
         is_cross_organization: boolean;
     };
-    members: ProgressMember[];
-    tasks: ProgressTask[];
-    truncated: boolean;
-    activity: ProgressActivity[];
-    generated_at: string;
+}
+
+export interface ProjectProgress extends ProgressReport {
+    project: {
+        id: number;
+        slug: string;
+        title: string;
+        title_np: string | null;
+        code: string;
+        organization: string | null;
+        is_archived: boolean;
+    };
 }
 
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
