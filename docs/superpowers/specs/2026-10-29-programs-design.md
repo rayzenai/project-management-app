@@ -93,6 +93,7 @@ Extend:
 | `canViewProject` | `managesProgramOf` |
 | `Project::scopeVisibleTo` (its twin) | `orWhereIn('program_id', managedProgramIds)` |
 | `canManageProjectAccess` | `managesProgramOf`. This carries progress (`canViewProjectProgress`), archiving and repository linking with it, as for a project manager. |
+| `canViewProjectCode` and its twin `Project::scopeCodeVisibleTo` (git phase 1) | `managesProgramOf`, where git is on. A project manager sees code by sitting on the team; the program manager stands above them and can already link repositories. |
 | `canManageRosterOf`, `canViewTeamProgress` | the program manager of the team's project |
 | `canRemoveFromTeam` | the program manager of the team's project, under the same limit as a leader: never the project's manager |
 | `Team::scopeVisibleTo`, `Member::scopeVisibleTo` | the teams of projects in a program they manage, and the people on those teams |
@@ -149,7 +150,7 @@ change to `WorkspaceAccess` or a service. At least:
 - A deactivated program manager has no program powers.
 - Taking a project out of the program, and deleting the program, both end access; deleting leaves every project intact.
 - A program's manager must be an active person of its organization; a project joins only a program of its organization.
-- `canViewProject` and `scopeVisibleTo` agree for a program manager.
+- `canViewProject` and `scopeVisibleTo` agree for a program manager, as do `canViewProjectCode` and `scopeCodeVisibleTo`.
 - Only office admins and super-admins manage programs, on web and API.
 - Every existing test passes unchanged, except ones that list every shared prop or resource key, which gain the new ones.
 
