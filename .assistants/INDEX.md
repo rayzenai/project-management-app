@@ -1,6 +1,6 @@
 # .assistants — PMOPM project map
 
-- **generated-from:** `b2ce57fbc361a6262c9e99f719569301652eb0b9`
+- **generated-from:** `ebc58164054ea756ef2c7055a36f4b4f894c836a`
 
 Agent-readable map of this repo. Read alongside `CLAUDE.md` (binding rules);
 these files are orientation, not rules.
@@ -17,7 +17,7 @@ external systems. The former
 - [struct.md](struct.md) — directory layout and where each concern lives.
 - [conventions.md](conventions.md) — coding conventions, commands, CI gates.
 - [backend.md](backend.md) — Laravel architecture: request flow, authorization
-  model, domain model, notifications, scheduled commands.
+  model, domain model, Git/OIDC, notifications, scheduled commands.
 - [frontend.md](frontend.md) — Svelte 5 + Inertia pages/components, the
   semantic theming layer, UI rules.
 - [testing.md](testing.md) — test layout, how to run, what coverage is expected.

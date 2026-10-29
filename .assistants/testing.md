@@ -8,7 +8,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - `tests/Feature/Workspace/**` — web-surface feature tests (visibility,
   permissions, quick-add, notifications, soft-delete/restore, reminders,
   seeder, plan tracker, appearance, login-detail email, organizations,
-  project progress, task dependencies, multi-tenant isolation).
+  project progress, task dependencies, multi-tenant isolation, stable task codes,
+  Git connections, OIDC sign-in and forge offboarding).
 - `tests/Feature/Workspace/Api/**` — API-surface twins (`AuthApiTest`,
   `ProjectApiTest`, `TaskApiTest`, `TaskCommentApiTest`, `MemberApiTest`,
   `TeamRosterApiTest`, `NotificationApiTest`, `RestoreApiTest`).
@@ -27,7 +28,21 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   project-feed visibility on web/API and the publication capability.
   `GuidePageTest` checks signed-in access and guest redirects;
   `SdocProjectsSeederTest` checks project/team creation, safe reruns and
-  isolation from another organization's same-named project.
+  isolation from another organization's same-named project, plus agreed-key
+  migration with aliases and preservation of admin-chosen keys.
+- `ProjectKeyTest` covers suggestion/backfill, tenant uniqueness, reserved aliases
+  and web/API key-change permissions; `ProjectCodeTest` covers resource/query
+  code loading. `TaskNumberTest` covers backfill, counter non-reuse after purge,
+  number immutability on web/API, quick-add, code/alias search and legacy bounds.
+- `GitConnectionTest` covers web/API super-admin gates, forge ownership checks,
+  connection failures, URL validation/normalization, office uniqueness and secret
+  redaction. `ForgeOffboardingTest` covers deactivation/deletion across all
+  connections, partial failures, token masking and completion feedback.
+- `OidcProviderTest` covers discovery/JWKS, code-to-token claims, access/tenant
+  gates (including cross-organization teams), scope filtering, redirect/consent
+  handling, SPA login redirect, sessionless throttled token route, persistent
+  Forgejo-safe usernames, purge schedule and client command, with temporary
+  signing keys generated in the test.
 
 ## Running
 

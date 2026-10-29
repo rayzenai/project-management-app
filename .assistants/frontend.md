@@ -7,7 +7,8 @@ Single Inertia entry `resources/js/app.ts`; single root view
 
 `Home`, `MyWorkspace`, `PlanTracker`, `Auth/`, `Notifications/` (two tabs:
 personal inbox + workspace activity feed, `?tab=activity`),
-`Organizations/Index` (super-admin tenant CRUD), `Projects/Index` (grouped by manager),
+`Organizations/Index` (super-admin tenant CRUD + Git connection controls),
+`Projects/Index` (grouped by manager),
 `Projects/Show` (list/board/people views via `components/project/`),
 `Tasks/Show`, `Team/Index` (organization-aware People directory), and
 `Projects/Progress` (workload, Gantt, activity; polls every 15s while visible).
@@ -30,7 +31,8 @@ uses `applyAppearance` for the immediate transition).
 Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 `lib/quickAddTokens.ts` (server twin: `App\Support\QuickAddParser`).
 Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
-`TaskCode` (mono `CODE-123` id chip from project code + item number),
+`TaskCode` (mono `KEY-12` id chip from stored project key + permanent task number,
+shared formatter `lib/taskCode.ts`; `#12` when the project code is unknown),
 `TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`, `AssigneePicker/Stack`,
 `DateChip`, `StatusChip/Badge`, `CompleteCheckbox`. `DateChip` reads shared
 status `is_complete`/`is_closed` metadata; closed work shows historical dates.
@@ -48,8 +50,13 @@ Notifications: inbox Teams filter covers team additions and manager appointments
 the activity tab includes project-level team changes with no task.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
 TaskTableRow,ProjectFilters,ProjectSummaryStrip,ProjectEditForm,ColumnComposer}`.
-`ProjectEditForm` gates publication with `project.can_publish` (office admins
-and super-admins); cross-organization access remains super-admin-only.
+`ProjectEditForm` gates publication with `project.can_publish` and key editing
+with `project.can_change_key` (office admins and super-admins); old keys remain
+searchable aliases. Cross-organization access remains super-admin-only.
+Command-palette search, dependencies and Gantt labels use the permanent task
+number. Plan `item_number` stays editable; task details show it separately only
+when it differs from `number`. `Organizations/Index` connects/updates Git using
+forge address, owner and a write-only bot token, and can turn the connection off.
 `BoardView` uses pointer drag/drop: dropping onto a card adds a dependency;
 `lib/dependencies.ts` keeps waiting tasks below prerequisites and draws dotted
 links, including cross-column links.

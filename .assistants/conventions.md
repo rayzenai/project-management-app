@@ -11,6 +11,9 @@ vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
 php artisan test --compact tests/Feature/Workspace   # scoped test runs
 php artisan db:seed --class=WorkspaceDemoSeeder      # demo data (non-prod)
+php artisan passport:keys                            # local OIDC signing keys
+php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback
+deploy/forgejo/local.sh up                            # local forge against this tracker
 ./deploy.sh                                          # SDOC web + scheduler (VPN required)
 ```
 
@@ -35,6 +38,8 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
 - New polymorphic subjects must be added to the morph map in
   `AppServiceProvider` (strict morph map: `user`, `task`, `task-comment`, ...).
 - Slugs in routes, never numeric ids, for projects/tasks.
+- Task codes use stored project `key` + permanent task `number`; `item_number`
+  is editable plan metadata. Project selects that expose `code` must include `key`.
 - Never hardcode task status strings — derive from config
   (`Task::completeStatuses()`); lateness is derived, not a status.
 - The app and PostgreSQL connection are fixed to `Asia/Kathmandu`;
@@ -61,3 +66,8 @@ Write once: FormRequest (authorize + validate) → action Service (ServiceResult
 `tasks-scheduler`; there is no queue worker (`QUEUE_CONNECTION=sync`). Deploys
 are manual because the panel is private: push `main`, then run `./deploy.sh`
 over the SDOC VPN. The script waits for build, rollout and `/up` health.
+
+Forge deployment is separate: `deploy/forgejo/compose.yml` and
+`docs/forgejo.md` cover bootstrap, OIDC, backups and upgrades. Production OIDC
+signing uses `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY`; rerunning
+`git:oidc-client` keeps the client id but rotates its secret.

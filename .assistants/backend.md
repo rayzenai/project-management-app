@@ -52,6 +52,7 @@ Key methods: `isSuperAdmin`, `memberFor` (read-only),
 `canViewTeamProgress`, `canViewProjectProgress`, `canCreateMember`,
 `canManageMember`, `canViewProject`,
 `canCreateProject`, `canManageProjectAccess`, `canPublishProject`,
+`canChangeProjectKey` (office admin/super-admin), `canManageGit` (super-admin),
 `ledTeamIds`. `Project::scopeVisibleTo` is the query twin of `canViewProject`;
 `Team` and `Member` also expose `visibleTo`. Per-user `WeakMap` memos flush on
 both `RouteMatched` and `RequestHandled`.
@@ -84,8 +85,12 @@ mention notifications only reach project viewers.
   `CreateProjectService` creates both atomically; `StoreProjectRequest`
   requires `manager_id` for interactive creation. `ProjectResource.can_publish`
   exposes the office-admin/super-admin publication capability.
-  Derived `code` attribute (uppercased initials of the title's words, max 4, fallback
-  `P{id}`) exposed on Project/Task resources so tasks render as `CODE-123`.
+  Stored `key` (1 to 10 uppercase ASCII letters) is also its `code`;
+  `ProjectKeys` suggests a unique key from the title (fallback `P`). Current keys
+  and `ProjectKeyAlias` entries reserve keys within the organization. Renaming
+  via `UpdateProjectService` retains the old key as an alias. Requests filter
+  key changes through `canChangeProjectKey`; resources expose `can_change_key`.
+  Saved projects selected for `code` must load `key`; no title-based fallback.
 - **Task** — slug-routed `{project_id}-{slug}`; 100-point-plan fields
   (`item_number`, `category`, `deadline_type`, `responsible_ministry`,
   `title_np`, `description_np`) live in the `metadata` jsonb via `Attribute`
@@ -96,6 +101,15 @@ mention notifications only reach project viewers.
   Queries, reminders and task/reference/progress payloads share this rule;
   Home excludes closed work. `is_late` also covers finished-late/failed work
   and remains a separate derived attribute, never a status.
+  Permanent `number` comes from `projects.last_task_number` in the creating
+  hook; create/quick-add services lock the project row. Unique per project,
+  never fillable/request-editable, never reused even after purging trash.
+  `item_number` remains editable plan metadata (1..2147483647);
+  `nextItemNumber()` includes trash and returns null at the limit.
+  The backfill preserves unique legacy item numbers in 1..100000, then assigns
+  the rest sequentially. Resources/references/progress expose `number`;
+  `TaskSearchQuery` matches bare numbers or case-insensitive `KEY-12` using
+  current keys or aliases, within visible active projects.
 - **TaskDependency** — finish-to-start link (`task_id` waits for
   `depends_on_task_id`); `Task::dependencies()`/`dependents()` expose the graph.
   `StoreTaskDependencyRequest` rejects self-links, duplicates, other projects
@@ -158,11 +172,44 @@ Daily schedule in `routes/console.php`. Commands: `workspace:api-token`,
 `workspace:prune-trashed` (trash TTL from config) and
 `workspace:send-deadline-reminders`; both maintenance commands support
 `--pretend`. Weekly digest mail, command and subscriber model/table are retired.
+`passport:purge` also runs daily. `git:oidc-client {redirect_uri}` creates/reuses
+the sole Forgejo client; reruns keep its id and rotate its secret.
 
 `php artisan db:seed --class=SdocProjectsSeeder --force` explicitly seeds SDOC
 and eight private projects with their own teams, initially without managers.
-It is production-safe, creates missing records without overwriting existing
-project data, and is not called by `DatabaseSeeder`.
+It is production-safe and creates missing records. It applies agreed project
+keys to existing automatic keys via the alias-preserving rename service,
+leaves admin-chosen keys alone, and is not called by `DatabaseSeeder`.
 
 Application and PostgreSQL session timezones are fixed to `Asia/Kathmandu`.
 The one-time timestamp migration converts existing UTC wall-clock values.
+
+## Git / Forgejo (phase 0)
+
+- `Organization::gitConnection()` is one encrypted-token connection per office;
+  `GitConnection` hides token/webhook secret. Paired `OrganizationGitController`s
+  serve `POST/DELETE organizations/{organization}/git` via shared requests and
+  `EnableGitService`/`DisableGitService`. Enable verifies the token user's forge
+  organization ownership with `Services/Git/ForgejoClient` before saving. HTTPS
+  is required except on loopback; one forge organization connects to one office.
+  `OrganizationResource.git` exposes only base URL, owner and URL to super-admins.
+- OIDC: Passport + `jeremy379/laravel-openid-connect` (replaces Passport's provider;
+  Passport auto-discovery/routes disabled). `routes/web.php` registers authenticated
+  `/oauth/authorize` behind `EnsureCanUseGit` and sessionless, throttled
+  `/oauth/token`; `config/openid.php` enables discovery/JWKS, disables userinfo,
+  fixes issuer to `APP_URL`. `OAuthClient` skips consent. Access/refresh lifetimes:
+  one hour/one day. `User` retains Sanctum's `HasApiTokens`.
+- `Support/Git/GitAccess::organizationsFor` gates sign-in and `git_orgs`: connected
+  offices only; super-admins get all, active members their own plus offices of
+  projects whose teams they belong to. Inactive/missing members get none.
+  `Oidc/IdentityEntity` emits identity claims and, for the `git` scope, `git_orgs`
+  and `groups` (`forge-admins` for super-admins); absent access omits `git_orgs`.
+  `GitUsernames` assigns `users.git_username` once, respects Forgejo's alphabet,
+  reserved names/endings and shared user/organization namespace, and never renames
+  it after an email change. Login uses `Inertia::location` for OIDC redirects.
+- Member controllers call `RemoveFromForgeService` after deactivation/deletion:
+  remove the stored username from every connection using each office's token.
+  Forge failures do not block the member change; the response asks for manual
+  suspension. Tokens/secrets must never reach resources, old input, errors or logs.
+- Runbook/deploy kit: `docs/forgejo.md`, `deploy/forgejo/`; broader design and
+  later phases: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
