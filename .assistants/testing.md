@@ -21,6 +21,13 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   covers folding existing teams into project-owned teams with one leader.
   `ProjectCreateAccessTest`/`ProjectUpdateAccessTest` and `TenancyTest` cover
   manager appointment, roster protections and reserved super-admin emails.
+- `OverdueRuleTest` checks the model scope/attribute and project/Home counts;
+  `DeadlineReminderTest` also excludes failed (closed) work. `TeamActivityTest`
+  covers roster/manager audit entries, team notifications, actor suppression,
+  project-feed visibility on web/API and the publication capability.
+  `GuidePageTest` checks signed-in access and guest redirects;
+  `SdocProjectsSeederTest` checks project/team creation, safe reruns and
+  isolation from another organization's same-named project.
 
 ## Running
 

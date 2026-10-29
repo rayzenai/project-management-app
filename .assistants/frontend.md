@@ -16,6 +16,9 @@ Pages wrap themselves in `AppShell` and supply the 44px top bar through its
 for full-bleed registers/boards. The sidebar collapses to an icon rail (`[`
 shortcut, persisted in localStorage); Organizations appears only for
 super-admins.
+`Guide` (`/workspace/guide`, sidebar link for all signed-in users) explains
+the organization/project/team model, role routines, dependencies, overdue
+work and shortcuts. Keep it aligned with changes to how people work.
 
 ## Key components (`resources/js/components`)
 
@@ -29,7 +32,10 @@ Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
 `TaskCode` (mono `CODE-123` id chip from project code + item number),
 `TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`, `AssigneePicker/Stack`,
-`DateChip`, `StatusChip/Badge`, `CompleteCheckbox`.
+`DateChip`, `StatusChip/Badge`, `CompleteCheckbox`. `DateChip` reads shared
+status `is_complete`/`is_closed` metadata; closed work shows historical dates.
+Project overdue counts/filters, dependency chips/links and progress views use
+server-provided `is_overdue`; `is_late` remains available for finished-late work.
 Dependencies: `TaskDependencies` in the task page/Peek, `DependsOnPicker` in
 quick-add, and `project/DependencyChips` on board cards/list rows.
 Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
@@ -38,8 +44,12 @@ Teams: `project/ProjectTeamPanel` manages the project's roster in its People
 tab; `team/RosterSearch` performs debounced server-side eligible-person search.
 `lib/clipboard.ts` provides Clipboard API + legacy fallback for copied login
 details in the People directory.
+Notifications: inbox Teams filter covers team additions and manager appointments;
+the activity tab includes project-level team changes with no task.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
 TaskTableRow,ProjectFilters,ProjectSummaryStrip,ProjectEditForm,ColumnComposer}`.
+`ProjectEditForm` gates publication with `project.can_publish` (office admins
+and super-admins); cross-organization access remains super-admin-only.
 `BoardView` uses pointer drag/drop: dropping onto a card adds a dependency;
 `lib/dependencies.ts` keeps waiting tasks below prerequisites and draws dotted
 links, including cross-column links.

@@ -22,7 +22,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
   `appearance`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`. Cross-cutting
-  web context goes there.
+  web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and office-admin
@@ -81,14 +81,21 @@ mention notifications only reach project viewers.
   soft-archive, `is_public` within that organization; scopes
   `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team (one each).
   `team()`/`ensureTeam()`/`manager()` expose its own team and manager;
-  `CreateProjectService` creates both atomically, with required `manager_id`.
+  `CreateProjectService` creates both atomically; `StoreProjectRequest`
+  requires `manager_id` for interactive creation. `ProjectResource.can_publish`
+  exposes the office-admin/super-admin publication capability.
   Derived `code` attribute (uppercased initials of the title's words, max 4, fallback
   `P{id}`) exposed on Project/Task resources so tasks render as `CODE-123`.
 - **Task** — slug-routed `{project_id}-{slug}`; 100-point-plan fields
   (`item_number`, `category`, `deadline_type`, `responsible_ministry`,
   `title_np`, `description_np`) live in the `metadata` jsonb via `Attribute`
   mutators; `Task::completeStatuses()` derives "finished" from config
-  `is_complete` flags; `is_late` is derived, not a status.
+  `is_complete` flags; `closedStatuses()`/`isClosed()` use `is_closed` plus
+  complete statuses (currently done and failed). `notClosed()` selects open
+  work; `overdue()`/`is_overdue` mean not closed and deadline before today.
+  Queries, reminders and task/reference/progress payloads share this rule;
+  Home excludes closed work. `is_late` also covers finished-late/failed work
+  and remains a separate derived attribute, never a status.
 - **TaskDependency** — finish-to-start link (`task_id` waits for
   `depends_on_task_id`); `Task::dependencies()`/`dependents()` expose the graph.
   `StoreTaskDependencyRequest` rejects self-links, duplicates, other projects
@@ -105,7 +112,8 @@ mention notifications only reach project viewers.
   never queued.
 - **Team** — made with its project and named after it (`Team::project()`);
   belongs to the same organization, is auto-slugged, may be
-  `is_cross_organization`, and uses pivot `member_team.role`. Candidate search
+  `is_cross_organization`, and uses pivot `member_team.role` through
+  `TeamMembership` on both Member/Team relations. Candidate search
   is limited to the home organization unless cross-organization. No standalone
   team CRUD routes; `TeamIndexQuery` serves the People directory, while roster
   endpoints remain under `teams/{team}`.
@@ -115,32 +123,46 @@ mention notifications only reach project viewers.
   assigned work, up to 500 project tasks (including dependency ids), workload
   and recent activity. The web polls `progress` every 15s while visible; old
   web team-progress links redirect here. No team-progress API remains.
-- **ProjectActivity** — polymorphic audit log, written only by the seven
-  observers (including `TaskDependencyObserver`). Surfaced through
+- **ProjectActivity** — polymorphic audit log, written only by the eight
+  observers via `ProjectActivityRecorder`. Each new row carries `project_id`;
+  `task_id` is null for project-level entries. `TeamMembershipObserver` records
+  roster additions/removals and manager handovers through `recordForProject`,
+  using the team as subject. The migration backfills existing projects and
+  converts `changes` to jsonb on PostgreSQL. Surfaced through
   `App\Queries\ActivityFeedQuery` on the activity
   tab of the notifications screen (`/workspace/notifications?tab=activity`);
-  visibility rides on the task's project via `visibleTo` — never filter the
+  visibility scopes `project_id` to projects `visibleTo` the viewer; progress
+  and dashboard feeds also include team changes. Never filter the
   feed on `->public()` (observers write `is_public = false`).
   **WorkspaceNote** — personal stickies.
   **ProjectAssignment/Note/Contact, TaskComment** — task children.
-  **ProjectDigestSubscriber** — weekly digest recipients.
 
 ## Notifications
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
-`MentionedInComment`, `TaskDeadlineDue` share
+`MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam` and
+`MadeProjectManager` share
 `Concerns\BuildsWorkspaceNotification`; stable payload
 `{kind, title, action, body, task, actor, url}` (`action` short-form,
 `body` long sentence). Dispatched from observers (assignment created;
 status entering done/failed), the comment service (mentions via
-`MentionParser`), and the reminders command.
+`MentionParser`), and the reminders command. Team membership creation or
+promotion notifies the linked user, except the actor; team payloads have
+`kind: team_added`/`made_manager`, `task: null`, a `project {slug, title}`
+and a URL to the project's People tab. `NotificationIndexQuery` groups both
+under the `team` filter/count on both surfaces.
 
 ## Scheduled / console commands
 
 Daily schedule in `routes/console.php`. Commands: `workspace:api-token`,
-`workspace:prune-trashed` (trash TTL from config), 
-`workspace:send-deadline-reminders`, `digest:send-weekly` — all support
-`--pretend` except api-token.
+`workspace:prune-trashed` (trash TTL from config) and
+`workspace:send-deadline-reminders`; both maintenance commands support
+`--pretend`. Weekly digest mail, command and subscriber model/table are retired.
+
+`php artisan db:seed --class=SdocProjectsSeeder --force` explicitly seeds SDOC
+and eight private projects with their own teams, initially without managers.
+It is production-safe, creates missing records without overwriting existing
+project data, and is not called by `DatabaseSeeder`.
 
 Application and PostgreSQL session timezones are fixed to `Asia/Kathmandu`.
 The one-time timestamp migration converts existing UTC wall-clock values.
