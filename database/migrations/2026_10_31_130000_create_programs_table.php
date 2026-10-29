@@ -28,14 +28,16 @@ return new class extends Migration
         });
 
         Schema::table('projects', function (Blueprint $table): void {
-            $table->foreignId('program_id')->nullable()->constrained('programs')->nullOnDelete();
+            $table->foreignId('program_id')->nullable()->index()->constrained('programs')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
         Schema::table('projects', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('program_id');
+            $table->dropForeign(['program_id']);
+            $table->dropIndex(['program_id']);
+            $table->dropColumn('program_id');
         });
 
         Schema::dropIfExists('programs');
