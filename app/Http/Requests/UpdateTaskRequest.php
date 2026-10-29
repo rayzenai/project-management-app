@@ -26,7 +26,7 @@ class UpdateTaskRequest extends FormRequest
             'deadline_at' => ['sometimes', 'nullable', 'date'],
             'status_note' => ['sometimes', 'nullable', 'string'],
             'source_url' => ['sometimes', 'nullable', 'url', 'max:500'],
-            'item_number' => ['sometimes', 'nullable', 'integer'],
+            'item_number' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647'],
             'category' => ['sometimes', 'nullable', 'string', 'max:64'],
             'deadline_type' => ['sometimes', 'nullable', 'string', 'max:64'],
             'responsible_ministry' => ['sometimes', 'nullable', 'string', 'max:255'],

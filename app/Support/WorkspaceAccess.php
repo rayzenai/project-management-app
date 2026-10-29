@@ -127,6 +127,14 @@ class WorkspaceAccess
         return self::isSuperAdmin($user);
     }
 
+    /**
+     * Connect an organization to a forge. Super-admin only.
+     */
+    public static function canManageGit(?Authenticatable $user): bool
+    {
+        return self::isSuperAdmin($user);
+    }
+
     // ---- Project teams ----
     // A team is a project's own (one each); its one leader is the project's
     // manager. Teams are made with their project, never on their own.
@@ -307,6 +315,15 @@ class WorkspaceAccess
     public static function canPublishProject(?Authenticatable $user, int|string|null $organizationId): bool
     {
         return self::administers($user, $organizationId);
+    }
+
+    /**
+     * Renaming a project's key rewrites how its tasks are quoted in commits,
+     * so only the people who administer its organization may.
+     */
+    public static function canChangeProjectKey(?Authenticatable $user, Project $project): bool
+    {
+        return self::administers($user, $project->organization_id);
     }
 
     /**

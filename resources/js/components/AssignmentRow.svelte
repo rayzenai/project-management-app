@@ -92,10 +92,10 @@
         <PriorityFlag {task} {projectSlug} quiet />
 
         <span class="flex min-w-0 flex-1 items-baseline gap-1.5">
-            {#if task.item_number}
+            {#if task.number}
                 <span
                     class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
-                    >#{task.item_number}</span
+                    >#{task.number}</span
                 >
             {/if}
             <span class="truncate text-[13px] font-medium text-fg">

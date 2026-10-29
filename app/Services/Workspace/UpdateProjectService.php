@@ -4,6 +4,7 @@ namespace App\Services\Workspace;
 
 use App\Models\Member;
 use App\Models\Project;
+use App\Support\ProjectKeys;
 use App\Support\ServiceResult;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -24,10 +25,21 @@ class UpdateProjectService
     {
         try {
             $result = DB::transaction(function () use ($project, $attributes): ?ServiceResult {
+                $newKey = isset($attributes['key']) ? strtoupper((string) $attributes['key']) : null;
+
+                // A key stays reserved to whoever held it, aliases included, whoever asks.
+                if ($newKey !== null && ProjectKeys::isTaken((int) $project->organization_id, $newKey, $project->id)) {
+                    return ServiceResult::failure('That key is already used in this organization.', 422);
+                }
+
                 foreach (['title', 'title_np', 'description', 'description_np', 'is_public'] as $key) {
                     if (array_key_exists($key, $attributes)) {
                         $project->{$key} = $attributes[$key];
                     }
+                }
+
+                if ($newKey !== null) {
+                    $this->rename($project, $newKey);
                 }
 
                 $project->save();
@@ -58,5 +70,20 @@ class UpdateProjectService
 
             return ServiceResult::fromException($e);
         }
+    }
+
+    /**
+     * Gives the project a new key; the old one becomes an alias so it keeps
+     * resolving. Taking back one of its own aliases retires that alias.
+     */
+    private function rename(Project $project, string $key): void
+    {
+        if ($key === $project->key) {
+            return;
+        }
+
+        $project->keyAliases()->where('key', $key)->delete();
+        $project->keyAliases()->create(['organization_id' => $project->organization_id, 'key' => $project->key]);
+        $project->key = $key;
     }
 }

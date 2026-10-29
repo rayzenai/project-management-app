@@ -10,6 +10,7 @@
         prerequisitesOf,
     } from '../../lib/dependencies';
     import type { CardBox, LinkKind } from '../../lib/dependencies';
+    import { taskCode } from '../../lib/taskCode';
     import { toast } from '../../lib/toast.svelte';
     import type { Project, Status, Task } from '../../lib/types';
     import StatusGlyph from '../StatusGlyph.svelte';
@@ -263,9 +264,7 @@
     }
 
     function codeOf(task: Task): string {
-        return task.item_number !== null && task.item_number !== undefined
-            ? `${project.code}-${task.item_number}`
-            : `#${task.id}`;
+        return taskCode(project.code, task.number);
     }
 
     /** What letting go over another card would do, in words. */

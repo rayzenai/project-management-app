@@ -81,7 +81,7 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | GET | `/workspace/dashboard` | per-project rollups, status breakdown, recent activity |
 | GET | `/workspace/my` | the caller's focused tasks, open todos, assigned work |
 | GET | `/workspace/plan-tracker` | the 100-point plan tracker (`config/government.php`) |
-| GET | `/workspace/search?q=` | task search across active projects |
+| GET | `/workspace/search?q=` | search across active projects (2 characters at least): `{ projects, tasks, notes, contacts }`. Tasks match on title, short title and Nepali title; a bare number (`12`) also finds tasks by their `number`, and a task code (`SG-12`, any case) finds task 12 of the project whose key is `SG` now or was before (an old key stays an alias). A number above 2147483647 is searched as text only. Each task is `{ id, slug, number, title, short_title, status, status_label, project { slug, title, code } }` |
 | POST | `/workspace/quick-add` | `{ text }` natural-language task capture; optional `depends_on_task_ids: int[]` (tasks of other projects are ignored) |
 
 ## Projects
@@ -90,12 +90,24 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | --- | --- | --- |
 | GET | `/workspace/projects` | list — visibility-scoped. `?archived=1` for archived |
 | GET | `/workspace/projects` | each project also carries `manager { id, name, title }`, `team { id, is_cross_organization, members_count }`, `percent_complete`, `open_tasks_count`, `overdue_tasks_count`, `next_deadline_at`; plus `managerCandidates` for the create form |
-| POST | `/workspace/projects` | create (office admin or super-admin). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization). A super-admin sends `organization_id`; otherwise it is the office admin's organization |
+| POST | `/workspace/projects` | create (office admin or super-admin). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization); optional `key` (see below), otherwise the title suggests a free one. A super-admin sends `organization_id`; otherwise it is the office admin's organization |
 | GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller |
-| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. For its manager, its office admin and super-admins (`project.can_view_progress`) |
-| PATCH | `/workspace/projects/{slug}` | update (its manager, office admin or super-admin). `manager_id` (office admin / super-admin; the old manager stays on the team), `is_public` (office admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team); dropped silently for anyone else. The team keeps the project's title |
+| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. `project` carries `code`; each task carries `number` and `project { slug, title, code }`. For its manager, its office admin and super-admins (`project.can_view_progress`) |
+| PATCH | `/workspace/projects/{slug}` | update (its manager, office admin or super-admin). `manager_id` (office admin / super-admin; the old manager stays on the team), `is_public` (office admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team), `key` (office admin / super-admin, see below); dropped silently for anyone else. The team keeps the project's title |
 | PATCH | `/workspace/projects/{slug}/archive` | soft-archive (its manager, its office admin, or a super-admin) |
 | PATCH | `/workspace/projects/{slug}/restore` | un-archive |
+
+**Keys.** A project's `key` is the first half of its task codes (`SG` in
+`SG-12`). Only its organization's office admin or a super-admin may set it, on
+create or update; anyone else's well-formed `key` is dropped silently. It is
+1 to 10 letters, sent in any case and stored upper case (`^[A-Z]{1,10}$`), and
+unique in the organization across every project's current key and old keys: a
+taken one is a 422 `That key is already used in this organization.` Changing it
+keeps the old key as an alias that still finds the project and its tasks and
+stays reserved for it, so an old commit never points at another project.
+
+Project payloads carry `key`, `code` (the same key, as task codes use it) and
+`can_change_key` (whether the caller may change it).
 
 ## Tasks
 
@@ -111,6 +123,15 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 
 Task statuses come from `config/project-management.php` (`not_started`,
 `unclear`, `in_progress`, `done`, `failed`); `done` is the only complete status.
+
+Every task has a `number`, given when it is created: one more than the highest
+its project has ever given, so a deleted (even purged) task's number is never
+reused. It is never editable; a `number` sent on create or update is ignored.
+With the project's key it makes the task code `SG-12` (`project.code`, a
+hyphen, `number`), the form people copy into commit messages. Task payloads
+carry `number`, and `project { id, slug, code, title }` when the project is
+loaded. `item_number` is the plan tracker's own number: optional, editable,
+an integer from 1 to 2147483647.
 
 ## Subtasks *(personal to the caller)*
 
@@ -176,6 +197,13 @@ progress, an office admin their whole organization, a super-admin everything.
 | POST | `/workspace/organizations` | `name` (unique) |
 | PATCH | `/workspace/organizations/{organization}` | `name` |
 | DELETE | `/workspace/organizations/{organization}` | 422 unless it has no people, teams or projects |
+| POST | `/workspace/organizations/{organization}/git` | `base_url` (https; plain http only for `127.0.0.1`, `localhost` or `::1`), `owner` (the forge organization), `token` (a bot token). Checks the token against the forge (`GET /api/v1/user`, then the user's permissions on `owner`) and saves it encrypted; calling again replaces the connection. 422 with `Couldn't reach the forge at {base_url}.`, `The forge refused that token.` or `{login} doesn't own {owner} on the forge.`, and nothing is saved. Validation 422s: `base_url` for plain http elsewhere, `owner` with `{owner} is already connected to another office.` when another organization has the same forge organization (case-insensitive) on the same forge |
+| DELETE | `/workspace/organizations/{organization}/git` | Turns git off by removing the connection |
+
+On the JSON API these are `POST|DELETE /api/v1/workspace/organizations/{organization}/git`
+(names `api.workspace.organizations.git.store|destroy`); success returns the
+organization. The token is write-only: organization payloads show only
+`git: { base_url, owner, url }` (or `null`), and only to a super-admin.
 
 ## Project teams *(roster: the project's manager, its office admin or a super-admin; choosing the manager: office admin or super-admin)*
 
@@ -199,7 +227,13 @@ people always join their own organization. Every member gets a login: the
 password you send, or a generated one if you send none. Either way the member is
 emailed their email and password; if that email fails the member is still
 created and `message` says so. `PATCH` accepts `organization_id` and
-`is_office_admin` from a super-admin only.
+`is_office_admin` from a super-admin only. Deactivating (`is_active: false`)
+or deleting someone who has a forge account removes them from every connected
+forge organization and adds a sentence to `message`: `{git_username} was removed
+from the forge.` when every removal succeeded, or `Couldn't remove
+{git_username} from the forge; ask a super-admin to suspend them there today.`
+when any failed (the change itself still stands). Nothing is added for someone
+without a forge account.
 
 | Method | Path |
 | --- | --- |
@@ -212,9 +246,9 @@ created and `message` says so. `PATCH` accepts `organization_id` and
 
 Finish-to-start, within one project: the task cannot start until the other is
 finished. Loops are refused. Task payloads carry `dependencies` and `dependents`
-(each `{ id, slug, title, item_number, status, status_label, is_complete,
-is_late, deadline_at, completed_at }`), and the project progress payload gives
-each task `depends_on: int[]`.
+(each `{ id, slug, title, number, item_number, status, status_label,
+is_complete, is_late, is_overdue, deadline_at, completed_at }`), and the project
+progress payload gives each task `depends_on: int[]`.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
@@ -277,3 +311,17 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Assigning a task (`POST /workspace/tasks/{task}/assignments`) notifies the
   assignee in-app; status changes to `done`/`failed` notify the task's assignees.
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
+
+## Changes
+
+**Git phase 0 (project keys and task numbers).**
+
+- Search results' tasks and project progress tasks carry `number` (the task's
+  stable number) instead of `item_number`; search tasks' `project` adds
+  `code`.
+- A bare-number search matches `number`, not `item_number`; `SG-12` codes
+  (current or old keys) work too.
+- `code`, on projects and on a task's `project`, is now the project's stored
+  key, no longer worked out from its title on every read.
+- Project payloads add `key` and `can_change_key`; task payloads and
+  dependency references add `number`.

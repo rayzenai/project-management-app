@@ -93,6 +93,9 @@ it('offers the same over the API', function () {
 
 it('moves existing data into one organization named after the app, leaving super-admins out', function () {
     config(['app.name' => 'SDOC']);
+    // The stable-key migration indexes organization_id, so it steps aside while the column goes.
+    $keys = require database_path('migrations/2026_10_30_000001_give_projects_a_stable_key.php');
+    $keys->down();
     $migration = require database_path('migrations/2026_10_28_100000_create_organizations_table.php');
     $migration->down();
 
@@ -108,6 +111,7 @@ it('moves existing data into one organization named after the app, leaving super
     DB::table('projects')->insert(['title' => 'Plan', 'slug' => 'plan', 'is_public' => false, 'created_at' => $now, 'updated_at' => $now]);
 
     $migration->up();
+    $keys->up();
 
     $organization = Organization::query()->sole();
 
@@ -121,9 +125,13 @@ it('moves existing data into one organization named after the app, leaving super
 });
 
 it('creates no organization when there is nothing to move', function () {
+    // The stable-key migration indexes organization_id, so it steps aside while the column goes.
+    $keys = require database_path('migrations/2026_10_30_000001_give_projects_a_stable_key.php');
+    $keys->down();
     $migration = require database_path('migrations/2026_10_28_100000_create_organizations_table.php');
     $migration->down();
     $migration->up();
+    $keys->up();
 
     expect(Organization::query()->count())->toBe(0);
 });

@@ -33,7 +33,7 @@ class ProgressReport
     public static function tasks(Builder $query): Collection
     {
         return $query
-            ->with(['project:id,slug,title', 'assignments.member:id,name', 'dependencies' => fn ($q) => $q->select('tasks.id')])
+            ->with(['project:id,slug,title,key', 'assignments.member:id,name', 'dependencies' => fn ($q) => $q->select('tasks.id')])
             ->orderBy('project_id')
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -99,7 +99,7 @@ class ProgressReport
                 'id' => $task->id,
                 'slug' => $task->slug,
                 'title' => $task->title,
-                'item_number' => $task->item_number,
+                'number' => $task->number,
                 'project' => ['slug' => $task->project->slug, 'title' => $task->project->title, 'code' => $task->project->code],
                 'status' => $task->status,
                 'priority' => $task->priority,

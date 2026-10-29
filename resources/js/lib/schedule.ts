@@ -1,3 +1,4 @@
+import { taskCode as codeFor } from './taskCode';
 import type { ProgressTask } from './types';
 
 /**
@@ -143,10 +144,8 @@ export function planTasks(
 
 /** Task code as the app writes it: PROJECT-ITEM, or the project code alone. */
 export function taskCode(task: {
-    item_number: number | null;
+    number: number;
     project: { code: string };
 }): string {
-    return task.item_number !== null
-        ? `${task.project.code}-${task.item_number}`
-        : task.project.code;
+    return codeFor(task.project.code, task.number);
 }

@@ -53,6 +53,7 @@
             steps: [
                 'Add people on the People page. Each one gets a login by email.',
                 'Create projects on the Projects page and choose who manages each one.',
+                "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team.',
                 'Watch everything from the Projects page: projects sit under their manager with how much is done, what is overdue and the next deadline.',
             ],

@@ -8,6 +8,7 @@ it('the backfill migration marks pre-existing projects public', function () {
     DB::table('projects')->insert([
         'organization_id' => OrganizationFactory::defaultId(),
         'slug' => 'legacy',
+        'key' => 'L',
         'title' => 'Legacy',
         'is_public' => false,
         'created_at' => now(),

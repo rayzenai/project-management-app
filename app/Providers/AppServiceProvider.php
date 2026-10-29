@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Member;
+use App\Models\OAuthClient;
 use App\Models\ProjectAssignment;
 use App\Models\ProjectContact;
 use App\Models\ProjectNote;
@@ -23,6 +24,7 @@ use App\Observers\TaskObserver;
 use App\Observers\TeamMembershipObserver;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Routing\Events\RouteMatched;
@@ -32,6 +34,8 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\Passport;
+use Symfony\Component\HttpFoundation\Response;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,7 +44,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The OIDC routes are registered by hand in routes/web.php (behind
+        // EnsureCanUseGit); none of Passport's own. Must run before Passport
+        // boots.
+        Passport::ignoreRoutes();
     }
 
     /**
@@ -50,6 +57,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureWorkspace();
+        $this->configureOidcProvider();
     }
 
     /**
@@ -123,5 +131,26 @@ class AppServiceProvider extends ServiceProvider
         TaskComment::observe(TaskCommentObserver::class);
         TaskDependency::observe(TaskDependencyObserver::class);
         TeamMembership::observe(TeamMembershipObserver::class);
+    }
+
+    /**
+     * The tracker as the forge's OpenID Connect provider (Passport plus
+     * jeremy379/laravel-openid-connect, whose provider replaces Passport's;
+     * see config/openid.php). The forge is the one client and skips consent,
+     * so the consent view is only reached by asking for it (prompt=consent),
+     * and is refused. Its tokens only carry the sign-in, so they are short
+     * lived; `passport:purge` clears the spent ones daily.
+     */
+    protected function configureOidcProvider(): void
+    {
+        Passport::useClientModel(OAuthClient::class);
+        Passport::tokensExpireIn(CarbonInterval::hours(1));
+        Passport::refreshTokensExpireIn(CarbonInterval::days(1));
+
+        /** @var array<string, string> $scopes */
+        $scopes = config('openid.passport.tokens_can', []);
+        Passport::tokensCan($scopes);
+
+        Passport::authorizationView(fn (): Response => abort(403));
     }
 }

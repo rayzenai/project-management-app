@@ -20,6 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $remember_token
+ * @property string|null $git_username
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

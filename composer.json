@@ -14,7 +14,9 @@
     "require": {
         "php": "^8.5",
         "inertiajs/inertia-laravel": "^3.0",
+        "jeremy379/laravel-openid-connect": "^3.3",
         "laravel/framework": "^13.17",
+        "laravel/passport": "^13.10",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14"
@@ -100,7 +102,9 @@
     },
     "extra": {
         "laravel": {
-            "dont-discover": []
+            "dont-discover": [
+                "laravel/passport"
+            ]
         }
     },
     "config": {

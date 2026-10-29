@@ -18,6 +18,7 @@ class OrganizationIndexQuery
     {
         $organizations = Organization::query()
             ->withCount(['members', 'teams', 'projects'])
+            ->with('gitConnection')
             ->with(['members' => fn ($q) => $q->where('is_office_admin', true)->orderBy('name')])
             ->orderBy('name')
             ->get();

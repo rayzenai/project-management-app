@@ -27,7 +27,7 @@
     function sortValue(task: Task, key: SortKey): number | string | null {
         switch (key) {
             case 'item':
-                return task.item_number ?? null;
+                return task.number;
             case 'deadline':
                 return task.deadline_at ?? null; // ISO date strings compare lexicographically
             case 'priority':

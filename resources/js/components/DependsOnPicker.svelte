@@ -1,5 +1,6 @@
 <script lang="ts">
     import { X } from '@lucide/svelte';
+    import { taskCode } from '../lib/taskCode';
     import type { TaskOption } from '../lib/types';
     import StatusGlyph from './StatusGlyph.svelte';
 
@@ -68,9 +69,7 @@
     }
 
     function label(option: TaskOption): string {
-        return option.item_number !== null
-            ? `#${option.item_number} ${option.title}`
-            : option.title;
+        return `${taskCode(null, option.number)} ${option.title}`;
     }
 </script>
 

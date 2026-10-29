@@ -9,9 +9,41 @@
     const uid = $props.id();
     let creating = $state(false);
     let renamingId = $state<number | null>(null);
+    let gitId = $state<number | null>(null);
 
     const createForm = useForm({ name: '' });
     const renameForm = useForm({ name: '' });
+    const gitForm = useForm({ base_url: '', owner: '', token: '' });
+
+    function startGit(organization: Organization) {
+        gitId = organization.id;
+        gitForm.clearErrors();
+        gitForm.base_url = organization.git?.base_url ?? '';
+        gitForm.owner = organization.git?.owner ?? organization.slug;
+        gitForm.token = '';
+    }
+
+    function saveGit(e: SubmitEvent, organization: Organization) {
+        e.preventDefault();
+        gitForm.post(`/workspace/organizations/${organization.id}/git`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                gitForm.reset();
+                gitId = null;
+            },
+        });
+    }
+
+    function turnOffGit(organization: Organization) {
+        if (!confirm(`Turn off git for "${organization.name}"?`)) {
+            return;
+        }
+
+        router.delete(`/workspace/organizations/${organization.id}/git`, {
+            preserveScroll: true,
+            onSuccess: () => (gitId = null),
+        });
+    }
 
     function create(e: SubmitEvent) {
         e.preventDefault();
@@ -173,6 +205,109 @@
                                     >Save</button
                                 >
                             </form>
+                        {:else if gitId === organization.id}
+                            <form
+                                onsubmit={(e) => saveGit(e, organization)}
+                                class="w-full max-w-lg space-y-3 py-1"
+                            >
+                                <h3 class="section-title">
+                                    Git for {organization.name}
+                                </h3>
+                                <div class="flex flex-col gap-1">
+                                    <label
+                                        class="label"
+                                        for="{uid}-git-url-{organization.id}"
+                                        >Forge address</label
+                                    >
+                                    <input
+                                        id="{uid}-git-url-{organization.id}"
+                                        type="url"
+                                        bind:value={gitForm.base_url}
+                                        required
+                                        placeholder="https://git.sdoc.gov.np"
+                                        class="input"
+                                    />
+                                    {#if gitForm.errors.base_url}
+                                        <p class="text-xs text-danger">
+                                            {gitForm.errors.base_url}
+                                        </p>
+                                    {/if}
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label
+                                        class="label"
+                                        for="{uid}-git-owner-{organization.id}"
+                                        >Forge organization</label
+                                    >
+                                    <input
+                                        id="{uid}-git-owner-{organization.id}"
+                                        type="text"
+                                        bind:value={gitForm.owner}
+                                        required
+                                        class="input"
+                                    />
+                                    {#if gitForm.errors.owner}
+                                        <p class="text-xs text-danger">
+                                            {gitForm.errors.owner}
+                                        </p>
+                                    {/if}
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label
+                                        class="label"
+                                        for="{uid}-git-token-{organization.id}"
+                                        >Bot token</label
+                                    >
+                                    <input
+                                        id="{uid}-git-token-{organization.id}"
+                                        type="password"
+                                        autocomplete="off"
+                                        bind:value={gitForm.token}
+                                        required
+                                        class="input"
+                                    />
+                                    {#if gitForm.errors.token}
+                                        <p class="text-xs text-danger">
+                                            {gitForm.errors.token}
+                                        </p>
+                                    {/if}
+                                </div>
+                                {#if (gitForm.errors as Record<string, string>).__global}
+                                    <p class="text-xs text-danger">
+                                        {(
+                                            gitForm.errors as Record<
+                                                string,
+                                                string
+                                            >
+                                        ).__global}
+                                    </p>
+                                {/if}
+                                <div class="flex justify-end gap-1.5">
+                                    {#if organization.git}
+                                        <button
+                                            type="button"
+                                            class="btn-danger"
+                                            onclick={() =>
+                                                turnOffGit(organization)}
+                                            >Turn off git</button
+                                        >
+                                    {/if}
+                                    <button
+                                        type="button"
+                                        class="btn-ghost"
+                                        onclick={() => (gitId = null)}
+                                        >Cancel</button
+                                    >
+                                    <button
+                                        type="submit"
+                                        class="btn-primary"
+                                        disabled={gitForm.processing}
+                                        >{organization.git
+                                            ? 'Save'
+                                            : 'Turn on git'}</button
+                                    >
+                                </div>
+                            </form>
                         {:else}
                             <div class="min-w-0 flex-1">
                                 <div class="truncate font-medium text-fg">
@@ -197,9 +332,20 @@
                                             ? `Office admin: ${(organization.office_admins ?? []).map((a) => a.name).join(', ')}`
                                             : 'No office admin yet'}
                                     </span>
+                                    {#if organization.git}
+                                        <span class="truncate font-mono"
+                                            >{organization.git.url}</span
+                                        >
+                                    {/if}
                                 </div>
                             </div>
                             <div class="flex shrink-0 items-center gap-1">
+                                <button
+                                    type="button"
+                                    class="btn-ghost"
+                                    onclick={() => startGit(organization)}
+                                    >Git</button
+                                >
                                 <a
                                     href={`/workspace/team?organization=${organization.id}`}
                                     use:inertia

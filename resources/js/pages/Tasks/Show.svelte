@@ -19,6 +19,7 @@
     import StatusChip from '../../components/StatusChip.svelte';
     import TaskDependencies from '../../components/TaskDependencies.svelte';
     import { formatDate } from '../../lib/format';
+    import { taskCode } from '../../lib/taskCode';
     import type {
         Comment,
         Contact,
@@ -253,11 +254,13 @@
             .filter(Boolean)
             .join(', '),
     );
+    // The plan's item number only when it is not just the task's own number.
+    const showItemNumber = $derived(
+        Boolean(task.item_number && task.item_number !== task.number),
+    );
     const hasPlan = $derived(
         Boolean(
-            task.item_number ||
-            task.category_label ||
-            task.responsible_ministry,
+            showItemNumber || task.category_label || task.responsible_ministry,
         ),
     );
 </script>
@@ -282,7 +285,7 @@
             >
             <span class="text-fg-faint">/</span>
             <span class="shrink-0 font-mono text-fg-muted tabular-nums">
-                {#if task.item_number}#{task.item_number}{:else}{task.slug}{/if}
+                {taskCode(project.code, task.number)}
             </span>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
@@ -821,7 +824,7 @@
                 <dl
                     class="grid grid-cols-[88px_1fr] items-center gap-x-2.5 text-[12.5px]"
                 >
-                    {#if task.item_number}
+                    {#if showItemNumber}
                         <dt
                             class="flex min-h-[30px] items-center text-fg-muted"
                         >

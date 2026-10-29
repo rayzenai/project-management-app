@@ -28,7 +28,7 @@ class PlanTrackerQuery
 
         $tasks = $project->tasks()
             ->with(['assignments.member', 'project'])
-            ->orderByRaw("CAST(metadata->>'item_number' AS INTEGER) ASC NULLS LAST")
+            ->orderByRaw("CAST(metadata->>'item_number' AS BIGINT) ASC NULLS LAST")
             ->get();
 
         $oathDate = config('government.oath_date');

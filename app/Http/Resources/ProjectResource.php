@@ -23,6 +23,7 @@ class ProjectResource extends JsonResource
             'id' => $this->id,
             'slug' => $this->slug,
             'code' => $this->code,
+            'key' => $this->key,
             'title' => $this->title,
             'title_np' => $this->title_np,
             'description' => $this->description,
@@ -37,6 +38,7 @@ class ProjectResource extends JsonResource
             'can_view_progress' => WorkspaceAccess::canViewProjectProgress($request->user(), $this->resource),
             // Choosing the manager and publishing are the office admin's (or a super-admin's).
             'can_choose_manager' => WorkspaceAccess::administers($request->user(), $this->organization_id),
+            'can_change_key' => WorkspaceAccess::canChangeProjectKey($request->user(), $this->resource),
             'can_publish' => WorkspaceAccess::canPublishProject($request->user(), $this->organization_id),
             'team' => $this->whenLoaded('teams', fn (): ?array => ($team = $this->team()) === null ? null : [
                 'id' => $team->id,

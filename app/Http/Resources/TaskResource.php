@@ -20,7 +20,7 @@ class TaskResource extends JsonResource
     /**
      * The short form of a task used in dependency lists and pickers.
      *
-     * @return array{id: int, slug: string, title: string, item_number: int|null, status: string, status_label: string, is_complete: bool, is_late: bool, is_overdue: bool, deadline_at: string|null, completed_at: string|null}
+     * @return array{id: int, slug: string, title: string, number: int, item_number: int|null, status: string, status_label: string, is_complete: bool, is_late: bool, is_overdue: bool, deadline_at: string|null, completed_at: string|null}
      */
     public static function reference(Task $task): array
     {
@@ -28,6 +28,7 @@ class TaskResource extends JsonResource
             'id' => $task->id,
             'slug' => $task->slug,
             'title' => $task->title,
+            'number' => $task->number,
             'item_number' => $task->item_number,
             'status' => $task->status,
             'status_label' => $task->status_label,
@@ -47,6 +48,7 @@ class TaskResource extends JsonResource
         return [
             'id' => $this->id,
             'project_id' => $this->project_id,
+            'number' => $this->number,
             'project' => $this->whenLoaded('project', fn () => [
                 'id' => $this->project->id,
                 'slug' => $this->project->slug,

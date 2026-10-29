@@ -59,7 +59,10 @@ class QuickAddTaskService
 
         try {
             return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $deadline, $priority, $status, $description, $dependsOnTaskIds): ServiceResult {
-                $itemNumber = $this->nextItemNumber($project->id);
+                // Serializes creates in this project so two of them never read the same last number.
+                Project::query()->whereKey($project->id)->lockForUpdate()->first();
+
+                $itemNumber = Task::nextItemNumber($project->id);
                 $sortOrder = ((int) Task::query()->where('project_id', $project->id)->max('sort_order')) + 100;
 
                 $task = Task::create([
@@ -104,18 +107,9 @@ class QuickAddTaskService
         }
     }
 
-    private function nextItemNumber(int $projectId): int
+    private function uniqueSlug(string $title, ?int $itemNumber): string
     {
-        $max = (int) (Task::withTrashed()
-            ->where('project_id', $projectId)
-            ->max(DB::raw("CAST(metadata->>'item_number' AS INTEGER)")) ?? 0);
-
-        return $max + 1;
-    }
-
-    private function uniqueSlug(string $title, int $itemNumber): string
-    {
-        $base = $itemNumber.'-'.Str::slug(Str::limit($title, 60, ''));
+        $base = ($itemNumber ?? 'task').'-'.Str::slug(Str::limit($title, 60, ''));
         if (Str::endsWith($base, '-')) {
             $base .= 'task';
         }

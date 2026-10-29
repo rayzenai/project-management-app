@@ -20,6 +20,7 @@
     function seed() {
         return {
             title: project.title ?? '',
+            key: project.key ?? '',
             title_np: project.title_np ?? '',
             description: project.description ?? '',
             description_np: project.description_np ?? '',
@@ -69,6 +70,27 @@
             {/if}
         </div>
     </div>
+
+    {#if project.can_change_key}
+        <div class="flex flex-col gap-1">
+            <label for={`${uid}-key`} class="label">Key</label>
+            <input
+                id={`${uid}-key`}
+                type="text"
+                bind:value={form.key}
+                maxlength="10"
+                required
+                class="input w-40 font-mono uppercase"
+            />
+            <p class="text-xs text-fg-muted">
+                Tasks are written KEY-12 in commits and branches. Old keys keep
+                working after a change.
+            </p>
+            {#if form.errors.key}
+                <p class="text-xs text-danger">{form.errors.key}</p>
+            {/if}
+        </div>
+    {/if}
 
     <div class="flex flex-col gap-1">
         <label for={`${uid}-description`} class="label">Description</label>

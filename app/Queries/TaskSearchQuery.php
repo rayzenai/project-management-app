@@ -34,23 +34,40 @@ class TaskSearchQuery
         $pgsql = DB::connection()->getDriverName() === 'pgsql';
         $likeOp = $pgsql ? 'ILIKE' : 'LIKE';
 
+        // "SG-12" or "12" finds the task by its stable number; the code's key
+        // (current or old) narrows it to that project. Only a number a task
+        // can have counts; anything longer is searched as text.
+        $number = null;
+        $codeKey = null;
+        if (ctype_digit($q)) {
+            $number = $this->taskNumber($q);
+        } elseif (preg_match('/^([A-Za-z]{1,10})-(\d+)$/', $q, $m) === 1) {
+            $number = $this->taskNumber($m[2]);
+            $codeKey = $number === null ? null : strtoupper($m[1]);
+        }
+
         $visibleProjectIds = Project::query()->visibleTo($request->user())->pluck('id');
 
         $tasks = Task::query()
             ->forActiveProjects()
             ->whereIn('project_id', $visibleProjectIds)
-            ->with('project:id,slug,title')
-            ->where(function ($query) use ($like, $likeOp, $q) {
+            ->with('project:id,slug,title,key')
+            ->where(function ($query) use ($like, $likeOp, $number, $codeKey) {
                 $query->where('title', $likeOp, $like)
                     ->orWhere('short_title', $likeOp, $like)
                     ->orWhereRaw("metadata->>'title_np' {$likeOp} ?", [$like]);
 
-                if (ctype_digit($q)) {
-                    $query->orWhereRaw("metadata->>'item_number' = ?", [(int) $q]);
+                if ($number !== null) {
+                    $query->orWhere(function ($byNumber) use ($number, $codeKey) {
+                        $byNumber->where('number', $number)
+                            ->when($codeKey !== null, fn ($q) => $q->whereHas('project', fn ($p) => $p->where(fn ($k) => $k
+                                ->where('key', $codeKey)
+                                ->orWhereHas('keyAliases', fn ($a) => $a->where('key', $codeKey)->whereColumn('project_key_aliases.organization_id', 'projects.organization_id')))));
+                    });
                 }
             })
             ->when($pgsql, fn ($query) => $query
-                ->orderByRaw("CASE WHEN CAST(metadata->>'item_number' AS INTEGER) = ? THEN 0 ELSE 1 END", [(int) $q])
+                ->orderByRaw('CASE WHEN number = ? THEN 0 ELSE 1 END', [$number ?? 0])
                 ->orderByRaw('similarity(title, ?) DESC', [$q]))
             ->limit(15)
             ->get();
@@ -108,7 +125,7 @@ class TaskSearchQuery
             'tasks' => array_values($tasks->map(fn (Task $task): array => [
                 'id' => $task->id,
                 'slug' => $task->slug,
-                'item_number' => $task->item_number,
+                'number' => $task->number,
                 'title' => $task->title,
                 'short_title' => $task->short_title,
                 'status' => $task->status,
@@ -116,6 +133,7 @@ class TaskSearchQuery
                 'project' => $task->project ? [
                     'slug' => $task->project->slug,
                     'title' => $task->project->title,
+                    'code' => $task->project->code,
                 ] : null,
             ])->all()),
             'notes' => array_merge(
@@ -142,6 +160,17 @@ class TaskSearchQuery
                 'task' => $this->taskRef($contact->task),
             ])->all()),
         ];
+    }
+
+    /**
+     * The digits as a task number, or null when no task can have it (the
+     * column is a Postgres integer).
+     */
+    private function taskNumber(string $digits): ?int
+    {
+        $number = (int) $digits;
+
+        return $number >= 1 && $number <= 2147483647 ? $number : null;
     }
 
     /**

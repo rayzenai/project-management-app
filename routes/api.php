@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\MyWorkspaceController;
 use App\Http\Controllers\Api\NoteController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\OrganizationGitController;
 use App\Http\Controllers\Api\PlanTrackerController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProjectController;
@@ -62,6 +63,8 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
             Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('organizations.update');
             Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('organizations.destroy');
+            Route::post('/organizations/{organization}/git', [OrganizationGitController::class, 'store'])->name('organizations.git.store');
+            Route::delete('/organizations/{organization}/git', [OrganizationGitController::class, 'destroy'])->name('organizations.git.destroy');
 
             // Teams
             Route::get('/team', [TeamController::class, 'index'])->name('team');

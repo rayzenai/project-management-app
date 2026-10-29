@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
+use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -36,10 +37,18 @@ class UpdateProjectRequest extends FormRequest
             'title_np' => ['sometimes', 'nullable', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string'],
             'description_np' => ['sometimes', 'nullable', 'string'],
+            'key' => ['sometimes', 'required', 'string', 'regex:/^[A-Z]{1,10}$/'],
             'is_public' => ['sometimes', 'nullable', 'boolean'],
             'manager_id' => ['sometimes', 'required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
             'is_cross_organization' => ['sometimes', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('key'))) {
+            $this->merge(['key' => strtoupper(trim($this->input('key')))]);
+        }
     }
 
     public function withValidator(Validator $validator): void
@@ -50,6 +59,14 @@ class UpdateProjectRequest extends FormRequest
             }
 
             $project = $this->project();
+
+            if ($this->has('key') && WorkspaceAccess::canChangeProjectKey($this->user(), $project)
+                && ProjectKeys::isTaken($project->organization_id, (string) $this->input('key'), $project->id)) {
+                $validator->errors()->add('key', 'That key is already used in this organization.');
+
+                return;
+            }
+
             $current = $project->team();
             // The team as it will be after this request, for who may join it.
             $team = new Team([
@@ -98,6 +115,10 @@ class UpdateProjectRequest extends FormRequest
     {
         $data = parent::validated();
         $project = $this->project();
+
+        if (! WorkspaceAccess::canChangeProjectKey($this->user(), $project)) {
+            unset($data['key']);
+        }
 
         if (! WorkspaceAccess::canPublishProject($this->user(), $project->organization_id)) {
             unset($data['is_public']);

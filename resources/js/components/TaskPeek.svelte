@@ -14,6 +14,7 @@
     import { SvelteMap, SvelteSet } from 'svelte/reactivity';
     import { formatDate } from '../lib/format';
     import { peek } from '../lib/peek.svelte';
+    import { taskCode } from '../lib/taskCode';
     import type { Priority, TaskPreview } from '../lib/types';
     import AssigneeStack from './AssigneeStack.svelte';
     import Avatar from './Avatar.svelte';
@@ -83,10 +84,14 @@
             .filter(Boolean)
             .join(', '),
     );
+    // The plan's item number only when it is not just the task's own number.
+    const showItemNumber = $derived(
+        Boolean(task?.item_number && task.item_number !== task.number),
+    );
     const hasPlan = $derived(
         Boolean(
             task &&
-            (task.item_number ||
+            (showItemNumber ||
                 task.category_label ||
                 task.responsible_ministry),
         ),
@@ -490,7 +495,7 @@
                     </a>
                     <span class="text-fg-faint">/</span>
                     <span class="shrink-0 font-mono tabular-nums">
-                        {#if task.item_number}#{task.item_number}{:else}{task.slug}{/if}
+                        {taskCode(task.project?.code, task.number)}
                     </span>
                 {:else}
                     <span class="text-fg-faint">Loading</span>
@@ -732,7 +737,7 @@
                         >
                             Plan
                         </dt>
-                        {#if task.item_number}
+                        {#if showItemNumber}
                             <dt
                                 class="flex min-h-[30px] items-center text-fg-muted"
                             >

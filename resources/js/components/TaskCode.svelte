@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Check, Link2 } from '@lucide/svelte';
     import { writeToClipboard } from '../lib/clipboard';
+    import { taskCode } from '../lib/taskCode';
     import { toast } from '../lib/toast.svelte';
     import type { Task } from '../lib/types';
 
@@ -10,7 +11,7 @@
         projectSlug = null,
         size = 'sm',
     }: {
-        task: Pick<Task, 'slug' | 'item_number' | 'project'>;
+        task: Pick<Task, 'slug' | 'number' | 'project'>;
         /** Falls back to the task's nested project when the parent knows it. */
         projectCode?: string | null;
         projectSlug?: string | null;
@@ -21,11 +22,7 @@
     const slug = $derived(projectSlug ?? task.project?.slug ?? null);
 
     // CODE-123 when we know the project, a bare #123 when we do not.
-    const label = $derived(
-        code && task.item_number != null
-            ? `${code}-${task.item_number}`
-            : `#${task.item_number ?? ''}`,
-    );
+    const label = $derived(taskCode(code, task.number));
 
     const href = $derived(
         slug ? `/workspace/projects/${slug}/tasks/${task.slug}` : null,

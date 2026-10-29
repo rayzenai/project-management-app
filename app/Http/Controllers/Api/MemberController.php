@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateMemberRequest;
 use App\Http\Resources\MemberResource;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
 use App\Support\WorkspaceAccess;
@@ -68,7 +69,7 @@ class MemberController extends Controller
         ], 201);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member): JsonResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge): JsonResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return response()->json([
@@ -77,8 +78,11 @@ class MemberController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($request, $member): void {
+        $deactivated = false;
+
+        DB::transaction(function () use ($request, $member, &$deactivated): void {
             $member->update($request->safe()->except(['team_ids', 'password']));
+            $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
 
             if ($request->has('team_ids')) {
                 $member->teams()->sync($request->validated('team_ids', []));
@@ -112,22 +116,25 @@ class MemberController extends Controller
         });
 
         return response()->json([
-            'message' => 'Member updated.',
+            'message' => $deactivated
+                ? trim('Member updated. '.$forge->execute($member->user)->message)
+                : 'Member updated.',
             'data' => new MemberResource($member->fresh()->load('teams:id')),
         ]);
     }
 
-    public function destroy(Request $request, Member $member): JsonResponse
+    public function destroy(Request $request, Member $member, RemoveFromForgeService $forge): JsonResponse
     {
         abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
-        DB::transaction(function () use ($member): void {
-            $user = $member->user;
+        $user = $member->user;
+
+        DB::transaction(function () use ($member, $user): void {
             $member->delete();
             $user?->delete();
         });
 
-        return response()->json(['message' => 'Member and their login removed.']);
+        return response()->json(['message' => trim('Member and their login removed. '.$forge->execute($user)->message)]);
     }
 
     public function restore(Request $request, Member $member, RestoreWorkspaceModel $service): JsonResponse

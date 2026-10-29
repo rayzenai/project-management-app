@@ -1,6 +1,7 @@
 <script lang="ts">
     import { inertia, page, router } from '@inertiajs/svelte';
     import { Plus, X } from '@lucide/svelte';
+    import { taskCode } from '../lib/taskCode';
     import type { Task, TaskRef } from '../lib/types';
     import StatusGlyph from './StatusGlyph.svelte';
 
@@ -38,9 +39,7 @@
     );
 
     function code(t: TaskRef): string {
-        return t.item_number !== null
-            ? `${projectCode}-${t.item_number}`
-            : projectCode;
+        return taskCode(projectCode, t.number);
     }
 
     function note(t: TaskRef): { text: string; tone: string } {

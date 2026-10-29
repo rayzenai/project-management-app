@@ -60,7 +60,7 @@ class HomeQuery
         // Work still being done: failed tasks are closed, not on anyone's list.
         $open = $this->inScope($user, $scope, $memberId)
             ->notClosed()
-            ->with(['project:id,slug,title', 'assignments.member'])
+            ->with(['project:id,slug,title,key', 'assignments.member'])
             // Soonest first, then by how loudly the task is asking to be done.
             ->orderByRaw('deadline_at ASC NULLS LAST')
             ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END")
@@ -69,7 +69,7 @@ class HomeQuery
 
         $recentlyDone = $this->inScope($user, $scope, $memberId)
             ->complete()
-            ->with(['project:id,slug,title', 'assignments.member'])
+            ->with(['project:id,slug,title,key', 'assignments.member'])
             ->where('completed_at', '>=', $today->subDays(7))
             ->orderByDesc('completed_at')
             ->limit(20)

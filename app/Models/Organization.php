@@ -7,6 +7,7 @@ use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 /**
@@ -71,6 +72,14 @@ class Organization extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);
+    }
+
+    /**
+     * @return HasOne<GitConnection, $this>
+     */
+    public function gitConnection(): HasOne
+    {
+        return $this->hasOne(GitConnection::class);
     }
 
     protected static function newFactory(): OrganizationFactory

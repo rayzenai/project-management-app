@@ -37,7 +37,7 @@
     <CompleteCheckbox {task} projectSlug={project.slug} />
 
     <span class="truncate font-mono text-xs text-fg-faint tabular-nums">
-        {task.item_number ?? ''}
+        {task.number}
     </span>
 
     <div class="flex min-w-0 items-baseline gap-2">

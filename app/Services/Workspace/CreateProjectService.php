@@ -4,6 +4,7 @@ namespace App\Services\Workspace;
 
 use App\Models\Member;
 use App\Models\Project;
+use App\Support\ProjectKeys;
 use App\Support\ServiceResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,6 +33,7 @@ class CreateProjectService
                     'organization_id' => $attributes['organization_id'],
                     'title' => $title,
                     'slug' => $this->uniqueSlug($title),
+                    'key' => ProjectKeys::unique((int) $attributes['organization_id'], (string) ($attributes['key'] ?? ProjectKeys::suggest($title))),
                     'title_np' => $attributes['title_np'] ?? null,
                     'description' => $attributes['description'] ?? null,
                     'description_np' => $attributes['description_np'] ?? null,

@@ -23,9 +23,12 @@ class CreateTaskService
 
         try {
             return DB::transaction(function () use ($project, $attributes, $title): ServiceResult {
+                // Serializes creates in this project so two of them never read the same last number.
+                Project::query()->whereKey($project->id)->lockForUpdate()->first();
+
                 $itemNumber = isset($attributes['item_number']) && $attributes['item_number'] !== ''
                     ? (int) $attributes['item_number']
-                    : $this->nextItemNumber($project->id);
+                    : Task::nextItemNumber($project->id);
 
                 $task = new Task([
                     'project_id' => $project->id,
@@ -66,23 +69,9 @@ class CreateTaskService
         return ((int) $max) + 100;
     }
 
-    /**
-     * Next available item_number for this project. Auto-numbers every task
-     * sequentially per project so users see #1, #2, #3 ... in chronological
-     * creation order regardless of project.
-     */
-    private function nextItemNumber(int $projectId): int
+    private function uniqueSlug(string $title, ?int $itemNumber): string
     {
-        $max = (int) (Task::withTrashed()
-            ->where('project_id', $projectId)
-            ->max(DB::raw("CAST(metadata->>'item_number' AS INTEGER)")) ?? 0);
-
-        return $max + 1;
-    }
-
-    private function uniqueSlug(string $title, int $itemNumber): string
-    {
-        $base = $itemNumber.'-'.Str::slug(Str::limit($title, 60, ''));
+        $base = ($itemNumber ?? 'task').'-'.Str::slug(Str::limit($title, 60, ''));
         if (Str::endsWith($base, '-')) {
             $base .= 'task';
         }

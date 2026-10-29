@@ -1,5 +1,6 @@
 <script lang="ts">
     import { Hourglass, Link2 } from '@lucide/svelte';
+    import { taskCode } from '../../lib/taskCode';
     import type { Task, TaskRef } from '../../lib/types';
 
     /**
@@ -10,9 +11,7 @@
         $props();
 
     function code(t: TaskRef): string {
-        return t.item_number !== null && projectCode
-            ? `${projectCode}-${t.item_number}`
-            : `#${t.item_number ?? t.id}`;
+        return taskCode(projectCode, t.number);
     }
 
     function list(tasks: TaskRef[]): string {

@@ -14,6 +14,7 @@
     import { palette } from '../lib/palette.svelte';
     import { peek } from '../lib/peek.svelte';
     import { quickAdd } from '../lib/quickAdd.svelte';
+    import { taskCode } from '../lib/taskCode';
     import Spinner from './Spinner.svelte';
     import StatusGlyph from './StatusGlyph.svelte';
 
@@ -26,12 +27,12 @@
     type TaskResult = {
         id: number;
         slug: string;
-        item_number: number | null;
+        number: number;
         title: string;
         short_title: string | null;
         status: string | null;
         status_label: string | null;
-        project: { slug: string; title: string } | null;
+        project: { slug: string; title: string; code: string } | null;
     };
     type TaskRef = {
         id: number;
@@ -77,7 +78,7 @@
               id: number;
               slug: string;
               title: string;
-              item_number: number | null;
+              code: string;
               status: string | null;
               meta: string;
           }
@@ -179,7 +180,7 @@
                         id: t.id,
                         slug: t.slug,
                         title: t.title,
-                        item_number: t.item_number,
+                        code: taskCode(t.project?.code, t.number),
                         status: t.status,
                         meta: [t.project?.title, t.status_label]
                             .filter(Boolean)
@@ -523,12 +524,10 @@
                                 >
                             {:else if item.kind === 'task'}
                                 <StatusGlyph status={item.status} size={13} />
-                                {#if item.item_number}
-                                    <span
-                                        class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
-                                        >{item.item_number}</span
-                                    >
-                                {/if}
+                                <span
+                                    class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
+                                    >{item.code}</span
+                                >
                                 <span class="min-w-0 flex-1 truncate"
                                     >{item.title}</span
                                 >

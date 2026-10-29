@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Models\GitConnection;
 use App\Models\Member;
 use App\Models\Organization;
+use App\Support\WorkspaceAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,6 +33,14 @@ class OrganizationResource extends JsonResource
                 ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email])
                 ->values()
                 ->all()),
+            'git' => $this->when(
+                WorkspaceAccess::canManageGit($request->user()) && $this->resource->relationLoaded('gitConnection'),
+                fn (): ?array => $this->gitConnection instanceof GitConnection ? [
+                    'base_url' => $this->gitConnection->base_url,
+                    'owner' => $this->gitConnection->owner,
+                    'url' => $this->gitConnection->url(),
+                ] : null,
+            ),
         ];
     }
 }

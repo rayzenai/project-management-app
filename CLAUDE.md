@@ -27,6 +27,8 @@ php artisan db:seed --class=SdocProjectsSeeder --force  # SDOC + its projects (i
 php artisan workspace:api-token bot@example.com --name=crm-sync   # token for an external system
 php artisan workspace:prune-trashed --pretend
 php artisan workspace:send-deadline-reminders --pretend
+php artisan passport:keys                         # local OIDC signing keys (storage/oauth-*.key)
+php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback   # the forge's OIDC client
 ```
 
 Output of pint/phpstan/pest is rewritten to JSON by `laravel/pao`; when a PHP
@@ -220,6 +222,63 @@ changes how people work.
   → token; `Api\AuthController::userPayload` is the token-auth twin of
   `ShareWorkspaceData`. External systems get tokens via `workspace:api-token`.
   Add cross-cutting API context to `userPayload`.
+
+## Git (Forgejo), phase 0
+
+Spec: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
+
+- **Project keys** (`Project::$key`, `App\Support\ProjectKeys`): 1 to 10
+  capital letters, unique in the organization across current keys **and**
+  `project_key_aliases` (a rename leaves the old key as an alias, so an old
+  commit never points at another project). Suggested from the title (`P`
+  when it has no ASCII letters); only `canChangeProjectKey` (office admin,
+  super-admin) may change it. `Project::code` is the key.
+- **Task numbers** (`Task::$number`): assigned once in the `creating` hook
+  from `projects.last_task_number`, a counter that only goes up, so a number
+  is never reused, even after the trash is purged; unique
+  `(project_id, number)`; never fillable, never editable through a request.
+  The create services lock the project row; the hook's increment locks it
+  for any other creator. A task's code is `KEY-12`
+  (`resources/js/lib/taskCode.ts`); search finds it by current or old key.
+- **Git connection** (`GitConnection`, `Organization::gitConnection()`): one
+  per organization (forge base URL, forge organization `owner`, encrypted
+  hidden bot token). An organization "has git" when it has one. Super-admin
+  only (`canManageGit`), checked against the forge by `EnableGitService` before
+  saving. `base_url` is https (plain http only for a forge on 127.0.0.1,
+  localhost or ::1), and a forge organization connects to one office only.
+  Tokens and secrets never go in a resource, flash, exception or log.
+  Deactivating or deleting someone with a `git_username` removes them from
+  every connected forge organization with each connection's own token
+  (`RemoveFromForgeService`); a forge failure never blocks the change and the
+  message asks for a manual suspend.
+- **OIDC provider** for the forge: Passport + `jeremy379/laravel-openid-connect`
+  (its provider replaces Passport's, which is in composer `dont-discover`;
+  Passport's own routes are off). Routes in `routes/web.php`:
+  `GET oauth/authorize` (`web`, `auth`, `EnsureCanUseGit`) and `POST
+  oauth/token` (no session or CSRF, throttled); the package adds
+  `/.well-known/openid-configuration` (issuer = `APP_URL`) and `/oauth/jwks`.
+  One client, `Forgejo` (`git:oidc-client`), skips consent
+  (`OAuthClient::skipsAuthorization`). Userinfo is off: every claim is in the
+  id_token (`App\Support\Git\Oidc\IdentityEntity`): `sub` (user id),
+  `email`, `email_verified`, `name`, `preferred_username` (`GitUsernames`,
+  stored once in `users.git_username`, never recomputed, always a name
+  Forgejo accepts: no separator runs, letter or digit at both ends, its
+  reserved names and endings treated as taken, as are every connection's
+  `owner`, its `{owner}-bot` and `forge-admin` (one namespace for forge
+  users and organizations), `user-{id}` fallback), and
+  for the `git` scope `git_orgs` (forge organization names; left out when
+  empty, so the forge's required-claim check refuses) and `groups`
+  (`forge-admins` for super-admins). Access tokens live an hour, refresh
+  tokens a day; `passport:purge` runs daily. `User` keeps Sanctum's
+  `HasApiTokens`; never add Passport's. Keys: `passport:keys` locally,
+  `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` in production.
+- **Who may use git** (`App\Support\Git\GitAccess::organizationsFor`, the
+  one rule for the sign-in gate and `git_orgs`): only organizations with a
+  connection; a super-admin gets all of them; an active member gets their own
+  organization plus the organization of every project whose team they are on
+  (a cross-organization team's outsiders included); a deactivated or missing
+  member gets none, and none means a 403 at `/oauth/authorize`.
+  A connected forge must sign people in only through this tracker, so forge usernames are the tracker's; removal on deactivation walks every connected forge organization by that name.
 
 ## Semantic theming layer (web UI)
 

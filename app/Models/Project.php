@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Database\Factories\ProjectFactory;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property int $organization_id
  * @property string $slug
+ * @property string $key
  * @property string $title
  * @property string|null $title_np
  * @property string|null $description
@@ -25,13 +27,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property bool $is_public
  * @property CarbonImmutable|null $starts_at
  * @property CarbonImmutable|null $ends_at
+ * @property int $last_task_number
  * @property CarbonImmutable|null $archived_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read int|null $tasks_count
  * @property-read int|null $done_tasks_count
  * @property-read int|null $overdue_tasks_count
- * @property-read non-empty-string $code
+ * @property-read string $code
  */
 class Project extends Model
 {
@@ -43,6 +46,7 @@ class Project extends Model
     protected $fillable = [
         'organization_id',
         'slug',
+        'key',
         'title',
         'title_np',
         'description',
@@ -66,24 +70,25 @@ class Project extends Model
     }
 
     /**
-     * Short project code: the first alphanumeric character of each word in the
-     * title, uppercased, capped at four. "Digital Nepal Rollout" -> DNR,
-     * "Government 100-Day Plan" -> G1P. Tasks quote it as CODE-123 so an id can
-     * be pasted into a chat and still mean something.
+     * The project half of a task code: its stored key (SG in SG-12). Only a
+     * project not saved yet falls back to what its title suggests; a saved
+     * one loaded without its key fails loudly instead of guessing.
      *
-     * @return Attribute<non-empty-string, never>
+     * @return Attribute<string, never>
      */
     protected function code(): Attribute
     {
-        return Attribute::get(function (): string {
-            $initials = collect(preg_split('/\s+/u', (string) $this->title) ?: [])
-                ->map(fn (string $word): string => (string) (preg_replace('/[^\p{L}\p{N}]/u', '', $word) ?: ''))
-                ->filter()
-                ->map(fn (string $word): string => mb_strtoupper(mb_substr($word, 0, 1)))
-                ->take(4)
-                ->implode('');
+        return Attribute::get(fn (): string => $this->exists ? $this->key : ($this->key ?? ProjectKeys::suggest((string) $this->title)));
+    }
 
-            return $initials !== '' ? $initials : 'P'.$this->id;
+    protected static function booted(): void
+    {
+        // A project made without a key (a factory, a console one-off) gets the
+        // one its title suggests; the services pass theirs explicitly.
+        static::creating(function (Project $project): void {
+            if (($project->attributes['key'] ?? null) === null) {
+                $project->key = ProjectKeys::unique((int) $project->organization_id, ProjectKeys::suggest((string) $project->title));
+            }
         });
     }
 
@@ -101,11 +106,21 @@ class Project extends Model
     }
 
     /**
+     * Keys the project used to have; they keep resolving to it.
+     *
+     * @return HasMany<ProjectKeyAlias, $this>
+     */
+    public function keyAliases(): HasMany
+    {
+        return $this->hasMany(ProjectKeyAlias::class);
+    }
+
+    /**
      * @return HasMany<Task, $this>
      */
     public function tasks(): HasMany
     {
-        return $this->hasMany(Task::class)->orderBy('sort_order')->orderByRaw("CAST(metadata->>'item_number' AS INTEGER) ASC NULLS LAST");
+        return $this->hasMany(Task::class)->orderBy('sort_order')->orderByRaw("CAST(metadata->>'item_number' AS BIGINT) ASC NULLS LAST");
     }
 
     /**

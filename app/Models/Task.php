@@ -19,6 +19,7 @@ use Illuminate\Support\Str;
 /**
  * @property int $id
  * @property int $project_id
+ * @property int $number
  * @property string $slug
  * @property string|null $short_title
  * @property string $title
@@ -91,6 +92,21 @@ class Task extends Model
 
     protected static function booted(): void
     {
+        // The number in the task's code (SG-12) is assigned once and never
+        // reused, not even after the trash is purged: it comes from the
+        // project's counter, which only goes up. The increment locks the
+        // project row (the create services already hold it); the unique
+        // index is the last guard.
+        static::creating(function (Task $item) {
+            if ($item->getAttribute('number') === null) {
+                $item->number = DB::transaction(function () use ($item): int {
+                    DB::table('projects')->where('id', $item->project_id)->increment('last_task_number');
+
+                    return (int) DB::table('projects')->where('id', $item->project_id)->value('last_task_number');
+                });
+            }
+        });
+
         static::saving(function (Task $item) {
             if (empty($item->slug)) {
                 $item->slug = $item->item_number.'-'.Str::slug($item->title);
@@ -335,7 +351,23 @@ class Task extends Model
     {
         $direction = strtolower($direction) === 'desc' ? 'DESC' : 'ASC';
 
-        return $query->orderByRaw("CAST(metadata->>'item_number' AS INTEGER) {$direction} NULLS LAST");
+        return $query->orderByRaw("CAST(metadata->>'item_number' AS BIGINT) {$direction} NULLS LAST");
+    }
+
+    /**
+     * The plan item number a new task in this project takes: the highest in
+     * the project, trashed tasks included, plus one. Read through a bigint
+     * cast so a stray huge value cannot make the query fail. Null when the
+     * next one would pass what validation accepts (2147483647), so the task
+     * is created without one.
+     */
+    public static function nextItemNumber(int $projectId): ?int
+    {
+        $max = (int) (static::withTrashed()
+            ->where('project_id', $projectId)
+            ->max(DB::raw("CAST(metadata->>'item_number' AS BIGINT)")) ?? 0);
+
+        return $max >= 2147483647 ? null : $max + 1;
     }
 
     /**

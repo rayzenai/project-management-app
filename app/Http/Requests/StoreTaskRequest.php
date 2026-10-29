@@ -25,7 +25,7 @@ class StoreTaskRequest extends FormRequest
             'deadline_at' => ['nullable', 'date'],
             'status_note' => ['nullable', 'string'],
             'source_url' => ['nullable', 'url', 'max:500'],
-            'item_number' => ['nullable', 'integer'],
+            'item_number' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
             'category' => ['nullable', 'string', 'max:64'],
             'deadline_type' => ['nullable', 'string', 'max:64'],
             'responsible_ministry' => ['nullable', 'string', 'max:255'],

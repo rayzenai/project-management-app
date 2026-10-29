@@ -84,7 +84,7 @@ class MyWorkspaceQuery
                 ->get()
             : collect();
 
-        $projects = Project::query()->visibleTo($user)->active()->orderBy('title')->get(['id', 'slug', 'title']);
+        $projects = Project::query()->visibleTo($user)->active()->orderBy('title')->get(['id', 'slug', 'key', 'title']);
 
         $teamMembers = Member::query()->visibleTo($user)->active()->orderBy('name')->get(['id', 'name', 'email', 'user_id']);
 

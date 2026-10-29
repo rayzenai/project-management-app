@@ -80,6 +80,17 @@ it('shows the people who run the project its tasks and everyone\'s workload on i
             ->where('progress.members.3.name', 'Deepak Former'));
 });
 
+it('builds task codes from the stored project key, not the title suggestion', function () {
+    // "Ward Upgrade" would suggest WU; the stored key is what commits carry.
+    $this->project->forceFill(['key' => 'KEPT'])->save();
+    $task = projectProgressTask($this->project, ['status' => 'in_progress'], [$this->worker]);
+
+    $this->actingAs($this->leader)->get("/workspace/projects/{$this->project->slug}/progress")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('progress.tasks.0.project.code', 'KEPT')
+            ->where('progress.tasks.0.number', $task->number));
+});
+
 it('offers the project\'s progress over the API and a link to it on the project', function () {
     projectProgressTask($this->project, ['status' => 'in_progress'], [$this->worker]);
 

@@ -9,6 +9,7 @@ use App\Http\Controllers\Workspace\MyWorkspaceController;
 use App\Http\Controllers\Workspace\NoteController;
 use App\Http\Controllers\Workspace\NotificationController;
 use App\Http\Controllers\Workspace\OrganizationController;
+use App\Http\Controllers\Workspace\OrganizationGitController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProjectController;
@@ -25,11 +26,26 @@ use App\Http\Controllers\Workspace\TeamController;
 use App\Http\Controllers\Workspace\TeamMemberController;
 use App\Http\Controllers\Workspace\TeamProgressController;
 use App\Http\Controllers\Workspace\WorkspaceNoteController;
+use App\Http\Middleware\EnsureCanUseGit;
 use App\Http\Middleware\EnsureProjectVisible;
 use App\Http\Middleware\ShareWorkspaceData;
 use Illuminate\Support\Facades\Route;
+use Laravel\Passport\Http\Controllers\AccessTokenController;
+use Laravel\Passport\Http\Controllers\AuthorizationController;
 
 Route::redirect('/', '/workspace')->name('home');
+
+// The forge's OpenID Connect sign-in. Passport's own routes are off; the
+// openid package adds discovery (/.well-known/openid-configuration) and the
+// signing key (/oauth/jwks). Only people GitAccess lets in get a code. The
+// forge calls the token endpoint server to server: no session, no CSRF.
+Route::get('/oauth/authorize', [AuthorizationController::class, 'authorize'])
+    ->middleware(['auth', EnsureCanUseGit::class])
+    ->name('passport.authorizations.authorize');
+Route::post('/oauth/token', [AccessTokenController::class, 'issueToken'])
+    ->withoutMiddleware('web')
+    ->middleware('throttle:60,1')
+    ->name('passport.token');
 
 Route::middleware('guest')
     ->prefix('workspace')
@@ -53,6 +69,8 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
         Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('organizations.update');
         Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('organizations.destroy');
+        Route::post('/organizations/{organization}/git', [OrganizationGitController::class, 'store'])->name('organizations.git.store');
+        Route::delete('/organizations/{organization}/git', [OrganizationGitController::class, 'destroy'])->name('organizations.git.destroy');
 
         Route::get('/team', [TeamController::class, 'index'])->name('team');
         Route::inertia('/guide', 'Guide')->name('guide');

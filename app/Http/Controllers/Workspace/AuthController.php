@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Workspace;
 
 use App\Http\Requests\Auth\LoginRequest;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
@@ -24,13 +23,21 @@ class AuthController extends Controller
         return Inertia::render('Auth/Login');
     }
 
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request): SymfonyResponse
     {
         $request->authenticate();
 
         $request->session()->regenerate();
 
-        return redirect()->intended('/workspace');
+        $redirect = redirect()->intended('/workspace');
+
+        // Signing in on the way to the forge: a full page visit, so the
+        // browser (not the SPA's XHR) follows /oauth/authorize off to the forge.
+        if (str_starts_with($redirect->getTargetUrl(), route('passport.authorizations.authorize'))) {
+            return Inertia::location($redirect->getTargetUrl());
+        }
+
+        return $redirect;
     }
 
     /**

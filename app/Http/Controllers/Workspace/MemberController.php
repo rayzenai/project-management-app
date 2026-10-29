@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
 use App\Support\WorkspaceAccess;
@@ -59,14 +60,17 @@ class MemberController extends Controller
         ]);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member): RedirectResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge): RedirectResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return back()->withErrors(['email' => 'An email is required to create a login.']);
         }
 
-        DB::transaction(function () use ($request, $member): void {
+        $deactivated = false;
+
+        DB::transaction(function () use ($request, $member, &$deactivated): void {
             $member->update($request->safe()->except(['team_ids', 'password']));
+            $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
 
             if ($request->has('team_ids')) {
                 $member->teams()->sync($request->validated('team_ids', []));
@@ -99,22 +103,33 @@ class MemberController extends Controller
             }
         });
 
-        return back()->with('workspace_flash', ['success' => true, 'message' => 'Member updated.']);
+        $success = true;
+        $message = 'Member updated.';
+        if ($deactivated) {
+            $removal = $forge->execute($member->user);
+            $message = trim($message.' '.$removal->message);
+            $success = $removal->meta['complete'] ?? true;
+        }
+
+        return back()->with('workspace_flash', ['success' => $success, 'message' => $message]);
     }
 
-    public function destroy(Request $request, Member $member): RedirectResponse
+    public function destroy(Request $request, Member $member, RemoveFromForgeService $forge): RedirectResponse
     {
         abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
-        DB::transaction(function () use ($member): void {
-            $user = $member->user;
+        $user = $member->user;
+
+        DB::transaction(function () use ($member, $user): void {
             $member->delete();
             $user?->delete();
         });
 
+        $removal = $forge->execute($user);
+
         return back()->with('workspace_flash', [
-            'success' => true,
-            'message' => 'Member and their login removed.',
+            'success' => $removal->meta['complete'] ?? true,
+            'message' => trim('Member and their login removed. '.$removal->message),
             'undo' => [
                 'label' => 'Undo',
                 'url' => route('workspace.members.restore', $member),

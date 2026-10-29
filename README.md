@@ -63,6 +63,7 @@ Vite, concurrently).
 | `PM_SUPER_ADMIN_PASSWORD` | Default password used by `WorkspaceSuperadminSeeder` |
 | `PM_TRASH_TTL_DAYS` | Days a soft-deleted record survives before `workspace:prune-trashed` removes it (default `30`) |
 | `PM_REMINDERS_RUN_AT` | Time of day `workspace:send-deadline-reminders` runs (default `08:00`) |
+| `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` | PEM contents of the key pair that signs the forge's OIDC id_tokens (production; newlines may be written as `\n`). Leave empty locally and run `php artisan passport:keys`, which writes `storage/oauth-*.key` |
 
 Config files worth knowing:
 
@@ -94,6 +95,27 @@ See [`docs/api.md` → Integrating another system](docs/api.md#integrating-anoth
 | `workspace:api-token` | Issue / revoke an API token for an external system |
 | `workspace:prune-trashed [--pretend]` | Force-delete soft-deleted rows past the trash TTL (scheduled daily) |
 | `workspace:send-deadline-reminders [--pretend]` | Heads-up / due-today / overdue notifications (scheduled daily at `PM_REMINDERS_RUN_AT`) |
+| `git:oidc-client {redirect_uri}` | Create the forge's OIDC client (`Forgejo`) for that callback URL and print its client id and secret. Run again to move it to a new URL: same id, new secret (the old one stops working) |
+
+### Signing in to the forge (OIDC)
+
+The tracker is the OpenID Connect provider for the Forgejo forge. Point the
+forge's OAuth2 source at `APP_URL/.well-known/openid-configuration` with the
+client id and secret from `git:oidc-client`, and the scopes `openid`, `profile`,
+`email` and `git`, each with its own `--scopes` (as in
+[`docs/forgejo.md`](docs/forgejo.md), bootstrap step 5).
+The id_token carries `git_orgs` (the forge organizations the person may enter)
+and `groups` (`forge-admins` for super-admins). Only active people whose
+office has git switched on, active people on the team of such an office's
+project, and super-admins get past `/oauth/authorize`; everyone else gets a
+403.
+
+The forge itself (`git.sdoc.gov.np`: the Dokploy compose kit in
+`deploy/forgejo/`, DNS, bootstrap, the OIDC source, backups and upgrades) is
+in [`docs/forgejo.md`](docs/forgejo.md).
+
+To try the forge against your local tracker, run `deploy/forgejo/local.sh up`
+([Try it locally](docs/forgejo.md#try-it-locally)).
 
 ## Organizations and roles
 
@@ -102,13 +124,17 @@ its teams, projects and people are invisible to every other organization.
 
 | Role | Who | Can |
 | --- | --- | --- |
-| Super-admin | emails in `PM_SUPER_ADMINS`, in no organization | manage organizations and everything in them; make a team cross-organization; make someone an office admin |
-| Office admin | a person marked office admin | create teams and people in their organization, choose team leaders, see all of it |
-| Team leader | `leader` on a team | add people to the team by searching (their organization, or anyone for a cross-organization team), see the team's live progress page and Gantt chart |
-| Member | everyone else | see their teams, teammates and those teams' projects |
+| Super-admin | emails in `PM_SUPER_ADMINS`, in no organization | manage organizations and everything in them; make a team cross-organization; make someone an office admin; change any project's key |
+| Office admin | a person marked office admin | create projects and people in their organization, choose each project's manager, see every project of it, publish projects to the whole organization; set and change its projects' keys (the old key keeps working: it stays an alias, so task codes already written still find their tasks) |
+| Project manager | the `leader` of a project's own team (one per project) | edit and archive their projects, add people to the project's team by searching (their organization, or anyone for a cross-organization team), see the project's live progress page and Gantt chart; never edits people or chooses managers |
+| Member | everyone else | see their projects, teammates and their organization's public projects; manage their own subtasks and notes |
+
+Every project has exactly one team of its own, made with the project, and that
+team's leader is the project's manager. Office roles such as senior dev or QA
+are not modeled: a person's free-text title carries them.
 
 New organizations: super-admin opens **Organizations**, creates one, then adds
-its office admin from **Team** (Add person, choose the organization, tick Office
+its office admin from **People** (Add person, choose the organization, tick Office
 admin). The migration that introduced organizations put existing data into one
 organization named after `APP_NAME`.
 

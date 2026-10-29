@@ -50,7 +50,7 @@
     }}
 >
     <span class="flex min-w-0">
-        {#if task.item_number}
+        {#if task.number}
             <TaskCode {task} projectSlug={projectSlug ?? undefined} />
         {/if}
     </span>

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,6 +31,7 @@ class StoreProjectRequest extends FormRequest
             'title_np' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'description_np' => ['nullable', 'string'],
+            'key' => ['nullable', 'string', 'regex:/^[A-Z]{1,10}$/'],
             'is_public' => ['nullable', 'boolean'],
             'organization_id' => [
                 Rule::requiredIf(fn (): bool => WorkspaceAccess::isSuperAdmin($this->user())),
@@ -39,11 +41,22 @@ class StoreProjectRequest extends FormRequest
         ];
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('key'))) {
+            $this->merge(['key' => strtoupper(trim($this->input('key')))]);
+        }
+    }
+
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
             if ($validator->errors()->isNotEmpty()) {
                 return;
+            }
+
+            if ($this->filled('key') && ProjectKeys::isTaken((int) $this->organizationId(), (string) $this->input('key'))) {
+                $validator->errors()->add('key', 'That key is already used in this organization.');
             }
 
             $manager = Member::query()->find($this->integer('manager_id'));
@@ -71,6 +84,11 @@ class StoreProjectRequest extends FormRequest
         // Public opens it to the whole organization: its administrators' call.
         if (! $this->boolean('is_public') || ! WorkspaceAccess::canPublishProject($this->user(), $this->organizationId())) {
             unset($data['is_public']);
+        }
+
+        // Choosing the key is the administrators' call; the title suggests one otherwise.
+        if (! WorkspaceAccess::administers($this->user(), $this->organizationId())) {
+            unset($data['key']);
         }
 
         return data_get($data, $key, $default);

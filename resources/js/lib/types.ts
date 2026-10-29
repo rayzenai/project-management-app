@@ -88,6 +88,8 @@ export interface Organization extends OrganizationOption {
     teams_count?: number;
     projects_count?: number;
     office_admins?: { id: Id; name: string; email?: string | null }[];
+    /** The forge connection; present for super-admins, null when git is off. */
+    git?: { base_url: string; owner: string; url: string } | null;
 }
 
 export interface ProjectSummary {
@@ -112,6 +114,10 @@ export interface Project extends ProjectSummary {
     can_view_progress?: boolean;
     /** Choosing the manager is the office admin's (or a super-admin's). */
     can_choose_manager?: boolean;
+    /** Stored project key, the code half of KEY-12. */
+    key?: string;
+    /** Renaming the key is the office admin's (or a super-admin's). */
+    can_change_key?: boolean;
     /** Making it public (everyone in its organization), likewise. */
     can_publish?: boolean;
     /** The project's own team. */
@@ -182,6 +188,7 @@ export interface Task {
         days_ago: number | null;
     };
     metadata?: Record<string, unknown>;
+    number: number;
     item_number?: number | null;
     category?: string | null;
     category_label?: string | null;
@@ -329,7 +336,7 @@ export interface TaskRef {
     id: number;
     slug: string;
     title: string;
-    item_number: number | null;
+    number: number;
     status: string;
     status_label: string;
     is_complete: boolean;
@@ -343,7 +350,7 @@ export interface TaskRef {
 export interface TaskOption {
     id: number;
     title: string;
-    item_number: number | null;
+    number: number;
     status: string;
 }
 
@@ -370,7 +377,7 @@ export interface ProgressTask {
     id: number;
     slug: string;
     title: string;
-    item_number: number | null;
+    number: number;
     project: { slug: string; title: string; code: string };
     status: string;
     priority: string;
