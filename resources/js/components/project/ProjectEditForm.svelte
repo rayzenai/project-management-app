@@ -98,11 +98,13 @@
         {/if}
     </div>
 
-    {#if isSuperAdmin}
+    {#if project.can_publish}
         <label class="flex items-center gap-2 text-fg-muted">
             <input type="checkbox" bind:checked={form.is_public} />
-            Public (visible to everyone)
+            Public (everyone in its organization can see it)
         </label>
+    {/if}
+    {#if isSuperAdmin}
         <label class="flex items-center gap-2 text-fg-muted">
             <input type="checkbox" bind:checked={form.is_cross_organization} />
             Its team can take people from other organizations

@@ -52,6 +52,13 @@ it('never reminds completed tasks', function () {
     Notification::assertNothingSent();
 });
 
+it('never chases failed tasks, which are closed', function () {
+    Notification::fake();
+    assignedTask(['deadline_at' => today()->subDays(4), 'status' => 'failed']);
+    $this->artisan('workspace:send-deadline-reminders')->assertSuccessful();
+    Notification::assertNothingSent();
+});
+
 it('re-notifies overdue tasks on the configured cadence', function () {
     Notification::fake();
     assignedTask(['deadline_at' => today()->subDays(1), 'status' => 'in_progress']);

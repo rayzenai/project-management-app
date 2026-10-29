@@ -64,12 +64,14 @@ are deferred.
 
 | Method | Path | Returns |
 | --- | --- | --- |
-| GET | `/notifications?page=` | paginated `[Notification]`, newest first (`data` + `meta` + `links`), plus `counts` (all / unread / per kind) and the echoed `filters`. `?scope=unread` and `?type=assigned\|status\|mention\|deadline` narrow the list; `counts` always describe the whole inbox |
+| GET | `/notifications?page=` | paginated `[Notification]`, newest first (`data` + `meta` + `links`), plus `counts` (all / unread / per kind) and the echoed `filters`. `?scope=unread` and `?type=assigned\|status\|mention\|deadline\|team` narrow the list; `counts` always describe the whole inbox |
 | GET | `/notifications/unread-count` | `{ data: { count } }` |
 | POST | `/notifications/{id}/read` | `{ message }` (sets `read_at`) |
 | POST | `/notifications/read-all` | `{ message }` |
 
-Each notification's `data` payload is `{ kind, title, body, task, actor, url }`.
+Each notification's `data` payload is `{ kind, title, body, task, actor, url }`. Team notifications (`kind` `team_added` or `made_manager`) have `task: null` and add `project { slug, title }`.
+
+Task payloads carry `is_overdue`: still being worked on (not done, not failed) and past the deadline. Every overdue count in the API uses that rule; failed tasks are closed and never on the Home to-do buckets.
 
 ## Feeds & overview (`/workspace/*`)
 

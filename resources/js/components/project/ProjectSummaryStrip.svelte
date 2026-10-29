@@ -11,10 +11,7 @@
         ),
     );
     const isComplete = (t: Task) => completeSet.has(t.status);
-    const isOverdue = (t: Task) =>
-        !!t.deadline_at &&
-        !isComplete(t) &&
-        new Date(t.deadline_at) < new Date(new Date().toDateString());
+    const isOverdue = (t: Task) => t.is_overdue === true;
 
     const total = $derived(tasks.length);
     const doneCount = $derived(tasks.filter(isComplete).length);

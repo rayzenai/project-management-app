@@ -35,8 +35,9 @@ class ProjectResource extends JsonResource
             'can_archive' => WorkspaceAccess::canArchiveProject($request->user(), $this->resource),
             'can_manage_access' => WorkspaceAccess::canManageProjectAccess($request->user(), $this->resource),
             'can_view_progress' => WorkspaceAccess::canViewProjectProgress($request->user(), $this->resource),
-            // Choosing the manager is the office admin's (or a super-admin's).
+            // Choosing the manager and publishing are the office admin's (or a super-admin's).
             'can_choose_manager' => WorkspaceAccess::administers($request->user(), $this->organization_id),
+            'can_publish' => WorkspaceAccess::canPublishProject($request->user(), $this->organization_id),
             'team' => $this->whenLoaded('teams', fn (): ?array => ($team = $this->team()) === null ? null : [
                 'id' => $team->id,
                 'is_cross_organization' => (bool) $team->is_cross_organization,

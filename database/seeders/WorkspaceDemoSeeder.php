@@ -7,7 +7,6 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\ProjectContact;
-use App\Models\ProjectDigestSubscriber;
 use App\Models\ProjectNote;
 use App\Models\Subtask;
 use App\Models\Task;
@@ -111,7 +110,6 @@ class WorkspaceDemoSeeder extends Seeder
 
         $this->seedProjects();
         $this->seedStickies();
-        $this->seedDigestSubscribers();
         $this->seedNotifications();
 
         Auth::logout();
@@ -986,7 +984,7 @@ class WorkspaceDemoSeeder extends Seeder
         TaskComment::query()->create([
             'task_id' => $task->getKey(),
             'user_id' => $this->users['admin']->getKey(),
-            'body' => 'Noted. Keep the weekly line in the digest until this closes.',
+            'body' => 'Noted. Keep it on the weekly review until this closes.',
             'mentioned_member_ids' => null,
         ]);
     }
@@ -1099,34 +1097,6 @@ class WorkspaceDemoSeeder extends Seeder
                     'position_y' => 40 + intdiv($position, 3) * 220,
                 ]);
             }
-        }
-    }
-
-    /**
-     * Three digest recipients: confirmed, pending confirmation, unsubscribed.
-     */
-    private function seedDigestSubscribers(): void
-    {
-        /** @var list<array{email: string, categories: ?list<string>, confirmed: bool, unsubscribed: bool}> $subscribers */
-        $subscribers = [
-            ['email' => 'press@pmopm.test', 'categories' => null, 'confirmed' => true, 'unsubscribed' => false],
-            ['email' => 'reform-watch@pmopm.test', 'categories' => ['admin_reform', 'anti_corruption'], 'confirmed' => false, 'unsubscribed' => false],
-            ['email' => 'former-subscriber@pmopm.test', 'categories' => null, 'confirmed' => true, 'unsubscribed' => true],
-        ];
-
-        foreach ($subscribers as $spec) {
-            ProjectDigestSubscriber::query()->updateOrCreate(
-                ['email' => $spec['email']],
-                [
-                    'categories' => $spec['categories'],
-                    'frequency' => 'weekly',
-                    'confirmation_token' => Str::random(40),
-                    'confirmed_at' => $spec['confirmed'] ? CarbonImmutable::now()->subDays(20) : null,
-                    'unsubscribe_token' => Str::random(40),
-                    'unsubscribed_at' => $spec['unsubscribed'] ? CarbonImmutable::now()->subDays(3) : null,
-                    'last_sent_at' => $spec['confirmed'] ? CarbonImmutable::now()->subDays(8) : null,
-                ],
-            );
         }
     }
 

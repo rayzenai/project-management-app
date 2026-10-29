@@ -635,7 +635,7 @@
                     to: t.id,
                     tone: (d.is_complete
                         ? 'done'
-                        : d.is_late
+                        : d.is_overdue
                           ? 'late'
                           : 'idle') as Tone,
                 })),

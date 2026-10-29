@@ -2,6 +2,7 @@
     import { inertia, page, router } from '@inertiajs/svelte';
     import {
         Bell,
+        BookOpen,
         Building2,
         Folder,
         LayoutGrid,
@@ -163,6 +164,7 @@
                   },
               ]
             : []),
+        { label: 'Guide', href: '/workspace/guide', icon: BookOpen },
     ]);
 
     function isActive(href: string) {

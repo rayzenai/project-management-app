@@ -8,7 +8,7 @@ layer.
 
 A standalone Laravel 13 + Inertia + Svelte 5 project/task tracking workspace
 (projects → tasks → subtasks, assignments, notes, contacts, teams, members,
-activity log, in-app notifications, weekly digest, 100-point plan tracker) with a
+activity log, in-app notifications, 100-point plan tracker) with a
 Sanctum JSON API. It used to be a thin host for the `rayzenai/project-management`
 package; that package is **retired** and all of its code now lives here under
 `App\`. Do not reintroduce the dependency.
@@ -23,10 +23,10 @@ composer types:check                            # PHPStan level 7 over app/ conf
 vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
 php artisan db:seed --class=WorkspaceDemoSeeder  # full demo workspace (idempotent, non-prod only)
+php artisan db:seed --class=SdocProjectsSeeder --force  # SDOC + its projects (idempotent, prod-safe)
 php artisan workspace:api-token bot@example.com --name=crm-sync   # token for an external system
 php artisan workspace:prune-trashed --pretend
 php artisan workspace:send-deadline-reminders --pretend
-php artisan digest:send-weekly --pretend
 ```
 
 Output of pint/phpstan/pest is rewritten to JSON by `laravel/pao`; when a PHP
@@ -154,8 +154,12 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   `category`, `deadline_type`, `responsible_ministry`, `title_np`,
   `description_np`) stored in the `metadata` jsonb column via `Attribute`
   mutators; `Task::completeStatuses()` derives "finished" from the config
-  `is_complete` flags — never hardcode status strings. Lateness is derived
-  (`is_late`), not a status.
+  `is_complete` flags and `Task::closedStatuses()` from `is_closed` (done and
+  failed: work has stopped) — never hardcode status strings. Lateness is
+  derived (`is_late`), not a status. **Overdue has one rule everywhere**:
+  not closed and past its deadline (`is_overdue`, `scopeOverdue`,
+  `notClosed`); every count, filter, chip and reminder uses it, and closed
+  tasks never sit on anyone's to-do list.
 - **TaskDependency** — finish-to-start (`task_id` waits for
   `depends_on_task_id`), same project only, no loops
   (`TaskDependency::reaches`); `Task::dependencies()` / `dependents()`;
@@ -178,22 +182,32 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   report polled every 15s: `components/ProgressReport.svelte`,
   `components/team/GanttChart.svelte` selects, and
   `TaskReportDrawer.svelte` shows the task read-only (never the editable Peek). **ProjectActivity** —
-  polymorphic audit log written only by observers. **WorkspaceNote** — personal
+  polymorphic audit log written only by observers; every row names its
+  `project_id`, and `task_id` is null for project-level entries (team
+  changes, written by `TeamMembershipObserver` via the `TeamMembership`
+  pivot model). Feeds scope activity by `project_id`. **WorkspaceNote** — personal
   stickies. **ProjectAssignment / ProjectNote / ProjectContact / TaskComment** —
-  task children. **ProjectDigestSubscriber** — weekly digest recipients.
+  task children.
 - Dates are `CarbonImmutable` app-wide (`Date::use`); type-hint
   `CarbonInterface` when accepting model dates.
 
 ## In-app notifications (`app/Notifications`)
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
-`MentionedInComment`, `TaskDeadlineDue` share `Concerns\BuildsWorkspaceNotification`
+`MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam` and
+`MadeProjectManager` share `Concerns\BuildsWorkspaceNotification`
 and emit the stable payload `{kind, title, action, body, task, actor, url}`
 (`action` is the short form with the task title left out, for surfaces that lead
 with the title; `body` keeps the long sentence). Dispatched
 from observers (assignment created → `TaskAssigned`; task status entering
-done/failed → `TaskStatusChanged`), the comment service (mentions) and the
-reminders command.
+done/failed → `TaskStatusChanged`; joining a project's team or becoming its
+manager → the team notifications, never to the person who did it), the
+comment service (mentions) and the reminders command. The team ones carry
+`task: null` and a `project {slug, title}`.
+
+The sidebar's **Guide** (`pages/Guide.svelte`, `/workspace/guide`) explains
+the model and each role's routine to users: keep it in step when a feature
+changes how people work.
 
 ## Two delivery surfaces
 

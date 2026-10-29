@@ -48,7 +48,7 @@
             return { text: 'Done', tone: 'text-success' };
         }
 
-        if (t.is_late && t.status !== 'failed') {
+        if (t.is_overdue) {
             return { text: 'Late', tone: 'text-danger' };
         }
 

@@ -7,7 +7,9 @@
         CalendarClock,
         Check,
         CircleDot,
+        UserCheck,
         UserPlus,
+        Users,
     } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
@@ -112,6 +114,8 @@
         task_status_changed: CircleDot,
         mentioned_in_comment: AtSign,
         task_deadline_due: CalendarClock,
+        team_added: Users,
+        made_manager: UserCheck,
     };
 
     const TYPE_CHIPS = [
@@ -120,6 +124,7 @@
         { key: 'status', label: 'Status' },
         { key: 'mention', label: 'Mentions' },
         { key: 'deadline', label: 'Deadlines' },
+        { key: 'team', label: 'Teams' },
     ];
 
     /**

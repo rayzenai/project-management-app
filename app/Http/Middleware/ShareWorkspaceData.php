@@ -47,6 +47,7 @@ class ShareWorkspaceData
                 'label' => $meta['label'] ?? ucfirst($value),
                 'color' => $meta['color'] ?? '#9CA3AF',
                 'is_complete' => (bool) ($meta['is_complete'] ?? false),
+                'is_closed' => (bool) ($meta['is_closed'] ?? $meta['is_complete'] ?? false),
             ])
             ->values()
             ->all());

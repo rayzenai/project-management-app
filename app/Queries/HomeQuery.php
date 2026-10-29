@@ -57,8 +57,9 @@ class HomeQuery
 
         $scope = $this->resolveScope($request, $user, $memberId);
 
+        // Work still being done: failed tasks are closed, not on anyone's list.
         $open = $this->inScope($user, $scope, $memberId)
-            ->incomplete()
+            ->notClosed()
             ->with(['project:id,slug,title', 'assignments.member'])
             // Soonest first, then by how loudly the task is asking to be done.
             ->orderByRaw('deadline_at ASC NULLS LAST')
@@ -170,8 +171,9 @@ class HomeQuery
                 /** @var Collection<int, Task> $items */
                 $items = $byProject->get($project->id) ?? new Collection;
 
-                $open = $items->reject(fn (Task $task): bool => $task->isComplete());
-                $complete = $items->count() - $open->count();
+                $complete = $items->filter(fn (Task $task): bool => $task->isComplete())->count();
+                // Still being worked on: failed tasks are closed.
+                $open = $items->reject(fn (Task $task): bool => $task->isClosed());
 
                 return [
                     'slug' => $project->slug,
@@ -182,10 +184,7 @@ class HomeQuery
                     'percent_complete' => $items->count() === 0
                         ? 0
                         : (int) round($complete / $items->count() * 100),
-                    'overdue' => $open->filter(
-                        fn (Task $task): bool => $task->deadline_at !== null
-                            && $task->deadline_at->startOfDay()->lt($today),
-                    )->count(),
+                    'overdue' => $items->filter(fn (Task $task): bool => $task->is_overdue)->count(),
                     'due_this_week' => $open->filter(
                         fn (Task $task): bool => $task->deadline_at !== null
                             && $task->deadline_at->startOfDay()->gte($today)

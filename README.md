@@ -47,6 +47,7 @@ php artisan key:generate
 createdb pmopm            # then set DB_* / REDIS_* in .env
 php artisan migrate
 php artisan db:seed       # creates the PM_SUPER_ADMINS logins
+php artisan db:seed --class=SdocProjectsSeeder   # SDOC and its projects (safe to rerun)
 npm install
 npm run build             # or: npm run dev
 ```
@@ -93,7 +94,6 @@ See [`docs/api.md` → Integrating another system](docs/api.md#integrating-anoth
 | `workspace:api-token` | Issue / revoke an API token for an external system |
 | `workspace:prune-trashed [--pretend]` | Force-delete soft-deleted rows past the trash TTL (scheduled daily) |
 | `workspace:send-deadline-reminders [--pretend]` | Heads-up / due-today / overdue notifications (scheduled daily at `PM_REMINDERS_RUN_AT`) |
-| `digest:send-weekly [--pretend]` | Weekly project digest email to subscribers |
 
 ## Organizations and roles
 

@@ -96,17 +96,17 @@ class Member extends Model
     }
 
     /**
-     * @return BelongsToMany<Team, $this>
+     * @return BelongsToMany<Team, $this, TeamMembership>
      */
     public function teams(): BelongsToMany
     {
-        return $this->belongsToMany(Team::class)->withPivot('role')->withTimestamps();
+        return $this->belongsToMany(Team::class)->using(TeamMembership::class)->withPivot('id', 'role')->withTimestamps();
     }
 
     /**
      * Teams this member leads (pivot role = leader).
      *
-     * @return BelongsToMany<Team, $this>
+     * @return BelongsToMany<Team, $this, TeamMembership>
      */
     public function ledTeams(): BelongsToMany
     {

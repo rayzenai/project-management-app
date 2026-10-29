@@ -2,7 +2,7 @@
     import { inertia, page, router } from '@inertiajs/svelte';
     import { ChartGantt } from '@lucide/svelte';
     import { onMount } from 'svelte';
-    import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+    import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import BoardView from '../../components/project/BoardView.svelte';
     import ListView from '../../components/project/ListView.svelte';
@@ -95,16 +95,7 @@
         category: null,
     });
 
-    const completeSet = $derived(
-        new SvelteSet(
-            statuses.filter((s) => s.is_complete).map((s) => s.value),
-        ),
-    );
-    const isComplete = (t: Task) => completeSet.has(t.status);
-    const isOverdue = (t: Task) =>
-        !!t.deadline_at &&
-        !isComplete(t) &&
-        new Date(t.deadline_at) < new Date(new Date().toDateString()); // date-only compare
+    const isOverdue = (t: Task) => t.is_overdue === true;
 
     const teammates = $derived.by(() => {
         // Unique, name-sorted, from assignments.

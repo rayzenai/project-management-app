@@ -156,7 +156,7 @@
             return { text: 'Done', tone: 'text-success' };
         }
 
-        if (other.is_late && other.status !== 'failed') {
+        if (other.is_overdue) {
             const due = other.deadline_at ? dayOf(other.deadline_at) : today;
 
             return {

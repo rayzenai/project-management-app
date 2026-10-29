@@ -9,8 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
+ * An audit entry. It always names its project; `task_id` is null when it
+ * concerns the project itself, such as its team.
+ *
  * @property int $id
- * @property int $task_id
+ * @property int|null $project_id
+ * @property int|null $task_id
  * @property int|null $user_id
  * @property string $subject_type
  * @property int $subject_id
@@ -44,6 +48,7 @@ class ProjectActivity extends Model
     protected $table = 'project_activities';
 
     protected $fillable = [
+        'project_id',
         'task_id',
         'user_id',
         'subject_type',
@@ -63,6 +68,14 @@ class ProjectActivity extends Model
             'changes' => 'array',
             'is_public' => 'boolean',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Project, $this>
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     /**

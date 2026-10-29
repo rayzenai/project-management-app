@@ -56,6 +56,7 @@ class ProjectProgressQuery
                 $people,
                 $tasks,
                 fn (Member $member): string => in_array($member->id, $leaderIds, true) ? 'leader' : 'member',
+                [$project->id],
             ),
         ];
     }

@@ -11,16 +11,18 @@ return [
     | and dashboards all render from this single definition; `is_complete`
     | marks the statuses that count a task as finished everywhere (progress
     | percentages, the My Workspace triage, the one-click complete checkbox).
-    | Edit here to change the workflow.
+    | `is_closed` marks the statuses where work has stopped, finished or not:
+    | a closed task is never overdue, never on anyone's to-do list and never
+    | reminded about. Edit here to change the workflow.
     |
     */
 
     'statuses' => [
-        'not_started' => ['label' => 'Not Started', 'color' => '#9AA2B3', 'is_complete' => false],
-        'unclear' => ['label' => 'Unclear', 'color' => '#9AA2B3', 'is_complete' => false],
-        'in_progress' => ['label' => 'In Progress', 'color' => '#E5A33A', 'is_complete' => false],
-        'done' => ['label' => 'Done', 'color' => '#3EC98A', 'is_complete' => true],
-        'failed' => ['label' => 'Failed', 'color' => '#F2655A', 'is_complete' => false],
+        'not_started' => ['label' => 'Not Started', 'color' => '#9AA2B3', 'is_complete' => false, 'is_closed' => false],
+        'unclear' => ['label' => 'Unclear', 'color' => '#9AA2B3', 'is_complete' => false, 'is_closed' => false],
+        'in_progress' => ['label' => 'In Progress', 'color' => '#E5A33A', 'is_complete' => false, 'is_closed' => false],
+        'done' => ['label' => 'Done', 'color' => '#3EC98A', 'is_complete' => true, 'is_closed' => true],
+        'failed' => ['label' => 'Failed', 'color' => '#F2655A', 'is_complete' => false, 'is_closed' => true],
     ],
 
     /*

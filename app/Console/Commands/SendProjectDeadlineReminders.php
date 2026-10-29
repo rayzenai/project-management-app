@@ -23,7 +23,8 @@ class SendProjectDeadlineReminders extends Command
         $leadDays = array_values(array_map('intval', (array) config('project-management.reminders.reminder_lead_days', [2])));
         $repeat = max(1, (int) config('project-management.reminders.overdue_repeat_days', 3));
 
-        $tasks = Task::incomplete()
+        // Failed work is closed: nobody is chased about it.
+        $tasks = Task::notClosed()
             ->whereNotNull('deadline_at')
             ->with(['assignments.member.user', 'project'])
             ->lazy();

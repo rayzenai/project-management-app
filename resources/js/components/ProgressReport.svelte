@@ -73,8 +73,7 @@
 
         return {
             open: open.length,
-            overdue: open.filter((t) => t.is_late && t.status !== 'failed')
-                .length,
+            overdue: open.filter((t) => t.is_overdue).length,
             soon: open.filter((t) => {
                 const due = t.deadline_at ? dayOf(t.deadline_at) : null;
 

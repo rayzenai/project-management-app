@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\TaskComment;
 use App\Models\TaskDependency;
 use App\Models\Team;
+use App\Models\TeamMembership;
 use App\Models\User;
 use App\Observers\ProjectAssignmentObserver;
 use App\Observers\ProjectContactObserver;
@@ -19,6 +20,7 @@ use App\Observers\SubtaskObserver;
 use App\Observers\TaskCommentObserver;
 use App\Observers\TaskDependencyObserver;
 use App\Observers\TaskObserver;
+use App\Observers\TeamMembershipObserver;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -120,5 +122,6 @@ class AppServiceProvider extends ServiceProvider
         ProjectAssignment::observe(ProjectAssignmentObserver::class);
         TaskComment::observe(TaskCommentObserver::class);
         TaskDependency::observe(TaskDependencyObserver::class);
+        TeamMembership::observe(TeamMembershipObserver::class);
     }
 }

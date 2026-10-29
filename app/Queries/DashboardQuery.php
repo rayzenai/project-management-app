@@ -5,7 +5,6 @@ namespace App\Queries;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\Task;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -41,9 +40,7 @@ class DashboardQuery
             && $t->deadline_at !== null
             && $t->deadline_at->gte($today)
             && $t->deadline_at->lte($weekEnd);
-        $isOverdue = fn (Task $t): bool => ! $isComplete($t)
-            && $t->deadline_at !== null
-            && $t->deadline_at->lt($today);
+        $isOverdue = fn (Task $t): bool => $t->is_overdue;
 
         $percent = function (Collection $items) use ($isComplete): int {
             $total = $items->count();
@@ -85,9 +82,9 @@ class DashboardQuery
         // ever sets is_public on an activity row (ProjectActivityRecorder always
         // writes false), so that scope guaranteed an empty feed.
         $recentActivity = array_values(ProjectActivity::query()
-            ->whereHas('task', fn (Builder $q) => $q->whereIn('project_id', $visibleProjectIds))
+            ->whereIn('project_id', $visibleProjectIds)
             ->recent(14)
-            ->with(['user', 'task.project'])
+            ->with(['user', 'task.project', 'project'])
             ->latest()
             ->limit(15)
             ->get()
@@ -97,7 +94,7 @@ class DashboardQuery
                 'user_name' => $activity->user?->name,
                 'task_title' => $activity->task?->title,
                 'task_slug' => $activity->task?->slug,
-                'project_slug' => $activity->task?->project?->slug,
+                'project_slug' => $activity->task->project->slug ?? $activity->project?->slug,
                 'happened_at' => $activity->created_at?->toIso8601String(),
             ])
             ->all());

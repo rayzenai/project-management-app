@@ -3,6 +3,8 @@
 namespace App\Queries;
 
 use App\Models\User;
+use App\Notifications\AddedToProjectTeam;
+use App\Notifications\MadeProjectManager;
 use App\Notifications\MentionedInComment;
 use App\Notifications\TaskAssigned;
 use App\Notifications\TaskDeadlineDue;
@@ -22,12 +24,13 @@ use Illuminate\Pagination\LengthAwarePaginator;
  */
 class NotificationIndexQuery
 {
-    /** Query-string value => notification class. */
+    /** Query-string value => the notification classes it covers. */
     private const TYPES = [
-        'assigned' => TaskAssigned::class,
-        'status' => TaskStatusChanged::class,
-        'mention' => MentionedInComment::class,
-        'deadline' => TaskDeadlineDue::class,
+        'assigned' => [TaskAssigned::class],
+        'status' => [TaskStatusChanged::class],
+        'mention' => [MentionedInComment::class],
+        'deadline' => [TaskDeadlineDue::class],
+        'team' => [AddedToProjectTeam::class, MadeProjectManager::class],
     ];
 
     /**
@@ -48,18 +51,18 @@ class NotificationIndexQuery
 
         $scope = $request->query('scope') === 'unread' ? 'unread' : 'all';
         $typeKey = (string) $request->query('type', '');
-        $type = self::TYPES[$typeKey] ?? null;
+        $types = self::TYPES[$typeKey] ?? null;
 
         $page = $user->notifications()
             ->when($scope === 'unread', fn (Builder $q): Builder => $q->whereNull('read_at'))
-            ->when($type !== null, fn (Builder $q): Builder => $q->where('type', $type))
+            ->when($types !== null, fn (Builder $q): Builder => $q->whereIn('type', $types))
             ->latest()
             ->paginate($perPage)
             ->withQueryString();
 
         return [
             'notifications' => $page,
-            'filters' => ['scope' => $scope, 'type' => $type === null ? null : $typeKey],
+            'filters' => ['scope' => $scope, 'type' => $types === null ? null : $typeKey],
             'counts' => $this->counts($user),
         ];
     }
@@ -87,8 +90,8 @@ class NotificationIndexQuery
             'unread' => $user->unreadNotifications()->count(),
         ];
 
-        foreach (self::TYPES as $key => $class) {
-            $counts[$key] = (int) ($byType[$class] ?? 0);
+        foreach (self::TYPES as $key => $classes) {
+            $counts[$key] = (int) collect($classes)->sum(fn (string $class): int => (int) ($byType[$class] ?? 0));
         }
 
         return $counts;

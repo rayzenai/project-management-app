@@ -27,9 +27,7 @@
 
     const waitsFor = $derived(task.dependencies ?? []);
     const unfinished = $derived(waitsFor.filter((t) => !t.is_complete));
-    const lateBefore = $derived(
-        unfinished.some((t) => t.is_late && t.status !== 'failed'),
-    );
+    const lateBefore = $derived(unfinished.some((t) => t.is_overdue));
     // Once this task is finished it holds nothing up any more.
     const holdsUp = $derived(
         task.completed_at
@@ -59,7 +57,7 @@
         {/if}
         {#if holdsUp.length > 0}
             <span
-                class={`chip max-w-full ${task.is_late && task.status !== 'failed' ? 'text-danger' : ''}`}
+                class={`chip max-w-full ${task.is_overdue ? 'text-danger' : ''}`}
                 title={`Holding up:\n${titles(holdsUp)}`}
             >
                 <Link2 class="h-3 w-3 shrink-0" />

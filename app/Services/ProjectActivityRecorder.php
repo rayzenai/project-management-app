@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Project;
 use App\Models\ProjectActivity;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
@@ -40,7 +42,37 @@ class ProjectActivityRecorder
         }
 
         return ProjectActivity::create([
+            'project_id' => Task::withTrashed()->whereKey($taskId)->value('project_id'),
             'task_id' => $taskId,
+            'user_id' => auth()->id(),
+            'subject_type' => $subject->getMorphClass(),
+            'subject_id' => $subject->getKey(),
+            'action' => $action,
+            'changes' => $changes,
+            'description' => mb_substr($description, 0, 500, 'UTF-8'),
+            'is_public' => false,
+        ]);
+    }
+
+    /**
+     * Write an entry about the project itself rather than one of its tasks.
+     *
+     * @param  array<string, mixed>|null  $changes
+     */
+    public static function recordForProject(
+        Project $project,
+        Model $subject,
+        string $action,
+        string $description,
+        ?array $changes = null,
+    ): ?ProjectActivity {
+        if (! self::tableExists()) {
+            return null;
+        }
+
+        return ProjectActivity::create([
+            'project_id' => $project->id,
+            'task_id' => null,
             'user_id' => auth()->id(),
             'subject_type' => $subject->getMorphClass(),
             'subject_id' => $subject->getKey(),

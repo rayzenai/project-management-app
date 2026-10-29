@@ -2,6 +2,7 @@
 
 namespace App\Notifications\Concerns;
 
+use App\Models\Project;
 use App\Models\Task;
 
 trait BuildsWorkspaceNotification
@@ -24,6 +25,17 @@ trait BuildsWorkspaceNotification
             'title' => $task->title,
             'project_slug' => $task->project->slug ?? '',
         ];
+    }
+
+    /** @return array{slug:string,title:string} */
+    protected function projectRef(Project $project): array
+    {
+        return ['slug' => $project->slug, 'title' => $project->title];
+    }
+
+    protected function projectUrl(Project $project): string
+    {
+        return "/workspace/projects/{$project->slug}?view=people";
     }
 
     protected function taskUrl(?Task $task): string

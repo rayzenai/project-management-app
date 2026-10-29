@@ -35,10 +35,7 @@ class ProjectIndexQuery
             ->withCount([
                 'tasks',
                 'tasks as done_tasks_count' => fn ($q) => $q->whereIn('status', Task::completeStatuses()),
-                'tasks as overdue_tasks_count' => fn ($q) => $q
-                    ->whereNotIn('status', [...Task::completeStatuses(), 'failed'])
-                    ->whereNotNull('deadline_at')
-                    ->where('deadline_at', '<', $today),
+                'tasks as overdue_tasks_count' => fn ($q) => $q->overdue(),
             ])
             ->withMin(['tasks as next_deadline_at' => fn ($q) => $q
                 ->whereNotIn('status', Task::completeStatuses())

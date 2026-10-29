@@ -5,7 +5,6 @@ namespace App\Queries;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -13,8 +12,9 @@ use Illuminate\Pagination\LengthAwarePaginator;
  * The workspace activity feed: every audit entry the caller is allowed to see,
  * newest first, paginated.
  *
- * Visibility rides on the task's project, so a private project a user is not
- * on never leaks through the feed. The observers write every entry with
+ * Visibility rides on the entry's project, so a private project a user is not
+ * on never leaks through the feed; entries about a project's team carry no
+ * task. The observers write every entry with
  * `is_public = false`, so filtering on that column would empty the feed —
  * never add a `->public()` here.
  */
@@ -29,11 +29,8 @@ class ActivityFeedQuery
         $user = $request->user();
 
         return ProjectActivity::query()
-            ->whereHas(
-                'task',
-                fn (Builder $q) => $q->whereIn('project_id', Project::query()->visibleTo($user)->select('id')),
-            )
-            ->with(['user', 'task.project'])
+            ->whereIn('project_id', Project::query()->visibleTo($user)->select('id'))
+            ->with(['user', 'task.project', 'project'])
             ->latest()
             ->paginate($perPage)
             ->withQueryString();
@@ -52,7 +49,8 @@ class ActivityFeedQuery
             'user_name' => $activity->user?->name,
             'task_title' => $activity->task?->title,
             'task_slug' => $activity->task?->slug,
-            'project_slug' => $activity->task?->project?->slug,
+            'project_slug' => $activity->task->project->slug ?? $activity->project?->slug,
+            'project_title' => $activity->project->title ?? $activity->task?->project?->title,
             'happened_at' => $activity->created_at?->toIso8601String(),
         ];
     }

@@ -45,9 +45,10 @@ class ProgressReport
      * @param  Collection<int, Member>  $people  who to list, in order
      * @param  Collection<int, Task>  $tasks  from {@see self::tasks()}
      * @param  Closure(Member): string  $roleOf  'leader' or 'member'
+     * @param  list<int>  $projectIds  whose activity to show, team changes included
      * @return array{members: array<int, array<string, mixed>>, tasks: array<int, array<string, mixed>>, truncated: bool, activity: array<int, array<string, mixed>>, generated_at: string}
      */
-    public static function build(Collection $people, Collection $tasks, Closure $roleOf): array
+    public static function build(Collection $people, Collection $tasks, Closure $roleOf, array $projectIds): array
     {
         $now = CarbonImmutable::now();
         $today = $now->startOfDay();
@@ -78,7 +79,7 @@ class ProgressReport
                 'assigned' => $mine->count(),
                 'open' => $open->count(),
                 'done' => $done,
-                'overdue' => $open->filter(fn (ProjectAssignment $a): bool => $a->task->deadline_at !== null && $a->task->deadline_at->lt($today))->count(),
+                'overdue' => $open->filter(fn (ProjectAssignment $a): bool => $a->task->is_overdue)->count(),
                 'due_this_week' => $open->filter(fn (ProjectAssignment $a): bool => $a->task->deadline_at !== null
                     && $a->task->deadline_at->betweenIncluded($today, $today->addDays(7)))->count(),
                 'progress' => $mine->isEmpty()
@@ -105,6 +106,7 @@ class ProgressReport
                 'progress' => $complete ? 100 : (int) $task->progress,
                 'is_complete' => $complete,
                 'is_late' => $task->is_late,
+                'is_overdue' => $task->is_overdue,
                 'start' => $task->created_at?->toDateString(),
                 'end' => $end?->toDateString(),
                 'deadline_at' => $task->deadline_at?->toIso8601String(),
@@ -123,8 +125,8 @@ class ProgressReport
         })->values()->all();
 
         $activity = ProjectActivity::query()
-            ->whereIn('task_id', $tasks->pluck('id'))
-            ->with(['user', 'task.project'])
+            ->whereIn('project_id', $projectIds)
+            ->with(['user', 'task.project', 'project'])
             ->latest()
             ->limit(20)
             ->get()

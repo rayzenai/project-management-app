@@ -112,6 +112,8 @@ export interface Project extends ProjectSummary {
     can_view_progress?: boolean;
     /** Choosing the manager is the office admin's (or a super-admin's). */
     can_choose_manager?: boolean;
+    /** Making it public (everyone in its organization), likewise. */
+    can_publish?: boolean;
     /** The project's own team. */
     team?: {
         id: Id;
@@ -169,6 +171,8 @@ export interface Task {
     deadline_at?: string | null;
     completed_at?: string | null;
     is_late?: boolean;
+    /** Still being worked on and past its deadline: the one overdue rule. */
+    is_overdue?: boolean;
     days_relative_label?: string;
     source_url?: string | null;
     source_links?: unknown[];
@@ -295,6 +299,8 @@ export interface Status {
     label: string;
     color: string;
     is_complete: boolean;
+    /** Work has stopped, finished or not: never overdue. */
+    is_closed: boolean;
 }
 
 export interface ActivityEntry {
@@ -328,6 +334,7 @@ export interface TaskRef {
     status_label: string;
     is_complete: boolean;
     is_late: boolean;
+    is_overdue: boolean;
     deadline_at: string | null;
     completed_at: string | null;
 }
@@ -370,6 +377,7 @@ export interface ProgressTask {
     progress: number;
     is_complete: boolean;
     is_late: boolean;
+    is_overdue: boolean;
     /** When the task was opened. */
     start: string | null;
     /** When it was finished, or its deadline while open. */

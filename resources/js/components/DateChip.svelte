@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { router } from '@inertiajs/svelte';
+    import { page, router } from '@inertiajs/svelte';
     import { formatDate, formatRelative } from '../lib/format';
-    import type { Task } from '../lib/types';
+    import type { Status, Task } from '../lib/types';
     import Popover from './Popover.svelte';
 
     let {
@@ -43,8 +43,14 @@
             /^in [1-7]d$/.test(relative),
     );
 
-    const COMPLETE = new Set(['done']);
-    const complete = $derived(COMPLETE.has(task.status ?? ''));
+    const statusMeta = $derived(
+        (((page.props as any).statuses ?? []) as Status[]).find(
+            (s) => s.value === task.status,
+        ),
+    );
+    const complete = $derived(statusMeta?.is_complete ?? false);
+    // Failed work is closed: its deadline is history, never "overdue".
+    const closed = $derived(statusMeta?.is_closed ?? complete);
 
     $effect(() => {
         if (
@@ -99,6 +105,12 @@
                 class={`chip ${sizing} ${task.is_late ? 'chip-warn' : ''} ${failed ? 'ring-1 ring-danger' : ''}`}
             >
                 {task.is_late ? 'finished late' : formatDate(shown)}
+            </span>
+        {:else if shown && closed}
+            <span
+                class={`chip ${sizing} ${failed ? 'ring-1 ring-danger' : ''}`}
+            >
+                {formatDate(shown)}
             </span>
         {:else if shown}
             <span

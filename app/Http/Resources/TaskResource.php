@@ -20,7 +20,7 @@ class TaskResource extends JsonResource
     /**
      * The short form of a task used in dependency lists and pickers.
      *
-     * @return array{id: int, slug: string, title: string, item_number: int|null, status: string, status_label: string, is_complete: bool, is_late: bool, deadline_at: string|null, completed_at: string|null}
+     * @return array{id: int, slug: string, title: string, item_number: int|null, status: string, status_label: string, is_complete: bool, is_late: bool, is_overdue: bool, deadline_at: string|null, completed_at: string|null}
      */
     public static function reference(Task $task): array
     {
@@ -33,6 +33,7 @@ class TaskResource extends JsonResource
             'status_label' => $task->status_label,
             'is_complete' => $task->isComplete(),
             'is_late' => (bool) $task->is_late,
+            'is_overdue' => (bool) $task->is_overdue,
             'deadline_at' => $task->deadline_at?->toDateString(),
             'completed_at' => $task->completed_at?->toIso8601String(),
         ];
@@ -67,6 +68,7 @@ class TaskResource extends JsonResource
             'deadline_at' => $this->deadline_at?->toDateString(),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'is_late' => (bool) $this->is_late,
+            'is_overdue' => (bool) $this->is_overdue,
             'days_relative_label' => $this->days_relative_label,
             'source_url' => $this->source_url,
             'source_links' => $this->source_links ?? [],

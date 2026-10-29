@@ -72,7 +72,7 @@ class Task extends Model
         'responsible_ministry',
     ];
 
-    protected $appends = ['category_label', 'category_color', 'status_label', 'status_color', 'deadline_label', 'days_relative_label', 'freshness', 'is_late'];
+    protected $appends = ['category_label', 'category_color', 'status_label', 'status_color', 'deadline_label', 'days_relative_label', 'freshness', 'is_late', 'is_overdue'];
 
     /**
      * @return array<string, string>
@@ -238,6 +238,52 @@ class Task extends Model
     public function isComplete(): bool
     {
         return in_array($this->status, self::completeStatuses(), true);
+    }
+
+    /**
+     * Statuses where work has stopped, finished or not (`is_closed`; every
+     * complete status counts).
+     *
+     * @return list<string>
+     */
+    public static function closedStatuses(): array
+    {
+        $statuses = collect((array) config('project-management.statuses'))
+            ->filter(fn (array $meta): bool => (bool) ($meta['is_closed'] ?? $meta['is_complete'] ?? false))
+            ->keys()
+            ->map(fn (int|string $status): string => (string) $status);
+
+        return array_values(array_unique([...$statuses->all(), ...self::completeStatuses()]));
+    }
+
+    public function isClosed(): bool
+    {
+        return in_array($this->status, self::closedStatuses(), true);
+    }
+
+    /**
+     * Tasks still being worked on: not finished, not failed.
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    public function scopeNotClosed(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', self::closedStatuses());
+    }
+
+    /**
+     * Overdue: still being worked on and past its deadline. The one rule
+     * every count, filter and reminder uses ({@see self::isOverdue()}).
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    public function scopeOverdue(Builder $query): Builder
+    {
+        return $query->notClosed()
+            ->whereNotNull('deadline_at')
+            ->where('deadline_at', '<', Carbon::today());
     }
 
     /**
@@ -508,6 +554,20 @@ class Task extends Model
         }
 
         return abs($diff).'d overdue';
+    }
+
+    /**
+     * Overdue: still being worked on (not finished, not failed) and past its
+     * deadline. Lateness (`is_late`) also covers finished-late and failed work;
+     * overdue is what still needs chasing. Twin of {@see self::scopeOverdue()}.
+     *
+     * @return Attribute<bool, never>
+     */
+    protected function isOverdue(): Attribute
+    {
+        return Attribute::get(fn (): bool => ! $this->isClosed()
+            && $this->deadline_at !== null
+            && $this->deadline_at->startOfDay()->lt(Carbon::today()));
     }
 
     /**
