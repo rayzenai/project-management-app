@@ -75,6 +75,14 @@ class Organization extends Model
     }
 
     /**
+     * @return HasMany<Program, $this>
+     */
+    public function programs(): HasMany
+    {
+        return $this->hasMany(Program::class);
+    }
+
+    /**
      * @return HasOne<GitConnection, $this>
      */
     public function gitConnection(): HasOne

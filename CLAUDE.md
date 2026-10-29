@@ -155,6 +155,9 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 - **Project** — slug-routed; belongs to an organization; `archived_at`
   soft-archive; `is_public` (within its organization); scopes `visibleTo`,
   `active`, `archived`; `hasMany Task`, `belongsToMany Team`.
+- **Program** — a named collection of projects in one organization with one
+  program manager (`manager_id`, a member). `projects.program_id` is nullable:
+  a project is in at most one program, and deleting a program keeps its projects.
 - **Task** — slug-routed (`{project_id}-{slug}`); plan fields (`item_number`,
   `category`, `deadline_type`, `responsible_ministry`, `title_np`,
   `description_np`) stored in the `metadata` jsonb column via `Attribute`

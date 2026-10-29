@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int $id
  * @property int $organization_id
+ * @property int|null $program_id
  * @property string $slug
  * @property string $key
  * @property string $title
@@ -45,6 +46,7 @@ class Project extends Model
 
     protected $fillable = [
         'organization_id',
+        'program_id',
         'slug',
         'key',
         'title',
@@ -103,6 +105,14 @@ class Project extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * @return BelongsTo<Program, $this>
+     */
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(Program::class);
     }
 
     /**
