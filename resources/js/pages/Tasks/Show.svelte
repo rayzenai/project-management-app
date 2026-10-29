@@ -11,6 +11,7 @@
     import { onMount, untrack } from 'svelte';
     import AppShell from '../../components/AppShell.svelte';
     import AssigneeStack from '../../components/AssigneeStack.svelte';
+    import AutosaveStatus from '../../components/AutosaveStatus.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import CommentThread from '../../components/CommentThread.svelte';
     import DateChip from '../../components/DateChip.svelte';
@@ -27,6 +28,7 @@
         Note,
         Priority,
         Project,
+        SharedProps,
         Subtask,
         Task,
         TaskRef,
@@ -109,43 +111,44 @@
         router.delete(`/workspace/subtasks/${t.id}`, { preserveScroll: true });
     }
 
-    const editForm = useForm(
-        untrack(() => ({
-            title: task.title,
-            description: task.description ?? '',
-            status: task.status,
-            priority: task.priority ?? 'medium',
-            task_progress: task.progress,
-            deadline_at: task.deadline_at ?? '',
-            status_note: task.status_note ?? '',
-            source_url: task.source_url ?? '',
-        })),
+    type Draft = {
+        title: string;
+        description: string;
+        status_note: string;
+        source_url: string;
+        progress: number;
+    };
+
+    function draftOf(t: Task): Draft {
+        return {
+            title: t.title,
+            description: t.description ?? '',
+            status_note: t.status_note ?? '',
+            source_url: t.source_url ?? '',
+            progress: t.progress,
+        };
+    }
+
+    // These fields save on their own when you leave them (the property chips
+    // already do). Not on every keystroke: each save is an activity entry.
+    // `saved` is what the server last accepted; only fields that differ go.
+    let draft = $state(untrack(() => draftOf(task)));
+    let saved = $state(untrack(() => draftOf(task)));
+    let saving = $state(false);
+    let savedAt = $state<Date | null>(null);
+    let saveError = $state<string | null>(null);
+    let saveAgain = false;
+
+    const changes = $derived(
+        Object.fromEntries(
+            Object.entries(draft).filter(
+                ([key, value]) => saved[key as keyof Draft] !== value,
+            ),
+        ) as Partial<Draft>,
     );
+    const dirty = $derived(Object.keys(changes).length > 0);
 
-    // `progress` is a reserved field name on useForm, so the form tracks it
-    // as `task_progress` and maps it back to what the backend validates.
-    editForm.transform(({ task_progress, ...data }) => ({
-        ...data,
-        progress: task_progress,
-    }));
-
-    // The property chips (status, priority, deadline) save on their own. Mirror
-    // their value into the edit form and its defaults so a later Save doesn't
-    // resend a stale value and the form doesn't read as dirty.
-    function syncStatus(status: string) {
-        editForm.status = status;
-        editForm.defaults('status', status);
-    }
-
-    function syncPriority(priority: Priority) {
-        editForm.priority = priority;
-        editForm.defaults('priority', priority);
-    }
-
-    function syncDeadline(deadline_at: string | null) {
-        editForm.deadline_at = deadline_at ?? '';
-        editForm.defaults('deadline_at', deadline_at ?? '');
-    }
+    const features = $derived((page.props as unknown as SharedProps).features);
 
     const noteForm = useForm({ body: '', type: 'general', happened_at: '' });
     const contactForm = useForm({
@@ -161,23 +164,66 @@
     let noteFormEl = $state<HTMLFormElement | null>(null);
     let contactFormEl = $state<HTMLFormElement | null>(null);
 
-    function submitEdit() {
-        if (!editForm.isDirty || editForm.processing) {
+    function save() {
+        if (saving) {
+            saveAgain = true;
+
             return;
         }
 
-        editForm.patch(
+        // A task always has a title: an emptied one goes back to the saved one.
+        if (draft.title.trim() === '') {
+            draft.title = saved.title;
+        }
+
+        const sent = { ...changes };
+
+        if (Object.keys(sent).length === 0) {
+            return;
+        }
+
+        saving = true;
+        router.patch(
             `/workspace/projects/${project.slug}/tasks/${task.slug}`,
+            sent,
             {
                 preserveScroll: true,
-                onSuccess: () => editForm.defaults(),
+                preserveState: true,
+                // Inertia lets an optimistic visit finish when a link is
+                // followed straight from a field, so leaving never drops an edit.
+                optimistic: (props) => ({
+                    task: { ...(props.task as Task), ...sent },
+                }),
+                onSuccess: () => {
+                    Object.assign(saved, sent);
+                    savedAt = new Date();
+                    saveError = null;
+                },
+                onError: (errors) => {
+                    saveError = Object.values(errors)[0] ?? 'Try again.';
+                },
+                onFinish: () => {
+                    saving = false;
+
+                    if (saveAgain) {
+                        saveAgain = false;
+                        save();
+                    }
+                },
             },
         );
     }
 
     function saveEdit(e: SubmitEvent) {
         e.preventDefault();
-        submitEdit();
+        save();
+    }
+
+    // Closing the tab skips the blur that saves, so ask first.
+    function warnIfUnsaved(e: BeforeUnloadEvent) {
+        if (dirty || saving) {
+            e.preventDefault();
+        }
     }
 
     // Cmd/Ctrl+S saves whichever form has focus; the task itself otherwise.
@@ -194,7 +240,7 @@
             } else if (contactFormEl?.contains(active)) {
                 submitContact();
             } else {
-                submitEdit();
+                save();
             }
         }
     }
@@ -265,7 +311,7 @@
     );
 </script>
 
-<svelte:window onkeydown={handleSaveShortcut} />
+<svelte:window onkeydown={handleSaveShortcut} onbeforeunload={warnIfUnsaved} />
 
 <svelte:head><title>{task.title} · Workspace</title></svelte:head>
 
@@ -289,21 +335,7 @@
             </span>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
-            {#if editForm.isDirty}
-                <span class="text-xs text-fg-faint">Unsaved changes</span>
-                <button
-                    type="button"
-                    onclick={() => editForm.reset()}
-                    class="btn-ghost">Discard</button
-                >
-            {/if}
-            <button
-                type="submit"
-                form={`${uid}-edit`}
-                disabled={editForm.processing || !editForm.isDirty}
-                title="Save (⌘S / Ctrl+S)"
-                class="btn-primary">Save <kbd class="kbd">⌘S</kbd></button
-            >
+            <AutosaveStatus {saving} {savedAt} {dirty} error={saveError} />
             <button
                 type="button"
                 onclick={deleteTask}
@@ -317,12 +349,12 @@
 
     <div class="grid min-h-[70vh] lg:grid-cols-[minmax(0,1fr)_300px]">
         <div class="min-w-0 max-w-[760px] px-5 py-6 lg:px-10 lg:py-8">
-            <form id={`${uid}-edit`} onsubmit={saveEdit}>
+            <form onsubmit={saveEdit} onfocusout={save}>
                 <label class="sr-only" for={`${uid}-title`}>Title</label>
                 <input
                     id={`${uid}-title`}
                     type="text"
-                    bind:value={editForm.title}
+                    bind:value={draft.title}
                     placeholder="Task title"
                     class="w-full rounded-sm border-0 bg-transparent p-0 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg outline-none placeholder:text-fg-faint focus-visible:outline-none"
                 />
@@ -337,7 +369,7 @@
                 >
                 <textarea
                     id={`${uid}-description`}
-                    bind:value={editForm.description}
+                    bind:value={draft.description}
                     rows="4"
                     placeholder="Add a description"
                     class="mt-4 w-full max-w-[66ch] resize-y rounded-sm border-0 bg-transparent p-0 text-[14px] leading-relaxed text-fg outline-none placeholder:text-fg-faint focus-visible:outline-none"
@@ -357,7 +389,7 @@
                         >
                         <textarea
                             id={`${uid}-status-note`}
-                            bind:value={editForm.status_note}
+                            bind:value={draft.status_note}
                             rows="2"
                             placeholder="What is the latest on this?"
                             class="input mt-1 resize-y"
@@ -370,7 +402,7 @@
                         <input
                             id={`${uid}-source-url`}
                             type="url"
-                            bind:value={editForm.source_url}
+                            bind:value={draft.source_url}
                             placeholder="https://"
                             class="input mt-1"
                         />
@@ -475,232 +507,245 @@
                 </form>
             </section>
 
-            <section id={`${uid}-notes`} class="mt-8 scroll-mt-14">
-                <h2 class="section-title text-[15px]">
-                    Notes
-                    {#if notes.length > 0}
-                        <span class="section-count">{notes.length}</span>
-                    {/if}
-                </h2>
-                <div class="mt-1">
-                    {#each notes as note (note.id)}
-                        <div class="group border-b border-line-soft py-2.5">
-                            <div class="flex items-center gap-2 text-xs">
-                                <span class="font-medium text-fg"
-                                    >{note.user?.name ?? 'Someone'}</span
-                                >
-                                <span class="chip">{note.type_label}</span>
-                                {#if note.happened_at}
-                                    <span
-                                        class="font-mono text-fg-faint tabular-nums"
-                                        >{formatDate(note.happened_at)}</span
+            {#if features?.task_notes}
+                <section id={`${uid}-notes`} class="mt-8 scroll-mt-14">
+                    <h2 class="section-title text-[15px]">
+                        Notes
+                        {#if notes.length > 0}
+                            <span class="section-count">{notes.length}</span>
+                        {/if}
+                    </h2>
+                    <div class="mt-1">
+                        {#each notes as note (note.id)}
+                            <div class="group border-b border-line-soft py-2.5">
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="font-medium text-fg"
+                                        >{note.user?.name ?? 'Someone'}</span
                                     >
-                                {/if}
-                                <button
-                                    type="button"
-                                    onclick={() => deleteNote(note)}
-                                    class="btn-icon ml-auto h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
-                                    title="Delete note"
-                                    aria-label="Delete note"
-                                >
-                                    <X class="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                            <p
-                                class="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-fg"
-                            >
-                                {note.body}
-                            </p>
-                        </div>
-                    {:else}
-                        <p class="py-2 text-[13px] text-fg-muted">
-                            No notes yet.
-                        </p>
-                    {/each}
-                </div>
-                <form
-                    bind:this={noteFormEl}
-                    onsubmit={addNote}
-                    class="mt-3 rounded-lg border border-line bg-surface-alt px-3.5 py-3"
-                >
-                    <textarea
-                        bind:value={noteForm.body}
-                        rows="2"
-                        placeholder="Add a note"
-                        aria-label="Add a note"
-                        class="input min-h-[56px] resize-y border-0 bg-transparent p-0 focus:border-0"
-                    ></textarea>
-                    <div class="mt-2 flex flex-wrap items-center gap-2">
-                        <select
-                            bind:value={noteForm.type}
-                            aria-label="Note type"
-                            class="input w-auto py-1"
-                        >
-                            <option value="general">General</option>
-                            <option value="action_taken">Action taken</option>
-                            <option value="meeting">Meeting</option>
-                            <option value="blocker">Blocker</option>
-                            <option value="milestone">Milestone</option>
-                            <option value="decision">Decision</option>
-                        </select>
-                        <input
-                            type="date"
-                            bind:value={noteForm.happened_at}
-                            aria-label="Happened on"
-                            class="input w-auto py-1"
-                        />
-                        <button
-                            type="submit"
-                            disabled={noteForm.processing ||
-                                !noteForm.body.trim()}
-                            class="btn-primary ml-auto"
-                        >
-                            {#if noteForm.processing}
-                                <LoaderCircle
-                                    class="h-3.5 w-3.5 animate-spin"
-                                />
-                            {/if}
-                            Add note
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            <section id={`${uid}-contacts`} class="mt-8 scroll-mt-14">
-                <h2 class="section-title text-[15px]">
-                    Contacts
-                    {#if contacts.length > 0}
-                        <span class="section-count">{contacts.length}</span>
-                    {/if}
-                </h2>
-                <div class="mt-1">
-                    {#each contacts as contact (contact.id)}
-                        <div
-                            class="flex items-center gap-3 border-b border-line-soft py-2"
-                        >
-                            <Avatar name={contact.name} size="md" />
-                            <div class="min-w-0 flex-1 leading-tight">
-                                <div
-                                    class="truncate text-[13.5px] font-medium text-fg"
-                                >
-                                    {contact.name}
+                                    <span class="chip">{note.type_label}</span>
+                                    {#if note.happened_at}
+                                        <span
+                                            class="font-mono text-fg-faint tabular-nums"
+                                            >{formatDate(
+                                                note.happened_at,
+                                            )}</span
+                                        >
+                                    {/if}
+                                    <button
+                                        type="button"
+                                        onclick={() => deleteNote(note)}
+                                        class="btn-icon ml-auto h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                                        title="Delete note"
+                                        aria-label="Delete note"
+                                    >
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
                                 </div>
-                                {#if contact.role || contact.organization}
-                                    <div class="truncate text-xs text-fg-muted">
-                                        {[contact.role, contact.organization]
-                                            .filter(Boolean)
-                                            .join(' · ')}
-                                    </div>
-                                {/if}
+                                <p
+                                    class="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-fg"
+                                >
+                                    {note.body}
+                                </p>
                             </div>
-                            <div
-                                class="flex shrink-0 items-center gap-3 text-xs text-fg-muted"
+                        {:else}
+                            <p class="py-2 text-[13px] text-fg-muted">
+                                No notes yet.
+                            </p>
+                        {/each}
+                    </div>
+                    <form
+                        bind:this={noteFormEl}
+                        onsubmit={addNote}
+                        class="mt-3 rounded-lg border border-line bg-surface-alt px-3.5 py-3"
+                    >
+                        <textarea
+                            bind:value={noteForm.body}
+                            rows="2"
+                            placeholder="Add a note"
+                            aria-label="Add a note"
+                            class="input min-h-[56px] resize-y border-0 bg-transparent p-0 focus:border-0"
+                        ></textarea>
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <select
+                                bind:value={noteForm.type}
+                                aria-label="Note type"
+                                class="input w-auto py-1"
                             >
-                                {#if contact.email}
-                                    <a
-                                        href={`mailto:${contact.email}`}
-                                        class="flex items-center gap-1.5 hover:text-fg"
-                                    >
-                                        <Mail
-                                            class="h-3.5 w-3.5 text-fg-faint"
-                                        />
-                                        <span class="max-w-[14rem] truncate"
-                                            >{contact.email}</span
-                                        >
-                                    </a>
+                                <option value="general">General</option>
+                                <option value="action_taken"
+                                    >Action taken</option
+                                >
+                                <option value="meeting">Meeting</option>
+                                <option value="blocker">Blocker</option>
+                                <option value="milestone">Milestone</option>
+                                <option value="decision">Decision</option>
+                            </select>
+                            <input
+                                type="date"
+                                bind:value={noteForm.happened_at}
+                                aria-label="Happened on"
+                                class="input w-auto py-1"
+                            />
+                            <button
+                                type="submit"
+                                disabled={noteForm.processing ||
+                                    !noteForm.body.trim()}
+                                class="btn-primary ml-auto"
+                            >
+                                {#if noteForm.processing}
+                                    <LoaderCircle
+                                        class="h-3.5 w-3.5 animate-spin"
+                                    />
                                 {/if}
-                                {#if contact.phone}
-                                    <a
-                                        href={`tel:${contact.phone}`}
-                                        class="flex items-center gap-1.5 hover:text-fg"
-                                    >
-                                        <Phone
-                                            class="h-3.5 w-3.5 text-fg-faint"
-                                        />
-                                        <span class="font-mono tabular-nums"
-                                            >{contact.phone}</span
-                                        >
-                                    </a>
-                                {/if}
-                            </div>
+                                Add note
+                            </button>
                         </div>
-                    {:else}
-                        <p class="py-2 text-[13px] text-fg-muted">
-                            No contacts yet.
-                        </p>
-                    {/each}
-                </div>
-                <form
-                    bind:this={contactFormEl}
-                    onsubmit={addContact}
-                    class="mt-3 grid gap-3 sm:grid-cols-2"
-                >
-                    <div>
-                        <label class="label" for={`${uid}-contact-name`}
-                            >Name</label
-                        >
-                        <input
-                            id={`${uid}-contact-name`}
-                            type="text"
-                            bind:value={contactForm.name}
-                            required
-                            class="input mt-1"
-                        />
+                    </form>
+                </section>
+            {/if}
+
+            {#if features?.contacts}
+                <section id={`${uid}-contacts`} class="mt-8 scroll-mt-14">
+                    <h2 class="section-title text-[15px]">
+                        Contacts
+                        {#if contacts.length > 0}
+                            <span class="section-count">{contacts.length}</span>
+                        {/if}
+                    </h2>
+                    <div class="mt-1">
+                        {#each contacts as contact (contact.id)}
+                            <div
+                                class="flex items-center gap-3 border-b border-line-soft py-2"
+                            >
+                                <Avatar name={contact.name} size="md" />
+                                <div class="min-w-0 flex-1 leading-tight">
+                                    <div
+                                        class="truncate text-[13.5px] font-medium text-fg"
+                                    >
+                                        {contact.name}
+                                    </div>
+                                    {#if contact.role || contact.organization}
+                                        <div
+                                            class="truncate text-xs text-fg-muted"
+                                        >
+                                            {[
+                                                contact.role,
+                                                contact.organization,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </div>
+                                    {/if}
+                                </div>
+                                <div
+                                    class="flex shrink-0 items-center gap-3 text-xs text-fg-muted"
+                                >
+                                    {#if contact.email}
+                                        <a
+                                            href={`mailto:${contact.email}`}
+                                            class="flex items-center gap-1.5 hover:text-fg"
+                                        >
+                                            <Mail
+                                                class="h-3.5 w-3.5 text-fg-faint"
+                                            />
+                                            <span class="max-w-[14rem] truncate"
+                                                >{contact.email}</span
+                                            >
+                                        </a>
+                                    {/if}
+                                    {#if contact.phone}
+                                        <a
+                                            href={`tel:${contact.phone}`}
+                                            class="flex items-center gap-1.5 hover:text-fg"
+                                        >
+                                            <Phone
+                                                class="h-3.5 w-3.5 text-fg-faint"
+                                            />
+                                            <span class="font-mono tabular-nums"
+                                                >{contact.phone}</span
+                                            >
+                                        </a>
+                                    {/if}
+                                </div>
+                            </div>
+                        {:else}
+                            <p class="py-2 text-[13px] text-fg-muted">
+                                No contacts yet.
+                            </p>
+                        {/each}
                     </div>
-                    <div>
-                        <label class="label" for={`${uid}-contact-role`}
-                            >Role</label
-                        >
-                        <input
-                            id={`${uid}-contact-role`}
-                            type="text"
-                            bind:value={contactForm.role}
-                            class="input mt-1"
-                        />
-                    </div>
-                    <div>
-                        <label class="label" for={`${uid}-contact-org`}
-                            >Organization</label
-                        >
-                        <input
-                            id={`${uid}-contact-org`}
-                            type="text"
-                            bind:value={contactForm.organization}
-                            class="input mt-1"
-                        />
-                    </div>
-                    <div>
-                        <label class="label" for={`${uid}-contact-email`}
-                            >Email</label
-                        >
-                        <input
-                            id={`${uid}-contact-email`}
-                            type="email"
-                            bind:value={contactForm.email}
-                            class="input mt-1"
-                        />
-                    </div>
-                    <div>
-                        <label class="label" for={`${uid}-contact-phone`}
-                            >Phone</label
-                        >
-                        <input
-                            id={`${uid}-contact-phone`}
-                            type="tel"
-                            bind:value={contactForm.phone}
-                            class="input mt-1"
-                        />
-                    </div>
-                    <div class="flex items-end justify-end">
-                        <button
-                            type="submit"
-                            disabled={contactForm.processing ||
-                                !contactForm.name.trim()}
-                            class="btn-primary">Add contact</button
-                        >
-                    </div>
-                </form>
-            </section>
+                    <form
+                        bind:this={contactFormEl}
+                        onsubmit={addContact}
+                        class="mt-3 grid gap-3 sm:grid-cols-2"
+                    >
+                        <div>
+                            <label class="label" for={`${uid}-contact-name`}
+                                >Name</label
+                            >
+                            <input
+                                id={`${uid}-contact-name`}
+                                type="text"
+                                bind:value={contactForm.name}
+                                required
+                                class="input mt-1"
+                            />
+                        </div>
+                        <div>
+                            <label class="label" for={`${uid}-contact-role`}
+                                >Role</label
+                            >
+                            <input
+                                id={`${uid}-contact-role`}
+                                type="text"
+                                bind:value={contactForm.role}
+                                class="input mt-1"
+                            />
+                        </div>
+                        <div>
+                            <label class="label" for={`${uid}-contact-org`}
+                                >Organization</label
+                            >
+                            <input
+                                id={`${uid}-contact-org`}
+                                type="text"
+                                bind:value={contactForm.organization}
+                                class="input mt-1"
+                            />
+                        </div>
+                        <div>
+                            <label class="label" for={`${uid}-contact-email`}
+                                >Email</label
+                            >
+                            <input
+                                id={`${uid}-contact-email`}
+                                type="email"
+                                bind:value={contactForm.email}
+                                class="input mt-1"
+                            />
+                        </div>
+                        <div>
+                            <label class="label" for={`${uid}-contact-phone`}
+                                >Phone</label
+                            >
+                            <input
+                                id={`${uid}-contact-phone`}
+                                type="tel"
+                                bind:value={contactForm.phone}
+                                class="input mt-1"
+                            />
+                        </div>
+                        <div class="flex items-end justify-end">
+                            <button
+                                type="submit"
+                                disabled={contactForm.processing ||
+                                    !contactForm.name.trim()}
+                                class="btn-primary">Add contact</button
+                            >
+                        </div>
+                    </form>
+                </section>
+            {/if}
 
             <section class="mt-8">
                 <h2 class="section-title mb-3 text-[15px]">
@@ -722,22 +767,14 @@
                     Status
                 </dt>
                 <dd class="flex min-h-[30px] min-w-0 items-center">
-                    <StatusChip
-                        {task}
-                        projectSlug={project.slug}
-                        onUpdated={syncStatus}
-                    />
+                    <StatusChip {task} projectSlug={project.slug} />
                 </dd>
 
                 <dt class="flex min-h-[30px] items-center text-fg-muted">
                     Priority
                 </dt>
                 <dd class="flex min-h-[30px] min-w-0 items-center gap-1.5">
-                    <PriorityFlag
-                        {task}
-                        projectSlug={project.slug}
-                        onUpdated={syncPriority}
-                    />
+                    <PriorityFlag {task} projectSlug={project.slug} />
                     <span class="text-fg"
                         >{PRIORITY_LABELS[task.priority ?? 'medium']}</span
                     >
@@ -759,19 +796,20 @@
                     Progress
                 </dt>
                 <dd class="flex min-h-[30px] min-w-0 items-center gap-2">
-                    <ProgressRing percent={editForm.task_progress} />
+                    <ProgressRing percent={draft.progress} />
                     <input
                         id={`${uid}-progress`}
                         type="range"
                         min="0"
                         max="100"
                         step="5"
-                        bind:value={editForm.task_progress}
+                        bind:value={draft.progress}
+                        onchange={save}
                         aria-label="Progress"
                         class="w-24 accent-accent"
                     />
                     <span class="font-mono text-xs text-fg-muted tabular-nums"
-                        >{editForm.task_progress}%</span
+                        >{draft.progress}%</span
                     >
                 </dd>
             </dl>
@@ -804,11 +842,7 @@
                     Due
                 </dt>
                 <dd class="flex min-h-[30px] min-w-0 items-center">
-                    <DateChip
-                        {task}
-                        projectSlug={project.slug}
-                        onUpdated={syncDeadline}
-                    />
+                    <DateChip {task} projectSlug={project.slug} />
                 </dd>
             </dl>
 

@@ -45,15 +45,15 @@ the same `app/Services/Workspace/*` action service.
 | --- | --- | --- | --- |
 | POST | `/login` | `email`, `password`, `device_name` | `{ token, user }` |
 | POST | `/logout` | — | `{ message }` (revokes the current token) |
-| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, is_super_admin, led_team_ids }` |
+| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, features }`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off) |
 
 ## Appearance, preferences & themes
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | `/themes` | — | `{ data: { themes, font_allow_list } }` from `config/themes.php` |
-| GET | `/user/preferences` | — | `{ data: { theme, font_override, email_notifications, configured, resolved_tokens } }` |
-| PATCH | `/user/preferences` | `theme?`, `font_override?`, `email_notifications?` | same shape as GET |
+| GET | `/user/preferences` | — | `{ data: { theme, font_override, email_notifications, task_notes_enabled, contacts_enabled, configured, resolved_tokens } }` |
+| PATCH | `/user/preferences` | `theme?`, `font_override?`, `email_notifications?`, `task_notes_enabled?`, `contacts_enabled?` | same shape as GET |
 
 The web app exposes a session twin at `PATCH /workspace/preferences`.
 

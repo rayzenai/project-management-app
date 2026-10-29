@@ -12,8 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $theme
  * @property array<string, string|null>|null $font_override
  * @property bool $email_notifications
+ * @property bool $task_notes_enabled
+ * @property bool $contacts_enabled
  */
-#[Fillable(['user_id', 'theme', 'font_override', 'email_notifications'])]
+#[Fillable(['user_id', 'theme', 'font_override', 'email_notifications', 'task_notes_enabled', 'contacts_enabled'])]
 class UserPreference extends Model
 {
     /**
@@ -32,6 +34,8 @@ class UserPreference extends Model
         return [
             'font_override' => 'array',
             'email_notifications' => 'boolean',
+            'task_notes_enabled' => 'boolean',
+            'contacts_enabled' => 'boolean',
         ];
     }
 }

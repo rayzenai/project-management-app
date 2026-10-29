@@ -27,6 +27,8 @@ class UpdatePreferenceRequest extends FormRequest
             'font_override.body' => ['nullable', Rule::in($fontAllowList['body'])],
             'font_override.mono' => ['nullable', Rule::in($fontAllowList['mono'])],
             'email_notifications' => ['sometimes', 'boolean'],
+            'task_notes_enabled' => ['sometimes', 'boolean'],
+            'contacts_enabled' => ['sometimes', 'boolean'],
         ];
     }
 }

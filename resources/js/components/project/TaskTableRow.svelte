@@ -17,6 +17,10 @@
             [],
     );
 
+    const features = $derived(
+        ((page.props ?? {}) as unknown as SharedProps).features,
+    );
+
     function openPeek() {
         peek.open({ id: task.id, slug: task.slug });
     }
@@ -49,7 +53,7 @@
                 >{task.title_np}</span
             >
         {/if}
-        {#if task.notes_count}
+        {#if features?.task_notes && task.notes_count}
             <span
                 class="inline-flex shrink-0 items-center gap-0.5 font-mono text-[11px] text-fg-faint tabular-nums"
                 title={`${task.notes_count} notes`}
@@ -61,7 +65,7 @@
         <span class="min-w-0 shrink">
             <DependencyChips {task} projectCode={project.code} />
         </span>
-        {#if task.contacts_count}
+        {#if features?.contacts && task.contacts_count}
             <span
                 class="inline-flex shrink-0 items-center gap-0.5 font-mono text-[11px] text-fg-faint tabular-nums"
                 title={`${task.contacts_count} contacts`}

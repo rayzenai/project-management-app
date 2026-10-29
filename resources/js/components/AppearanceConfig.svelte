@@ -7,9 +7,9 @@
     import type { SharedProps } from '../lib/types';
 
     /**
-     * Settings: theme (system / light / dark) and email notifications.
-     * Selecting a theme previews it instantly; Save persists it, and closing
-     * without saving puts the previous theme back.
+     * Settings: theme (system / light / dark), email notifications and the
+     * optional task features. Selecting a theme previews it instantly; Save
+     * persists it, and closing without saving puts the previous theme back.
      */
     let {
         appearance,
@@ -21,21 +21,28 @@
         oncancel?: () => void;
     } = $props();
 
-    const catalogue = $derived(
-        ((page.props ?? {}) as unknown as SharedProps).themeCatalogue?.themes ??
-            {},
-    );
+    const shared = $derived((page.props ?? {}) as unknown as SharedProps);
+    const catalogue = $derived(shared.themeCatalogue?.themes ?? {});
 
     const initialTheme = untrack(() => appearance.theme);
     const initialEmail = untrack(() => appearance.email_notifications);
+    const initialTaskNotes = untrack(
+        () => shared.features?.task_notes ?? false,
+    );
+    const initialContacts = untrack(() => shared.features?.contacts ?? false);
 
     let selectedKey = $state(initialTheme);
     let emailNotifications = $state(initialEmail);
+    let taskNotes = $state(initialTaskNotes);
+    let contacts = $state(initialContacts);
     let saving = $state(false);
     let saved = false;
 
     const dirty = $derived(
-        selectedKey !== initialTheme || emailNotifications !== initialEmail,
+        selectedKey !== initialTheme ||
+            emailNotifications !== initialEmail ||
+            taskNotes !== initialTaskNotes ||
+            contacts !== initialContacts,
     );
 
     const options = [
@@ -99,6 +106,8 @@
                 theme: selectedKey,
                 font_override: { display: null, body: null, mono: null },
                 email_notifications: emailNotifications,
+                task_notes_enabled: taskNotes,
+                contacts_enabled: contacts,
             },
             {
                 preserveScroll: true,
@@ -114,6 +123,27 @@
         );
     }
 </script>
+
+{#snippet toggle(on: boolean, labelledby: string, flip: () => void)}
+    <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-labelledby={labelledby}
+        onclick={flip}
+        class={`mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border px-[3px] transition-colors ${
+            on
+                ? 'justify-end border-accent bg-accent'
+                : 'justify-start border-line bg-surface-alt'
+        }`}
+    >
+        <span
+            class={`block h-3 w-3 rounded-full transition-colors ${
+                on ? 'bg-white' : 'bg-fg-faint'
+            }`}
+        ></span>
+    </button>
+{/snippet}
 
 {#snippet swatch(tokens: ThemeTokens | undefined)}
     <div
@@ -222,24 +252,54 @@
                     Assignments, mentions and deadline reminders by email.
                 </p>
             </div>
-            <button
-                type="button"
-                role="switch"
-                aria-checked={emailNotifications}
-                aria-labelledby="pref-email-label"
-                onclick={() => (emailNotifications = !emailNotifications)}
-                class={`mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border px-[3px] transition-colors ${
-                    emailNotifications
-                        ? 'justify-end border-accent bg-accent'
-                        : 'justify-start border-line bg-surface-alt'
-                }`}
-            >
-                <span
-                    class={`block h-3 w-3 rounded-full transition-colors ${
-                        emailNotifications ? 'bg-white' : 'bg-fg-faint'
-                    }`}
-                ></span>
-            </button>
+            {@render toggle(
+                emailNotifications,
+                'pref-email-label',
+                () => (emailNotifications = !emailNotifications),
+            )}
+        </div>
+    </section>
+
+    <section class="flex flex-col gap-4 border-t border-line px-6 py-5">
+        <div>
+            <div class="label">Features</div>
+            <p class="mt-1 text-[13px] text-fg-muted">
+                Extra sections on every task. Turning one off hides it and keeps
+                what was written.
+            </p>
+        </div>
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <div id="pref-notes-label" class="text-sm font-medium text-fg">
+                    Task notes
+                </div>
+                <p class="mt-1 text-[13px] text-fg-muted">
+                    A log of meetings, decisions and blockers on each task.
+                </p>
+            </div>
+            {@render toggle(
+                taskNotes,
+                'pref-notes-label',
+                () => (taskNotes = !taskNotes),
+            )}
+        </div>
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <div
+                    id="pref-contacts-label"
+                    class="text-sm font-medium text-fg"
+                >
+                    Contacts
+                </div>
+                <p class="mt-1 text-[13px] text-fg-muted">
+                    People outside the team to reach about a task.
+                </p>
+            </div>
+            {@render toggle(
+                contacts,
+                'pref-contacts-label',
+                () => (contacts = !contacts),
+            )}
         </div>
     </section>
 

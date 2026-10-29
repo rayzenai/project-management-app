@@ -47,6 +47,8 @@ class PreferenceController extends Controller
                 'theme' => $appearance['theme'],
                 'font_override' => $appearance['font_override'],
                 'email_notifications' => $appearance['email_notifications'],
+                'task_notes_enabled' => $user->features()['task_notes'],
+                'contacts_enabled' => $user->features()['contacts'],
                 'configured' => $user->preferences()->exists(),
                 'resolved_tokens' => $resolver->resolved($appearance['theme'], $appearance['font_override']),
             ],

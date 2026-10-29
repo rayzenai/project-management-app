@@ -467,6 +467,12 @@ export interface ThemeCatalogue {
     fontAllowList: FontAllowList;
 }
 
+/** Optional features each person turns on in Settings; both start off. */
+export interface Features {
+    task_notes: boolean;
+    contacts: boolean;
+}
+
 export interface SharedProps {
     auth: { user: AuthUser | null };
     flash?: Flash;
@@ -483,5 +489,6 @@ export interface SharedProps {
     ledTeamIds?: Id[];
     unreadNotifications?: number;
     themeCatalogue?: ThemeCatalogue;
+    features?: Features;
     [key: string]: unknown;
 }

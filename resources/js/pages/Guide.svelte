@@ -73,9 +73,10 @@
             title: 'Team member',
             steps: [
                 'My Workspace lists everything given to you, soonest first.',
-                'Keep your tasks current: move the card on the board, set your progress and add a note when something changes.',
+                'Keep your tasks current: move the card on the board, set your progress and write a status note when something changes. A task saves itself as you leave each field.',
                 'Comment on a task and type @ and a name to bring someone in.',
                 'Notifications tell you about new tasks, mentions, deadlines and teams you join.',
+                'Want a log of meetings and decisions, or outside contacts, on your tasks? Turn on Task notes or Contacts in Settings.',
             ],
         },
     ];

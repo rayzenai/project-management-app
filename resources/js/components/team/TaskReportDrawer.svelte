@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { inertia } from '@inertiajs/svelte';
+    import { inertia, page } from '@inertiajs/svelte';
     import { CircleCheck, Circle, ExternalLink, X } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
@@ -17,6 +17,7 @@
         Assignment,
         Priority,
         ProgressTask,
+        SharedProps,
         Status,
         TaskPreview,
     } from '../../lib/types';
@@ -47,6 +48,8 @@
         onclose: () => void;
         onselect?: (task: ProgressTask) => void;
     } = $props();
+
+    const features = $derived((page.props as unknown as SharedProps).features);
 
     const cache = new SvelteMap<number, TaskPreview>();
     let preview = $state<TaskPreview | null>(null);
@@ -724,7 +727,7 @@
                     </section>
                 {/if}
 
-                {#if details && details.notes.length > 0}
+                {#if features?.task_notes && details && details.notes.length > 0}
                     <section>
                         <h3 class="section-title mb-2">
                             Notes
@@ -760,7 +763,7 @@
                     </section>
                 {/if}
 
-                {#if details && details.contacts.length > 0}
+                {#if features?.contacts && details && details.contacts.length > 0}
                     <section>
                         <h3 class="section-title mb-2">Contacts</h3>
                         <ul class="space-y-2 text-[13px]">

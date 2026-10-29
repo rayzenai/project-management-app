@@ -12,6 +12,7 @@ use Inertia\Testing\AssertableInertia;
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
     $this->user = User::factory()->create(['email' => 'boss@example.com']);
+    $this->user->preferences()->create(['task_notes_enabled' => true]);
 });
 
 it('surfaces the user task notes in the shared taskNotes prop with task context', function () {

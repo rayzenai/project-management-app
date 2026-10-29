@@ -15,8 +15,9 @@
     import { formatDate } from '../lib/format';
     import { peek } from '../lib/peek.svelte';
     import { taskCode } from '../lib/taskCode';
-    import type { Priority, TaskPreview } from '../lib/types';
+    import type { Priority, SharedProps, TaskPreview } from '../lib/types';
     import AssigneeStack from './AssigneeStack.svelte';
+    import AutosaveStatus from './AutosaveStatus.svelte';
     import Avatar from './Avatar.svelte';
     import CompleteCheckbox from './CompleteCheckbox.svelte';
     import DateChip from './DateChip.svelte';
@@ -69,12 +70,24 @@
         email: '',
     });
     let showHistory = $state(false);
+    let saving = $state(false);
+    let savedAt = $state<Date | null>(null);
+    let saveError = $state<string | null>(null);
 
     let openPathname = '';
 
     const target = $derived(peek.target);
     const task = $derived(preview?.task ?? null);
     const projectSlug = $derived(task?.project?.slug ?? '');
+    const dirty = $derived(
+        Boolean(
+            task &&
+            ((editingTitle && titleDraft.trim() !== task.title) ||
+                (editingDescription &&
+                    descriptionDraft !== (task.description ?? ''))),
+        ),
+    );
+    const features = $derived((page.props as unknown as SharedProps).features);
     const doneSubtasks = $derived(
         preview?.subtasks.filter((s) => s.is_done).length ?? 0,
     );
@@ -169,6 +182,7 @@
                     false;
             subtaskDraft = noteDraft = '';
             editingSubtaskId = null;
+            savedAt = saveError = null;
             pendingSubtaskIds.clear();
             void load(opened.id, { background: cached !== null });
         });
@@ -208,6 +222,7 @@
             return;
         }
 
+        saving = true;
         router.patch(
             `/workspace/projects/${projectSlug}/tasks/${task.slug}`,
             payload,
@@ -215,8 +230,16 @@
                 preserveState: true,
                 preserveScroll: true,
                 onSuccess: () => {
+                    savedAt = new Date();
+                    saveError = null;
                     onSuccess?.();
                     revalidate();
+                },
+                onError: (errors) => {
+                    saveError = Object.values(errors)[0] ?? 'Try again.';
+                },
+                onFinish: () => {
+                    saving = false;
                 },
             },
         );
@@ -502,6 +525,7 @@
                 {/if}
             </div>
             {#if task}
+                <AutosaveStatus {saving} {savedAt} {dirty} error={saveError} />
                 <a
                     href={`/workspace/projects/${projectSlug}/tasks/${task.slug}`}
                     class="btn-ghost"
@@ -908,203 +932,219 @@
                     />
                 </section>
 
-                <section class="mt-8">
-                    <h3 class="section-title text-[15px]">
-                        Notes
-                        {#if preview && preview.notes.length > 0}
-                            <span class="section-count"
-                                >{preview.notes.length}</span
-                            >
-                        {/if}
-                    </h3>
-                    <div class="mt-1">
-                        {#each preview?.notes ?? [] as note (note.id)}
-                            <div class="group border-b border-line-soft py-2.5">
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span class="font-medium text-fg"
-                                        >{note.user?.name}</span
-                                    >
-                                    <span class="chip">{note.type_label}</span>
-                                    {#if note.happened_at}
-                                        <span
-                                            class="font-mono text-fg-faint tabular-nums"
-                                            >{formatDate(
-                                                note.happened_at,
-                                            )}</span
-                                        >
-                                    {/if}
-                                    <button
-                                        type="button"
-                                        aria-label="Delete note"
-                                        class="btn-icon ml-auto h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
-                                        onclick={() => deleteNote(note.id)}
-                                    >
-                                        <X class="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                                <p
-                                    class="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-fg"
-                                >
-                                    {note.body}
-                                </p>
-                            </div>
-                        {/each}
-                    </div>
-                    <div
-                        class="mt-3 rounded-lg border border-line bg-surface-alt px-3.5 py-3"
-                    >
-                        <textarea
-                            bind:value={noteDraft}
-                            rows="2"
-                            placeholder="Add a note"
-                            aria-label="Add a note"
-                            class="input min-h-[56px] resize-y border-0 bg-transparent p-0 focus:border-0"
-                        ></textarea>
-                        <div class="mt-2 flex items-center gap-2">
-                            <select
-                                bind:value={noteType}
-                                aria-label="Note type"
-                                class="input w-auto py-1"
-                            >
-                                {#each NOTE_TYPES as t (t.value)}
-                                    <option value={t.value}>{t.label}</option>
-                                {/each}
-                            </select>
-                            <button
-                                type="button"
-                                class="btn-primary ml-auto"
-                                disabled={noteDraft.trim() === ''}
-                                onclick={addNote}
-                            >
-                                Add
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="mt-8">
-                    <div class="flex items-center justify-between">
+                {#if features?.task_notes}
+                    <section class="mt-8">
                         <h3 class="section-title text-[15px]">
-                            Contacts
-                            {#if preview && preview.contacts.length > 0}
+                            Notes
+                            {#if preview && preview.notes.length > 0}
                                 <span class="section-count"
-                                    >{preview.contacts.length}</span
+                                    >{preview.notes.length}</span
                                 >
                             {/if}
                         </h3>
-                        <button
-                            type="button"
-                            class="btn-ghost"
-                            onclick={() => (showContactForm = !showContactForm)}
-                        >
-                            {#if showContactForm}
-                                <X class="h-3.5 w-3.5" />
-                                Cancel
-                            {:else}
-                                <Plus class="h-3.5 w-3.5" />
-                                Add
-                            {/if}
-                        </button>
-                    </div>
-                    {#if preview && preview.contacts.length > 0}
-                        <div class="mt-1.5 flex flex-wrap gap-1.5">
-                            {#each preview.contacts as contact (contact.id)}
-                                <span
-                                    class="chip h-6 gap-1 px-2"
-                                    title={[
-                                        contact.organization,
-                                        contact.phone,
-                                        contact.email,
-                                    ]
-                                        .filter(Boolean)
-                                        .join(' · ')}
+                        <div class="mt-1">
+                            {#each preview?.notes ?? [] as note (note.id)}
+                                <div
+                                    class="group border-b border-line-soft py-2.5"
                                 >
-                                    <span class="font-medium text-fg"
-                                        >{contact.name}</span
+                                    <div
+                                        class="flex items-center gap-2 text-xs"
                                     >
-                                    {#if contact.role}
-                                        <span class="font-normal"
-                                            >{contact.role}</span
+                                        <span class="font-medium text-fg"
+                                            >{note.user?.name}</span
                                         >
-                                    {/if}
-                                </span>
+                                        <span class="chip"
+                                            >{note.type_label}</span
+                                        >
+                                        {#if note.happened_at}
+                                            <span
+                                                class="font-mono text-fg-faint tabular-nums"
+                                                >{formatDate(
+                                                    note.happened_at,
+                                                )}</span
+                                            >
+                                        {/if}
+                                        <button
+                                            type="button"
+                                            aria-label="Delete note"
+                                            class="btn-icon ml-auto h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                                            onclick={() => deleteNote(note.id)}
+                                        >
+                                            <X class="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                    <p
+                                        class="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-fg"
+                                    >
+                                        {note.body}
+                                    </p>
+                                </div>
                             {/each}
                         </div>
-                    {:else if !showContactForm}
-                        <p class="mt-1 text-[13px] text-fg-muted">
-                            No contacts yet.
-                        </p>
-                    {/if}
-                    {#if showContactForm}
-                        <div class="mt-3 grid grid-cols-2 gap-3">
-                            <div class="col-span-2">
-                                <label class="label" for="peek-contact-name"
-                                    >Name</label
+                        <div
+                            class="mt-3 rounded-lg border border-line bg-surface-alt px-3.5 py-3"
+                        >
+                            <textarea
+                                bind:value={noteDraft}
+                                rows="2"
+                                placeholder="Add a note"
+                                aria-label="Add a note"
+                                class="input min-h-[56px] resize-y border-0 bg-transparent p-0 focus:border-0"
+                            ></textarea>
+                            <div class="mt-2 flex items-center gap-2">
+                                <select
+                                    bind:value={noteType}
+                                    aria-label="Note type"
+                                    class="input w-auto py-1"
                                 >
-                                <input
-                                    id="peek-contact-name"
-                                    type="text"
-                                    bind:value={contactDraft.name}
-                                    class="input mt-1"
-                                />
-                            </div>
-                            <div>
-                                <label class="label" for="peek-contact-role"
-                                    >Role</label
-                                >
-                                <input
-                                    id="peek-contact-role"
-                                    type="text"
-                                    bind:value={contactDraft.role}
-                                    class="input mt-1"
-                                />
-                            </div>
-                            <div>
-                                <label class="label" for="peek-contact-org"
-                                    >Organization</label
-                                >
-                                <input
-                                    id="peek-contact-org"
-                                    type="text"
-                                    bind:value={contactDraft.organization}
-                                    class="input mt-1"
-                                />
-                            </div>
-                            <div>
-                                <label class="label" for="peek-contact-phone"
-                                    >Phone</label
-                                >
-                                <input
-                                    id="peek-contact-phone"
-                                    type="text"
-                                    bind:value={contactDraft.phone}
-                                    class="input mt-1"
-                                />
-                            </div>
-                            <div>
-                                <label class="label" for="peek-contact-email"
-                                    >Email</label
-                                >
-                                <input
-                                    id="peek-contact-email"
-                                    type="email"
-                                    bind:value={contactDraft.email}
-                                    class="input mt-1"
-                                />
-                            </div>
-                            <div class="col-span-2 flex justify-end">
+                                    {#each NOTE_TYPES as t (t.value)}
+                                        <option value={t.value}
+                                            >{t.label}</option
+                                        >
+                                    {/each}
+                                </select>
                                 <button
                                     type="button"
-                                    class="btn-primary"
-                                    disabled={contactDraft.name.trim() === ''}
-                                    onclick={addContact}
+                                    class="btn-primary ml-auto"
+                                    disabled={noteDraft.trim() === ''}
+                                    onclick={addNote}
                                 >
-                                    Add contact
+                                    Add
                                 </button>
                             </div>
                         </div>
-                    {/if}
-                </section>
+                    </section>
+                {/if}
+
+                {#if features?.contacts}
+                    <section class="mt-8">
+                        <div class="flex items-center justify-between">
+                            <h3 class="section-title text-[15px]">
+                                Contacts
+                                {#if preview && preview.contacts.length > 0}
+                                    <span class="section-count"
+                                        >{preview.contacts.length}</span
+                                    >
+                                {/if}
+                            </h3>
+                            <button
+                                type="button"
+                                class="btn-ghost"
+                                onclick={() =>
+                                    (showContactForm = !showContactForm)}
+                            >
+                                {#if showContactForm}
+                                    <X class="h-3.5 w-3.5" />
+                                    Cancel
+                                {:else}
+                                    <Plus class="h-3.5 w-3.5" />
+                                    Add
+                                {/if}
+                            </button>
+                        </div>
+                        {#if preview && preview.contacts.length > 0}
+                            <div class="mt-1.5 flex flex-wrap gap-1.5">
+                                {#each preview.contacts as contact (contact.id)}
+                                    <span
+                                        class="chip h-6 gap-1 px-2"
+                                        title={[
+                                            contact.organization,
+                                            contact.phone,
+                                            contact.email,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' · ')}
+                                    >
+                                        <span class="font-medium text-fg"
+                                            >{contact.name}</span
+                                        >
+                                        {#if contact.role}
+                                            <span class="font-normal"
+                                                >{contact.role}</span
+                                            >
+                                        {/if}
+                                    </span>
+                                {/each}
+                            </div>
+                        {:else if !showContactForm}
+                            <p class="mt-1 text-[13px] text-fg-muted">
+                                No contacts yet.
+                            </p>
+                        {/if}
+                        {#if showContactForm}
+                            <div class="mt-3 grid grid-cols-2 gap-3">
+                                <div class="col-span-2">
+                                    <label class="label" for="peek-contact-name"
+                                        >Name</label
+                                    >
+                                    <input
+                                        id="peek-contact-name"
+                                        type="text"
+                                        bind:value={contactDraft.name}
+                                        class="input mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="label" for="peek-contact-role"
+                                        >Role</label
+                                    >
+                                    <input
+                                        id="peek-contact-role"
+                                        type="text"
+                                        bind:value={contactDraft.role}
+                                        class="input mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="label" for="peek-contact-org"
+                                        >Organization</label
+                                    >
+                                    <input
+                                        id="peek-contact-org"
+                                        type="text"
+                                        bind:value={contactDraft.organization}
+                                        class="input mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        class="label"
+                                        for="peek-contact-phone">Phone</label
+                                    >
+                                    <input
+                                        id="peek-contact-phone"
+                                        type="text"
+                                        bind:value={contactDraft.phone}
+                                        class="input mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        class="label"
+                                        for="peek-contact-email">Email</label
+                                    >
+                                    <input
+                                        id="peek-contact-email"
+                                        type="email"
+                                        bind:value={contactDraft.email}
+                                        class="input mt-1"
+                                    />
+                                </div>
+                                <div class="col-span-2 flex justify-end">
+                                    <button
+                                        type="button"
+                                        class="btn-primary"
+                                        disabled={contactDraft.name.trim() ===
+                                            ''}
+                                        onclick={addContact}
+                                    >
+                                        Add contact
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
+                    </section>
+                {/if}
 
                 {#if preview}
                     <section class="mt-8">

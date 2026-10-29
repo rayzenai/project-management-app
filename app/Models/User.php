@@ -82,6 +82,21 @@ class User extends Authenticatable
     }
 
     /**
+     * The optional features this user turned on in Settings; both start off.
+     *
+     * @return array{task_notes: bool, contacts: bool}
+     */
+    public function features(): array
+    {
+        $preferences = $this->preferences()->first();
+
+        return [
+            'task_notes' => $preferences !== null && $preferences->task_notes_enabled,
+            'contacts' => $preferences !== null && $preferences->contacts_enabled,
+        ];
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

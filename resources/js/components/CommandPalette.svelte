@@ -15,6 +15,7 @@
     import { peek } from '../lib/peek.svelte';
     import { quickAdd } from '../lib/quickAdd.svelte';
     import { taskCode } from '../lib/taskCode';
+    import type { SharedProps } from '../lib/types';
     import Spinner from './Spinner.svelte';
     import StatusGlyph from './StatusGlyph.svelte';
 
@@ -121,6 +122,14 @@
     let wasOpen = false;
 
     const hasQuery = $derived(query.trim().length >= 2);
+    const features = $derived((page.props as unknown as SharedProps).features);
+    // Sticky notes always; task notes and contacts only when turned on.
+    const notes = $derived(
+        results.notes.filter(
+            (n) => n.kind === 'sticky' || features?.task_notes,
+        ),
+    );
+    const contacts = $derived(features?.contacts ? results.contacts : []);
 
     // Groups never reorder; ranking happens within the server groups (server
     // order is trusted) and via substring filtering for the static Navigate group.
@@ -189,10 +198,10 @@
                 });
             }
 
-            if (results.notes.length) {
+            if (notes.length) {
                 groups.push({
                     label: 'Notes',
-                    items: results.notes.slice(0, 4).map((n) => ({
+                    items: notes.slice(0, 4).map((n) => ({
                         kind: 'note' as const,
                         noteKind: n.kind,
                         id: n.id,
@@ -207,10 +216,10 @@
                 });
             }
 
-            if (results.contacts.length) {
+            if (contacts.length) {
                 groups.push({
                     label: 'Contacts',
-                    items: results.contacts.slice(0, 4).map((c) => ({
+                    items: contacts.slice(0, 4).map((c) => ({
                         kind: 'contact' as const,
                         id: c.id,
                         name: c.name,

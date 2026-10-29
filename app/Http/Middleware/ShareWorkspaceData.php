@@ -31,7 +31,9 @@ use Symfony\Component\HttpFoundation\Response;
  *   authored by a teammate). Includes task + project context for deep-linking.
  *   These are read-only in the notes panel/board (kept separate from the editable,
  *   draggable `workspaceNotes` stickies) so every note relevant to the user is
- *   visible in one place.
+ *   visible in one place. Empty while the user has task notes turned off.
+ * - `features` — the optional features (task notes, contacts) the user turned
+ *   on in Settings. Screens hide what is off.
  * - `themeCatalogue` — the theme + font catalogue from `config/themes.php`, so
  *   the appearance onboarding/settings render their cards without fetching the
  *   Sanctum-protected `GET /api/v1/themes` endpoint (which 401s in the session
@@ -110,7 +112,7 @@ class ShareWorkspaceData
 
         Inertia::share('taskNotes', function () use ($request): array {
             $user = $request->user();
-            if (! $user) {
+            if (! $user || ! $user->features()['task_notes']) {
                 return [];
             }
 
@@ -149,6 +151,9 @@ class ShareWorkspaceData
                 'configured' => $request->user()?->preferences()->exists() ?? false,
             ];
         });
+
+        Inertia::share('features', fn (): array => $request->user()?->features()
+            ?? ['task_notes' => false, 'contacts' => false]);
 
         Inertia::share('themeCatalogue', fn (): array => [
             'themes' => (array) config('themes.themes'),

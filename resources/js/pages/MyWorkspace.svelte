@@ -397,7 +397,7 @@
                 <NotesStrip {stickyNotes} taskNotes={[]} />
             </section>
 
-            {#if recentNotes.length > 0}
+            {#if shared.features?.task_notes && recentNotes.length > 0}
                 <section class="border-t border-line px-5 py-6 lg:px-6">
                     <h2 class="section-title mb-3">
                         From my tasks
@@ -407,9 +407,11 @@
                 </section>
             {/if}
 
-            <section class="border-t border-line px-5 py-6 lg:px-6">
-                <ContactChips contacts={recentContacts} />
-            </section>
+            {#if shared.features?.contacts}
+                <section class="border-t border-line px-5 py-6 lg:px-6">
+                    <ContactChips contacts={recentContacts} />
+                </section>
+            {/if}
         </aside>
     </div>
 </AppShell>
