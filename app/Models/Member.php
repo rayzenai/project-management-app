@@ -160,8 +160,9 @@ class Member extends Model
     /**
      * People the user may see in directories, pickers and rosters: everyone
      * for a super-admin; for anyone else themselves and the people on their
-     * teams, plus, for an office admin, everyone in their organization and
-     * anyone on its teams (including outsiders on its cross-organization
+     * teams, plus the people on the teams of the projects in the programs
+     * they manage, and, for an office admin, everyone in their organization
+     * and anyone on its teams (including outsiders on its cross-organization
      * teams). See {@see WorkspaceAccess}.
      *
      * @param  Builder<Member>  $query
@@ -180,10 +181,15 @@ class Member extends Model
         }
 
         $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+        $programIds = WorkspaceAccess::managedProgramIds($user);
 
-        return $query->where(function (Builder $q) use ($self, $adminOrganizationId): void {
+        return $query->where(function (Builder $q) use ($self, $adminOrganizationId, $programIds): void {
             $q->whereKey($self->getKey())
                 ->orWhereHas('teams', fn (Builder $t) => $t->whereIn('teams.id', $self->teams()->select('teams.id')));
+
+            if ($programIds !== []) {
+                $q->orWhereHas('teams.projects', fn (Builder $p) => Project::inPrograms($p, $programIds, $self));
+            }
 
             if ($adminOrganizationId !== null) {
                 $q->orWhere('organization_id', $adminOrganizationId)

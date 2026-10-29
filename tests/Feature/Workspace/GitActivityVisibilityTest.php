@@ -5,6 +5,7 @@ use App\Models\GitPullRequest;
 use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Organization;
+use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\Task;
@@ -170,6 +171,23 @@ it('shows git rows in the project progress report, web and API, to those who may
     $rows = $this->getJson("/api/v1/workspace/projects/{$this->project->slug}/progress")->assertSuccessful()->json('data.activity');
     expect(gitActivityMentionsGit($rows))->toBeTrue();
 })->with(['manager', 'office admin', 'super-admin']);
+
+it('shows git rows to the manager of the project\'s program, who is not on its team', function () {
+    $user = gitActivityActor('outsider', $this->project);
+    $program = Program::factory()->create([
+        'organization_id' => $this->organization->id,
+        'manager_id' => Member::query()->where('user_id', $user->id)->value('id'),
+    ]);
+    $this->project->update(['program_id' => $program->id]);
+
+    $this->actingAs($user)->get('/workspace/notifications?tab=activity')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('activity.data', fn ($rows) => gitActivityMentionsGit($rows)));
+
+    $this->actingAs($user)->get("/workspace/projects/{$this->project->slug}/progress")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('progress.activity', fn ($rows) => gitActivityMentionsGit($rows)));
+});
 
 it('hides git rows when the organization has no git connection any more', function () {
     GitConnection::query()->delete();

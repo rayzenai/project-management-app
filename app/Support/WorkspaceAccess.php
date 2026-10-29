@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\GitConnection;
 use App\Models\Member;
+use App\Models\Program;
 use App\Models\Project;
 use App\Models\Team;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -12,12 +13,17 @@ use Illuminate\Support\Facades\Gate;
 /**
  * The single source of truth for workspace authorization. Every controller,
  * form request, query and resource that makes a role decision goes through
- * here. Four tiers:
+ * here. Five tiers:
  *
  * - Super-admin: the config-driven `manage-workspace` Gate. Belongs to no
  *   organization; sees and manages every organization.
  * - Office admin: a member with `is_office_admin` (and active). Full control
- *   inside their own organization: its teams, people, projects and leaders.
+ *   inside their own organization: its teams, people, projects, programs and
+ *   leaders.
+ * - Program manager: `programs.manager_id` (while active, programs of their
+ *   own organization only). On every project in the program, what its own
+ *   manager can do, without sitting on its team; never chooses a manager
+ *   and has no power over people.
  * - Team leader: the `role` column on the member_team pivot. Manages the
  *   roster of the teams they lead and sees their progress.
  * - Member: sees their teams' projects and teammates; manages own subtasks.
@@ -38,6 +44,9 @@ class WorkspaceAccess
      */
     private static ?\WeakMap $ledTeamIdsMemo = null;
 
+    /** @var \WeakMap<Authenticatable, list<int>>|null */
+    private static ?\WeakMap $managedProgramIdsMemo = null;
+
     /** @var \WeakMap<Authenticatable, Member|false>|null false: the user has no member */
     private static ?\WeakMap $memberMemo = null;
 
@@ -47,6 +56,7 @@ class WorkspaceAccess
     public static function flush(): void
     {
         self::$ledTeamIdsMemo = null;
+        self::$managedProgramIdsMemo = null;
         self::$memberMemo = null;
         self::$gitMemo = [];
     }
@@ -160,16 +170,17 @@ class WorkspaceAccess
 
     /**
      * Add people to a team (by searching) and take them off it: the
-     * project's manager, or whoever administers its organization.
+     * project's manager, its program's manager, or whoever administers its
+     * organization.
      */
     public static function canManageRosterOf(?Authenticatable $user, Team $team): bool
     {
-        return self::canEditTeam($user, $team) || self::leadsTeam($user, $team);
+        return self::canEditTeam($user, $team) || self::leadsTeam($user, $team) || self::managesProgramOfTeam($user, $team);
     }
 
     /**
-     * The manager is chosen by the office admin: a manager may take members
-     * off their team but not the manager.
+     * The manager is chosen by the office admin: a manager (or the program's
+     * manager) may take members off the team but not the manager.
      */
     public static function canRemoveFromTeam(?Authenticatable $user, Team $team, Member $member): bool
     {
@@ -177,7 +188,7 @@ class WorkspaceAccess
             return true;
         }
 
-        if (! self::leadsTeam($user, $team)) {
+        if (! self::leadsTeam($user, $team) && ! self::managesProgramOfTeam($user, $team)) {
             return false;
         }
 
@@ -275,6 +286,10 @@ class WorkspaceAccess
             return true;
         }
 
+        if (self::managesProgramOf($user, $project)) {
+            return true;
+        }
+
         return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
     }
 
@@ -289,7 +304,7 @@ class WorkspaceAccess
 
     public static function canManageProjectAccess(?Authenticatable $user, Project $project): bool
     {
-        if (self::administers($user, $project->organization_id)) {
+        if (self::administers($user, $project->organization_id) || self::managesProgramOf($user, $project)) {
             return true;
         }
 
@@ -336,10 +351,10 @@ class WorkspaceAccess
 
     /**
      * The project's linked repositories and its tasks' code: its team (any
-     * role, while active), its organization's office admins and super-admins.
-     * Not other viewers of a public project: code is for the people doing
-     * the work. The predicate twin of Project::scopeCodeVisibleTo; keep them
-     * in step.
+     * role, while active), its program's manager, its organization's office
+     * admins and super-admins. Not other viewers of a public project: code
+     * is for the people doing the work. The predicate twin of
+     * Project::scopeCodeVisibleTo; keep them in step.
      */
     public static function canViewProjectCode(?Authenticatable $user, Project $project): bool
     {
@@ -355,6 +370,10 @@ class WorkspaceAccess
 
         if ($member === null || ! $member->is_active) {
             return false;
+        }
+
+        if (self::managesProgramOf($user, $project)) {
+            return true;
         }
 
         return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
@@ -374,6 +393,87 @@ class WorkspaceAccess
         $organizationId = (int) $project->organization_id;
 
         return self::$gitMemo[$organizationId] ??= GitConnection::query()->where('organization_id', $organizationId)->exists();
+    }
+
+    // ---- Programs ----
+    // A named collection of projects in one organization with one manager,
+    // who runs every project in it as its own manager does, from above: never
+    // on its team, never choosing its manager, no power over people.
+
+    /**
+     * Create, edit and delete an organization's programs, and choose their
+     * managers: whoever administers it.
+     */
+    public static function canManagePrograms(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return self::administers($user, $organizationId);
+    }
+
+    /**
+     * The predicate twin of Program::scopeVisibleTo; keep them in step.
+     */
+    public static function canViewProgram(?Authenticatable $user, Program $program): bool
+    {
+        return self::administers($user, $program->organization_id)
+            || in_array((int) $program->getKey(), self::managedProgramIds($user), true);
+    }
+
+    /**
+     * Whether the project is in a program the user manages. A project of
+     * another organization never is, whatever its program_id says.
+     */
+    public static function managesProgramOf(?Authenticatable $user, Project $project): bool
+    {
+        return $project->program_id !== null
+            && in_array((int) $project->program_id, self::managedProgramIds($user), true)
+            && (int) $project->organization_id === (int) self::memberFor($user)?->organization_id;
+    }
+
+    /**
+     * Whether the team works on a project in a program the user manages.
+     */
+    private static function managesProgramOfTeam(?Authenticatable $user, Team $team): bool
+    {
+        $programIds = self::managedProgramIds($user);
+        $member = self::memberFor($user);
+
+        return $programIds !== [] && $member !== null
+            && Project::inPrograms($team->projects()->getQuery(), $programIds, $member)->exists();
+    }
+
+    /**
+     * The ids of the programs the user's linked member manages, in their own
+     * organization, while they are active (a deactivated or moved manager
+     * keeps the row but loses the power). Memoized per user instance for the
+     * request.
+     *
+     * @return list<int>
+     */
+    public static function managedProgramIds(?Authenticatable $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        self::$managedProgramIdsMemo ??= new \WeakMap;
+
+        if (isset(self::$managedProgramIdsMemo[$user])) {
+            return self::$managedProgramIdsMemo[$user];
+        }
+
+        $member = self::memberFor($user);
+
+        $ids = $member === null || ! $member->is_active || $member->organization_id === null
+            ? []
+            : array_values(Program::query()
+                ->where('manager_id', $member->getKey())
+                ->where('organization_id', $member->organization_id)
+                ->orderBy('id')
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all());
+
+        return self::$managedProgramIdsMemo[$user] = $ids;
     }
 
     /**

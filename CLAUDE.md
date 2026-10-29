@@ -96,7 +96,7 @@ multi-tenant: an **organization** (an office or ministry) is the tenant
 boundary. Every project has exactly one team of its own (made with it,
 never on its own), and that team's one leader is the project's **manager**.
 Office roles (senior dev, QA, ...) are not modeled: a person's free-text
-`title` carries them. Four tiers:
+`title` carries them. Five tiers:
 
 1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
    Belongs to no organization. Manages organizations and everything in them;
@@ -105,14 +105,21 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
 2. **Office admin**: a member with `is_office_admin` (and `is_active`). Full
    control inside their own organization: creates its people and projects,
    chooses each project's manager, sees every project, can publish projects
-   (public means "everyone in this organization").
-3. **Project manager**: `member_team.role = 'leader'` on a project's team (a
+   (public means "everyone in this organization"), creates its programs and
+   chooses their managers.
+3. **Program manager**: `programs.manager_id` (while `is_active`, programs of
+   their own organization only; a ministry's Joint Secretary). On every
+   project in the program, exactly what its project manager can do (see,
+   edit, archive, progress, roster, code and repositories), without sitting
+   on its team. Never chooses managers, never creates projects or programs,
+   never publishes or rekeys a project, never edits people.
+4. **Project manager**: `member_team.role = 'leader'` on a project's team (a
    partial unique index allows one per team). Edits and archives their
    projects, manages their teams' rosters by searching people
    (`TeamCandidatesQuery`: their organization, or anyone for a
    cross-organization team) and sees their projects' progress. Never edits
    people, never chooses managers, never creates projects.
-4. **Member**: sees their projects and teammates (plus their organization's
+5. **Member**: sees their projects and teammates (plus their organization's
    public projects); manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
@@ -122,9 +129,11 @@ manager), `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
 `canCreateMember`, `canManageMember`, `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canManageProjectAccess`,
 `canPublishProject`, `canViewProjectCode`, `canManageProjectRepositories`,
-`ledTeamIds`. Visibility scopes: `Project`, `Team` and
-`Member::scopeVisibleTo`. Memos are per user instance and flushed on every
-`RouteMatched`/`RequestHandled`.
+`ledTeamIds`, `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
+`canViewProgram` (twin of `Program::scopeVisibleTo`). Visibility scopes:
+`Project`, `Team`, `Member` and `Program::scopeVisibleTo` (the first three
+reach a program manager's projects through `Project::inPrograms`). Memos
+are per user instance and flushed on every `RouteMatched`/`RequestHandled`.
 
 Privilege-escalation protections — do not regress:
 
@@ -145,6 +154,12 @@ Privilege-escalation protections — do not regress:
   silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
   `safe()`, which bypasses those overrides.
 - Mentions only notify people who can view the task's project.
+- A program manager is never a team leader (never added to the team, never
+  `leadsTeam`), reaches only projects of programs in their own organization
+  (`managedProgramIds` and `managesProgramOf` check both the program's and
+  the project's organization; a person cannot change organization while
+  managing a program), and gains no power over people (`canManageMember`,
+  `canCreateMember`, `canEditTeam` unchanged).
 
 Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 
@@ -311,11 +326,12 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
   reconcile all go through it; `ForgeShapes` maps forge JSON once. Nothing in
   phase 1 changes a task's status, a merge included.
 - **Access**: viewing code needs `canViewProjectCode`: git on, and the
-  project's team (any role, while the member is active), its organization's
-  office admins or a super-admin; not other viewers of a public project. Its
-  query twin is `Project::scopeCodeVisibleTo`; keep them in step. Linking
-  and unlinking needs `canManageProjectRepositories` (manager, office admin,
-  super-admin, git on). A task shows code only from repositories whose
+  project's team (any role, while the member is active), its program's
+  manager, its organization's office admins or a super-admin; not other
+  viewers of a public project. Its query twin is
+  `Project::scopeCodeVisibleTo`; keep them in step. Linking and unlinking
+  needs `canManageProjectRepositories` (manager, program manager, office
+  admin, super-admin, git on). A task shows code only from repositories whose
   project's code the viewer may see (`TaskCodeQuery::inVisibleRepositories`,
   on `codeVisibleTo`, also on the board's `has_pull_request`), and a pull
   request writes task activity only on tasks of its repository's own

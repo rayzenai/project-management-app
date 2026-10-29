@@ -87,8 +87,10 @@ class Program extends Model
     }
 
     /**
-     * Stub until the access rules land: everything for a super-admin, nothing
-     * for anyone else.
+     * Programs the user may see: all for a super-admin, every one of the
+     * organization an office admin runs, otherwise the ones they manage. The
+     * query twin of {@see WorkspaceAccess::canViewProgram()}; keep them in
+     * step.
      *
      * @param  Builder<Program>  $query
      * @return Builder<Program>
@@ -99,7 +101,13 @@ class Program extends Model
             return $query;
         }
 
-        return $query->whereRaw('1 = 0');
+        $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+
+        if ($adminOrganizationId !== null) {
+            return $query->where('organization_id', $adminOrganizationId);
+        }
+
+        return $query->whereKey(WorkspaceAccess::managedProgramIds($user));
     }
 
     protected static function newFactory(): ProgramFactory

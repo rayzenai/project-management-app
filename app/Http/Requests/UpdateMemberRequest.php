@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Models\Program;
 use App\Models\Team;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
@@ -57,8 +58,8 @@ class UpdateMemberRequest extends FormRequest
     /**
      * Only a super-admin may hand out a super-admin's email (the Gate matches
      * on email). Moving someone to another organization would leave them on
-     * teams they can no longer join, so it waits until they are off those
-     * teams.
+     * teams they can no longer join, or managing programs of an organization
+     * they left, so it waits until they are off those teams and programs.
      */
     public function withValidator(Validator $validator): void
     {
@@ -109,6 +110,16 @@ class UpdateMemberRequest extends FormRequest
 
             if ($stranded->isNotEmpty()) {
                 $validator->errors()->add('organization_id', 'Take them off '.$stranded->implode(', ').' first.');
+            }
+
+            $programs = Program::query()
+                ->where('manager_id', $member->getKey())
+                ->where('organization_id', $member->organization_id)
+                ->orderBy('name')
+                ->pluck('name');
+
+            if ($programs->isNotEmpty()) {
+                $validator->errors()->add('organization_id', 'Choose another manager for the '.$programs->implode(', ').' program first.');
             }
         });
     }

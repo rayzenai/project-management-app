@@ -75,8 +75,9 @@ class Team extends Model
 
     /**
      * Teams the user may see: all for a super-admin, every team of the
-     * organization an office admin runs, and otherwise the teams they are
-     * on. A leader never sees the other teams of their organization.
+     * organization an office admin runs, the teams of the projects in the
+     * programs they manage, and otherwise the teams they are on. A leader
+     * never sees the other teams of their organization.
      *
      * @param  Builder<Team>  $query
      * @return Builder<Team>
@@ -94,12 +95,17 @@ class Team extends Model
         }
 
         $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+        $programIds = WorkspaceAccess::managedProgramIds($user);
 
-        return $query->where(function (Builder $q) use ($member, $adminOrganizationId): void {
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId, $programIds): void {
             $q->whereHas('members', fn (Builder $m) => $m->where('members.id', $member->getKey()));
 
             if ($adminOrganizationId !== null) {
                 $q->orWhere('organization_id', $adminOrganizationId);
+            }
+
+            if ($programIds !== []) {
+                $q->orWhereHas('projects', fn (Builder $p) => Project::inPrograms($p, $programIds, $member));
             }
         });
     }

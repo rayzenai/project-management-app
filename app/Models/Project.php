@@ -217,10 +217,11 @@ class Project extends Model
 
     /**
      * Projects the user may see: those of their organization's office they
-     * administer, public ones of their own organization, and any attached
-     * to a team they are on (which is how a cross-organization team's
-     * outsiders see its projects). Super-admins see everything. The query
-     * twin of {@see WorkspaceAccess::canViewProject()}; keep them in step.
+     * administer, public ones of their own organization, those of the
+     * programs they manage, and any attached to a team they are on (which is
+     * how a cross-organization team's outsiders see its projects).
+     * Super-admins see everything. The query twin of
+     * {@see WorkspaceAccess::canViewProject()}; keep them in step.
      *
      * @param  Builder<Project>  $query
      * @return Builder<Project>
@@ -238,8 +239,9 @@ class Project extends Model
         }
 
         $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+        $programIds = WorkspaceAccess::managedProgramIds($user);
 
-        return $query->where(function (Builder $q) use ($member, $adminOrganizationId): void {
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId, $programIds): void {
             $q->whereHas('teams.members', fn (Builder $m): Builder => $m->where('members.id', $member->getKey()));
 
             if ($member->organization_id !== null) {
@@ -251,14 +253,19 @@ class Project extends Model
             if ($adminOrganizationId !== null) {
                 $q->orWhere('organization_id', $adminOrganizationId);
             }
+
+            if ($programIds !== []) {
+                $q->orWhere(fn (Builder $program): Builder => self::inPrograms($program, $programIds, $member));
+            }
         });
     }
 
     /**
      * Projects whose code (linked repositories, and the branches, commits
      * and pull requests on their tasks) the user may see: in an organization
-     * with git, those whose team they are on (any role, while active), every
-     * one of the office they administer, and every one for a super-admin.
+     * with git, those whose team they are on (any role, while active), those
+     * of the programs they manage, every one of the office they administer,
+     * and every one for a super-admin.
      * Not other viewers of a public project. The query twin of
      * {@see WorkspaceAccess::canViewProjectCode()}; keep them in step.
      *
@@ -281,14 +288,39 @@ class Project extends Model
         }
 
         $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+        $programIds = WorkspaceAccess::managedProgramIds($user);
 
-        return $query->where(function (Builder $q) use ($member, $adminOrganizationId): void {
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId, $programIds): void {
             $q->whereHas('teams.members', fn (Builder $m): Builder => $m->where('members.id', $member->getKey()));
 
             if ($adminOrganizationId !== null) {
                 $q->orWhere('organization_id', $adminOrganizationId);
             }
+
+            if ($programIds !== []) {
+                $q->orWhere(fn (Builder $program): Builder => self::inPrograms($program, $programIds, $member));
+            }
         });
+    }
+
+    /**
+     * Projects of the given programs ({@see WorkspaceAccess::managedProgramIds()})
+     * that sit in the manager's own organization, as
+     * {@see WorkspaceAccess::managesProgramOf()} requires. Also constrains a
+     * related projects query, for the team and member scopes (`whereHas`
+     * cannot infer the related model, hence the template).
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @param  list<int>  $programIds
+     * @return Builder<TModel>
+     */
+    public static function inPrograms(Builder $query, array $programIds, Member $manager): Builder
+    {
+        return $query
+            ->whereIn('projects.program_id', $programIds)
+            ->where('projects.organization_id', $manager->organization_id);
     }
 
     /**
