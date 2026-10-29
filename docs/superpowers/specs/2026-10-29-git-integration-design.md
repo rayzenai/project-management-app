@@ -21,10 +21,11 @@ projects can each link one or more repositories.
 | Forge | **Forgejo**, 15.0 LTS (supported to 15 Jul 2027), then 19.0 LTS (Apr 2027) | GPLv3+, non-profit steward, no paid tier; org-wide signed webhooks, OIDC sign-in and pull mirroring are free; ~300 MB idle; chosen by the Dutch government in 2026. Skip 17.0.0 (the project advised against it). |
 | Not GitLab CE | | Webhooks covering a whole group, OIDC group rules and pull mirroring are paid; monthly patching with upgrade stops; 8 GB idle; unauthenticated CVSS 10 RCE in Oct 2026; its tracker link drops the `SG` prefix. |
 | Not Gitea | | Company-held trademark, fixes only on the latest major, three majors in six months, and moving from Gitea 1.23+ to Forgejo later needs manual database surgery. |
-| Where | `git.sdoc.gov.np` on the SDOC VM, own Dokploy Compose project with its own Postgres | Next to the tracker. The public gateway (103.175.192.178) forwards ports 80 and 443 to this VM's Traefik, so the tracker is on the internet; whether the forge is too is an open question below. |
+| Where | `git.sdoc.gov.np` on the SDOC VM, own Dokploy Compose project with its own Postgres | Next to the tracker. The public gateway (103.175.192.178) forwards ports 80 and 443 to this VM's Traefik, so the tracker is on the internet, and so is the forge (owner, 2026-10-29), behind two-factor sign-in. |
 | Git over SSH | Forgejo's built-in SSH server on port **2222**; HTTPS always works | Host sshd keeps port 22. The gateway forwards only 80 and 443, so SSH is reachable inside the SDOC network and over VPN only. |
 | Who is the source of truth | **The tracker** for people, projects, teams and keys. The forge for code. | Forgejo can't confine a token to one organization and never retries webhooks, so the tracker needs its own reconciler anyway. |
 | Sign-in | The tracker is the forge's **OIDC provider** ("Sign in with SDOC Tasks"); forge passwords off | One account; deactivating someone in the tracker shuts the forge door. Must exist before anyone creates a local forge account. |
+| Two-factor | Forgejo's own `GLOBAL_TWO_FACTOR_REQUIREMENT = all`; every `{owner}-bot` is a Forgejo bot user, which it exempts. `forge-admin` stays an ordinary site admin, so Forgejo never makes the first person to sign in its admin, and is a bot only while bootstrap step 3 uses its one-off token | The owner wants the forge on the internet only behind 2FA (2026-10-29). Every person enrols TOTP or a security key on the forge and enters it after the tracker's sign-in; a token works only for someone enrolled. Off locally, by the owner's choice. |
 | Status automation | Links only by default; at most `not_started`/`unclear` to `in_progress`, opt-in per project; **a merge never marks a task done** | There is no review status, and `done` drives progress and the overdue rule. |
 
 ## Goals
@@ -137,13 +138,12 @@ Each phase ships on its own and is useful on its own. Risk comes last.
    tracker host, mail through the SDOC SMTP account. A break-glass site-admin
    account is used through the `forgejo admin` CLI only. Dokploy's own Forgejo
    template is not used (stale version, hard-coded database password, no SSH).
-   If the forge is to stay off the internet: a public DNS record at NITC (so
-   Let's Encrypt HTTP-01 still works through the gateway) plus a Traefik IP
-   allowlist admitting only the SDOC network and VPN ranges. Public traffic
-   arrives either with its own address or the gateway's, neither of which is
-   on the list, and VPN users already resolve the name to 10.5.23.138.
+   The owner chose a public forge behind two-factor sign-in (Owner's answers,
+   2): a public DNS record at NITC, as for the tracker, no IP allowlist, and
+   `GLOBAL_TWO_FACTOR_REQUIREMENT = all` (the Two-factor decision above).
 5. **Backups** from day one: nightly `pg_dump` and a copy of the data volume,
-   kept off the VM. One restore drill before real code is pushed.
+   on the VM for now; the off-VM copy and the restore drill wait for the
+   backup VM (Owner's answers, 3).
 6. **Switch git on for SDOC.** By hand in Forgejo: create the `sdoc`
    organization and the `sdoc-bot` user as its owner, make a token. In the
    tracker, a super-admin opens the organization, chooses Enable git and pastes
@@ -283,8 +283,8 @@ mean). `CLAUDE.md`, `docs/api.md` and the README are updated in the same change.
 - Commit and PR text is shown as text, never as HTML.
 - The OIDC provider issues tokens only to the one registered client, with an
   exact redirect URI, and only to active members of git-enabled organizations.
-- Forgejo's SSH port is reachable only inside the SDOC network and VPN, and
-  its web pages too if open question 2 goes that way. Upgrades follow LTS
+- Forgejo's SSH port is reachable only inside the SDOC network and VPN; its
+  web pages are public, behind two-factor sign-in. Upgrades follow LTS
   point releases promptly; security advisories are watched.
 
 ## Left to the builder
@@ -295,17 +295,17 @@ parser's edge cases beyond those listed, how the queue worker is configured,
 and how keys are resolved when the migration finds collisions (as long as the
 office admin can review them before git goes live).
 
-## Open questions for the owner
+## Owner's answers (2026-10-29)
 
-1. Where does each project's code live today (GitHub, a vendor's GitLab,
-   laptops, nowhere yet), and will developers push to the forge directly? If
-   they keep working elsewhere and the forge only mirrors, pull requests never
-   reach it and phase 1 shows commits only.
-2. Should the forge's web pages be reachable from the internet like the
-   tracker, or only inside the SDOC network and VPN? Recommendation: network
-   and VPN only (see phase 0, item 4). The cost is that developers outside the
-   office need the VPN to use git at all.
-3. Where can off-VM backups of the code go (another SDOC server, government
-   data centre storage)? Phase 0 can't finish its restore drill without one.
-
-Answers go here once settled.
+1. **Where the code lives:** on our own server, the forge. Developers push to
+   it directly, so pull requests and pushes happen there and phase 1 can show
+   both.
+2. **Reachability:** the forge is on the internet like the tracker, but only
+   behind two-factor sign-in. No IP allowlist; see the Two-factor decision
+   above. Git over SSH stays inside the SDOC network and VPN (the gateway
+   forwards only 80 and 443); from outside, developers push over HTTPS with a
+   token.
+3. **Off-VM backups:** later, to a new backup VM. Until it exists, the nightly
+   dumps sit on the same VM and every developer's clone is the only other copy;
+   losing the VM before then loses the forge's issues, pull requests and
+   settings. The restore drill waits for the backup VM.

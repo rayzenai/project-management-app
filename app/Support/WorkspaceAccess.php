@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\GitConnection;
 use App\Models\Member;
 use App\Models\Project;
 use App\Models\Team;
@@ -40,10 +41,14 @@ class WorkspaceAccess
     /** @var \WeakMap<Authenticatable, Member|false>|null false: the user has no member */
     private static ?\WeakMap $memberMemo = null;
 
+    /** @var array<int, bool> organization id => whether it has a git connection */
+    private static array $gitMemo = [];
+
     public static function flush(): void
     {
         self::$ledTeamIdsMemo = null;
         self::$memberMemo = null;
+        self::$gitMemo = [];
     }
 
     public static function isSuperAdmin(?Authenticatable $user): bool
@@ -324,6 +329,51 @@ class WorkspaceAccess
     public static function canChangeProjectKey(?Authenticatable $user, Project $project): bool
     {
         return self::administers($user, $project->organization_id);
+    }
+
+    // ---- Code (git) ----
+    // Only where the project's organization has a git connection.
+
+    /**
+     * The project's linked repositories and its tasks' code: its team (any
+     * role, while active), its organization's office admins and super-admins.
+     * Not other viewers of a public project: code is for the people doing
+     * the work. The predicate twin of Project::scopeCodeVisibleTo; keep them
+     * in step.
+     */
+    public static function canViewProjectCode(?Authenticatable $user, Project $project): bool
+    {
+        if (! self::hasGit($project)) {
+            return false;
+        }
+
+        if (self::administers($user, $project->organization_id)) {
+            return true;
+        }
+
+        $member = self::memberFor($user);
+
+        if ($member === null || ! $member->is_active) {
+            return false;
+        }
+
+        return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
+    }
+
+    /**
+     * Link and unlink repositories: whoever runs the project (its manager,
+     * its office admin, a super-admin).
+     */
+    public static function canManageProjectRepositories(?Authenticatable $user, Project $project): bool
+    {
+        return self::hasGit($project) && self::canManageProjectAccess($user, $project);
+    }
+
+    private static function hasGit(Project $project): bool
+    {
+        $organizationId = (int) $project->organization_id;
+
+        return self::$gitMemo[$organizationId] ??= GitConnection::query()->where('organization_id', $organizationId)->exists();
     }
 
     /**

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { page } from '@inertiajs/svelte';
+    import { GitPullRequest } from '@lucide/svelte';
     import { peek } from '../../lib/peek.svelte';
     import type { SharedProps, Task } from '../../lib/types';
     import AssigneeStack from '../AssigneeStack.svelte';
@@ -90,6 +91,14 @@
     <div class="mt-2.5 flex items-center gap-1.5">
         <DateChip {task} {projectSlug} size="sm" ghost />
         <PriorityFlag {task} {projectSlug} quiet />
+        {#if task.has_pull_request}
+            <span
+                class="ml-auto inline-flex text-fg-faint"
+                title="Has a pull request"
+                aria-label="Has a pull request"
+                role="img"><GitPullRequest class="h-3.5 w-3.5" /></span
+            >
+        {/if}
     </div>
 
     {#if nest}

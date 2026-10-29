@@ -26,29 +26,41 @@ class GitAccess
      */
     public static function organizationsFor(User $user): Collection
     {
-        $query = Organization::query()
-            ->whereHas('gitConnection')
-            ->with('gitConnection:id,organization_id,owner')
-            ->orderBy('id');
+        return self::query($user)?->with('gitConnection:id,organization_id,owner')->orderBy('id')->get() ?? new Collection;
+    }
+
+    /**
+     * Whether organizationsFor lists any: the user may use git somewhere
+     * (`gitEnabled` on the web, `git_enabled` on the API).
+     */
+    public static function anyFor(User $user): bool
+    {
+        return self::query($user)?->exists() ?? false;
+    }
+
+    /**
+     * @return Builder<Organization>|null null when the user gets none
+     */
+    private static function query(User $user): ?Builder
+    {
+        $query = Organization::query()->whereHas('gitConnection');
 
         if (WorkspaceAccess::isSuperAdmin($user)) {
-            return $query->get();
+            return $query;
         }
 
         $member = WorkspaceAccess::memberFor($user);
 
         if ($member === null || ! $member->is_active) {
-            return new Collection;
+            return null;
         }
 
-        return $query
-            ->where(function (Builder $q) use ($member): void {
-                $q->whereHas('projects.teams.members', fn (Builder $m) => $m->where('members.id', $member->getKey()));
+        return $query->where(function (Builder $q) use ($member): void {
+            $q->whereHas('projects.teams.members', fn (Builder $m) => $m->where('members.id', $member->getKey()));
 
-                if ($member->organization_id !== null) {
-                    $q->orWhere('organizations.id', $member->organization_id);
-                }
-            })
-            ->get();
+            if ($member->organization_id !== null) {
+                $q->orWhere('organizations.id', $member->organization_id);
+            }
+        });
     }
 }

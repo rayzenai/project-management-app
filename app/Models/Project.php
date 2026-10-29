@@ -124,6 +124,16 @@ class Project extends Model
     }
 
     /**
+     * Forge repositories linked to the project.
+     *
+     * @return HasMany<GitRepository, $this>
+     */
+    public function repositories(): HasMany
+    {
+        return $this->hasMany(GitRepository::class);
+    }
+
+    /**
      * The link to the project's team. The pivot is unique on both sides, so a
      * project has exactly one team and a team serves exactly one project;
      * the visibility scopes query through this relation.
@@ -227,6 +237,43 @@ class Project extends Model
                     ->where('is_public', true)
                     ->where('organization_id', $member->organization_id));
             }
+
+            if ($adminOrganizationId !== null) {
+                $q->orWhere('organization_id', $adminOrganizationId);
+            }
+        });
+    }
+
+    /**
+     * Projects whose code (linked repositories, and the branches, commits
+     * and pull requests on their tasks) the user may see: in an organization
+     * with git, those whose team they are on (any role, while active), every
+     * one of the office they administer, and every one for a super-admin.
+     * Not other viewers of a public project. The query twin of
+     * {@see WorkspaceAccess::canViewProjectCode()}; keep them in step.
+     *
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeCodeVisibleTo(Builder $query, ?Authenticatable $user): Builder
+    {
+        $query->whereIn('organization_id', GitConnection::query()->select('organization_id'));
+
+        if (WorkspaceAccess::isSuperAdmin($user)) {
+            return $query;
+        }
+
+        $member = WorkspaceAccess::memberFor($user);
+
+        // An office admin is an active member too.
+        if ($member === null || ! $member->is_active) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId): void {
+            $q->whereHas('teams.members', fn (Builder $m): Builder => $m->where('members.id', $member->getKey()));
 
             if ($adminOrganizationId !== null) {
                 $q->orWhere('organization_id', $adminOrganizationId);

@@ -96,6 +96,7 @@ See [`docs/api.md` → Integrating another system](docs/api.md#integrating-anoth
 | `workspace:prune-trashed [--pretend]` | Force-delete soft-deleted rows past the trash TTL (scheduled daily) |
 | `workspace:send-deadline-reminders [--pretend]` | Heads-up / due-today / overdue notifications (scheduled daily at `PM_REMINDERS_RUN_AT`) |
 | `git:oidc-client {redirect_uri}` | Create the forge's OIDC client (`Forgejo`) for that callback URL and print its client id and secret. Run again to move it to a new URL: same id, new secret (the old one stops working) |
+| `git:reconcile [--connection=] [--allow-removals]` | The nightly forge repair (scheduled daily at 01:30): puts the webhook back, catches linked repositories up, unlinks those the forge no longer has, keeps forge Owners and members in step. Exits non-zero when a step fails or it holds back a mass removal or unlink; `--allow-removals` lifts those breakers for one run, after checking ([`docs/forgejo.md`](docs/forgejo.md#when-the-reconcile-holds-removals-back)) |
 
 ### Signing in to the forge (OIDC)
 
@@ -113,6 +114,20 @@ project, and super-admins get past `/oauth/authorize`; everyone else gets a
 The forge itself (`git.sdoc.gov.np`: the Dokploy compose kit in
 `deploy/forgejo/`, DNS, bootstrap, the OIDC source, backups and upgrades) is
 in [`docs/forgejo.md`](docs/forgejo.md).
+
+### Code from the forge (git phase 1)
+
+Where an office has git on, a project's manager or office admin links forge
+repositories from the project's **Code** tab. Commits, branches and pull
+requests that name a task code (`SG-12`) then show in that task's Code
+section and as a mark on its board card, and `SG-12` on the forge links back
+to the task (`/workspace/go/{forge org}/SG-12`). Nothing on the forge changes
+a task's status. The forge reports through one signed organization webhook
+(`POST /git/webhooks/{id}`), processed on the queue; `git:reconcile` fills in
+whatever it missed every night. Operations (the bot token's scopes, the
+webhook, the queue worker, the reconcile and its circuit breaker) are in
+[`docs/forgejo.md`](docs/forgejo.md#12-webhook-and-nightly-reconcile), the
+endpoints and payloads in [`docs/api.md`](docs/api.md).
 
 To try the forge against your local tracker, run `deploy/forgejo/local.sh up`
 ([Try it locally](docs/forgejo.md#try-it-locally)).
@@ -208,7 +223,9 @@ Production runs on the SDOC VM's own Dokploy (private
 | `tasks-postgres` | PostgreSQL 18.6, database/user `tasks` |
 | `tasks-redis` | Redis 8.2, password, 128 MB `volatile-lru`, AOF |
 
-No queue worker: nothing is queued, so `QUEUE_CONNECTION=sync`. Mail uses
+No queue worker yet, so `QUEUE_CONNECTION=sync`: git phase 1's webhook
+processing and backfills then run after each response. Add `tasks-queue`
+before turning git on ([`docs/forgejo.md`](docs/forgejo.md#queue-worker)). Mail uses
 SDOC's SMTP account (`no-reply@sdoc.gov.np`). The production env is in Dokploy
 and in the gitignored, owner-only `.env.sdoc`, which also holds the seeded
 super-admin password. The app always runs on Nepal time (`Asia/Kathmandu`,

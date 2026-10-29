@@ -5,6 +5,7 @@
     import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import BoardView from '../../components/project/BoardView.svelte';
+    import CodeView from '../../components/project/CodeView.svelte';
     import ListView from '../../components/project/ListView.svelte';
     import PeopleView from '../../components/project/PeopleView.svelte';
     import ProjectEditForm from '../../components/project/ProjectEditForm.svelte';
@@ -20,6 +21,7 @@
     import type {
         Member,
         Project,
+        ProjectGit,
         ProjectTeam,
         SharedProps,
         Task,
@@ -29,21 +31,29 @@
         project,
         tasks,
         team = null,
+        git = null,
     }: {
         project: Project;
         tasks: Task[];
         team?: ProjectTeam | null;
+        /** The Code tab; null when the organization has no git. */
+        git?: ProjectGit | null;
     } = $props();
 
     let editing = $state(false);
 
-    type Tab = 'board' | 'list' | 'people';
+    type Tab = 'board' | 'list' | 'people' | 'code';
 
     const TABS: { value: Tab; label: string }[] = [
         { value: 'board', label: 'Board' },
         { value: 'list', label: 'List' },
         { value: 'people', label: 'People' },
     ];
+
+    // Code only where the organization has git.
+    const tabs = $derived<{ value: Tab; label: string }[]>(
+        git ? [...TABS, { value: 'code', label: 'Code' }] : TABS,
+    );
 
     function initialTab(): Tab {
         if (typeof window === 'undefined') {
@@ -59,7 +69,8 @@
         if (
             requested === 'board' ||
             requested === 'list' ||
-            requested === 'people'
+            requested === 'people' ||
+            (requested === 'code' && git)
         ) {
             return requested;
         }
@@ -71,6 +82,10 @@
         if (raw === 'kanban') {
             return 'board';
         } // legacy value migration
+
+        if (raw === 'code' && git) {
+            return 'code';
+        }
 
         return raw === 'list' || raw === 'people' ? raw : 'board'; // default + garbage guard
     }
@@ -176,6 +191,10 @@
     }
 
     function tabCount(tab: Tab): number {
+        if (tab === 'code') {
+            return git?.repositories.length ?? 0;
+        }
+
         return tab === 'people' ? teammates.length : filteredTasks.length;
     }
 
@@ -287,11 +306,17 @@
                 <ProjectTeamPanel {team} projectTitle={project.title} />
             </div>
         {/if}
+        {#if git}
+            <!-- Its repositories can be linked before there is any task. -->
+            <div class="border-t border-line px-6 py-7 lg:px-8">
+                <CodeView {project} {git} />
+            </div>
+        {/if}
     {:else}
         <div
             class="flex h-14 items-center gap-1 overflow-x-auto border-b border-line px-6 lg:px-8"
         >
-            {#each TABS as tab (tab.value)}
+            {#each tabs as tab (tab.value)}
                 {@const active = activeTab === tab.value}
                 <button
                     type="button"
@@ -308,13 +333,16 @@
                 </button>
             {/each}
 
-            <ProjectFilters
-                bind:filters
-                {teammates}
-                {categories}
-                shownCount={filteredTasks.length}
-                totalCount={tasks.length}
-            />
+            {#if activeTab !== 'code'}
+                <!-- Filters narrow tasks; the Code tab lists repositories. -->
+                <ProjectFilters
+                    bind:filters
+                    {teammates}
+                    {categories}
+                    shownCount={filteredTasks.length}
+                    totalCount={tasks.length}
+                />
+            {/if}
         </div>
 
         <!-- Project context: the title block, then the metric cards. Its
@@ -357,7 +385,7 @@
             <ProjectSummaryStrip {tasks} {statuses} />
         </div>
 
-        {#if filteredTasks.length === 0}
+        {#if filteredTasks.length === 0 && activeTab !== 'code'}
             <div class="flex items-center gap-3 border-t border-line px-4 py-6">
                 <p class="text-fg-muted">No tasks match the current filters.</p>
                 <button type="button" class="btn" onclick={clearFilters}>
@@ -376,6 +404,12 @@
         {:else if activeTab === 'list'}
             {#if filteredTasks.length > 0}
                 <ListView {project} tasks={filteredTasks} {statuses} />
+            {/if}
+        {:else if activeTab === 'code'}
+            {#if git}
+                <div class="px-6 py-6 lg:px-8">
+                    <CodeView {project} {git} />
+                </div>
             {/if}
         {:else}
             {#if team}

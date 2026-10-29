@@ -10,6 +10,7 @@ use App\Http\Resources\TaskResource;
 use App\Models\Member;
 use App\Models\ProjectActivity;
 use App\Models\Task;
+use App\Support\WorkspaceAccess;
 
 /**
  * Assembles the Task Peek payload — the full editable context for one task
@@ -18,6 +19,8 @@ use App\Models\Task;
  */
 class TaskPreviewQuery
 {
+    public function __construct(private TaskCodeQuery $code) {}
+
     /**
      * @return array{
      *     task: array<string, mixed>,
@@ -28,7 +31,8 @@ class TaskPreviewQuery
      *     activity: array<int, array<string, mixed>>,
      *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
      *     comments_count: int,
-     *     dependency_candidates: array<int, array<string, mixed>>
+     *     dependency_candidates: array<int, array<string, mixed>>,
+     *     code: array<string, mixed>|null
      * }
      */
     public function data(Task $task): array
@@ -41,6 +45,7 @@ class TaskPreviewQuery
         // Visibility is already enforced upstream by EnsureProjectVisible.
         $activity = ProjectActivity::query()
             ->where('task_id', $task->id)
+            ->codeVisibleTo(request()->user())
             ->with('user')
             ->latest()
             ->limit(20)
@@ -56,6 +61,8 @@ class TaskPreviewQuery
             ->get(['id', 'name', 'email', 'user_id'])
             ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id]);
 
+        $viewer = request()->user();
+
         return [
             'task' => (new TaskResource($task))->resolve(),
             'assignments' => AssignmentResource::collection($task->assignments)->resolve(),
@@ -68,6 +75,8 @@ class TaskPreviewQuery
             // What the task could be made to depend on: the rest of its project.
             'dependency_candidates' => $task->project->tasks()->whereKeyNot($task->id)->get()
                 ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
+            // The Code section: null when the organization has no git.
+            'code' => WorkspaceAccess::canViewProjectCode($viewer, $task->project) ? $this->code->data($task, $viewer) : null,
         ];
     }
 }

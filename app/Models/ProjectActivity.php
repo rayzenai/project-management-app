@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -109,6 +110,28 @@ class ProjectActivity extends Model
     public function scopePublic(Builder $query): Builder
     {
         return $query->where('is_public', true);
+    }
+
+    /**
+     * Entries the user may read: everything except the git ones (a linked
+     * repository, a pull request, a branch, a commit), which name code and
+     * so follow {@see Project::scopeCodeVisibleTo()}. The one place that
+     * rule is applied to activity; every reader of the log goes through it.
+     *
+     * @param  Builder<ProjectActivity>  $query
+     * @return Builder<ProjectActivity>
+     */
+    public function scopeCodeVisibleTo(Builder $query, ?Authenticatable $user): Builder
+    {
+        $gitTypes = array_map(
+            fn (string $model): string => (new $model)->getMorphClass(),
+            [GitRepository::class, GitBranch::class, GitCommit::class, GitPullRequest::class],
+        );
+
+        return $query->where(function (Builder $q) use ($gitTypes, $user): void {
+            $q->whereNotIn('subject_type', $gitTypes)
+                ->orWhereIn('project_id', Project::query()->codeVisibleTo($user)->select('projects.id'));
+        });
     }
 
     /**

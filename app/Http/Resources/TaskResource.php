@@ -97,6 +97,8 @@ class TaskResource extends JsonResource
             'dependents' => $this->whenLoaded('dependents', fn () => $this->dependents->map(fn (Task $t): array => self::reference($t))->values()->all()),
             'notes_count' => $this->whenCounted('notes'),
             'contacts_count' => $this->whenCounted('contacts'),
+            // The board's pull-request mark; only checked where code shows.
+            'has_pull_request' => $this->whenExistsLoaded('pullRequests'),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

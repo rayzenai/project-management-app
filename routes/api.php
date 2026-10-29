@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\PlanTrackerController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectProgressController;
+use App\Http\Controllers\Api\ProjectRepositoryController;
 use App\Http\Controllers\Api\QuickAddController;
 use App\Http\Controllers\Api\SubtaskController;
 use App\Http\Controllers\Api\TaskCommentController;
@@ -87,6 +88,12 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::patch('/projects/{project:slug}', [ProjectController::class, 'update'])->name('projects.update');
             Route::patch('/projects/{project:slug}/archive', [ProjectController::class, 'archive'])->name('projects.archive');
             Route::patch('/projects/{project:slug}/restore', [ProjectController::class, 'restore'])->name('projects.restore');
+
+            // Linked forge repositories
+            Route::get('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'index'])->name('projects.repositories.index');
+            Route::get('/projects/{project:slug}/repositories/candidates', [ProjectRepositoryController::class, 'candidates'])->name('projects.repositories.candidates');
+            Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
+            Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
 
             // Tasks + task-children: gated centrally by EnsureProjectVisible
             // (binding has resolved the parameter to a model instance, so the

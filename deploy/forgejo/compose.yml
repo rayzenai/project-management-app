@@ -38,6 +38,8 @@ services:
       FORGEJO__security__SECRET_KEY: ${FORGEJO_SECRET_KEY:?set FORGEJO_SECRET_KEY}
       # The 15.x image defaults this to "*"; trust only Traefik's network.
       FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES: ${FORGEJO_TRUSTED_PROXIES:?set FORGEJO_TRUSTED_PROXIES}
+      # The forge is on the internet: every person enrols 2FA (bot users are exempt).
+      FORGEJO__security__GLOBAL_TWO_FACTOR_REQUIREMENT: all
 
       # Sign-in only through the tracker (OIDC source "sdoc-tasks"): no
       # password form, no password over HTTP basic auth (access tokens and

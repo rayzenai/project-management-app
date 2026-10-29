@@ -7,8 +7,10 @@ use App\Http\Resources\WorkspaceNoteResource;
 use App\Models\Member;
 use App\Models\Project;
 use App\Models\ProjectNote;
+use App\Models\User;
 use App\Models\WorkspaceNote;
 use App\Services\ResolveThemeTokens;
+use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,6 +36,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   visible in one place. Empty while the user has task notes turned off.
  * - `features` — the optional features (task notes, contacts) the user turned
  *   on in Settings. Screens hide what is off.
+ * - `gitEnabled` — whether the user may use git anywhere (GitAccess), so the
+ *   Guide shows its Code section only to them.
  * - `themeCatalogue` — the theme + font catalogue from `config/themes.php`, so
  *   the appearance onboarding/settings render their cards without fetching the
  *   Sanctum-protected `GET /api/v1/themes` endpoint (which 401s in the session
@@ -172,6 +176,9 @@ class ShareWorkspaceData
             : []);
 
         Inertia::share('isOfficeAdmin', fn (): bool => WorkspaceAccess::officeAdminOrganizationId($request->user()) !== null);
+
+        // Whether the user may use git anywhere: the Guide shows its Code section then.
+        Inertia::share('gitEnabled', fn (): bool => $request->user() instanceof User && GitAccess::anyFor($request->user()));
 
         Inertia::share('organization', function () use ($request): ?array {
             $organization = WorkspaceAccess::memberFor($request->user())?->organization;

@@ -1,16 +1,22 @@
 # Forgejo at git.sdoc.gov.np
 
 The runbook for SDOC's git forge: a Forgejo 15 LTS instance that people sign
-in to with their tracker account. Design and reasons:
+in to with their tracker account, whose repositories projects link so that
+commits, branches and pull requests show on their tasks. Design and reasons:
 [`docs/superpowers/specs/2026-10-29-git-integration-design.md`](superpowers/specs/2026-10-29-git-integration-design.md)
-(Phase 0). The deploy kit is [`deploy/forgejo/`](../deploy/forgejo): one
+(Phase 0 and Phase 1). The deploy kit is [`deploy/forgejo/`](../deploy/forgejo): one
 Compose file and its `.env.example`.
 
 Nothing here has been run against production yet. The sign-in was proved end
-to end on a laptop (Forgejo 17.0.1 against this tracker), and the account,
-organization and suspension steps were checked against the same settings; see
-[Forgejo 15 and 17](#forgejo-15-and-17). Follow the steps in order; the owner
-decides when.
+to end on a laptop (Forgejo 17.0.1 against this tracker), with and without the
+two-factor requirement, and the account, organization and suspension steps
+were checked against the same settings; see
+[Forgejo 15 and 17](#forgejo-15-and-17). Phase 1 was proved the same way on
+17.0.1: the webhook made by turning git on, linking with its backfill,
+pushes, a branch and a pull request through to its merge, the link back,
+a replayed delivery, and the reconcile filling a gap left while the tracker
+was down and moving the webhook to a new tracker address. Follow the steps
+in order; the owner decides when.
 
 To run the same forge on your own machine against your local tracker, one
 command does it: [Try it locally](#try-it-locally).
@@ -22,15 +28,16 @@ command does it: [Try it locally](#try-it-locally).
 | Forgejo `15.0.11` + Postgres 17 | SDOC VM (`10.5.23.138`), Dokploy Compose project `git`, named volumes `forgejo-data` and `forgejo-db` |
 | Web | `https://git.sdoc.gov.np` through Traefik (Let's Encrypt), container port 3000, never published |
 | Git over SSH | Forgejo's built-in SSH server on host port **2222** (the host's sshd keeps 22). The gateway forwards only 80 and 443, so 2222 is reachable only at `10.5.23.138`: from the VPN, whose resolver returns that address, and from office machines only if their resolver returns it too. HTTPS works wherever the web does |
-| Sign-in | Only "Sign in with sdoc-tasks", the tracker as OpenID Connect provider. No password sign-in anywhere: no password form and no password over HTTP basic auth. Access tokens and SSH keys work. No sign-up form, no OpenID 2.0, no anonymous browsing |
-| Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, and the side that calls the forge's API with the `sdoc-bot` token |
+| Sign-in | Only "Sign in with sdoc-tasks", the tracker as OpenID Connect provider, then the forge's own second factor, which every person must enrol ([section 2](#2-public-behind-two-factor-sign-in)). No password sign-in anywhere: no password form and no password over HTTP basic auth. Access tokens and SSH keys work. No sign-up form, no OpenID 2.0, no anonymous browsing |
+| Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, the side that calls the forge's API with the `sdoc-bot` token, and the receiver of the forge's webhook (`/git/webhooks/{id}`, [section 12](#12-webhook-and-nightly-reconcile)) |
 
 ## 1. DNS at NITC
 
 Ask NITC for an `A` record `git.sdoc.gov.np → 103.175.192.178`, the same
 public address as `tasks.sdoc.gov.np`. The gateway already forwards 80 and 443
 to the VM's Traefik, and Let's Encrypt's HTTP-01 challenge needs port 80, so
-the record must be public even if the pages stay internal (next section).
+the record is public, and so are the forge's pages, behind two-factor sign-in
+(next section).
 
 Ask the network administrator to add the same name to the VPN's resolver,
 pointing at `10.5.23.138`, as for `tasks`. Only VPN clients get that private
@@ -44,56 +51,61 @@ dig +short git.sdoc.gov.np @1.1.1.1      # 103.175.192.178
 dig +short git.sdoc.gov.np               # on the VPN: 10.5.23.138
 ```
 
-## 2. Optional: web pages inside the SDOC network only
+## 2. Public, behind two-factor sign-in
 
-Open question 2 of the spec. If the owner wants the forge's pages reachable
-only from the SDOC network and the VPN, put a Traefik IP allowlist in front of
-them. Not tested here; check it from both sides before relying on it.
+The owner chose (2026-10-29) to put the forge on the internet like the
+tracker, with no IP allowlist, behind two-factor sign-in:
+`security.GLOBAL_TWO_FACTOR_REQUIREMENT = all` in `compose.yml`. Every person
+enrols a second factor on the forge and gives it after the tracker's sign-in.
+Forgejo exempts bot users, which is what `sdoc-bot` is
+([bootstrap](#7-bootstrap)). Git over SSH stays inside the SDOC network and
+the VPN (the gateway forwards only 80 and 443); from outside, people push over
+HTTPS with an access token.
 
-1. Define the middleware in Traefik's file provider on the VM, e.g.
-   `/etc/dokploy/traefik/dynamic/sdoc-only.yml`:
+### Two-factor for people
 
-   ```yaml
-   http:
-     middlewares:
-       sdoc-only:
-         ipAllowList:
-           sourceRange:
-             - "<SDOC office CIDR>"   # from the network administrator
-             - "<VPN pool CIDR>"
-   ```
+- **First sign-in.** After "Sign in with sdoc-tasks" and the tracker's own
+  sign-in, the forge makes the account and opens Settings → Security with
+  "This Forgejo instance requires users to enable two-factor authentication
+  before they can access their accounts." Every other page sends them back
+  there. Until they enrol, the API answers 403 ("… Enable it at:
+  https://git.sdoc.gov.np/user/settings/security") even to a token, git over
+  HTTPS is redirected to that page, and SSH is refused with the same message.
+  They enrol either:
+  - an authenticator app (TOTP): **Enroll into two-factor authentication**,
+    scan the image (or type the secret under it), enter the 6-digit
+    passcode, **Verify**; or
+  - a security key: **Add security key**.
+- **Every later sign-in** asks, after the tracker's sign-in, for the passcode
+  (or the security key). A wrong passcode is refused ("Your passcode is
+  incorrect. If you misplaced your device, use your scratch code to sign
+  in.") and nothing is signed in until the right one.
+- **Git over HTTPS** takes an access token as the password, made after
+  enrolling: Settings → Applications → **New access token**, repository read
+  and write. A token works without the passcode, so give it only the scopes
+  it needs, and delete it there when a laptop is lost.
+- **The recovery key.** Enrolling shows a single-use recovery key once
+  ("Store your single-use recovery key (…) in a safe place, as it will not be
+  shown again."); keep it somewhere other than the phone. On the passcode
+  page, **Use a scratch code** takes it instead; the forge then opens
+  Settings → Security, where **Regenerate single-use recovery key** makes a
+  new one. Nobody can turn two-factor off ("Two-factor authentication is
+  required for your account and cannot be disabled."); a new phone is set up
+  with **Re-enroll two-factor authentication** while the old one still works.
+- **A lost second factor and no recovery key.** A site admin removes it, after
+  confirming the person outside the forge (in person or by phone: this reset
+  is what an attacker would ask for):
 
-2. Attach it to the forge's HTTPS router. A domain added in Dokploy's Domains
-   tab gets labels Dokploy writes itself, so instead remove that domain and
-   give the `forgejo` service its own labels (Dokploy's "manual" domain
-   method), plus `dokploy-network` as an external network:
+  ```sh
+  fj admin user reset-mfa --username <git_username>
+  ```
 
-   ```yaml
-   labels:
-     - traefik.enable=true
-     - traefik.http.routers.forgejo-web.rule=Host(`git.sdoc.gov.np`)
-     - traefik.http.routers.forgejo-web.entrypoints=web
-     - traefik.http.routers.forgejo-web.middlewares=redirect-to-https@file
-     - traefik.http.routers.forgejo.rule=Host(`git.sdoc.gov.np`)
-     - traefik.http.routers.forgejo.entrypoints=websecure
-     - traefik.http.routers.forgejo.tls.certresolver=letsencrypt
-     - traefik.http.routers.forgejo.middlewares=sdoc-only@file
-     - traefik.http.services.forgejo.loadbalancer.server.port=3000
-   ```
-
-   Check the entrypoint, resolver and redirect middleware names against the
-   labels Dokploy generated for `tasks` before copying these.
-
-Rules for the list:
-
-- Public traffic reaches Traefik either with its own address or with the
-  gateway's. The gateway's inside address must **not** be in the list, even
-  though it is in the SDOC range. Read Traefik's access log for one request
-  from outside and one from the VPN to see which addresses actually arrive.
-- Calls that start on the VM (the tracker's API calls now and later, the
-  bootstrap's `curl --resolve … 127.0.0.1` below) arrive with a Docker-side
-  address; admit the one the access log shows, or they get 403.
-- HTTP-01 still works: the challenge is answered on port 80 before any router.
+  It prints "<name>'s two-factor authentication settings have been removed!"
+  and deletes the TOTP and any security keys. The web UI does the same: Site
+  administration → Identity & access → User accounts → the person → Edit →
+  tick **Reset 2FA** → Update user account (nothing else on the account
+  changes). Until the person enrols again, every page sends them to enrol and
+  their access tokens are refused; once they have, the tokens work again.
 
 ## 3. Tracker prerequisites
 
@@ -141,21 +153,45 @@ curl -fsS https://tasks.sdoc.gov.np/oauth/jwks     # one RSA key
 
 ### Queue worker
 
-Production runs `QUEUE_CONNECTION=sync` and nothing is queued yet, but phase 1
-(webhooks, forge calls) needs a worker. Add it now, as the old PMOPM instance
-had:
+Phase 1 needs a worker: the forge's webhook deliveries, the backfill after a
+repository is linked and the Owners sync after an office-admin change all run
+on the queue. Production runs `QUEUE_CONNECTION=sync` until it exists, and
+then that work runs in the web request after its response: php-fpm sends the
+forge its 202 first (`fastcgi_finish_request`), so the forge's delivery
+timeout never waits on it, but it holds an FPM worker until it is done, and a
+failed run is not retried (the worker retries a job three times, a minute
+apart). Either way, a failed delivery is processed again when someone
+replays it on the forge ([section 12](#12-webhook-and-nightly-reconcile)),
+or the nightly reconcile fills in what it carried. Add the worker, as the old
+PMOPM instance had:
 
 1. Dokploy, project `tasks`: a new application `tasks-queue` from the same
    repository, branch and Dockerfile as `tasks-web`, with `tasks-web`'s
    environment plus `AUTORUN_ENABLED=false` (it must not race the web app's
    migrations), command `php artisan queue:work redis --sleep=3 --tries=3
-   --max-time=3600`, and the Swarm healthcheck set to none (it runs no nginx),
-   as `tasks-scheduler` is configured.
+   --timeout=320 --max-time=3600`, and the Swarm healthcheck set to none (it
+   runs no nginx), as `tasks-scheduler` is configured. A backfill may take up
+   to five minutes (`BackfillGitRepository::$timeout = 300`), so the worker's
+   `--timeout` sits above it, and Redis's `retry_after` must sit above that
+   again, or a second worker starts the same job while the first still runs:
+   set `REDIS_QUEUE_RETRY_AFTER=360` (the default is 90; see
+   `config/queue.php`) on all three applications.
 2. Set `QUEUE_CONNECTION=redis` on `tasks-web`, `tasks-scheduler` and
    `tasks-queue`, and deploy all three.
 3. `./deploy.sh` knows only `web` and `scheduler`. Deploy `tasks-queue` from
    Dokploy after each push, or add its application id and Swarm service name
    to `service_for` in `deploy.sh`.
+
+### Request size
+
+The webhook intake takes deliveries of up to 2 MB and answers 413 to anything
+larger, so the tracker's web server must let a 2 MB body through to it. The
+image (`serversideup/php:8.5-fpm-nginx`) already does: its
+`NGINX_CLIENT_MAX_BODY_SIZE` (nginx `client_max_body_size`) and
+`PHP_POST_MAX_SIZE` (PHP `post_max_size`) both default to `100M`, the tracker
+sets neither, and Traefik limits a body only through a buffering middleware,
+which Dokploy does not add. If either variable is ever set on `tasks-web`,
+keep it at `2M` or more.
 
 ## 4. The Dokploy compose project
 
@@ -170,11 +206,11 @@ password, no SSH).
    and fill in every blank ([Environment](#5-environment)). Keep a copy with
    the other SDOC credentials.
 4. Domains: host `git.sdoc.gov.np`, service `forgejo`, container port `3000`,
-   HTTPS on, certificate Let's Encrypt. (Or the labels in section 2.)
+   HTTPS on, certificate Let's Encrypt.
 5. Deploy. The compose file refuses to start while a required variable is
    empty, and the `forgejo` service turns healthy once `/api/healthz`
    answers.
-6. Check, from a VPN-connected machine:
+6. Check (the web checks from anywhere, `ssh-keyscan` from the VPN):
 
    ```sh
    curl -fsS https://git.sdoc.gov.np/api/healthz          # "pass"
@@ -190,6 +226,9 @@ FJ=$(sudo docker ps --format '{{.Names}}' | grep -- '-forgejo-1$')
 FJDB=${FJ%-forgejo-1}-db-1
 fj() { sudo docker exec -u git -i "$FJ" forgejo "$@"; }   # the forgejo CLI, as the git user
 ```
+
+Paste the blocks below one at a time, not as one long paste: `docker exec -i`
+reads standard input, so lines pasted after it can be swallowed.
 
 Secrets stay off command lines, where `ps` would show them: read them with
 `read -rs`, hand them to `curl` as a header file (`-H @<(printf …)`; `printf`
@@ -229,7 +268,7 @@ endpoint's certificate is what it trusts.
 | `FORGEJO_DB_PASSWORD` | The `forgejo` Postgres role's password, used by both services. `openssl rand -hex 32` once |
 | `FORGEJO_SECRET_KEY` | Forgejo's global secret. `openssl rand -hex 32` once, never change it. An empty value would fall back to a public constant, so the compose file requires it |
 | `FORGEJO_TRUSTED_PROXIES` | Traefik's network as comma-separated CIDRs: `sudo docker network inspect dokploy-network --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' \| xargs \| tr ' ' ','`. The 15.x image would otherwise trust `*` |
-| `FORGEJO_WEBHOOK_ALLOWED_HOSTS` | `tasks.sdoc.gov.np`: the only host webhooks may reach (phase 1) |
+| `FORGEJO_WEBHOOK_ALLOWED_HOSTS` | `tasks.sdoc.gov.np`: the only host webhooks may reach. It must admit the tracker's host, because the tracker's webhook calls `https://tasks.sdoc.gov.np/git/webhooks/{id}` ([section 12](#12-webhook-and-nightly-reconcile)); a host it leaves out gets no delivery |
 | `FORGEJO_SMTP_*`, `FORGEJO_MAIL_FROM` | SDOC's SMTP account, as the tracker uses: `smtp.nepal.gov.np`, 465 (implicit TLS), `no-reply@sdoc.gov.np`. Certificate checks stay on |
 | `FORGEJO_SSH_PUBLISH_PORT`, `FORGEJO_MAILER_ENABLED` | Left out in production (2222, on). Only a [restore drill](#restore-drill) sets them |
 
@@ -247,6 +286,7 @@ checked against the 15.0 and 17.0 configuration cheat sheets
 | `server.START_SSH_SERVER`, `SSH_PORT`, `SSH_LISTEN_PORT` | `true`, `2222`, `2222` | Built-in SSH on 2222, published as `2222:2222`. The image's own OpenSSH still runs on the container's 22, unpublished and without keys |
 | `security.INSTALL_LOCK` | `true` | The web installer never appears |
 | `security.REVERSE_PROXY_TRUSTED_PROXIES` | Traefik's network | Client addresses only from Traefik's `X-Forwarded-For` |
+| `security.GLOBAL_TWO_FACTOR_REQUIREMENT` | `all` | Every person enrols a second factor before anything works, the API and git included ([Two-factor for people](#two-factor-for-people)); bot users are exempt. Any value other than `none`, `all` or `admin` silently means `none`, so check it in the [checks](#8-check) |
 | `service.REQUIRE_SIGNIN_VIEW` | `true` | Nothing, not even the explore pages or the API, without signing in |
 | `service.ALLOW_ONLY_EXTERNAL_REGISTRATION` | `true` | No sign-up form; accounts come only from the OIDC source |
 | `service.ENABLE_INTERNAL_SIGNIN` | `false` | No password form; the login page shows only "Sign in with sdoc-tasks" |
@@ -258,7 +298,7 @@ checked against the 15.0 and 17.0 configuration cheat sheets
 | `oauth2_client.ENABLE_AUTO_REGISTRATION` | `true` | The first sign-in creates the account |
 | `oauth2_client.USERNAME` | `nickname` | The account's name. Forgejo's OIDC provider fills "nickname" from the `nickname` claim, else `preferred_username`; the tracker sends only `preferred_username` (its `users.git_username`). 16 and later also offer `preferred_username`; 15 does not (it would warn and fall back to `nickname`) |
 | `oauth2_client.ACCOUNT_LINKING` | `login` | If the name or email already exists, show the link page instead of merging silently |
-| `webhook.ALLOWED_HOST_LIST` | `tasks.sdoc.gov.np` | Webhooks may call the tracker and nothing else |
+| `webhook.ALLOWED_HOST_LIST` | `tasks.sdoc.gov.np` | Webhooks may call the tracker's intake and nothing else |
 | `migrations.ALLOW_LOCALNETWORKS` | `false` | Migrations and mirrors can't reach private addresses (the default, set explicitly) |
 | `mailer.*` | SDOC SMTP over `smtps` | Notifications and admin mail |
 
@@ -284,35 +324,85 @@ person's first sign-in lands on the link page.
    ```
 
    The generated password is discarded unseen: nothing accepts it (no
-   password form, no basic auth). When an admin API call is needed that no
-   CLI command covers, mint a token for this account with the CLI, use it, and
-   delete it, as in step 3. Super-admins already arrive as site admins
+   password form, no basic auth). Super-admins already arrive as site admins
    through the tracker for anything in the web UI.
 
+   It stays an ordinary (individual) user for good. Forgejo makes the first
+   person to sign in a site admin when no other individual user exists, and
+   never demotes its last individual admin, so `forge-admin` must always be
+   counted as one. Under the two-factor requirement the API refuses an
+   ordinary user's token, so it is a bot only while step 3 uses its one-off
+   token; any later admin API call that no CLI command covers is done the
+   same way.
+
 2. **The bot** `sdoc-bot` (`{owner}-bot`), owner of the `sdoc` organization
-   and nothing else:
+   and nothing else, made a bot user before its token is made or used:
 
    ```sh
    fj admin user create --username sdoc-bot \
      --email sdoc-bot@sdoc.gov.np --random-password --must-change-password=false >/dev/null
+   sudo docker exec "$FJDB" psql -U forgejo -d forgejo \
+     -c "UPDATE \"user\" SET type = 4 WHERE lower_name = 'sdoc-bot'"
    fj admin user generate-access-token --username sdoc-bot --token-name tasks-sdoc \
-     --scopes read:user,write:organization --raw
+     --scopes read:user,write:organization,write:repository --raw
    ```
+
+   The update must print `UPDATE 1`. A service account can't enrol a second
+   factor, and Forgejo exempts bot users (type 4) from the requirement;
+   neither the CLI nor the API sets the type, hence the database. It stays a
+   bot for good: it is not an admin, so it never counts for the first-user or
+   last-admin rules.
 
    The token is shown once; it goes into the tracker in step 6 and nowhere
    else. `read:user` lets the tracker check who the token is;
-   `write:organization` lets it manage the organization (its webhook in
-   phase 1). Phase 2 (repos, teams) will need a wider token, replaced from
-   the same Organizations dialog.
+   `write:organization` lets it manage the organization (its webhook, its
+   Owners team and its members); `write:repository` lets it read the
+   repositories, branches, commits and pull requests a project links, and set
+   each linked repository's external tracker, the forge's link back to the
+   task. It is still not a site-admin token. If phase 2 needs a wider one, it
+   is replaced the same way as below.
+
+   **Replacing the token** (an install whose token predates phase 1, made
+   with `read:user,write:organization` only: the Code tab still lists the
+   forge organization's repositories, but linking one fails with "The forge
+   answered 403. Try again shortly."):
+
+   ```sh
+   fj admin user generate-access-token --username sdoc-bot --token-name tasks-sdoc-2 \
+     --scopes read:user,write:organization,write:repository --raw
+   ```
+
+   A super-admin enters it in the tracker exactly as in step 6
+   (**Organizations**, **Git** on SDOC, the same forge address and forge
+   organization, the new token). It says "Git is on." and keeps the webhook,
+   or creates it if there is none yet. Then delete the old token, in the
+   database because the API deletes tokens only with basic auth; it must say
+   `DELETE 1`:
+
+   ```sh
+   sudo docker exec "$FJDB" psql -U forgejo -d forgejo \
+     -c "DELETE FROM access_token WHERE name = 'tasks-sdoc' AND uid = (SELECT id FROM \"user\" WHERE lower_name = 'sdoc-bot')"
+   ```
 
 3. **The organization** `sdoc`, private, owned by the bot. Users can't create
    organizations, so `forge-admin` creates it, hands it to the bot and
-   leaves; the one-off token is then deleted. The calls go to Traefik on the
-   VM itself (`--resolve`), whatever the public name resolves to:
+   leaves; the one-off token is then deleted. `forge-admin` is a bot only
+   inside this block, which is safe because nobody can sign in yet (the
+   sign-in source comes in step 5, git for SDOC in step 6). The calls go to
+   Traefik on the VM itself (`--resolve`), whatever the public name resolves
+   to:
 
    ```sh
+   fjsql() { sudo docker exec "$FJDB" psql -U forgejo -d forgejo "$@"; }
+   end_bootstrap() {
+     fjsql -c "DELETE FROM access_token WHERE name = 'bootstrap'" \
+       -c "UPDATE \"user\" SET type = 0 WHERE lower_name = 'forge-admin'" \
+       -c "SELECT lower_name, type FROM \"user\" WHERE lower_name = 'forge-admin'"
+   }
    (
      set -euo pipefail
+     trap end_bootstrap EXIT
+     fjsql -c "UPDATE \"user\" SET type = 4 WHERE lower_name = 'forge-admin'"
      ADMIN_TOKEN=$(fj admin user generate-access-token --username forge-admin \
        --token-name bootstrap --scopes write:organization --raw)
      api() { curl -fsS --resolve git.sdoc.gov.np:443:127.0.0.1 \
@@ -326,22 +416,34 @@ person's first sign-in lands on the link page.
      api -X DELETE https://git.sdoc.gov.np/api/v1/orgs/sdoc/members/forge-admin
      echo 'sdoc ready'
    )
-   sudo docker exec "$FJDB" psql -U forgejo -d forgejo \
-     -c "DELETE FROM access_token WHERE name = 'bootstrap'"
    ```
 
    The calls run in a subshell with `set -euo pipefail`, so the first one
    that fails stops the rest, prints curl's error, and never prints
    `sdoc ready`; the token only lives inside the subshell. Run it as one
-   block, not inside `&&` or `||` (bash ignores `set -e` there). The delete
-   after it always runs:
+   block, not inside `&&` or `||` (bash ignores `set -e` there). However the
+   subshell ends, a failed call included, its `trap` runs `end_bootstrap`,
+   which deletes the token and makes `forge-admin` an ordinary user again.
+   It ends with `UPDATE 1` and this, every time:
 
-   - It must print `DELETE 1`. `DELETE 0` means no token was made (the
-     first command failed); anything else, stop and look at `access_token`
-     before going on.
-   - No `sdoc ready`: fix what curl reported, then finish only the calls
-     that did not happen (a new `bootstrap` token first, the same delete
-     after). Creating `sdoc` again fails once it exists.
+   ```text
+    lower_name  | type
+   -------------+------
+    forge-admin |    0
+   (1 row)
+   ```
+
+   - The `DELETE` above it must say `DELETE 1`. `DELETE 0` means no token was
+     made (the token command failed); anything else, stop and look at
+     `access_token` before going on.
+   - A type other than `0`, or a block cut off half-way (a dropped SSH
+     session): in the new session repeat the container lookup above (`FJ`,
+     `FJDB`, `fj`), define `fjsql` and `end_bootstrap` again and run
+     `end_bootstrap` until it shows `0`. Nothing goes on while it isn't.
+   - No `sdoc ready`: fix what curl reported, then run the block again,
+     leaving out the calls that already succeeded: `POST /orgs` once `sdoc`
+     exists, and `forge-admin` leaving once it has left. Adding `sdoc-bot` to
+     Owners again is harmless.
 
    Forgejo can delete a token over its API only with basic auth, which is
    off, hence the one-line delete in the database. The forge organization is
@@ -392,6 +494,12 @@ person's first sign-in lands on the link page.
    - `--admin-group forge-admins`: tracker super-admins get `groups:
      ["forge-admins"]` and are made site admins on every sign-in; losing
      super-admin removes it at the next sign-in.
+   - No `--skip-local-2fa`, ever: with it the forge takes the tracker's
+     sign-in alone and never asks for the passcode. `forgejo admin auth
+     update-oauth` silently ignores that flag (it exits 0 and changes
+     nothing, in 15 and 17), so the source must be added without it from the
+     start. If it ever was: Site administration → Authentication sources →
+     sdoc-tasks → untick **Skip local 2FA**.
    - After `forgejo admin auth update-oauth ...` restart the `forgejo` service
      (Dokploy → Restart): the running server keeps the old settings until
      then. `add-oauth` takes effect at once.
@@ -401,30 +509,51 @@ person's first sign-in lands on the link page.
    super-admin opens **Organizations**, chooses **Git** on SDOC, and enters
    forge address `https://git.sdoc.gov.np`, forge organization `sdoc` and the
    bot token from step 2. The tracker checks the token against the forge
-   before saving it (encrypted). Its answers:
+   before saving it (encrypted), then creates the organization's webhook
+   ([section 12](#12-webhook-and-nightly-reconcile)); nothing is saved
+   unless both work. Its answers:
 
    | Message | Meaning |
    | --- | --- |
    | Couldn't reach the forge at {url}. | No answer, or a 5xx: wrong address, or [no hairpin](#tracker-and-forge-must-reach-each-other). The cause (the cURL error) is in the tracker's log |
-   | The forge refused that token. | A 401 or 403 on `/api/v1/user`: a mistyped, deleted or under-scoped token |
+   | The forge refused that token. | A 401 or 403 on `/api/v1/user`: a mistyped, deleted or under-scoped token, or `sdoc-bot` not made a bot user (step 2), which the two-factor requirement refuses |
    | {url} doesn't look like a Forgejo forge. | A 404, or a 200 that carries no login: the address is not a Forgejo |
    | The forge answered {status}. Try again shortly. | Any other status |
    | {login} doesn't own {owner} on the forge. | The token works but its user is not an owner of that organization |
    | {owner} is already connected to another office. | Another office already uses that forge organization |
+   | Couldn't create the forge webhook: the forge answered {status}. | The token passed the checks but the forge refused the webhook: a 403 is a token that may read the organization but not write it (`read:organization`) |
 
    Two validation messages come before any forge call: the address must not
-   carry credentials, and must not carry a query or a fragment.
+   carry credentials, and must not carry a query or a fragment. The address
+   must also be the forge's real one, not an alias that redirects to it
+   (such as an `http://` or `www.` name that forwards elsewhere), because the
+   tracker's ownership checks do not follow redirects.
 
 ## 8. Check
 
 The spec's Phase 0 check, after the bootstrap:
 
+- The two-factor setup: Site administration → Configuration shows "Global
+  two-factor requirement: All users"; Authentication sources → sdoc-tasks has
+  **Skip local 2FA** unticked; and the service accounts have the right types,
+  `forge-admin` `0` (an ordinary admin) and `sdoc-bot` `4` (a bot):
+
+  ```sh
+  sudo docker exec "$FJDB" psql -U forgejo -d forgejo \
+    -c "SELECT lower_name, type, is_admin FROM \"user\" WHERE lower_name IN ('forge-admin', 'sdoc-bot')"
+  ```
+
 - An SDOC member chooses "Sign in with sdoc-tasks", signs in to the tracker
-  if needed, and lands on the forge signed in. Their forge username equals
-  the tracker's stored one:
+  if needed, and lands on the forge's Settings → Security with the red
+  "requires users to enable two-factor authentication" message, not as a
+  site admin, even if they are the first person ever to sign in. Every other
+  page sends them back there. They enrol and keep the recovery key. Their
+  forge username equals the tracker's stored one:
   `php artisan tinker --execute 'echo App\Models\User::where("email", "…")->value("git_username");'`.
-  They create an access token (Settings → Applications) and push over HTTPS
-  with it, and add an SSH key and push over port 2222 from the VPN.
+- They sign out and in again: after the tracker, the forge asks for the
+  passcode; a wrong one is refused, the right one signs them in. They create
+  an access token (Settings → Applications) and push over HTTPS with it, and
+  add an SSH key and push over port 2222 from the VPN.
 - Someone with no SDOC membership and on no SDOC project team gets the
   tracker's 403 page ("You don't have access to git. Ask your office
   admin.") and no forge account.
@@ -433,8 +562,35 @@ The spec's Phase 0 check, after the bootstrap:
   the tracker at once (check the confirmation says "{git_username} was
   removed from the forge."); their personal tokens and SSH keys are cut only
   by [suspending](#9-offboarding) the account.
-- A super-admin arrives as a site admin (Site administration in the user
-  menu).
+- A super-admin is sent to enrol like everyone else, and then arrives as a
+  site admin (Site administration in the user menu).
+
+Phase 1, once git is on (`SG-1` stands for any task code of the project):
+
+- **The webhook.** On the forge, sdoc → Settings → Webhooks lists one
+  Forgejo hook to `https://tasks.sdoc.gov.np/git/webhooks/{id}`, active, with
+  the push, create, delete, pull request and repository events.
+- **Linking.** The SDOC office admin is an owner of `sdoc` (Teams → Owners;
+  the reconcile puts them there once they have signed in to the forge, so
+  run it by hand after their first sign-in, [section 12](#12-webhook-and-nightly-reconcile)).
+  They create a repository in `sdoc` and push a commit `SG-1 first change`.
+  In the tracker, the project's **Code** tab → **Link repository** → the
+  repository: "Linked sdoc/{name}.", and within seconds the commit is in
+  `SG-1`'s Code section (the backfill, on the queue).
+- **Push.** A commit `SG-1 second change` pushed to the repository is in the
+  task's Code section within seconds; the hook's Recent deliveries on the
+  forge show a 202 for it.
+- **Pull request.** A branch `sg-1-thing` and a pull request from it show in
+  the task's Code section, and the task's board card shows the pull-request
+  mark. Merging it shows it merged; the task's status does not change.
+- **Link back.** On the forge, `SG-1` in a commit message is a link to
+  `https://tasks.sdoc.gov.np/workspace/go/sdoc/SG-1`, which opens the task
+  (after the tracker's sign-in); someone who can't see the task gets a 404.
+- **Reconcile.** In `tasks-web`'s terminal, `php artisan git:reconcile` prints
+  `sdoc at https://git.sdoc.gov.np: reconciled 1 repository.` and exits 0. A
+  second run prints the same, with no "repaired the webhook"; each run makes
+  exactly one `PATCH` to the hook (the stored secret, written back every
+  night).
 
 ## 9. Offboarding
 
@@ -460,13 +616,17 @@ everything at once:
 That blocks everything at once: the web session, API tokens ("This account is
 prohibited from signing in"), git over HTTPS (the "Account is suspended" page)
 and SSH ("Forgejo: Your account is disabled."). There is no `forgejo admin`
-command for it in 15; the API equivalent is
-`PATCH /api/v1/admin/users/{username}` with `{"prohibit_login": true}`, using
-a `write:admin` token minted for `forge-admin` and deleted afterwards as in
-bootstrap step 3. Untick it if the person comes back.
+command for it in 15, so it is done here, by a super-admin, who has a second
+factor. Untick it if the person comes back.
 
-Taking someone off a cross-organization project team while they stay active
-does not touch the forge; that waits for phase 1's nightly reconcile.
+Taking someone off a cross-organization project team, or moving them to
+another office, while they stay active does not touch the forge at once: the
+nightly reconcile removes them from every forge organization the tracker no
+longer lets them into ([section 12](#12-webhook-and-nightly-reconcile)). It
+also keeps each forge organization's Owners team in step with the office's
+active office admins, and a reactivated office admin goes back into Owners at
+once;
+everyone else who comes back is re-added to forge teams by hand.
 
 A connected forge must sign people in only through this tracker, so forge
 usernames are the tracker's; removal on deactivation walks every connected
@@ -474,18 +634,25 @@ forge organization by that name.
 
 ## 10. Backups
 
-From day one: a nightly database dump and a copy of the data volume, kept off
-the VM, and a restore drill.
+From day one: a nightly database dump and a copy of the data volume, on the
+VM. Copies off the VM and a restore drill come with a new backup VM (the
+owner's answer, 2026-10-29).
 
-**Go-live gate:** nobody pushes real code until all three hold:
+**Go-live gate:** nobody pushes real code until a deactivation can't leave
+forge access open: met by the tracker removing the person from every
+connected forge organization ([offboarding](#9-offboarding)); a "Couldn't
+remove" confirmation still needs a super-admin to suspend the account the
+same day.
 
-1. the nightly copy reaches a destination off the VM (where is the owner's
-   open question 3);
-2. one [restore drill](#restore-drill) has passed;
-3. a deactivation can't leave forge access open: met by the tracker
-   removing the person from every connected forge organization
-   ([offboarding](#9-offboarding)); a "Couldn't remove" confirmation still
-   needs a super-admin to suspend the account the same day.
+The owner deferred the gate's other two conditions until the backup VM
+exists: the nightly copy reaching it, and one [restore drill](#restore-drill)
+passed. **The risk until then:** every copy of the forge sits on the VM it
+runs on. The nightly dumps undo a bad upgrade or a deleted repository, not the
+loss of the VM. If its disk, the VM or its host is lost before the backup VM
+exists, the forge's issues, pull requests, reviews, wikis, accounts and
+settings are gone for good, and the code survives only in the branches
+developers happen to have cloned. Once the backup VM exists, copy `$DEST` to
+it nightly (the script's last comment) and run the restore drill.
 
 `/usr/local/sbin/forgejo-backup` (root, mode 700):
 
@@ -552,19 +719,32 @@ On a scratch copy, never on top of production:
 3. Check it with a token, not a sign-in: the copy's OIDC source still sends
    people to production's callback. The copy has no domain, so clone inside
    its container, which checks what the drill is for (the restored database
-   and repositories, and token access):
+   and repositories, and token access). The copy requires two-factor too, and
+   git refuses an ordinary user's token there, so `forge-admin` is a bot for
+   the check, exactly as in [bootstrap step 3](#7-bootstrap):
 
    ```sh
-   T=$(sudo docker exec -u git "$R-forgejo-1" forgejo admin user generate-access-token \
-     --username forge-admin --token-name drill --scopes read:repository --raw)
-   printf '%s\n' "$T" | sudo docker exec -i -u git "$R-forgejo-1" sh -c '
-     read -r T
-     export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader GIT_CONFIG_VALUE_0="Authorization: token $T"
-     git clone -q http://localhost:3000/sdoc/<repo>.git /tmp/drill && git -C /tmp/drill log --oneline -3'
-   unset T
+   rsql() { sudo docker exec "$R-db-1" psql -U forgejo -d forgejo "$@"; }
+   end_drill() {
+     rsql -c "DELETE FROM access_token WHERE name = 'drill'" \
+       -c "UPDATE \"user\" SET type = 0 WHERE lower_name = 'forge-admin'" \
+       -c "SELECT lower_name, type FROM \"user\" WHERE lower_name = 'forge-admin'"
+   }
+   (
+     set -euo pipefail
+     trap end_drill EXIT
+     rsql -c "UPDATE \"user\" SET type = 4 WHERE lower_name = 'forge-admin'"
+     T=$(sudo docker exec -u git "$R-forgejo-1" forgejo admin user generate-access-token \
+       --username forge-admin --token-name drill --scopes read:repository --raw)
+     printf '%s\n' "$T" | sudo docker exec -i -u git "$R-forgejo-1" sh -c '
+       read -r T
+       export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader GIT_CONFIG_VALUE_0="Authorization: token $T"
+       git clone -q http://localhost:3000/sdoc/<repo>.git /tmp/drill && git -C /tmp/drill log --oneline -3'
+   )
    ```
 
-   The last commits should match production's.
+   The last commits should match production's, and it ends with
+   `forge-admin` at type `0`.
 
 4. Delete the scratch project and its volumes in Dokploy, and note the date
    of the drill.
@@ -593,11 +773,161 @@ alternative for the volume copy once such a destination exists.
      image's `REVERSE_PROXY_TRUSTED_PROXIES` default stops being `*` from 16
      (ours is explicit anyway). Postgres stays on 17 unless 19 requires more.
 
+## 12. Webhook and nightly reconcile
+
+### The webhook
+
+Turning git on ([bootstrap step 6](#7-bootstrap)) creates one organization
+webhook on `sdoc`, owned by the tracker: type Forgejo, `POST` to
+`{APP_URL}/git/webhooks/{connection id}` (`https://tasks.sdoc.gov.np/git/webhooks/1`),
+JSON, every branch, the events push, create, delete, pull request and
+repository (the forge lists pull request with its sub-events), signed with a
+secret the tracker keeps encrypted. Leave it alone on the forge: the
+reconcile puts back whatever an owner changes. Entering the token again keeps
+it; pointing the connection at another forge, or another forge organization,
+makes a new one, deletes the old, and unlinks every repository linked from
+the old one, with their history in the tracker ("Git is on. Unlinked 2
+repositories that were on the old forge."): link them again from the new
+one. Turning git off deletes the hook and points every linked repository
+back at the forge's own issue tracker (best effort: a forge that is down
+never keeps git on, and a repository it missed keeps linking `TP-12` here
+until an owner changes it under the repository's Settings).
+
+What it needs: `FORGEJO_WEBHOOK_ALLOWED_HOSTS` admitting the tracker's host
+([Environment](#5-environment)), the forge reaching the tracker
+([section 4](#tracker-and-forge-must-reach-each-other)), a 2 MB request body
+([Request size](#request-size)) and the queue worker
+([Queue worker](#queue-worker)).
+
+The tracker stores each delivery once, by its delivery id, keeps it 14 days,
+and answers: 202 `Received.` (queued), 200 `Already received.` (a delivery
+id it already has; one still unprocessed is queued again), 403 for a missing
+or wrong signature, 404 for an unknown connection, 413 over 2 MB, 400 for
+anything that is not a forge delivery. Events other than those five are
+stored and ignored. Applying a delivery twice changes nothing, so any
+delivery can be sent again. The forge never retries on its own. To resend
+one that failed (the forge shows it with a warning sign; the tracker keeps a
+failed run's error on its `git_webhook_deliveries` row): sdoc → Settings →
+Webhooks → the hook → Recent deliveries → the delivery → the replay icon
+("Replay this webhook."). Forgejo sends the payload again under a new
+delivery id, so the tracker answers 202 and processes it as new. Whatever
+nobody replays, including everything sent while the tracker was down, is
+filled in by the nightly reconcile.
+
+### `git:reconcile`
+
+It runs every night at 01:30 Nepal time from `tasks-scheduler`, and by hand
+from `tasks-web`'s terminal:
+
+```sh
+php artisan git:reconcile                   # every connection
+php artisan git:reconcile --connection=1    # one: the id at the end of its webhook URL
+```
+
+For each connection, in this order, each step on its own (one that fails is
+logged and the rest still run; an unreachable forge ends that connection's
+steps):
+
+1. **The webhook.** A deleted one is created again, with a new secret. One
+   that was switched off, pointed elsewhere (or still at an old `APP_URL`),
+   lost an event, or narrowed to some branches or another content type gets
+   every setting back, with the stored secret ("repaired the webhook"). The
+   forge never shows a hook's secret, so a secret changed there can't be
+   seen: every run writes the settings and the stored secret back, one
+   `PATCH` to the hook a night, and says nothing of it when the hook looked
+   right.
+2. **Each linked repository**, looked up by its forge id. Deleted on the
+   forge, or moved to another forge organization: unlinked, once every
+   repository has been looked at (the project's activity says "Unlinked
+   repository …", the log `Unlinked a repository the forge organization no
+   longer has.`), unless the unlinks are held back
+   ([below](#when-the-reconcile-holds-removals-back)). Renamed: its names
+   and addresses follow. Its link back is set again. Commits, branches and pull requests
+   since the last reconcile (less a day; 90 days the first time) are filled
+   in. Commits no branch holds any more (force-pushed, or squash-merged and
+   their branch deleted) are marked "Unreachable" on their tasks, never
+   deleted, and lose the mark if they come back. Branches gone from the
+   forge leave their tasks.
+3. **Owners.** Every active office admin of the office who has a forge
+   account is put in the forge organization's Owners team; anyone else the
+   tracker knows is taken out. `forge-admin`, every `{owner}-bot` and forge
+   accounts the tracker doesn't know are never touched, here or below.
+4. **Members.** Anyone the tracker no longer lets into the forge
+   organization (deactivated, moved to another office, taken off a
+   cross-organization project team) is removed from it.
+5. Deliveries older than 14 days are deleted.
+
+It prints one line per connection, such as `sdoc at
+https://git.sdoc.gov.np: reconciled 3 repositories.`, adding `, unlinked 1`,
+`, recreated the webhook` or `, repaired the webhook` when it did those. A
+failure reads `sdoc at …: failed (sdoc/app: The forge answered 500);
+reconciled 2 repositories.`, and the command exits non-zero. Its warnings and
+errors carry no token or secret. Production logs to standard error
+(`LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`): the nightly run's are in
+Dokploy, `tasks-scheduler` → Logs, a run by hand's in `tasks-web` → Logs.
+Locally they are in `storage/logs/laravel.log`. Every change to forge
+membership (an owner added or removed, someone taken out of the
+organization) and every unlinked repository is logged as a warning, so
+production keeps a record of it.
+
+### When the reconcile holds removals back
+
+The Owners and Members steps refuse to remove more than 5 people, or more
+than a quarter of the people the tracker knows in that forge organization if
+that is more, in one run. Past that limit the step removes nobody (Owners
+still gets its additions), logs `Held back forge removals: too many at once.`
+with the forge organization, the step (`owners` or `members`) and the
+counts, and the command exits non-zero with `members: Held back: it would
+remove 6 of the 6 people it knows there`. That many departures in one night
+is more often a broken setting (an empty `PM_SUPER_ADMINS`, the wrong
+database) than real ones, and a removal cannot be undone from the tracker.
+
+Unlinking repositories is held back the same way, all or none, because an
+unlink drops the repository's history from the tracker:
+
+- Before it unlinks anything, it asks the forge once whether the bot still
+  owns the forge organization. A bot taken off its Owners team, or an
+  organization deleted or renamed, makes every repository look gone. If it
+  doesn't own it under the connection's name, nothing is unlinked, the log
+  has `Held back repository unlinks: the bot no longer owns sdoc; check the
+  Organizations page.`, and the command exits non-zero with `unlinks: Held
+  back: the bot no longer owns sdoc; check the Organizations page`.
+- It unlinks at most 3 repositories of a connection, or a quarter of those
+  linked if that is more. Past that it unlinks none, logs `Held back
+  repository unlinks: too many at once.` with the counts, and exits non-zero
+  with `unlinks: Held back: it would unlink 4 of the 4 linked repositories`.
+
+When it trips:
+
+1. Find the warning in the logs (above) and note the step and the counts.
+2. Check that the departures are real: on the forge, the organization's
+   Members (or Teams → Owners); in the tracker, People, for each of them:
+   deactivated, moved to another office, off every project team of the office,
+   or no longer an office admin. If they are not, fix the tracker's setting
+   first; nothing was removed. For unlinks: the bot is in the forge
+   organization's Owners team, the organization still has the name the
+   tracker's **Organizations** page shows (after a rename, enter the new name
+   there), and the repositories really are deleted or moved.
+3. Once the departures are real, either remove the people who really left by
+   hand on the forge, as a super-admin (the organization → Members →
+   **Remove**, or Teams → Owners → **Remove**), so the next run finds
+   nothing to hold back, or lift the breakers for one run:
+
+   ```sh
+   php artisan git:reconcile --connection=1 --allow-removals
+   ```
+
+   It prints `Removal breakers lifted for this run (--allow-removals).`
+   first, then removes and unlinks everything it found, whatever the count.
+   It never lifts the check that the bot owns the organization. Suspend
+   anyone who must also lose their tokens and SSH keys
+   ([section 9](#9-offboarding)).
+
 ## Try it locally
 
 [`deploy/forgejo/local.sh`](../deploy/forgejo/local.sh) runs Forgejo from
 Homebrew on your machine with the settings of `compose.yml` (SQLite instead of
-Postgres, plain http on `127.0.0.1`, no mail) and connects it to your tracker,
+Postgres, plain http on `127.0.0.1`, no mail, no two-factor) and connects it to your tracker,
 exactly as the [bootstrap](#7-bootstrap) does in production. Homebrew has
 Forgejo 17, not 15; see [Forgejo 15 and 17](#forgejo-15-and-17).
 
@@ -608,8 +938,28 @@ the new secret.
 
 ### Before you start
 
-- The tracker is migrated (`php artisan migrate`) and running (`composer dev`)
-  at its `APP_URL`.
+- The tracker is migrated (`php artisan migrate`) and running (`composer dev`,
+  which also runs the queue listener that applies the forge's webhooks) at
+  its `APP_URL`.
+- `APP_URL` in `.env` is the address you actually browse the tracker at, and
+  one the forge can reach. The sign-in source, the forge's link back and the
+  webhook URL (`{APP_URL}/git/webhooks/{id}`) are all built from it, so an
+  `APP_URL` of `https://pmopm.test` while you browse `https://projects.test`
+  (where `pmopm.test` answers 502) breaks all three. Set it to the browsed
+  address and run `php artisan config:clear`; then `up` moves the sign-in
+  source, and, if git is already on, `php artisan git:reconcile` moves the
+  webhook and the link backs.
+- That address is a name, not `127.0.0.1` or `localhost`: Forgejo refuses an
+  external tracker on a loopback address ("External tracker URL not valid"),
+  so with `http://127.0.0.1:8000` linking a repository works but says "The
+  forge link back couldn't be set", and `TP-1` on the forge stays plain
+  text. Any `.test` name resolves to `127.0.0.1` here, so
+  `http://tracker.test:8000` reaches `php artisan serve` just as well.
+- Webhooks reach the tracker only on this machine: `app.ini` has
+  `ALLOWED_HOST_LIST = loopback`, which admits `127.0.0.1` and any name that
+  resolves to it (`projects.test` does, through the `.test` resolver;
+  check with `dscacheutil -q host -a name projects.test`). A tracker on
+  another address gets no deliveries.
 - Your super-admin's email is in `PM_SUPER_ADMINS` and has a login
   (`php artisan db:seed`).
 - SDOC exists (`php artisan db:seed --class=SdocProjectsSeeder`) and has a
@@ -639,24 +989,30 @@ use another one. The log is `forgejo.log` in the data directory. `up` stops
 with "port 3300 is in use by …" (or 2222) when another program holds a port.
 
 The first `up` installs Forgejo, writes `app.ini`, starts the server, creates
-`forge-admin`, `sdoc-bot` and the private organization `sdoc` (owned by
-`sdoc-bot`, the one-off `forge-admin` token deleted afterwards), writes
-`sdoc-bot`'s token to `sdoc-bot.token`, runs `php artisan passport:keys` if
-the signing keys are missing, registers the forge with `php artisan
-git:oidc-client`, and adds the sign-in source `sdoc-tasks` with the flags of
-[bootstrap step 5](#7-bootstrap) plus one local-only flag, `--skip-local-2fa`:
-locally the forge never asks for its own two-factor code after the tracker's
-sign-in (production leaves that flag off). It never prints a token or secret.
+`forge-admin` and `sdoc-bot`, makes `sdoc-bot` a bot user, creates the private
+organization `sdoc` (owned by `sdoc-bot`; as in production, `forge-admin` is a
+bot only while its one-off token lives, then an ordinary admin again, and the
+token is deleted), writes `sdoc-bot`'s token (`read:user,write:organization,write:repository`,
+as in [bootstrap step 2](#7-bootstrap)) to `sdoc-bot.token`, runs `php
+artisan passport:keys` if the signing keys are missing, registers the forge
+with `php artisan git:oidc-client`, and adds the sign-in source `sdoc-tasks`
+with the flags of [bootstrap step 5](#7-bootstrap) plus one local-only flag,
+`--skip-local-2fa`. Locally there is no two-factor: `app.ini` leaves out
+`GLOBAL_TWO_FACTOR_REQUIREMENT`, and the flag means the forge never asks for
+its own code even if you enrol one. Production has neither. It never prints a
+token or secret.
 
 Running `up` again reuses all of that, so the bot token and the sign-in
 source stay as they are. Two things make it replace one:
 
 - The tracker's Forgejo client is gone or was replaced (a fresh database), or
   `TRACKER_URL` changed. `up` then runs `php artisan git:oidc-client` again
-  (a new client, or a new secret for the existing one), updates the source,
-  and restarts the forge.
-- The forge no longer has the bot token in `sdoc-bot.token`. `up` writes a
-  new one; turn git on again with it.
+  (a new client, or a new secret for the existing one), updates the source
+  (which keeps `--skip-local-2fa` from when it was added, since `update-oauth`
+  ignores that flag), and restarts the forge.
+- The forge no longer has the bot token in `sdoc-bot.token`, or has it
+  without `write:repository` (a token from before phase 1). `up` writes a new
+  one; turn git on again with it (step 1 below), which keeps the webhook.
 
 `php artisan` runs with the tracker's `.env`, so it writes the client into the
 tracker's database. If `up` says the tracker "calls itself" another address,
@@ -673,10 +1029,14 @@ The forge, a Go program, must trust the tracker's certificate. `https://pmopm.te
 program using the system roots got the proxy's answer, not a certificate
 error. If yours fails, the sign-in stops after the tracker with an `x509`
 error in `forgejo.log`. Then use plain http on this machine: set
-`APP_URL=http://127.0.0.1:8000` in `.env`, run `php artisan config:clear`,
-serve the tracker with `php artisan serve` (port 8000), and run
-`TRACKER_URL=http://127.0.0.1:8000 deploy/forgejo/local.sh up`, which moves
-the sign-in source to that address.
+`APP_URL=http://tracker.test:8000` in `.env` (a name, for the link back;
+it resolves to `127.0.0.1`), run `php artisan config:clear`, serve the
+tracker with `php artisan serve` (port 8000), and run
+`TRACKER_URL=http://tracker.test:8000 deploy/forgejo/local.sh up`, which
+moves the sign-in source to that address. Then run `php artisan
+git:reconcile`, which moves the webhook and every linked repository's link
+back to the new address too ("repaired the webhook"); turning git on again
+keeps the webhook as it is.
 
 ### Checks
 
@@ -689,7 +1049,8 @@ the sign-in source to that address.
 
    then, as a super-admin in the tracker: Organizations, Git on SDOC,
    forge address http://127.0.0.1:3300, forge organization sdoc, paste the bot
-   token, Turn on git. It says "Git is on."
+   token, Turn on git. It says "Git is on.", and the forge has the
+   tracker's webhook (sdoc, Settings, Webhooks).
 
 2. Sign in. Open http://127.0.0.1:3300 in a private window, a new one for each
    person, and choose "Sign in with sdoc-tasks":
@@ -713,6 +1074,16 @@ the sign-in source to that address.
    sdoc (sdoc, Teams, New team, then add the member). In the tracker,
    deactivate the member: the confirmation says "<git_username> was removed
    from the forge.", and they are gone from sdoc's Members on the forge.
+
+5. Code, with an SDOC office admin who has signed in to the forge (step 2).
+   Run php artisan git:reconcile, which puts them in sdoc's Owners team. As
+   them, on the forge: a new repository owned by sdoc, and a pushed commit
+   naming a task code, such as "SG-1 first change". In the tracker, the
+   project's Code tab, Link repository: the commit shows on SG-1. Pushes,
+   a branch sg-1-thing and its pull request then show there within
+   seconds, and SG-1 on the forge links back to the task if the tracker's
+   address is a name, not 127.0.0.1 or localhost (docs/forgejo.md,
+   section 8 and Try it locally).
 ```
 
 ### Clean up
@@ -732,9 +1103,13 @@ settings as `compose.yml` except SQLite, plain http on `127.0.0.1` and SSH on
 a local port: the sign-in against this tracker, and separately the bootstrap
 (password basic auth refused, tokens accepted in a header and as the
 basic-auth password, regular users refused an organization, the
-create-hand-over-leave sequence, the token deleted in the database) and
-suspension (API, HTTPS and SSH all refused). What carries over to 15.0.11,
-from Forgejo's source and cheat sheets:
+create-hand-over-leave sequence, the token deleted in the database),
+suspension (API, HTTPS and SSH all refused), and the two-factor requirement
+(the first person to sign in not made admin, enrolment, the passcode after
+the tracker, tokens and git over HTTP refused before enrolling and working
+after, the bot token, `forge-admin`'s bot window in step 3 ending at type 0
+even when a call fails, `reset-mfa` and **Reset 2FA**). What carries over to
+15.0.11, from Forgejo's source and cheat sheets:
 
 - The OIDC path is the same code in both: the same `goth` v1.82.0 provider
   and the same `providers_openid.go`. It fills "nickname" from `nickname`,
@@ -750,6 +1125,21 @@ from Forgejo's source and cheat sheets:
   `service.ADD_MEMBERS_BY_INVITATIONS` exists only from 16; the container
   image's `REVERSE_PROXY_TRUSTED_PROXIES` default is `*` before 16. Every
   other key in `compose.yml` is in both cheat sheets.
+- Two-factor, the same code at the `v15.0.11` and `v17.0.1` tags:
+  `GLOBAL_TWO_FACTOR_REQUIREMENT` takes `none`, `all` or `admin`, anything
+  else meaning `none`; `MustHaveTwoFactor` exempts Actions users and every
+  user that isn't an individual, so bot users; the API's 403 is the same
+  check (17 only adds token methods ahead of it); so are the web redirect to
+  Settings → Security, the SSH refusal (`routers/private/serv.go`), the
+  source's `SkipLocalTwoFA`, `forgejo admin user reset-mfa` and the admin
+  UI's Reset 2FA (both delete the TOTP and security keys).
+- Why `forge-admin` is not a bot, in both: `handleUserCreated` makes the
+  only individual user a site admin, and `IsLastAdminUser` counts only
+  individual admins. With `forge-admin` a bot, the first SDOC member to sign
+  in on 17.0.1 became a site admin (the `forge-admins` demotion failed with
+  "can not delete the last admin user", after the session was already
+  made).
 - `forgejo admin auth add-oauth` has the same flags in both (17 adds
-  `--dyn-group-maps`, unused here). Neither has a CLI command to suspend a
-  user or delete a token.
+  `--dyn-group-maps`, unused here). `update-oauth` ignores
+  `--skip-local-2fa` in both. Neither has a CLI command to suspend a user or
+  delete a token.

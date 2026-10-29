@@ -33,8 +33,12 @@ class AuthController extends Controller
 
         // Signing in on the way to the forge: a full page visit, so the
         // browser (not the SPA's XHR) follows /oauth/authorize off to the forge.
-        if (str_starts_with($redirect->getTargetUrl(), route('passport.authorizations.authorize'))) {
-            return Inertia::location($redirect->getTargetUrl());
+        // The same for the forge's link back (/workspace/go/...), whose 404
+        // would otherwise open in the SPA's error overlay on the login page.
+        $target = $redirect->getTargetUrl();
+
+        if (str_starts_with($target, route('passport.authorizations.authorize')) || str_starts_with($target, url('/workspace/go').'/')) {
+            return Inertia::location($target);
         }
 
         return $redirect;

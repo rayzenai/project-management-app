@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Member;
 use App\Models\User;
+use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -90,6 +91,8 @@ class AuthController extends Controller
             'is_office_admin' => WorkspaceAccess::officeAdminOrganizationId($user) !== null,
             'led_team_ids' => WorkspaceAccess::ledTeamIds($user),
             'features' => $user->features(),
+            // The twin of the web's gitEnabled: the user may use git somewhere.
+            'git_enabled' => GitAccess::anyFor($user),
         ];
     }
 }

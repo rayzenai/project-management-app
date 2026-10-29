@@ -126,6 +126,7 @@ class ProgressReport
 
         $activity = ProjectActivity::query()
             ->whereIn('project_id', $projectIds)
+            ->codeVisibleTo(request()->user())
             ->with(['user', 'task.project', 'project'])
             ->latest()
             ->limit(20)

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -203,6 +204,40 @@ class Task extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(TaskComment::class);
+    }
+
+    /**
+     * The branches, commits and pull requests that mention this task.
+     *
+     * @return HasMany<TaskGitLink, $this>
+     */
+    public function gitLinks(): HasMany
+    {
+        return $this->hasMany(TaskGitLink::class);
+    }
+
+    /**
+     * @return MorphToMany<GitPullRequest, $this, TaskGitLink>
+     */
+    public function pullRequests(): MorphToMany
+    {
+        return $this->morphedByMany(GitPullRequest::class, 'linkable', 'task_git_links')->using(TaskGitLink::class)->withPivot('created_at');
+    }
+
+    /**
+     * @return MorphToMany<GitBranch, $this, TaskGitLink>
+     */
+    public function branches(): MorphToMany
+    {
+        return $this->morphedByMany(GitBranch::class, 'linkable', 'task_git_links')->using(TaskGitLink::class)->withPivot('created_at');
+    }
+
+    /**
+     * @return MorphToMany<GitCommit, $this, TaskGitLink>
+     */
+    public function commits(): MorphToMany
+    {
+        return $this->morphedByMany(GitCommit::class, 'linkable', 'task_git_links')->using(TaskGitLink::class)->withPivot('created_at');
     }
 
     /**

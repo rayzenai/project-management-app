@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * An organization's link to a forge organization (Forgejo). The bot token and
@@ -50,6 +51,14 @@ class GitConnection extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * @return HasMany<GitRepository, $this>
+     */
+    public function repositories(): HasMany
+    {
+        return $this->hasMany(GitRepository::class);
     }
 
     /**

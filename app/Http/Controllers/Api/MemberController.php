@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\RespondsWithServiceResult;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Http\Resources\MemberResource;
+use App\Jobs\SyncForgeOwners;
 use App\Models\Member;
 use App\Models\User;
 use App\Services\Workspace\RemoveFromForgeService;
@@ -79,10 +80,12 @@ class MemberController extends Controller
         }
 
         $deactivated = false;
+        $ownersChanged = [];
 
-        DB::transaction(function () use ($request, $member, &$deactivated): void {
+        DB::transaction(function () use ($request, $member, &$deactivated, &$ownersChanged): void {
             $member->update($request->safe()->except(['team_ids', 'password']));
             $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
+            $ownersChanged = SyncForgeOwners::organizationsChangedBy($member);
 
             if ($request->has('team_ids')) {
                 $member->teams()->sync($request->validated('team_ids', []));
@@ -114,6 +117,8 @@ class MemberController extends Controller
                 $user->save();
             }
         });
+
+        SyncForgeOwners::dispatchFor($ownersChanged);
 
         return response()->json([
             'message' => $deactivated

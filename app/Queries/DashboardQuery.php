@@ -83,6 +83,7 @@ class DashboardQuery
         // writes false), so that scope guaranteed an empty feed.
         $recentActivity = array_values(ProjectActivity::query()
             ->whereIn('project_id', $visibleProjectIds)
+            ->codeVisibleTo($user)
             ->recent(14)
             ->with(['user', 'task.project', 'project'])
             ->latest()

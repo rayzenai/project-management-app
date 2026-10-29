@@ -77,6 +77,74 @@ export interface ProjectTeam {
     can_choose_manager: boolean;
 }
 
+/** A pull request on the forge (GitPullRequestResource). */
+export interface GitPullRequest {
+    id: Id;
+    number: number;
+    title: string;
+    state: 'open' | 'merged' | 'closed';
+    url: string;
+    head_branch: string;
+    author_username: string | null;
+    /** owner/name, on a task's Code section, where several repositories meet. */
+    repository?: string;
+    opened_at: string;
+    merged_at: string | null;
+    closed_at: string | null;
+}
+
+/** A forge repository linked to a project (GitRepositoryResource). */
+export interface GitRepository {
+    id: Id;
+    owner: string;
+    name: string;
+    full_name: string;
+    html_url: string;
+    clone_url: string;
+    ssh_url: string;
+    default_branch: string;
+    last_pushed_at: string | null;
+    created_at: string | null;
+    /** The newest open ones, ten at most. */
+    open_pull_requests?: GitPullRequest[];
+    /** Every open one, however many the list shows. */
+    open_pull_requests_count?: number;
+}
+
+/** A project's Code tab; the page gets null when its organization has no git. */
+export interface ProjectGit {
+    repositories: GitRepository[];
+    /** Link and unlink: its manager, office admin, super-admin. */
+    can_manage: boolean;
+}
+
+/** A forge repository the Link repository search offers. */
+export interface RepositoryCandidate {
+    full_name: string;
+    name: string;
+    description: string | null;
+    html_url: string | null;
+}
+
+/** A task's Code section (TaskCodeQuery); null when there is no git. */
+export interface TaskCode {
+    /** The branch to start for it: tp-12-fix-login. */
+    branch_name: string;
+    pull_requests: GitPullRequest[];
+    branches: { id: Id; name: string; repository: string; url: string }[];
+    /** The latest ten; an unreachable one vanished from its branches. */
+    commits: {
+        id: Id;
+        subject: string;
+        short_sha: string;
+        url: string;
+        author: string;
+        repository: string;
+        committed_at: string;
+        unreachable: boolean;
+    }[];
+}
+
 export interface OrganizationOption {
     id: Id;
     name: string;
@@ -206,6 +274,8 @@ export interface Task {
     /** Tasks this one waits for, and tasks waiting for it (same project). */
     dependencies?: TaskRef[];
     dependents?: TaskRef[];
+    /** On a project page with git: a pull request mentions the task. */
+    has_pull_request?: boolean;
     created_at?: string;
     updated_at?: string;
 }
@@ -329,6 +399,8 @@ export interface TaskPreview {
     comments_count: number;
     /** The rest of the task's project, for the dependency picker. */
     dependency_candidates?: TaskRef[];
+    /** The Code section; null when the organization has no git. */
+    code?: TaskCode | null;
 }
 
 /** A task in a dependency list or picker (TaskResource::reference). */
@@ -490,5 +562,7 @@ export interface SharedProps {
     unreadNotifications?: number;
     themeCatalogue?: ThemeCatalogue;
     features?: Features;
+    /** The user may use git somewhere (GitAccess): the Guide's Code section. */
+    gitEnabled?: boolean;
     [key: string]: unknown;
 }

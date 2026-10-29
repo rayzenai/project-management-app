@@ -29,6 +29,7 @@ php artisan workspace:prune-trashed --pretend
 php artisan workspace:send-deadline-reminders --pretend
 php artisan passport:keys                         # local OIDC signing keys (storage/oauth-*.key)
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback   # the forge's OIDC client
+php artisan git:reconcile [--connection=1]        # the nightly forge repair, by hand
 ```
 
 Output of pint/phpstan/pest is rewritten to JSON by `laravel/pao`; when a PHP
@@ -39,8 +40,9 @@ vendor/bin/pest > file 2>&1` and read the file.
 
 - `app/Providers/AppServiceProvider.php` — the `manage-workspace` Gate (from
   `config('project-management.super_admins')`), the strict morph map (`user`,
-  `task`, `task-comment`, `project-note`, `project-contact`, `subtask`,
-  `project-assignment`, `team`, `member`), and the six observers.
+  `task`, `task-comment`, `task-dependency`, `project-note`, `project-contact`,
+  `subtask`, `project-assignment`, `team`, `member`, `git-repository`,
+  `git-branch`, `git-commit`, `git-pull-request`), and the observers.
 - `routes/web.php` — `/workspace/*` (Inertia, `auth` + `ShareWorkspaceData`),
   guest login routes, `/` redirect. `routes/api.php` — `/api/v1/*` (Sanctum).
   `routes/console.php` — the daily schedule.
@@ -119,7 +121,8 @@ manager), `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
 `canViewTeamProgress`, `canViewProjectProgress`,
 `canCreateMember`, `canManageMember`, `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canManageProjectAccess`,
-`canPublishProject`, `ledTeamIds`. Visibility scopes: `Project`, `Team` and
+`canPublishProject`, `canViewProjectCode`, `canManageProjectRepositories`,
+`ledTeamIds`. Visibility scopes: `Project`, `Team` and
 `Member::scopeVisibleTo`. Memos are per user instance and flushed on every
 `RouteMatched`/`RequestHandled`.
 
@@ -242,7 +245,9 @@ Spec: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
   (`resources/js/lib/taskCode.ts`); search finds it by current or old key.
 - **Git connection** (`GitConnection`, `Organization::gitConnection()`): one
   per organization (forge base URL, forge organization `owner`, encrypted
-  hidden bot token). An organization "has git" when it has one. Super-admin
+  hidden bot token, whose forge user `{owner}-bot` is a Forgejo bot user
+  because the forge requires 2FA of every person and exempts only bots;
+  `docs/forgejo.md`). An organization "has git" when it has one. Super-admin
   only (`canManageGit`), checked against the forge by `EnableGitService` before
   saving. `base_url` is https (plain http only for a forge on 127.0.0.1,
   localhost or ::1), and a forge organization connects to one office only.
@@ -279,6 +284,71 @@ Spec: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
   (a cross-organization team's outsiders included); a deactivated or missing
   member gets none, and none means a 403 at `/oauth/authorize`.
   A connected forge must sign people in only through this tracker, so forge usernames are the tracker's; removal on deactivation walks every connected forge organization by that name.
+
+## Git (Forgejo), phase 1
+
+Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
+`docs/forgejo.md` (section 12: webhook, queue, reconcile).
+
+- **Models**: `GitRepository` (linked to one project; unique
+  `(git_connection_id, forge_id)`, so a forge repository links to at most one
+  project), `GitBranch`, `GitCommit` (`unreachable_at`, never deleted),
+  `GitPullRequest` (`open|merged|closed`, `forge_updated_at` guards against
+  older snapshots), linked to tasks through `TaskGitLink` (`task_git_links`,
+  a `MorphPivot` with its own `git_repository_id` cascade). Morph map:
+  `git-repository`, `git-branch`, `git-commit`, `git-pull-request`.
+  `GitWebhookDelivery` keeps each delivery once by its UUID (14 days).
+- **One linking path**: `App\Services\Git\GitIngest` upserts branches,
+  commits and pull requests and links them to tasks through
+  `App\Support\Git\TaskReferences` (the key parser; uppercase only in text,
+  any case in branch names; code, fences and URLs skipped). Keys resolve
+  within the repository's organization (current keys and aliases); unknown
+  keys and trashed tasks link nothing. Webhooks (`ProcessGitDelivery`),
+  backfill (`BackfillGitRepository`, `RepositorySync::catchUp`) and the
+  reconcile all go through it; `ForgeShapes` maps forge JSON once. Nothing in
+  phase 1 changes a task's status, a merge included.
+- **Access**: viewing code needs `canViewProjectCode`: git on, and the
+  project's team (any role, while the member is active), its organization's
+  office admins or a super-admin; not other viewers of a public project. Its
+  query twin is `Project::scopeCodeVisibleTo`; keep them in step. Linking
+  and unlinking needs `canManageProjectRepositories` (manager, office admin,
+  super-admin, git on). A task shows code only from repositories whose
+  project's code the viewer may see (`TaskCodeQuery::inVisibleRepositories`,
+  on `codeVisibleTo`, also on the board's `has_pull_request`), and a pull
+  request writes task activity only on tasks of its repository's own
+  project, with no user (the forge did it). `gitEnabled` (web) /
+  `git_enabled` (API `userPayload`) say whether `GitAccess` admits the user
+  anywhere; the Guide's Code section shows only then.
+  `/workspace/go/{org}/{index}` (the forge's link back) 404s, never 403s, a
+  task the caller can't view; signing in on the way there is a full page
+  visit.
+- **Webhook**: `POST /git/webhooks/{connection}` (`git.webhook`, outside the
+  `web` group, throttled), one organization hook per connection made by
+  `EnableGitService`. HMAC-SHA256 over the raw body with the connection's
+  `webhook_secret`, else 403; over 2 MB 413; a replayed delivery 200 and not
+  processed twice. Jobs go through `App\Support\Background::dispatch` (after
+  the response on the sync queue; the `tasks-queue` worker otherwise).
+- **Reconcile**: `git:reconcile [--connection=] [--allow-removals]`, daily
+  at 01:30. Per connection: recreate the hook, or write its settings and
+  stored secret back (every run: the forge hides secrets),
+  `RepositorySync::reconcile` each repository (by forge id; mark
+  unreachable; prune branches; a 404 or transfer only reports it gone),
+  then `RepositorySync::unlinkGone` (all or none: only while the bot still
+  owns the forge organization under that name, and at most max(3, 25%) of
+  the linked repositories, else `UnlinksHeldBack`), `ForgeMembership`
+  (Owners = active office admins; remove people `GitAccess` no longer
+  admits), prune deliveries. Never touches `forge-admin`, `{owner}-bot` or
+  logins the tracker doesn't know. Circuit breaker: a step that would remove
+  more than max(5, 25%) of the tracker-known logins removes nobody
+  (`TooManyForgeRemovals`) and the command exits non-zero;
+  `--allow-removals` lifts both breakers (not the ownership check) for one
+  run. Membership changes and unlinks log at `warning` (production's level).
+  Office-admin flag changes run `SyncForgeOwners` at once. Re-pointing a
+  connection (another forge or owner) unlinks its repositories; turning git
+  off points each back at the forge's own issue tracker first.
+- **UI**: the project's Code tab (`project/CodeView.svelte`), the task's Code
+  section (`TaskCodePanel.svelte`, Peek and full page), the board card's
+  pull-request mark; absent without git.
 
 ## Semantic theming layer (web UI)
 

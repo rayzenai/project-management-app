@@ -28,6 +28,10 @@ class ProjectActivityRecorder
      * runs before the `create_project_activities_table` migration). Without
      * this guard, RefreshDatabase test runs blow up before the suite starts.
      *
+     * With $system, no one is credited: the entry is something the forge
+     * brought in (a webhook, a backfill, the reconcile), which may run inside
+     * someone's request without being their doing.
+     *
      * @param  array<string, mixed>|null  $changes
      */
     public static function record(
@@ -36,6 +40,7 @@ class ProjectActivityRecorder
         string $action,
         string $description,
         ?array $changes = null,
+        bool $system = false,
     ): ?ProjectActivity {
         if (! self::tableExists()) {
             return null;
@@ -44,7 +49,7 @@ class ProjectActivityRecorder
         return ProjectActivity::create([
             'project_id' => Task::withTrashed()->whereKey($taskId)->value('project_id'),
             'task_id' => $taskId,
-            'user_id' => auth()->id(),
+            'user_id' => $system ? null : auth()->id(),
             'subject_type' => $subject->getMorphClass(),
             'subject_id' => $subject->getKey(),
             'action' => $action,
@@ -56,6 +61,7 @@ class ProjectActivityRecorder
 
     /**
      * Write an entry about the project itself rather than one of its tasks.
+     * $system as for record().
      *
      * @param  array<string, mixed>|null  $changes
      */
@@ -65,6 +71,7 @@ class ProjectActivityRecorder
         string $action,
         string $description,
         ?array $changes = null,
+        bool $system = false,
     ): ?ProjectActivity {
         if (! self::tableExists()) {
             return null;
@@ -73,7 +80,7 @@ class ProjectActivityRecorder
         return ProjectActivity::create([
             'project_id' => $project->id,
             'task_id' => null,
-            'user_id' => auth()->id(),
+            'user_id' => $system ? null : auth()->id(),
             'subject_type' => $subject->getMorphClass(),
             'subject_id' => $subject->getKey(),
             'action' => $action,

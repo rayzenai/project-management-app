@@ -24,6 +24,7 @@
     import PriorityFlag from './PriorityFlag.svelte';
     import ProgressRing from './ProgressRing.svelte';
     import StatusChip from './StatusChip.svelte';
+    import TaskCodePanel from './TaskCodePanel.svelte';
     import TaskDependencies from './TaskDependencies.svelte';
 
     const NOTE_TYPES: { value: string; label: string }[] = [
@@ -1144,6 +1145,10 @@
                             </div>
                         {/if}
                     </section>
+                {/if}
+
+                {#if preview?.code}
+                    <TaskCodePanel code={preview.code} />
                 {/if}
 
                 {#if preview}

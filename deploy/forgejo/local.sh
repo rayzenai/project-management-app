@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A Forgejo on this machine that signs people in through this tracker, with
 # the production settings of deploy/forgejo/compose.yml. The differences:
-# SQLite instead of Postgres, plain http on 127.0.0.1, no mail. Guide:
-# docs/forgejo.md, "Try it locally".
+# SQLite instead of Postgres, plain http on 127.0.0.1, no mail, no two-factor.
+# Guide: docs/forgejo.md, "Try it locally".
 #
 #   deploy/forgejo/local.sh up      install, start and set up (safe to run again)
 #   deploy/forgejo/local.sh status  running or not, and whether the sign-in source exists
@@ -120,6 +120,8 @@ ROOT = $DIR/repositories
 DEFAULT_PRIVATE = private
 
 [security]
+; compose.yml also sets GLOBAL_TWO_FACTOR_REQUIREMENT = all. Left out on
+; purpose: besides mail and http, the one deliberate difference.
 INSTALL_LOCK = true
 SECRET_KEY = $secret_key
 ; No proxy here: trust only this machine.
@@ -245,16 +247,37 @@ create_user() {
         --random-password --must-change-password=false >/dev/null
 }
 
+# Forgejo's two-factor requirement exempts bot users, and sdoc-bot can't enrol;
+# neither the CLI nor the API sets the type. Before its token is made, as in
+# production (docs/forgejo.md, Bootstrap step 2).
+make_bot() {
+    if [[ $(sql "SELECT type FROM user WHERE lower_name = 'sdoc-bot'") == 4 ]]; then
+        say "sdoc-bot is a bot user"
+        return
+    fi
+    say "Making sdoc-bot a bot user"
+    sql "UPDATE user SET type = 4 WHERE lower_name = 'sdoc-bot'"
+}
+
+# forge-admin stays an ordinary user, so Forgejo never takes the first person
+# to sign in for its only user (and makes them site admin). Under the
+# two-factor requirement an ordinary user's token is refused, so it is a bot
+# only while the one-off token below is in use.
+set_admin_type() { sql "UPDATE user SET type = $1 WHERE lower_name = 'forge-admin'"; }
+
 # Users can't create organizations, so forge-admin creates sdoc with a one-off
-# token, makes sdoc-bot an owner and leaves; the token is then deleted. A run
-# that stopped half-way is finished by the next one.
+# token, makes sdoc-bot an owner and leaves; the token is then deleted and
+# forge-admin is an ordinary user again, even when a step fails. A run that
+# stopped half-way is finished by the next one.
 create_org() {
     if bot_owns_sdoc && ! admin_in_sdoc; then
         say "sdoc exists, owned by sdoc-bot"
+        end_bootstrap
         return
     fi
     say "Setting up the private organization sdoc, owned by sdoc-bot"
-    trap delete_bootstrap_token EXIT
+    trap end_bootstrap EXIT
+    set_admin_type 4
     ADMIN_TOKEN=$(fj admin user generate-access-token --username forge-admin \
         --token-name bootstrap --scopes write:organization --raw) \
         || die "making forge-admin's one-off token failed (see above)."
@@ -268,8 +291,9 @@ create_org() {
     admin_api "making sdoc-bot an owner of sdoc" PUT "/teams/$owners/members/sdoc-bot"
     admin_api "taking forge-admin out of sdoc" DELETE /orgs/sdoc/members/forge-admin
     ADMIN_TOKEN=
-    delete_bootstrap_token
+    end_bootstrap
     trap - EXIT
+    say "forge-admin is an ordinary site admin again (type $(sql "SELECT type FROM user WHERE lower_name = 'forge-admin'"))"
 }
 
 # admin_api STEP METHOD PATH [curl args]: a forge API call with the one-off
@@ -310,23 +334,35 @@ delete_bootstrap_token() {
          AND uid = (SELECT id FROM user WHERE lower_name = 'forge-admin')"
 }
 
+end_bootstrap() {
+    delete_bootstrap_token
+    set_admin_type 0
+}
+
 BOT_TOKEN_ROW="FROM access_token WHERE name = 'tasks-sdoc'
     AND uid = (SELECT id FROM user WHERE lower_name = 'sdoc-bot')"
+# As in production (docs/forgejo.md, Bootstrap step 2).
+BOT_SCOPES=read:user,write:organization,write:repository
 
+# A token from before phase 1 lacks write:repository, so it is replaced too.
 write_bot_token() {
-    if [[ -s $TOKEN_FILE && $(sql "SELECT count(*) $BOT_TOKEN_ROW") != 0 ]]; then
+    local scope
+    scope=$(sql "SELECT scope $BOT_TOKEN_ROW")
+    if [[ -s $TOKEN_FILE && ,$scope, == *,write:repository,* ]]; then
         say "sdoc-bot's token is in $TOKEN_FILE"
         return
     fi
-    if [[ -s $TOKEN_FILE ]]; then
+    if [[ -s $TOKEN_FILE && -n $scope ]]; then
+        say "The token in $TOKEN_FILE can't write repositories (it predates phase 1); turn git on again with the new one"
+    elif [[ -s $TOKEN_FILE ]]; then
         say "The forge no longer has the token in $TOKEN_FILE; turn git on again with the new one"
     fi
-    say "Writing a read:user,write:organization token for sdoc-bot to $TOKEN_FILE"
+    say "Writing a $BOT_SCOPES token for sdoc-bot to $TOKEN_FILE"
     sql "DELETE $BOT_TOKEN_ROW"
     (
         umask 077
         fj admin user generate-access-token --username sdoc-bot --token-name tasks-sdoc \
-            --scopes read:user,write:organization --raw | tr -d '\n' >"$TOKEN_FILE"
+            --scopes "$BOT_SCOPES" --raw | tr -d '\n' >"$TOKEN_FILE"
     )
 }
 
@@ -387,9 +423,10 @@ setup_sign_in() {
             --skip-local-2fa
     else
         say "Updating the sign-in source $SOURCE for the new client"
+        # update-oauth ignores --skip-local-2fa (Forgejo 15 and 17), so it is
+        # left out here: the source keeps the value add-oauth gave it above.
         fj admin auth update-oauth --id "$id" --key "$client" --secret "$secret" \
-            --auto-discover-url "$tracker/.well-known/openid-configuration" \
-            --skip-local-2fa
+            --auto-discover-url "$tracker/.well-known/openid-configuration"
         # The running server keeps a source's old settings until it restarts.
         stop_forge
         start_forge
@@ -409,7 +446,8 @@ in through $1.
 
    then, as a super-admin in the tracker: Organizations, Git on SDOC,
    forge address $FORGE_URL, forge organization sdoc, paste the bot
-   token, Turn on git. It says "Git is on."
+   token, Turn on git. It says "Git is on.", and the forge has the
+   tracker's webhook (sdoc, Settings, Webhooks).
 
 2. Sign in. Open $FORGE_URL in a private window, a new one for each
    person, and choose "Sign in with sdoc-tasks":
@@ -434,6 +472,16 @@ in through $1.
    deactivate the member: the confirmation says "<git_username> was removed
    from the forge.", and they are gone from sdoc's Members on the forge.
 
+5. Code, with an SDOC office admin who has signed in to the forge (step 2).
+   Run php artisan git:reconcile, which puts them in sdoc's Owners team. As
+   them, on the forge: a new repository owned by sdoc, and a pushed commit
+   naming a task code, such as "SG-1 first change". In the tracker, the
+   project's Code tab, Link repository: the commit shows on SG-1. Pushes,
+   a branch sg-1-thing and its pull request then show there within
+   seconds, and SG-1 on the forge links back to the task if the tracker's
+   address is a name, not 127.0.0.1 or localhost (docs/forgejo.md,
+   section 8 and Try it locally).
+
 deploy/forgejo/local.sh down stops the forge, up starts it again, and reset
 deletes it.
 EOF
@@ -449,6 +497,7 @@ cmd_up() {
     start_forge
     create_user forge-admin --admin
     create_user sdoc-bot
+    make_bot
     create_org
     write_bot_token
     ensure_passport_keys

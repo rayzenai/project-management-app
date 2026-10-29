@@ -45,7 +45,7 @@ the same `app/Services/Workspace/*` action service.
 | --- | --- | --- | --- |
 | POST | `/login` | `email`, `password`, `device_name` | `{ token, user }` |
 | POST | `/logout` | — | `{ message }` (revokes the current token) |
-| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, features }`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off) |
+| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, features, git_enabled }`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled` |
 
 ## Appearance, preferences & themes
 
@@ -197,8 +197,8 @@ progress, an office admin their whole organization, a super-admin everything.
 | POST | `/workspace/organizations` | `name` (unique) |
 | PATCH | `/workspace/organizations/{organization}` | `name` |
 | DELETE | `/workspace/organizations/{organization}` | 422 unless it has no people, teams or projects |
-| POST | `/workspace/organizations/{organization}/git` | `base_url` (https; plain http only for `127.0.0.1`, `localhost` or `::1`), `owner` (the forge organization), `token` (a bot token). Checks the token against the forge (`GET /api/v1/user`, then the user's permissions on `owner`) and saves it encrypted; calling again replaces the connection. 422 with `Couldn't reach the forge at {base_url}.`, `The forge refused that token.` or `{login} doesn't own {owner} on the forge.`, and nothing is saved. Validation 422s: `base_url` for plain http elsewhere, `owner` with `{owner} is already connected to another office.` when another organization has the same forge organization (case-insensitive) on the same forge |
-| DELETE | `/workspace/organizations/{organization}/git` | Turns git off by removing the connection |
+| POST | `/workspace/organizations/{organization}/git` | `base_url` (https; plain http only for `127.0.0.1`, `localhost` or `::1`), `owner` (the forge organization), `token` (a bot token). Checks the token against the forge (`GET /api/v1/user`, then the user's permissions on `owner`) and saves it encrypted; calling again replaces the connection, and pointing it at another forge or forge organization unlinks the repositories it had (`Git is on. Unlinked {n} repositories that were on the old forge.`). 422 with `Couldn't reach the forge at {base_url}.`, `The forge refused that token.` or `{login} doesn't own {owner} on the forge.`, and nothing is saved. Validation 422s: `base_url` for plain http elsewhere, `owner` with `{owner} is already connected to another office.` when another organization has the same forge organization (case-insensitive) on the same forge |
+| DELETE | `/workspace/organizations/{organization}/git` | Turns git off: deletes the forge webhook, points each linked repository back at the forge's own issue tracker (best effort; a forge that is down or refuses never keeps git on), then removes the connection and its links |
 
 On the JSON API these are `POST|DELETE /api/v1/workspace/organizations/{organization}/git`
 (names `api.workspace.organizations.git.store|destroy`); success returns the
@@ -218,6 +218,71 @@ returns it as `team { id, is_cross_organization, members: [{ id, name, email, ti
 | DELETE | `/workspace/teams/{team}/members/{member}` | 422 for the manager: make someone else manager first |
 | PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member); `role: member` on the manager is a 422 |
 
+## Code repositories *(only in an organization with git on; list: the project's team, its office admin or a super-admin; the rest: its manager, its office admin or a super-admin)*
+
+A project links repositories of its organization's forge organization. Every
+route answers 403 when the organization has no git connection, whoever asks.
+A repository payload is `{ id, owner, name, full_name, html_url, clone_url,
+ssh_url, default_branch, last_pushed_at, created_at }`; nothing of the
+connection (never the bot token). On the project show it adds
+`open_pull_requests` (the 10 newest open ones) and `open_pull_requests_count`.
+A pull request is `{ id, number, title, state (open|merged|closed), url,
+head_branch, author_username, repository?, opened_at, merged_at, closed_at }`
+(`repository` is the `full_name`, given in a task's `code`); its body stays
+on the forge.
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| GET | `/workspace/projects/{slug}/repositories` | the project's repositories, by name (JSON API only; the web Code tab gets them with the project) |
+| GET | `/workspace/projects/{slug}/repositories/candidates?q=` | `{ data: [{ full_name, name, description, html_url }] }`: up to 50 repositories of the forge organization that no project links yet, by name, `q` matching the name in any case. 502 with the forge's answer (`The forge answered 500.`) when it can't list them |
+| POST | `/workspace/projects/{slug}/repositories` | `full_name` (`owner/name`, no `.` or `..` part). The forge decides: 422 with `That repository isn't in the {owner} organization on the forge.` (also when the forge has no such repository), `That repository is already linked to {project title}.` (`another project` when the caller can't see it), `Couldn't reach the forge at {base_url}.` or `The forge answered {status}. Try again shortly.`. On success: `Linked {full_name}.`, the forge's external tracker is set to `{APP_URL}/workspace/go/{user}/{index}` (style `alphanumeric`), and a backfill is queued (open pull requests and those updated in the last 90 days, every branch, the default branch's commits of the last 90 days, all linked to tasks without changing any). When the forge refuses the external tracker the link stands and the message adds ` The forge link back couldn't be set; the nightly reconcile will retry.` |
+| DELETE | `/workspace/projects/{slug}/repositories/{repository}` | `Unlinked {full_name}. The repository is untouched on the forge.`: its branches, commits, pull requests and task links go; nothing changes on the forge. 404 for a repository of another project |
+
+On the JSON API these are `/api/v1/workspace/projects/{slug}/repositories…`
+(names `api.workspace.projects.repositories.index|candidates|store|destroy`);
+linking answers 201 with the repository. On the web they answer with a
+redirect and `workspace_flash`, except `candidates`, which is JSON.
+
+**The forge's link back** (web only): `GET /workspace/go/{org}/{index}` (name
+`workspace.go`), where the forge fills `{org}` with the forge organization
+(matched in any case) and `{index}` with a task code such as `TP-12`. The key
+resolves within the office connected to that forge organization, current keys
+and old ones alike, and redirects to the task. 404, never 403, when the code,
+key, number or forge organization is unknown, the task is trashed, or the
+caller can't see the task. A guest signs in first and lands on the task.
+
+**Code on projects and tasks.** Only where the project's organization has
+git and the caller may see its code: someone on the project's team (any
+role, while active), its office admin or a super-admin, not other viewers
+of a public project. Elsewhere `git` and `code` are `null` and
+`has_pull_request` is absent.
+
+- `GET /workspace/projects/{slug}` adds `git: { repositories, can_manage }`:
+  the linked repositories by `full_name`, and whether the caller may link
+  and unlink (its manager, its office admin or a super-admin). Each of its
+  `tasks` adds `has_pull_request` (the board's mark).
+- `GET /workspace/projects/{slug}/tasks/{taskSlug}` and
+  `GET /workspace/tasks/{task}/preview` add `code: { branch_name,
+  pull_requests, branches, commits }`. `branch_name` is the branch to start
+  for the task (`tp-12-fix-the-login`). `pull_requests`: up to 10 that
+  mention the task, open first, then newest. `branches`: every one that
+  names it, `{ id, name, repository, url }`. `commits`: the latest 10, `{ id,
+  subject, short_sha, url, author, repository, committed_at, unreachable }`;
+  `unreachable` is true for a commit no branch holds any more (force-pushed,
+  or squash-merged and its branch deleted), which stays listed.
+
+A task code resolves anywhere in the repository's organization, so a
+repository of another project can mention a task. Its pull requests,
+branches and commits show (and count for `has_pull_request`) only to someone
+who may see that other project's code too, and its pull requests write no
+row into this task's activity. Nothing in the code changes a task: a merged
+pull request never moves it, and the activity rows the forge brings in
+carry no user.
+
+The forge's webhook, `POST /git/webhooks/{connection}` (name `git.webhook`),
+is server to server: no session, CSRF or token, a body signed with the
+connection's webhook secret. See `docs/forgejo.md`, section 12.
+
 ## Members *(create/edit/delete: office admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login),
@@ -233,7 +298,11 @@ forge organization and adds a sentence to `message`: `{git_username} was removed
 from the forge.` when every removal succeeded, or `Couldn't remove
 {git_username} from the forge; ask a super-admin to suspend them there today.`
 when any failed (the change itself still stands). Nothing is added for someone
-without a forge account.
+without a forge account. Changing `is_office_admin`, or moving or
+reactivating an office admin, puts the forge organizations of the offices
+concerned in step after the response: active office admins in its Owners
+team, nobody else the tracker knows. A forge failure there is only logged;
+the nightly `git:reconcile` does it again.
 
 | Method | Path |
 | --- | --- |
@@ -325,3 +394,12 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
   key, no longer worked out from its title on every read.
 - Project payloads add `key` and `can_change_key`; task payloads and
   dependency references add `number`.
+
+**Git phase 1 (projects link repositories, tasks show code).**
+
+- New: `GET|POST /workspace/projects/{slug}/repositories`,
+  `GET …/repositories/candidates` and `DELETE …/repositories/{repository}`
+  (see Code repositories), and the web-only `GET /workspace/go/{org}/{index}`.
+- The project show adds `git` and its tasks `has_pull_request`; the task
+  show and the task preview add `code`. Each is `null` or absent where the
+  organization has no git.

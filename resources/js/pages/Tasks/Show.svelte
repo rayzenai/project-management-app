@@ -18,6 +18,7 @@
     import PriorityFlag from '../../components/PriorityFlag.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
     import StatusChip from '../../components/StatusChip.svelte';
+    import TaskCodePanel from '../../components/TaskCodePanel.svelte';
     import TaskDependencies from '../../components/TaskDependencies.svelte';
     import { formatDate } from '../../lib/format';
     import { taskCode } from '../../lib/taskCode';
@@ -31,6 +32,7 @@
         SharedProps,
         Subtask,
         Task,
+        TaskCode,
         TaskRef,
     } from '../../lib/types';
 
@@ -43,6 +45,7 @@
         comments,
         team,
         dependencyCandidates = [],
+        code = null,
     }: {
         project: Project;
         task: Task;
@@ -52,6 +55,8 @@
         comments: Comment[];
         team: Member[];
         dependencyCandidates?: TaskRef[];
+        /** The Code section; null when the organization has no git. */
+        code?: TaskCode | null;
         statuses: { value: string; label: string }[];
     } = $props();
 
@@ -745,6 +750,10 @@
                         </div>
                     </form>
                 </section>
+            {/if}
+
+            {#if code}
+                <TaskCodePanel {code} heading="h2" />
             {/if}
 
             <section class="mt-8">

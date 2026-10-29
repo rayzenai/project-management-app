@@ -101,6 +101,29 @@
         ['Progress ring', "The share of a project's tasks that are done."],
     ];
 
+    const code = [
+        [
+            'Link a repository',
+            "On the project's Code tab, its manager or office admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
+        ],
+        [
+            'Name a branch',
+            "Start the name with the task's code: tp-12-fix-login. Copy branch name in the task's Code section gives you one.",
+        ],
+        [
+            'Write a commit',
+            'Put the code in capitals in the commit message or the pull request title, such as TP-12 Fix the login form. Each code you name links to its task.',
+        ],
+        [
+            'Merging',
+            'A merged pull request never marks a task done. Move the card when the work is really finished.',
+        ],
+        [
+            'Forge access',
+            "Office admins own the office's forge organization: they create its repositories and give people access there. An office admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it.",
+        ],
+    ];
+
     const shortcuts = [
         ['N or Q', 'Add a task, from anywhere'],
         ['Ctrl K or /', 'Search tasks and projects (Cmd K on a Mac)'],
@@ -233,6 +256,29 @@
                 {/each}
             </dl>
         </section>
+
+        {#if shared.gitEnabled}
+            <section>
+                <h2 class="section-title mb-1">Code</h2>
+                <p class="mb-3 text-[13px] text-fg-muted">
+                    When your office keeps its code on the forge, each project
+                    has a Code tab with its repositories, and each task a Code
+                    section with the pull requests, branches and commits that
+                    name its code. Both are for the project's team and the
+                    office admins.
+                </p>
+                <dl class="border-t border-line">
+                    {#each code as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+            </section>
+        {/if}
 
         <section>
             <h2 class="section-title mb-3">Shortcuts</h2>

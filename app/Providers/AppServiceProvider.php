@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\GitBranch;
+use App\Models\GitCommit;
+use App\Models\GitPullRequest;
+use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\OAuthClient;
 use App\Models\ProjectAssignment;
@@ -11,15 +15,19 @@ use App\Models\Subtask;
 use App\Models\Task;
 use App\Models\TaskComment;
 use App\Models\TaskDependency;
+use App\Models\TaskGitLink;
 use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Observers\GitPullRequestObserver;
+use App\Observers\GitRepositoryObserver;
 use App\Observers\ProjectAssignmentObserver;
 use App\Observers\ProjectContactObserver;
 use App\Observers\ProjectNoteObserver;
 use App\Observers\SubtaskObserver;
 use App\Observers\TaskCommentObserver;
 use App\Observers\TaskDependencyObserver;
+use App\Observers\TaskGitLinkObserver;
 use App\Observers\TaskObserver;
 use App\Observers\TeamMembershipObserver;
 use App\Support\WorkspaceAccess;
@@ -114,6 +122,10 @@ class AppServiceProvider extends ServiceProvider
             'project-assignment' => ProjectAssignment::class,
             'team' => Team::class,
             'member' => Member::class,
+            'git-repository' => GitRepository::class,
+            'git-branch' => GitBranch::class,
+            'git-commit' => GitCommit::class,
+            'git-pull-request' => GitPullRequest::class,
         ]);
 
         // Observers own every side effect of a workspace mutation: the
@@ -131,6 +143,9 @@ class AppServiceProvider extends ServiceProvider
         TaskComment::observe(TaskCommentObserver::class);
         TaskDependency::observe(TaskDependencyObserver::class);
         TeamMembership::observe(TeamMembershipObserver::class);
+        GitRepository::observe(GitRepositoryObserver::class);
+        TaskGitLink::observe(TaskGitLinkObserver::class);
+        GitPullRequest::observe(GitPullRequestObserver::class);
     }
 
     /**

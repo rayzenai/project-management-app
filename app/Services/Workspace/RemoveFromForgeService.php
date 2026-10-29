@@ -45,6 +45,7 @@ class RemoveFromForgeService
             try {
                 ForgejoClient::for($connection)->removeOrganizationMember($connection->owner, $username);
                 $removed[] = $connection->owner;
+                Log::warning('Removed someone from a forge organization.', ['owner' => $connection->owner, 'login' => $username]);
             } catch (ForgejoException $e) {
                 // Expected: the forge is down or refused (a 403 means the bot token lacks scope).
                 // Log only where and what status, never the token or the exception.

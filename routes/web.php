@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\GitWebhookController;
 use App\Http\Controllers\Workspace\AssignmentController;
 use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\ContactController;
+use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\HomeController;
 use App\Http\Controllers\Workspace\MemberController;
 use App\Http\Controllers\Workspace\MyWorkspaceController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProjectController;
 use App\Http\Controllers\Workspace\ProjectProgressController;
+use App\Http\Controllers\Workspace\ProjectRepositoryController;
 use App\Http\Controllers\Workspace\QuickAddController;
 use App\Http\Controllers\Workspace\SubtaskController;
 use App\Http\Controllers\Workspace\TaskCommentController;
@@ -46,6 +49,16 @@ Route::post('/oauth/token', [AccessTokenController::class, 'issueToken'])
     ->withoutMiddleware('web')
     ->middleware('throttle:60,1')
     ->name('passport.token');
+
+// The forge's organization webhook: server to server, signed, no session or
+// CSRF. The controller looks the connection up itself (no route binding).
+// Its own throttle counter (the prefix): the forge's token calls come from
+// the same address, and a busy push day must not lock out forge sign-in.
+Route::post('/git/webhooks/{connection}', GitWebhookController::class)
+    ->whereNumber('connection')
+    ->withoutMiddleware('web')
+    ->middleware('throttle:600,1,git-webhook')
+    ->name('git.webhook');
 
 Route::middleware('guest')
     ->prefix('workspace')
@@ -92,6 +105,15 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         Route::patch('/projects/{project:slug}', [ProjectController::class, 'update'])->name('projects.update');
         Route::patch('/projects/{project:slug}/archive', [ProjectController::class, 'archive'])->name('projects.archive');
         Route::patch('/projects/{project:slug}/restore', [ProjectController::class, 'restore'])->name('projects.restore');
+
+        // Linked forge repositories (the Code tab) and the forge's link back
+        // to a task (TP-12 on the forge opens /workspace/go/{forge org}/TP-12).
+        Route::get('/projects/{project:slug}/repositories/candidates', [ProjectRepositoryController::class, 'candidates'])->name('projects.repositories.candidates');
+        Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
+        Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])
+            ->scopeBindings()
+            ->name('projects.repositories.destroy');
+        Route::get('/go/{org}/{index}', GoToTaskController::class)->name('go');
 
         // Every route that acts on a task or a task-child is gated centrally by
         // EnsureProjectVisible: route-model binding has already resolved the

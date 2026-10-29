@@ -12,6 +12,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Subtask;
 use App\Models\Task;
+use App\Support\WorkspaceAccess;
 
 /**
  * Assembles the single-task payload (task, its notes/contacts, the current
@@ -20,6 +21,8 @@ use App\Models\Task;
  */
 class TaskShowQuery
 {
+    public function __construct(private TaskCodeQuery $code) {}
+
     /**
      * @return array{
      *     project: array<string, mixed>,
@@ -28,7 +31,9 @@ class TaskShowQuery
      *     contacts: array<int, array<string, mixed>>,
      *     subtasks: array<int, array<string, mixed>>,
      *     comments: array<int, array<string, mixed>>,
-     *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>
+     *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
+     *     dependencyCandidates: array<int, array<string, mixed>>,
+     *     code: array<string, mixed>|null
      * }
      */
     public function data(Project $project, Task $task, int $userId): array
@@ -47,6 +52,8 @@ class TaskShowQuery
         $comments = $task->comments()->with('user')->latest()->get();
         TaskCommentResource::preload($comments);
 
+        $viewer = request()->user();
+
         return [
             'project' => (new ProjectResource($project))->resolve(),
             'task' => (new TaskResource($task))->resolve(),
@@ -58,6 +65,8 @@ class TaskShowQuery
             // What this task could be made to depend on: the rest of its project.
             'dependencyCandidates' => $project->tasks()->whereKeyNot($task->id)->get()
                 ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
+            // The Code section: null when the organization has no git.
+            'code' => WorkspaceAccess::canViewProjectCode($viewer, $project) ? $this->code->data($task, $viewer) : null,
         ];
     }
 }

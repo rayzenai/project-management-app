@@ -140,6 +140,23 @@ it('removes a person from both organizations when both answer', function () {
         ->and($result->data)->toBe(['removed' => ['sdoc', 'opmcm'], 'failed' => []]);
 });
 
+it('logs each successful removal from a forge organization at warning, without the token', function () {
+    Log::spy();
+    Http::fake([
+        'git.example.test/*' => Http::response('', 204),
+        'git.other.test/*' => Http::response('', 500),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeOffice('opmcm', 'git.other.test');
+    [$user] = forgePerson($sdoc);
+
+    app(RemoveFromForgeService::class)->execute($user);
+
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === 'Removed someone from a forge organization.'
+        && $context === ['owner' => 'sdoc', 'login' => 'ram.k'])->once();
+    Log::shouldNotHaveReceived('warning', fn (string $message, array $context = []) => $message === 'Removed someone from a forge organization.' && $context['owner'] === 'opmcm');
+});
+
 it('makes no call for a member without a forge account', function () {
     Http::fake();
     $sdoc = forgeOffice('sdoc');
@@ -261,7 +278,8 @@ it('reports the removal as incomplete when the connections cannot be loaded', fu
     Exceptions::fake();
     $sdoc = forgeOffice('sdoc');
     [$user] = forgePerson($sdoc);
-    Schema::drop('git_connections');
+    // Renamed rather than dropped: other tables point at it, and Postgres refuses the drop.
+    Schema::rename('git_connections', 'git_connections_gone');
 
     $result = app(RemoveFromForgeService::class)->execute($user);
 

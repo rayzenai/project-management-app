@@ -30,6 +30,7 @@ class ActivityFeedQuery
 
         return ProjectActivity::query()
             ->whereIn('project_id', Project::query()->visibleTo($user)->select('id'))
+            ->codeVisibleTo($user)
             ->with(['user', 'task.project', 'project'])
             ->latest()
             ->paginate($perPage)
