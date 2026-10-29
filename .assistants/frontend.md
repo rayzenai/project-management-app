@@ -34,8 +34,8 @@ Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
 `TaskCode` (mono `KEY-12` id chip from stored project key + permanent task number,
 shared formatter `lib/taskCode.ts`; `#12` when the project code is unknown),
 `TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`, `AssigneePicker/Stack`,
-`DateChip`, `StatusChip/Badge`, `CompleteCheckbox`. `DateChip` reads shared
-status `is_complete`/`is_closed` metadata; closed work shows historical dates.
+`DateChip`, `StatusChip/Badge`, `CompleteCheckbox`, `AutosaveStatus`. `DateChip`
+reads shared status `is_complete`/`is_closed` metadata; closed work shows historical dates.
 Project overdue counts/filters, dependency chips/links and progress views use
 server-provided `is_overdue`; `is_late` remains available for finished-late work.
 Dependencies: `TaskDependencies` in the task page/Peek, `DependsOnPicker` in
@@ -64,6 +64,25 @@ Progress: `ProgressReport` combines workload, activity and `team/GanttChart`;
 the chart supports persisted zoom/grouping, dependency arrows and task
 selection into read-only `team/TaskReportDrawer`. `lib/schedule.ts` plans
 finish-to-start dates after prerequisites without changing stored dates.
+
+## Task editing and optional features
+
+`Tasks/Show` places details, subtasks, notes and contacts on one page;
+`?tab=todos|notes|contacts` deep links scroll to the corresponding section.
+Title, description, status note and source URL save on focus-out; progress
+saves on change, sending only fields that differ from the last accepted draft.
+The page queues another save when needed, warns before unloading unsaved work,
+and supports Cmd/Ctrl+S (submits the focused add form, otherwise saves the task).
+`TaskPeek` saves title/description on blur and progress on change; subtask
+creation/editing also supports blur or Enter. `AutosaveStatus` reports saving,
+the saved time, pending edits or errors in both task surfaces.
+
+`AppearanceConfig` provides Settings toggles for Task notes and Contacts along
+with theme and email preferences; changes persist with its Save button.
+`SharedProps.features` (`lib/types.ts`) controls optional sections in task
+page/Peek, read-only `TaskReportDrawer`, `MyWorkspace`, list-row counts and
+command-palette results. Both features start off per user; turning them off
+keeps their data. Personal sticky notes remain available.
 
 ## Theming
 

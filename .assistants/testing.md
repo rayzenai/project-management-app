@@ -43,6 +43,10 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   handling, SPA login redirect, sessionless throttled token route, persistent
   Forgejo-safe usernames, purge schedule and client command, with temporary
   signing keys generated in the test.
+- `OptionalFeaturesTest` covers default-off notes/contacts, web/API preference
+  updates, preservation of other settings, boolean validation, shared task-note
+  feed gating and API user feature context. `TaskNotesInWorkspaceFeedTest`
+  explicitly enables task notes before testing feed contents.
 
 ## Running
 

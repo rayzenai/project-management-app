@@ -46,7 +46,8 @@ database/
                            # including Nepal-time shift, tenancy backfill, task dependencies,
                            # one-team-per-project / one-leader-per-team constraints,
                            # digest retirement, project-level activity backfill,
-                           # stable keys/task numbers, git connections and Passport tables
+                           # stable keys/task numbers, git connections and Passport tables,
+                           # optional task-note/contact preferences (both default off)
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (idempotent, production-safe SDOC projects)
 resources/
@@ -54,7 +55,8 @@ resources/
   js/pages/                # Home, MyWorkspace, PlanTracker, Guide, Auth/, Notifications/,
                            # Organizations/Index, Projects/{Index,Show,Progress}, Tasks/Show,
                            # Team/Index (People directory)
-  js/components/           # shared UI (AppShell, ThemeToggle, StatusGlyph, QuickAdd*, ...)
+  js/components/           # shared UI (AppShell, ThemeToggle, AppearanceConfig,
+                           # StatusGlyph, QuickAdd*, AutosaveStatus, ...)
                            # plus project/ views + ProjectTeamPanel, ProgressReport,
                            # team/{RosterSearch,GanttChart,TaskReportDrawer}, task dependency UI
   js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils,
@@ -70,6 +72,7 @@ tests/
 docs/api.md                # HTTP API reference + external-integration guide
 docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local proof
 docs/superpowers/          # design specs + implementation plans (Git phase 0 included)
+                           # 2026-10-29-programs-design.md is a draft, not implemented
 deploy/forgejo/            # Compose + .env.example for forge/Postgres; local.sh laptop runner
 deploy.sh                  # SDOC Dokploy web/scheduler deploy + health verification
 Dockerfile, dock.sh        # production image and local image runner

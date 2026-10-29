@@ -20,15 +20,28 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
 - **Web**: `routes/web.php`, prefix `workspace`, names `workspace.*`, `auth` +
   `ShareWorkspaceData` middleware. Shared Inertia props: `statuses`,
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
-  `appearance`, `themeCatalogue`, `unreadNotifications`, `flash`,
+  `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`. Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and office-admin
-  context. Cross-cutting API context goes there.
+  context plus `features: {task_notes, contacts}`. Cross-cutting API context
+  goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
+
+## Optional task features
+
+`User::features()` reads `UserPreference.task_notes_enabled` and
+`contacts_enabled` (boolean casts, database defaults false); missing preferences
+also mean both off. Shared `UpdatePreferenceRequest` validates these optional
+booleans for `PATCH /workspace/preferences` and `PATCH /api/v1/user/preferences`.
+Both preference controllers preserve omitted settings; API GET/PATCH returns
+both stored flag names alongside appearance and notification preferences.
+`ShareWorkspaceData` returns an empty `taskNotes` feed while task notes are off.
+These are per-user display preferences: existing data, task payloads, search
+queries and authorized note/contact endpoints remain available.
 
 ## Authorization — SECURITY CRITICAL
 
