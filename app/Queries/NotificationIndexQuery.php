@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Models\User;
 use App\Notifications\AddedToProjectTeam;
+use App\Notifications\MadeProgramManager;
 use App\Notifications\MadeProjectManager;
 use App\Notifications\MentionedInComment;
 use App\Notifications\TaskAssigned;
@@ -30,7 +31,7 @@ class NotificationIndexQuery
         'status' => [TaskStatusChanged::class],
         'mention' => [MentionedInComment::class],
         'deadline' => [TaskDeadlineDue::class],
-        'team' => [AddedToProjectTeam::class, MadeProjectManager::class],
+        'team' => [AddedToProjectTeam::class, MadeProjectManager::class, MadeProgramManager::class],
     ];
 
     /**

@@ -205,6 +205,26 @@ On the JSON API these are `POST|DELETE /api/v1/workspace/organizations/{organiza
 organization. The token is write-only: organization payloads show only
 `git: { base_url, owner, url }` (or `null`), and only to a super-admin.
 
+## Programs *(create/edit/delete: office admin of their organization or super-admin)*
+
+A program is a named collection of projects in one organization with one
+program manager, who runs every project in it as that project's own manager
+does. Deleting a program keeps its projects.
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| GET | `/workspace/programs` | `{ data: [program] }`, only the programs the caller may see: all for a super-admin, their organization's for an office admin, the ones they manage for a program manager, none for anyone else |
+| POST | `/workspace/programs` | `name` (unique in the organization), `description` (optional), `manager_id` (required: an active person of the program's organization; 422 on `manager_id` otherwise). A super-admin sends `organization_id`; for an office admin it is always their own, whatever is posted. 201 with the program; the manager is notified |
+| PATCH | `/workspace/programs/{slug}` | any of `name`, `description`, `manager_id` (same checks; a new manager is notified). The organization never changes |
+| DELETE | `/workspace/programs/{slug}` | the program goes, its projects stay with no program |
+
+Program payload: `{ id, slug, name, description, organization { id, name },
+manager { id, name, title } | null, projects_count (index only), can_manage }`.
+`manager` is `null` only after the manager's person was pruned. Anyone who is not
+an office admin of the program's organization or a super-admin gets 403 on
+POST, PATCH and DELETE. The web surface has the same writes at
+`/workspace/programs` (names `workspace.programs.store|update|destroy`).
+
 ## Project teams *(roster: the project's manager, its office admin or a super-admin; choosing the manager: office admin or super-admin)*
 
 A team is made with its project and never on its own; `GET /workspace/projects/{slug}`

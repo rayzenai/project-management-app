@@ -8,6 +8,7 @@ use App\Models\GitPullRequest;
 use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\OAuthClient;
+use App\Models\Program;
 use App\Models\ProjectAssignment;
 use App\Models\ProjectContact;
 use App\Models\ProjectNote;
@@ -21,6 +22,7 @@ use App\Models\TeamMembership;
 use App\Models\User;
 use App\Observers\GitPullRequestObserver;
 use App\Observers\GitRepositoryObserver;
+use App\Observers\ProgramObserver;
 use App\Observers\ProjectAssignmentObserver;
 use App\Observers\ProjectContactObserver;
 use App\Observers\ProjectNoteObserver;
@@ -135,6 +137,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(RouteMatched::class, fn () => WorkspaceAccess::flush());
         Event::listen(RequestHandled::class, fn () => WorkspaceAccess::flush());
 
+        Program::observe(ProgramObserver::class);
         Task::observe(TaskObserver::class);
         ProjectNote::observe(ProjectNoteObserver::class);
         ProjectContact::observe(ProjectContactObserver::class);

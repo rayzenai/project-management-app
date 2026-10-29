@@ -14,6 +14,7 @@ use App\Http\Controllers\Workspace\OrganizationController;
 use App\Http\Controllers\Workspace\OrganizationGitController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
+use App\Http\Controllers\Workspace\ProgramController;
 use App\Http\Controllers\Workspace\ProjectController;
 use App\Http\Controllers\Workspace\ProjectProgressController;
 use App\Http\Controllers\Workspace\ProjectRepositoryController;
@@ -82,6 +83,9 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
         Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('organizations.update');
         Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('organizations.destroy');
+        Route::post('/programs', [ProgramController::class, 'store'])->name('programs.store');
+        Route::patch('/programs/{program:slug}', [ProgramController::class, 'update'])->name('programs.update');
+        Route::delete('/programs/{program:slug}', [ProgramController::class, 'destroy'])->name('programs.destroy');
         Route::post('/organizations/{organization}/git', [OrganizationGitController::class, 'store'])->name('organizations.git.store');
         Route::delete('/organizations/{organization}/git', [OrganizationGitController::class, 'destroy'])->name('organizations.git.destroy');
 

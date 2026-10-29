@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\OrganizationGitController;
 use App\Http\Controllers\Api\PlanTrackerController;
 use App\Http\Controllers\Api\PreferenceController;
+use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectProgressController;
 use App\Http\Controllers\Api\ProjectRepositoryController;
@@ -66,6 +67,12 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('organizations.destroy');
             Route::post('/organizations/{organization}/git', [OrganizationGitController::class, 'store'])->name('organizations.git.store');
             Route::delete('/organizations/{organization}/git', [OrganizationGitController::class, 'destroy'])->name('organizations.git.destroy');
+
+            // Programs (office admin of the organization, or super-admin)
+            Route::get('/programs', [ProgramController::class, 'index'])->name('programs.index');
+            Route::post('/programs', [ProgramController::class, 'store'])->name('programs.store');
+            Route::patch('/programs/{program:slug}', [ProgramController::class, 'update'])->name('programs.update');
+            Route::delete('/programs/{program:slug}', [ProgramController::class, 'destroy'])->name('programs.destroy');
 
             // Teams
             Route::get('/team', [TeamController::class, 'index'])->name('team');

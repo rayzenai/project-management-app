@@ -218,7 +218,7 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
 `MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam` and
-`MadeProjectManager` share `Concerns\BuildsWorkspaceNotification`
+`MadeProjectManager` and `MadeProgramManager` share `Concerns\BuildsWorkspaceNotification`
 and emit the stable payload `{kind, title, action, body, task, actor, url}`
 (`action` is the short form with the task title left out, for surfaces that lead
 with the title; `body` keeps the long sentence). Dispatched
@@ -226,7 +226,8 @@ from observers (assignment created → `TaskAssigned`; task status entering
 done/failed → `TaskStatusChanged`; joining a project's team or becoming its
 manager → the team notifications, never to the person who did it), the
 comment service (mentions) and the reminders command. The team ones carry
-`task: null` and a `project {slug, title}`.
+`task: null` and a `project {slug, title}`; `MadeProgramManager` (a new program
+manager, from `ProgramObserver`) carries a `program {slug, name}` instead.
 
 The sidebar's **Guide** (`pages/Guide.svelte`, `/workspace/guide`) explains
 the model and each role's routine to users: keep it in step when a feature
