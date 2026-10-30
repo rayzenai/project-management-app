@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Workspace;
 
 use App\Http\Controllers\Workspace\Concerns\RedirectsWithServiceResult;
+use App\Http\Requests\CreateRepositoryRequest;
 use App\Http\Requests\LinkRepositoryRequest;
 use App\Http\Requests\SearchRepositoryCandidatesRequest;
 use App\Http\Requests\UnlinkRepositoryRequest;
@@ -10,6 +11,7 @@ use App\Models\GitRepository;
 use App\Models\Project;
 use App\Queries\RepositoryCandidatesQuery;
 use App\Services\Git\ForgejoException;
+use App\Services\Workspace\CreateRepositoryService;
 use App\Services\Workspace\LinkRepositoryService;
 use App\Services\Workspace\UnlinkRepositoryService;
 use Illuminate\Http\JsonResponse;
@@ -18,8 +20,9 @@ use Illuminate\Routing\Controller;
 
 /**
  * A project's linked forge repositories, from its Code tab: search the
- * forge organization's repositories, link one, unlink one. The manager, the
- * office admin or a super-admin, and only in an organization with git.
+ * forge organization's repositories, link one, create one (linked on
+ * creation), unlink one. The manager, the office admin or a super-admin,
+ * and only in an organization with git.
  */
 class ProjectRepositoryController extends Controller
 {
@@ -37,6 +40,16 @@ class ProjectRepositoryController extends Controller
     public function store(LinkRepositoryRequest $request, Project $project, LinkRepositoryService $service): RedirectResponse
     {
         return $this->redirectWithResult($service->execute($project, (string) $request->validated('full_name'), $request->user()));
+    }
+
+    public function create(CreateRepositoryRequest $request, Project $project, CreateRepositoryService $service): RedirectResponse
+    {
+        return $this->redirectWithResult($service->execute(
+            $project,
+            (string) $request->validated('name'),
+            $request->validated('description'),
+            $request->user(),
+        ));
     }
 
     public function destroy(UnlinkRepositoryRequest $request, Project $project, GitRepository $repository, UnlinkRepositoryService $service): RedirectResponse

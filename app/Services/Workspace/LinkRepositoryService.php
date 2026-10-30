@@ -13,6 +13,7 @@ use App\Services\Git\ForgejoException;
 use App\Services\Git\ForgeShapes;
 use App\Services\Git\RepositoryAccess;
 use App\Services\Git\RepositorySync;
+use App\Services\Workspace\Concerns\WordsForgeFailures;
 use App\Support\Background;
 use App\Support\ServiceResult;
 use App\Support\WorkspaceAccess;
@@ -33,6 +34,8 @@ use Throwable;
  */
 class LinkRepositoryService
 {
+    use WordsForgeFailures;
+
     public function __construct(
         private readonly RepositorySync $sync,
         private readonly RepositoryAccess $access,
@@ -145,16 +148,6 @@ class LinkRepositoryService
 
     private function forgeFailed(ForgejoException $e, GitConnection $connection): ServiceResult
     {
-        if ($e->status === 404) {
-            return $this->notInOrganization($connection);
-        }
-
-        if ($e->status === 0) {
-            Log::warning('Forge unreachable.', ['url' => $connection->base_url, 'cause' => $e->causeMessage($connection->token)]);
-        }
-
-        return $e->status === 0 || $e->status >= 500
-            ? ServiceResult::failure("Couldn't reach the forge at {$connection->base_url}.", 422)
-            : ServiceResult::failure("The forge answered {$e->status}. Try again shortly.", 422);
+        return $e->status === 404 ? $this->notInOrganization($connection) : $this->forgeFailure($e, $connection);
     }
 }

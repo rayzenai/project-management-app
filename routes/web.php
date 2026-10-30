@@ -115,6 +115,7 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         // to a task (TP-12 on the forge opens /workspace/go/{forge org}/TP-12).
         Route::get('/projects/{project:slug}/repositories/candidates', [ProjectRepositoryController::class, 'candidates'])->name('projects.repositories.candidates');
         Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
+        Route::post('/projects/{project:slug}/repositories/new', [ProjectRepositoryController::class, 'create'])->name('projects.repositories.create');
         Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])
             ->scopeBindings()
             ->name('projects.repositories.destroy');

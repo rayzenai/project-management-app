@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\RespondsWithServiceResult;
+use App\Http\Requests\CreateRepositoryRequest;
 use App\Http\Requests\LinkRepositoryRequest;
 use App\Http\Requests\SearchRepositoryCandidatesRequest;
 use App\Http\Requests\UnlinkRepositoryRequest;
@@ -11,6 +12,7 @@ use App\Models\GitRepository;
 use App\Models\Project;
 use App\Queries\RepositoryCandidatesQuery;
 use App\Services\Git\ForgejoException;
+use App\Services\Workspace\CreateRepositoryService;
 use App\Services\Workspace\LinkRepositoryService;
 use App\Services\Workspace\UnlinkRepositoryService;
 use App\Support\WorkspaceAccess;
@@ -49,6 +51,17 @@ class ProjectRepositoryController extends Controller
     public function store(LinkRepositoryRequest $request, Project $project, LinkRepositoryService $service): JsonResponse
     {
         $result = $service->execute($project, (string) $request->validated('full_name'), $request->user());
+
+        return $this->respondWithResult(
+            $result,
+            $result->data instanceof GitRepository ? new GitRepositoryResource($result->data) : null,
+            $result->success ? 201 : null,
+        );
+    }
+
+    public function create(CreateRepositoryRequest $request, Project $project, CreateRepositoryService $service): JsonResponse
+    {
+        $result = $service->execute($project, (string) $request->validated('name'), $request->validated('description'), $request->user());
 
         return $this->respondWithResult(
             $result,

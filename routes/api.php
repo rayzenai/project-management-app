@@ -102,6 +102,7 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'index'])->name('projects.repositories.index');
             Route::get('/projects/{project:slug}/repositories/candidates', [ProjectRepositoryController::class, 'candidates'])->name('projects.repositories.candidates');
             Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
+            Route::post('/projects/{project:slug}/repositories/new', [ProjectRepositoryController::class, 'create'])->name('projects.repositories.create');
             Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
 
             // Tasks + task-children: gated centrally by EnsureProjectVisible
