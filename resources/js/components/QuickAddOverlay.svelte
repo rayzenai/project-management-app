@@ -19,6 +19,21 @@
 
     let formComp = $state<{ focusInput: () => void } | null>(null);
 
+    /**
+     * Only a press that starts and ends on the backdrop closes the dialog. A
+     * press inside the panel released out here (a text selection dragged too
+     * far, or a control that moved away under the pointer) still clicks the
+     * backdrop, which the browser targets as the nearest common ancestor; it
+     * used to close the dialog and lose the task with no message.
+     */
+    let pressedBackdrop = false;
+
+    function onBackdropClick(e: MouseEvent) {
+        if (pressedBackdrop && e.target === e.currentTarget) {
+            quickAdd.close();
+        }
+    }
+
     $effect(() => {
         if (!quickAdd.isOpen) {
             return;
@@ -51,7 +66,8 @@
 {#if quickAdd.isOpen}
     <div
         class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
-        onclick={() => quickAdd.close()}
+        onpointerdown={(e) => (pressedBackdrop = e.target === e.currentTarget)}
+        onclick={onBackdropClick}
         role="presentation"
     >
         <div

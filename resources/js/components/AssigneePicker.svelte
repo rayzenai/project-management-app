@@ -49,24 +49,27 @@
         }
     }
 
-    // Close on a click anywhere outside the picker. pointerdown (not click) so it
-    // lands before the toggle's own click; the toggle is inside `rootEl`, so it
-    // is excluded and keeps toggling normally.
+    // Close on a click anywhere outside the picker. On click, not pointerdown:
+    // in a dialog (`flow`) the open list takes up room, and closing it between
+    // the press and the release moved whatever was pressed (Add task) out from
+    // under the pointer, so the click landed on the backdrop instead. Capture
+    // phase, so the target is checked before the click's own handler can
+    // re-render (and detach) it. The toggle is inside `rootEl`, so it is
+    // excluded and keeps toggling.
     $effect(() => {
         if (!open || typeof document === 'undefined') {
             return;
         }
 
-        const onPointerDown = (event: PointerEvent) => {
+        const onClick = (event: MouseEvent) => {
             if (!rootEl?.contains(event.target as Node)) {
                 close();
             }
         };
 
-        document.addEventListener('pointerdown', onPointerDown, true);
+        document.addEventListener('click', onClick, true);
 
-        return () =>
-            document.removeEventListener('pointerdown', onPointerDown, true);
+        return () => document.removeEventListener('click', onClick, true);
     });
 
     const everyone = $derived([...team, ...others]);

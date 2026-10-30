@@ -377,9 +377,21 @@
             return;
         }
 
+        // A one-off create from the dialog closes it and lands on the project
+        // board, which destroys this form before onSuccess runs: decide now,
+        // and read none of its deriveds once it is gone. "Create another"
+        // (and the inline bar) stays open, so it resets for the next task.
+        const closeAfter = keepOpen ? undefined : onSuccess;
+
         form.post('/workspace/quick-add', {
             preserveScroll: true,
             onSuccess: () => {
+                if (closeAfter) {
+                    closeAfter();
+
+                    return;
+                }
+
                 form.reset('title', 'deadline_at', 'description');
                 dependsOn = [];
                 // Re-seed the default assignee (self when eligible) for the next task.
@@ -391,11 +403,6 @@
                 form.priority = '';
                 form.status = defaultStatus;
                 tokenInput?.focus();
-
-                // "Create another" keeps the modal up with the pickers intact.
-                if (!keepOpen) {
-                    onSuccess?.();
-                }
             },
         });
     }
