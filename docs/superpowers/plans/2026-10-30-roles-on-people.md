@@ -119,3 +119,21 @@
 - [ ] **Step 1: Failing tests:** for each of: an organizational admin makes someone program manager (replacing, notified), project manager (replacing, old manager stays member, Review Focus 1), member of a team, off a team; the refusals above; an organizational admin refused another organization's program and team (403 or field error, nothing changed); a super-admin across organizations through `canJoinTeam`; the API twin; a person-form save never leaves a team without a manager.
 - [ ] **Step 2:** Fail; implement; pass; full suite; PHPStan; frontend checks and build.
 - [ ] **Step 3:** Commit.
+
+### Task 6: Quick add that always works, and assigning anyone in your organization
+
+Owner, 2026-10-30: in an organization with no project, "Add task" did nothing and said nothing (`QuickAddForm.svelte` `submit()` returns when no project is chosen). They want to add a task and assign anyone in their organization from one form.
+
+**Files:**
+- Modify: `resources/js/components/QuickAddForm.svelte` (the Project picker sits with "Assign to" and "Due date"; no silent return: a missing project shows "Pick a project." and disables Add task with that reason), `app/Http/Middleware/ShareWorkspaceData.php` (`quickAddContext`), `app/Http/Requests/QuickAddTaskRequest.php`, `app/Services/Workspace/QuickAddDispatcher.php` / `QuickAddTaskService.php`, `app/Http/Requests/StoreAssignmentRequest.php` and the assignment service, the task page's assignee picker (`AssignmentRow.svelte` or wherever it lists candidates) and its data, `app/Support/WorkspaceAccess.php`, `resources/js/pages/Guide.svelte`, `docs/api.md`, `CLAUDE.md`
+- Test: `tests/Feature/Workspace/QuickAddEverywhereTest.php`
+
+**Interfaces:**
+- `WorkspaceAccess::canAssignOutsideTeam(?Authenticatable $user, Project $project, Member $member): bool` = the member is active, of the project's organization, `canJoinTeam($member, $team)`, and `canManageRosterOf($user, $team)`.
+- Assigning such a person (quick add and the task's assignment route) first adds them to the project's team as a member through the same service the People tab uses, then assigns. Everyone else's assignment rules are unchanged (`Member::scopeAssignableFor`).
+- `quickAddContext`: each project gains `can_add_people` (= `canManageRosterOf`); the context gains `organizationPeople` (active people of the viewer's organization, `{id, name, title}`) when the viewer manages any project's roster, else `[]`; and `startGeneral: bool` when the viewer is an organizational admin whose organization has no active project.
+- With `startGeneral`, the picker offers "General" first; posting `start_general: true` (no `project_id`) creates "General" in their organization through `CreateProjectService` with them as manager, then files the task there, in one transaction. Refused for anyone else ("Pick a project.").
+
+- [ ] **Step 1: Failing tests:** an organizational admin of an organization with no projects quick-adds with `start_general` and an assignee from their organization → General exists (they manage it), the assignee joined its team and is assigned and notified; `start_general` refused for a member and when the organization already has a project; a project manager assigns a person of their organization who isn't on the team (joins, assigned) on quick add and on the task page; a member can't; nobody can assign someone of another organization or an inactive person; the form no longer sends with no project (assert the request validation message when `project_id` is missing).
+- [ ] **Step 2:** Fail; implement; pass; full suite; PHPStan; frontend checks and build.
+- [ ] **Step 3:** Commit.
