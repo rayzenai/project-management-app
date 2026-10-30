@@ -8,6 +8,7 @@ use App\Models\GitPullRequest;
 use App\Models\GitRepository;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
 use App\Support\Git\TaskReferences;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,6 +24,9 @@ use Illuminate\Support\Facades\DB;
  */
 class GitIngest
 {
+    /** @var array<string, int|null> lowercased forge username => user id */
+    private array $userIds = [];
+
     /**
      * The tasks the references name in the repository's organization (see
      * task()), each once.
@@ -81,6 +85,7 @@ class GitIngest
             'message' => $c['message'],
             'author_name' => $c['author_name'],
             'author_username' => $c['author_username'],
+            'user_id' => $this->userIdFor($c['author_username']),
             'url' => $c['url'],
             'committed_at' => $this->time($c['committed_at']),
         ]);
@@ -88,6 +93,27 @@ class GitIngest
         $this->link($repo, $commit, $this->tasksFor($repo, TaskReferences::inText($c['message'])), detaching: false);
 
         return $commit;
+    }
+
+    /**
+     * The user whose forge username is $username, ignoring case, else null.
+     * Remembered for this instance, so a backfill of many commits asks once
+     * per distinct author.
+     */
+    private function userIdFor(?string $username): ?int
+    {
+        if ($username === null || $username === '') {
+            return null;
+        }
+
+        $key = strtolower($username);
+
+        if (! array_key_exists($key, $this->userIds)) {
+            $id = User::query()->whereRaw('lower(git_username) = ?', [$key])->value('id');
+            $this->userIds[$key] = $id === null ? null : (int) $id;
+        }
+
+        return $this->userIds[$key];
     }
 
     public function branch(GitRepository $repo, string $name, ?string $headSha): GitBranch

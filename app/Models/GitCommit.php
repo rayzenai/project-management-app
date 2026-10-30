@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  *
  * @property int $id
  * @property int $git_repository_id
+ * @property int|null $user_id
  * @property string $sha
  * @property string $message
  * @property string $author_name
@@ -21,6 +22,21 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property string $url
  * @property CarbonImmutable $committed_at
  * @property CarbonImmutable|null $unreachable_at
+ * @property bool $is_merge
+ * @property int|null $files_changed
+ * @property int|null $additions
+ * @property int|null $deletions
+ * @property int $code_added
+ * @property int $code_removed
+ * @property int $comment_added
+ * @property int $comment_removed
+ * @property int $blank_added
+ * @property int $blank_removed
+ * @property int $docs_added
+ * @property int $docs_removed
+ * @property int $generated_lines
+ * @property string|null $stats_status ok, merge, too_large or missing
+ * @property CarbonImmutable|null $stats_computed_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -28,6 +44,7 @@ class GitCommit extends Model
 {
     protected $fillable = [
         'git_repository_id',
+        'user_id',
         'sha',
         'message',
         'author_name',
@@ -45,6 +62,8 @@ class GitCommit extends Model
         return [
             'committed_at' => 'datetime',
             'unreachable_at' => 'datetime',
+            'is_merge' => 'boolean',
+            'stats_computed_at' => 'datetime',
         ];
     }
 
@@ -54,6 +73,14 @@ class GitCommit extends Model
     public function repository(): BelongsTo
     {
         return $this->belongsTo(GitRepository::class, 'git_repository_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**

@@ -14,3 +14,6 @@ Schedule::command('passport:purge')->daily()->withoutOverlapping();
 // Forgejo never retries a webhook: fill the gaps, put back what forge owners
 // changed, and keep forge owners and members in step with the tracker.
 Schedule::command('git:reconcile')->dailyAt('01:30')->withoutOverlapping();
+
+// Count each new commit's code, comment and blank lines from its diff.
+Schedule::command('git:commit-stats')->everyFiveMinutes()->withoutOverlapping();
