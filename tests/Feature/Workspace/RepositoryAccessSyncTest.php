@@ -549,6 +549,27 @@ it('skips a repository unlinked before the job runs', function () {
     Http::assertNothingSent();
 });
 
+it('skips a repository gone before the job runs, even when the job still holds its model', function () {
+    Http::fake(accForge());
+    $job = new SyncRepositoryAccess($this->repo);
+    $this->repo->delete();
+
+    $job->handle(app(RepositoryAccess::class));
+
+    Http::assertNothingSent();
+});
+
+it('syncs the repository as it is when the job runs, not as it was queued', function () {
+    Http::fake(accForge(name: 'tp-core'));
+    $job = new SyncRepositoryAccess($this->repo);
+    GitRepository::query()->whereKey($this->repo->id)->update(['name' => 'tp-core', 'full_name' => 'sdoc/tp-core']);
+
+    $job->handle(app(RepositoryAccess::class));
+
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), '/repos/sdoc/tp-core/collaborators'));
+    Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/repos/sdoc/tp-api/'));
+});
+
 it('queues one sync per linked repository of a project', function () {
     config(['queue.default' => 'database']);
     Queue::fake();

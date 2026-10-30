@@ -448,6 +448,49 @@ it('refuses the link when the forge can\'t say who has access, keeping nothing a
     ],
 ]);
 
+it('on the sync queue, a refused link makes no forge call after the response', function () {
+    // Production's queue: the syncs run once the response is sent, for real.
+    config(['queue.default' => 'sync']);
+    Queue::fake([BackfillGitRepository::class]);
+    trigPerson($this->organization, 'Bikash');
+    // Asha's grant, and so a sync of sdoc/portal, is made before Bikash's permission fails.
+    trigFakeLink(trigLogins(['asha', 'bikash']), fn (Request $r) => str_contains($r->url(), '/bikash/')
+        ? Http::response(['message' => 'boom'], 500)
+        : Http::response(['permission' => 'write', 'role_name' => 'write', 'user' => ['id' => 1, 'login' => 'asha']]));
+
+    // The test client sends the response and then runs the after-response work.
+    $this->actingAs($this->adminUser)
+        ->post("/workspace/projects/{$this->project->slug}/repositories", ['full_name' => 'sdoc/portal'])
+        ->assertSessionHasErrors('__global');
+
+    $calls = Http::recorded()->map(fn (array $pair): string => $pair[0]->method().' '.preg_replace('/\?.*$/', '', $pair[0]->url()))->all();
+    // Only the refused link's own reads: the repository, its collaborators
+    // (two pages) and their permissions. No sync of the unlinked repository.
+    expect($calls)->toBe([
+        'GET https://git.example/api/v1/repos/sdoc/portal',
+        'GET https://git.example/api/v1/repos/sdoc/portal/collaborators',
+        'GET https://git.example/api/v1/repos/sdoc/portal/collaborators',
+        'GET https://git.example/api/v1/repos/sdoc/portal/collaborators/asha/permission',
+        'GET https://git.example/api/v1/repos/sdoc/portal/collaborators/bikash/permission',
+    ]);
+});
+
+it('on the sync queue, a link syncs its access once the response is sent', function () {
+    config(['queue.default' => 'sync']);
+    Queue::fake([BackfillGitRepository::class]);
+    trigFakeLink(trigLogins(['asha']));
+    Http::fake(['git.example/api/v1/repos/sdoc/portal/collaborators/*' => Http::response('', 204)]);
+
+    $this->actingAs($this->adminUser)
+        ->post("/workspace/projects/{$this->project->slug}/repositories", ['full_name' => 'sdoc/portal'])
+        ->assertSessionHas('workspace_flash.message', 'Linked sdoc/portal.');
+
+    // Asha imported as write, then given write on the forge after the response.
+    Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
+        && $r->url() === 'https://git.example/api/v1/repos/sdoc/portal/collaborators/asha'
+        && $r['permission'] === 'write');
+});
+
 it('refuses the link on an unexpected failure, reporting it without the token', function () {
     Exceptions::fake();
     trigFakeLink(trigLogins([]));

@@ -14,11 +14,12 @@ use Illuminate\Foundation\Queue\Queueable;
  * Writes one linked repository's access to the forge
  * (RepositoryAccess::sync) once something changed who should have it. It
  * runs off the request: a forge failure is logged without the token and the
- * ten-minute `git:sync-access` tries again. A repository unlinked before it
- * runs is skipped.
+ * ten-minute `git:sync-access` tries again.
  *
  * Dispatched inside a transaction, it waits for the commit, so it reads what
- * was saved.
+ * was saved. When it runs it reads its repository afresh from the database
+ * and syncs that; a repository unlinked since, or whose link never
+ * committed, is skipped without a forge call.
  */
 class SyncRepositoryAccess implements ShouldQueue
 {
@@ -47,10 +48,16 @@ class SyncRepositoryAccess implements ShouldQueue
 
     public function handle(RepositoryAccess $access): void
     {
+        $repository = GitRepository::query()->with('gitConnection')->find($this->repository->id);
+
+        if ($repository === null) {
+            return;
+        }
+
         try {
-            $access->sync($this->repository);
+            $access->sync($repository);
         } catch (ForgejoException $e) {
-            RepositoryAccess::logFailure($this->repository, $e);
+            RepositoryAccess::logFailure($repository, $e);
         }
     }
 }
