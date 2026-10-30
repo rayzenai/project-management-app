@@ -710,14 +710,15 @@ When an organizational admin deactivates or deletes someone with a forge account
 tracker removes them from every connected forge organization (`DELETE
 /api/v1/orgs/{owner}/members/{git_username}`, with each organization's own
 bot token) and the confirmation says so ("{git_username} was removed from the
-forge."). That ends their access through organization membership and teams; direct per-repository collaborator grants are separate, and a site admin removes those by hand. A
-restored member must be re-added to the forge teams by hand.
+forge."). That ends their access through organization membership and teams;
+their access as a repository's collaborator goes next (below). A restored
+member must be re-added to the forge teams by hand.
 
 Suspending the forge account stays as the fallback, and as the way to also
 cut their personal access tokens and SSH keys, which removal from an
 organization does not touch. Do it when the confirmation says "Couldn't
 remove {git_username} from the forge; ask a super-admin to suspend them there
-today." (the tracker couldn't reach the forge), or when the person must lose
+today." (the forge couldn't be reached, or refused a removal), or when the person must lose
 everything at once:
 
 1. A super-admin signs in to the forge (they are site admins) and opens Site
@@ -732,15 +733,31 @@ command for it in 15, so it is done here, by a super-admin, who has a second
 factor. Untick it if the person comes back.
 
 Deactivating or deleting someone also takes them off the collaborators of every
-linked repository, at once and with the bot's token
-([section 13](#13-repositories-access-and-code-activity)); the message says so,
-or asks for a manual suspend when the forge could not be reached.
+repository of each connected forge organization, linked to a project or not,
+at once and with the bot's token
+([section 13](#13-repositories-access-and-code-activity)). It lists each
+repository's collaborators and removes the person only where they are one, so
+the log ("Took someone off a forge repository's collaborators.") holds only
+real removals. The message says so, or asks for a manual suspend when the
+forge could not be reached or a repository could not be checked.
 
-Taking someone off a cross-organization project team, or moving them to
-another office, while they stay active does not touch the forge at once: the
-nightly reconcile removes them from every forge organization the tracker no
-longer lets them into ([section 12](#12-webhook-and-nightly-reconcile)). It
-also keeps each forge organization's Owners team in step with the office's
+Unlinking a repository keeps its forge collaborators: people who had access
+keep it on the forge until it's changed there or the repository is linked
+again (deactivating someone still takes them off it while the forge
+organization is connected). Turning git off, or re-pointing a connection at
+another forge or forge organization, leaves every collaborator as they are
+too, and offboarding no longer reaches that forge organization: suspend a
+person who leaves on that forge as above.
+
+Taking someone off a project's team, or moving them to another office, while
+they stay active changes their repository access at once: leaving the team
+deletes their grants on its repositories, and either change queues an access
+sync of the repositories concerned
+([Who has access](#who-has-access)), which production's sync queue runs right
+after the web response. Their forge organization membership waits for the
+nightly reconcile, which removes them from every forge organization the
+tracker no longer lets them into
+([section 12](#12-webhook-and-nightly-reconcile)). It also keeps each forge organization's Owners team in step with the office's
 active organizational admins, and a reactivated organizational admin goes back into Owners at
 once;
 everyone else who comes back is re-added to forge teams by hand.
@@ -757,7 +774,8 @@ owner's answer, 2026-10-29).
 
 **Go-live gate:** nobody pushes real code until a deactivation can't leave
 forge access open: met by the tracker removing the person from every
-connected forge organization ([offboarding](#9-offboarding)); a "Couldn't
+connected forge organization and from the collaborators of its repositories
+([offboarding](#9-offboarding)); a "Couldn't
 remove" confirmation still needs a super-admin to suspend the account the
 same day.
 
@@ -922,7 +940,9 @@ repositories that were on the old forge."): link them again from the new
 one. Turning git off deletes the hook and points every linked repository
 back at the forge's own issue tracker (best effort: a forge that is down
 never keeps git on, and a repository it missed keeps linking `TP-12` here
-until an owner changes it under the repository's Settings).
+until an owner changes it under the repository's Settings). Either way every
+repository's collaborators stay as they are on the forge
+([section 9](#9-offboarding)).
 
 What it needs: `FORGEJO_WEBHOOK_ALLOWED_HOSTS` admitting the tracker's host
 ([Environment](#5-environment)), the forge reaching the tracker
@@ -1065,8 +1085,10 @@ repository from the tracker, the tracker decides who may pull and push it, and
 a report counts what each person committed. Design and reasons:
 [`docs/superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md`](superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md).
 It needs nothing new on the forge or in the environment: the bot's token
-already carries `write:organization` and `write:repository`, and the tracker's
-scheduler and queue worker ([Queue worker](#queue-worker)) run the new jobs.
+already carries `write:organization` and `write:repository`, `tasks-scheduler`
+runs the new commands, and the access syncs are queued jobs that production's
+sync queue runs in the web request right after its response (on the worker
+once there is one, [Queue worker](#queue-worker)).
 The HTTP surface is in [`docs/api.md`](api.md) (Code repositories, repository
 access, Code activity).
 
@@ -1100,6 +1122,10 @@ couldn't link it: …") and it can be linked from the list. Only repositories
 the tracker created are marked as protecting `main`; a repository that was
 linked keeps whatever rules its owners set and the sync never touches them.
 
+In a new repository, push `main` first: the first branch pushed to an empty
+repository becomes its default, and only maintainers (and Owners) may push
+`main`, so a maintainer makes the first push.
+
 ### Who has access
 
 The forge's collaborators of every linked repository follow the tracker, never
@@ -1120,11 +1146,16 @@ the other way:
 A grant counts only while the person is active and in the project's
 organization or on its team; otherwise it stays stored and gives nothing.
 Linking an existing repository reads its current collaborators first and makes
-each one the tracker could grant (as above, not a maintainer) a grant (`admin`
-and `write` on the forge become `write`, `read` stays `read`), in one
+each one an organizational admin could grant a grant, whoever links it: an
+active person of the project's organization or on its team, not a maintainer
+(`admin` and `write` on the forge become `write`, `read` stays `read`), in one
 transaction with the link, so linking never takes anyone's access away. If the
 forge can't answer that, nothing is linked: "Couldn't read sdoc/sg-api's
 collaborators on the forge, so it wasn't linked. Try again shortly."
+
+Repositories linked before phase 2 never had their collaborators imported: the
+first sync takes off every collaborator the tracker knows who has no grant.
+Give those people their grants first.
 
 People leaving change the forge at once:
 
@@ -1133,25 +1164,33 @@ People leaving change the forge at once:
 - Moving to another office queues a sync of every repository they hold a grant
   on (their grants stop counting there).
 - Deactivating or deleting someone removes them from every connected forge
-  organization and takes them off the collaborators of every linked
-  repository, with each connection's own bot token. A forge that is down never
-  blocks the change: the message asks for a manual suspend
-  ([section 9](#9-offboarding)), and the rest of that forge is not retried
-  call by call. Only real removals are logged.
+  organization and takes them off the collaborators of every repository of
+  those forge organizations where they are one, linked or not, with each
+  connection's own bot token. A forge that is down never blocks the change:
+  the message asks for a manual suspend ([section 9](#9-offboarding)), and the
+  rest of that forge is not retried call by call. Only real removals are
+  logged.
 - A deactivated project manager loses the manager's powers in the tracker too,
   and the sync takes them off as a maintainer.
+
+Unlinking a repository keeps its forge collaborators: people who had access
+keep it on the forge until it's changed there or the repository is linked
+again. Turning git off or re-pointing a connection leaves collaborators as
+they are too ([section 9](#9-offboarding)).
 
 ### The access sync
 
 A sync writes one repository's wanted collaborators to the forge. It is queued
-(`SyncRepositoryAccess`, three tries, a minute apart, after the database
-transaction that caused it commits) when a grant is made, changed or removed,
-a repository is linked, someone joins or leaves the project's team or becomes
-or stops being its manager, the project changes program, a program gets a new
-manager, or a person moves office. Two things run it regardless: the
-`git:sync-access` command every ten minutes from `tasks-scheduler`, which picks
-up people whose first forge sign-in came after their grant, and the nightly
-reconcile's `access` step per repository.
+(`SyncRepositoryAccess`, after the database transaction that caused it
+commits; on production's sync queue it runs right after the web response) when
+a grant is made, changed or removed, a repository is linked, someone joins or
+leaves the project's team or becomes or stops being its manager, the project
+changes program, a program gets a new manager, or a person moves office. A
+forge failure is logged ("Couldn't sync a forge repository's access.") and the
+job ends there; the next ten-minute run tries again. Two things run it
+regardless: the `git:sync-access` command every ten minutes from
+`tasks-scheduler`, which picks up people whose first forge sign-in came after
+their grant, and the nightly reconcile's `access` step per repository.
 
 In this order, so nobody gains access while a removal is stuck:
 
@@ -1247,6 +1286,10 @@ After a big backfill the backlog drains at 3,600 commits an hour; the report
 shows how many of its commits are still uncounted. To drain faster run it by hand
 in `tasks-web`'s terminal, or with a higher `--limit`.
 
+The schedule runs one at a time: a killed run's lock lapses after 30 minutes
+(`git:sync-access`'s after 15), and `php artisan schedule:clear-cache` clears a
+stuck one at once.
+
 The same command also fills `user_id` on commits ingested before their author
 had a forge username (see below).
 
@@ -1300,6 +1343,7 @@ fails the run's exit code like any other step.
 | `git:sync-access` prints `failed (forge answered 403)` | The bot lost ownership of the forge organization or its token is under-scoped (`write:repository`). |
 | Someone added by hand on the forge disappears | The sync took them off: add them as a grant in the tracker instead. |
 | A removed collaborator is still on the forge | The removal failed; the log has "Couldn't sync a forge repository's access." with the status. The next run retries. |
+| People still reach a repository that was unlinked | Unlinking keeps forge collaborators: change them on the forge, or link the repository again. |
 | The report keeps showing uncounted commits | The forge was down or refused; look for "Counting a commit failed." and run `git:commit-stats` by hand. |
 | A person's commits are "Not matched to anyone" | Their commit email isn't on their forge account (above). |
 

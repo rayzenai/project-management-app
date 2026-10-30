@@ -209,8 +209,8 @@ progress, an organizational admin their whole organization, a super-admin everyt
 | POST | `/workspace/organizations` | `name` (unique) |
 | PATCH | `/workspace/organizations/{organization}` | `name` |
 | DELETE | `/workspace/organizations/{organization}` | 422 unless it has no people, teams or projects |
-| POST | `/workspace/organizations/{organization}/git` | `base_url` (https; plain http only for `127.0.0.1`, `localhost` or `::1`), `owner` (the forge organization), `token` (a bot token). Checks the token against the forge (`GET /api/v1/user`, then the user's permissions on `owner`) and saves it encrypted; calling again replaces the connection, and pointing it at another forge or forge organization unlinks the repositories it had (`Git is on. Unlinked {n} repositories that were on the old forge.`). 422 with `Couldn't reach the forge at {base_url}.`, `The forge refused that token.` or `{login} doesn't own {owner} on the forge.`, and nothing is saved. Validation 422s: `base_url` for plain http elsewhere, `owner` with `{owner} is already connected to another office.` when another organization has the same forge organization (case-insensitive) on the same forge |
-| DELETE | `/workspace/organizations/{organization}/git` | Turns git off: deletes the forge webhook, points each linked repository back at the forge's own issue tracker (best effort; a forge that is down or refuses never keeps git on), then removes the connection and its links |
+| POST | `/workspace/organizations/{organization}/git` | `base_url` (https; plain http only for `127.0.0.1`, `localhost` or `::1`), `owner` (the forge organization), `token` (a bot token). Checks the token against the forge (`GET /api/v1/user`, then the user's permissions on `owner`) and saves it encrypted; calling again replaces the connection, and pointing it at another forge or forge organization unlinks the repositories it had (`Git is on. Unlinked {n} repositories that were on the old forge.`), leaving their forge collaborators as they are. 422 with `Couldn't reach the forge at {base_url}.`, `The forge refused that token.` or `{login} doesn't own {owner} on the forge.`, and nothing is saved. Validation 422s: `base_url` for plain http elsewhere, `owner` with `{owner} is already connected to another office.` when another organization has the same forge organization (case-insensitive) on the same forge |
+| DELETE | `/workspace/organizations/{organization}/git` | Turns git off: deletes the forge webhook, points each linked repository back at the forge's own issue tracker (best effort; a forge that is down or refuses never keeps git on), then removes the connection and its links; every repository's forge collaborators stay as they are |
 
 On the JSON API these are `POST|DELETE /api/v1/workspace/organizations/{organization}/git`
 (names `api.workspace.organizations.git.store|destroy`); success returns the
@@ -277,7 +277,7 @@ on the forge.
 | GET | `/workspace/projects/{slug}/repositories/candidates?q=` | `{ data: [{ full_name, name, description, html_url }] }`: up to 50 repositories of the forge organization that no project links yet, by name, `q` matching the name in any case. 502 with the forge's answer (`The forge answered 500.`) when it can't list them |
 | POST | `/workspace/projects/{slug}/repositories` | `full_name` (`owner/name`, no `.` or `..` part). The forge decides: 422 with `That repository isn't in the {owner} organization on the forge.` (also when the forge has no such repository), `That repository is already linked to {project title}.` (`another project` when the caller can't see it), `Couldn't reach the forge at {base_url}.` or `The forge answered {status}. Try again shortly.`. On success: `Linked {full_name}.`, the forge's external tracker is set to `{APP_URL}/workspace/go/{user}/{index}` (style `alphanumeric`), and a backfill is queued (open pull requests and those updated in the last 90 days, every branch, the default branch's commits of the last 90 days, all linked to tasks without changing any). When the forge refuses the external tracker the link stands and the message adds ` The forge link back couldn't be set; the nightly reconcile will retry.` |
 | POST | `/workspace/projects/{slug}/repositories/new` | Creates a repository in the forge organization and links it. `name`: the project's key lowercased (`tp`) or that followed by `-` and more (`tp-api`); lowercase letters and digits with a single `.`, `_` or `-` between them; at most 100 characters; not ending in `.git`, `.wiki`, `.rss` or `.atom` (validation 422s: `Start the name with {key}, such as {key}-api.`, `Use lowercase letters and digits, with a single ., _ or - between them.`, `The name can't end in .git, .wiki, .rss or .atom.`). `description`: optional, at most 255 characters. On the forge it is private and empty with `main` as its default branch, and `main` is protected: changes reach it through a pull request with one approval, and only the forge organization's Owners and the repository's maintainers (the project's manager and its program's manager, kept on the rule's push allow-list by the access sync) push to it. Then it is linked as above. 422 with `A repository named {name} already exists in {owner}. Link it instead.`, `Couldn't reach the forge at {base_url}.` or `The forge answered {status}. Try again shortly.` (nothing is linked), or `Created {owner}/{name} on the forge, but couldn't link it: {why}` (it exists on the forge and can be linked). On success: `Created and linked {owner}/{name}.`, or `Created and linked {owner}/{name}, but main couldn't be protected: protect it on the forge.` when the forge refused the rule (the repository is linked all the same) |
-| DELETE | `/workspace/projects/{slug}/repositories/{repository}` | `Unlinked {full_name}. The repository is untouched on the forge.`: its branches, commits, pull requests and task links go; nothing changes on the forge. 404 for a repository of another project |
+| DELETE | `/workspace/projects/{slug}/repositories/{repository}` | `Unlinked {full_name}. The repository is untouched on the forge. People who had access keep it on the forge until it's changed there or the repository is linked again.`: its branches, commits, pull requests and task links go; nothing changes on the forge, its collaborators included (the access sync stops writing them). 404 for a repository of another project |
 
 On the JSON API these are `/api/v1/workspace/projects/{slug}/repositories…`
 (names `api.workspace.projects.repositories.index|candidates|store|create|destroy`);
@@ -302,9 +302,12 @@ someone inactive, a super-admin's own member or a maintainer. The same
 rule decides who may change a grant; removing one needs only the right to
 manage access.
 
-A grant is `{ id, permission, waiting, member: { id, name, title },
+A grant is `{ id, permission, waiting, effective, member: { id, name, title },
 granted_at }`. `waiting` is true while the person has never signed in to
-the forge (the forge can't have them until they do). No email anywhere.
+the forge (the forge can't have them until they do). `effective` is false
+while the grant gives nothing: the person is deactivated, or no longer in
+the project's organization or on its team; it stays listed so it can be
+removed, and counts again if that changes. No email anywhere.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
@@ -341,6 +344,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
         "id": 12,
         "permission": "write",
         "waiting": false,
+        "effective": true,
         "member": { "id": 9, "name": "Asha Gurung", "title": "Senior developer" },
         "granted_at": "2026-10-30T09:15:00+00:00"
       }
@@ -363,6 +367,7 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" 
     "id": 13,
     "permission": "read",
     "waiting": true,
+    "effective": true,
     "member": { "id": 14, "name": "Bina Shrestha", "title": "Analyst" },
     "granted_at": "2026-10-30T10:02:11+00:00"
   }
@@ -629,8 +634,12 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 
 **Git phase 2 (repositories, access and code reports).**
 
+- New: `POST /workspace/projects/{slug}/repositories/new` (see Code
+  repositories).
 - New: `GET|POST /workspace/projects/{slug}/repositories/{repository}/access`,
   `GET …/access/candidates` and `PATCH|DELETE …/access/{grant}` (see
   Repository access).
+- Unlinking says that people keep their access on the forge (see Code
+  repositories).
 - New: `GET /workspace/reports/code` and
   `GET /workspace/reports/code/people/{user}` (see Code activity).

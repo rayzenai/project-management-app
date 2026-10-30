@@ -598,7 +598,7 @@ class WorkspaceAccess
 
         $member = self::memberFor($user);
 
-        // ledTeamIds alone keeps a deactivated manager's teams.
+        // A deactivated or missing member sees only their own commits.
         if ($member === null || ! $member->is_active) {
             return $scope;
         }

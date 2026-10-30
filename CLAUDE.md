@@ -472,7 +472,9 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
 - **Models**: `GitRepositoryGrant` (`git_repository_grants`: `read|write`,
   unique `(git_repository_id, member_id)`, `granted_by`; morph `git-repository-grant`;
   `scopeEffective` = the member is active and in the project's organization
-  or on its team, the rest stays stored and gives nothing). `GitRepository`
+  or on its team, the rest stays stored and gives nothing; `isEffective`
+  asks it of one grant, and the resource's `effective` says it, the access
+  list asking the scope once). `GitRepository`
   gains `protects_main` (set only for repositories the tracker created and
   protected) and `access_synced_at`. `GitCommit` gains `user_id` (the user
   whose lowercased `git_username` equals `author_username`), `is_merge`,
@@ -487,10 +489,15 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   `LinkRepositoryService`. A refused rule still links (message says to
   protect it); a failed link after creation says it exists.
 - **Link imports access**: `LinkRepositoryService` saves the row and
-  `RepositoryAccess::importExisting` (the forge's current collaborators the
-  tracker could grant, as `canGrantRepositoryAccessTo`: `admin`/`owner`/`write`
+  `RepositoryAccess::importExisting` (the forge's current collaborators an
+  organizational admin could grant, whoever links: an active person of the
+  project's organization or on its team, not a maintainer, as
+  `RepositoryAccessCandidatesQuery` lists them for an organizational admin;
+  `admin`/`owner`/`write`
   become `write`, `read` stays) in one transaction; if the forge cannot
   answer, nothing is linked ("Couldn't read ... so it wasn't linked").
+  Repositories linked before phase 2 were never imported: their first sync
+  takes off tracker-known collaborators without a grant.
 - **Sync**: `App\Services\Git\RepositoryAccess::sync` writes a repository's
   collaborators: maintainers `admin`, effective grants at their permission
   (the higher when both). Order: removals of tracker-known logins no longer
@@ -503,7 +510,8 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   user are never touched (`ForgeMembership::untouchableLogins`). Logs at
   `warning`, no token.
 - **Triggers**: `SyncRepositoryAccess` (a job: no unique lock, `afterCommit`,
-  3 tries, 60s backoff, reads its repository afresh, skips an unlinked one)
+  reads its repository afresh, skips an unlinked one; it catches every
+  `ForgejoException`, logs it and returns, so the ten-minute run is the retry)
   from `GitRepositoryGrantObserver` (also writes the activity row),
   `TeamMembershipObserver` (add, role change, leave; leaving first deletes that
   member's grants on the project's repositories, one by one, in the same
@@ -514,11 +522,17 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   queue now waits for the surrounding transaction to commit (a rollback drops
   the job); never dispatch forge work any other way.
 - **Offboarding**: `RemoveFromForgeService` removes a deactivated or deleted
-  person from every connected forge organization and every linked repository's
-  collaborators, per connection with its own token; an unreachable forge
-  short-circuits the connection's remaining calls, only real removals log,
-  and a forge failure never blocks the change (`meta.complete` false, the
-  message asks for a manual suspend).
+  person from every connected forge organization, then lists every
+  repository of each of those forge organizations (linked or not) and its
+  collaborators, and removes them only where they are one (login in any
+  case), per connection with its own token; an unreachable forge
+  short-circuits the connection's remaining calls, only real removals log
+  and are listed, and a forge failure never blocks the change
+  (`meta.complete` false, the failed repositories, or `{owner}/*` when an
+  organization's repositories can't be listed, in `failed`; the message asks
+  for a manual suspend). Unlinking, turning git off and re-pointing a
+  connection leave forge collaborators as they are (the unlink message says
+  so).
 - **Access rules** (do not regress): grant, change and remove need
   `canManageRepositoryAccess`; `StoreRepositoryGrantRequest` and
   `UpdateRepositoryGrantRequest` check `canGrantRepositoryAccessTo` and answer
@@ -527,9 +541,10 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   cannot change an organizational admin's grant to someone off the team, only
   remove it. A maintainer's access is never a grant. A cross-organization
   team's outsiders can hold grants only while on the team.
-- **Commit stats**: `git:commit-stats` (every five minutes, 300 commits per run,
-  oldest first; `--limit`) via `CommitStats::compute`: more than one parent is
-  a merge (marked, not counted); else the forge's totals plus the diff
+- **Commit stats**: `git:commit-stats` (every five minutes,
+  `withoutOverlapping(30)`, 300 commits per run, oldest first; `--limit`)
+  via `CommitStats::compute`: more than one parent is a merge (marked, not
+  counted); else the forge's totals plus the diff
   (`ForgejoClient::commitDiff`, streamed, over 5 MB is `too_large`) classified
   by `App\Support\Git\DiffStats` (`CommentSyntax` per file type; `GeneratedFiles`
   skipped; docs by extension; block-comment state per hunk side); a 404 is

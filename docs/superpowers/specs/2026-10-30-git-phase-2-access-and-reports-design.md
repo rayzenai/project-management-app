@@ -129,8 +129,10 @@ not have answers 422 ("user does not exist"), removing an absent one answers
 
 **Deactivation and deletion** (`RemoveFromForgeService`, which already takes
 a person out of every connected forge organization) also removes them as a
-collaborator from every linked repository of each connection, best effort
-with the same "Couldn't remove" message when any call fails.
+collaborator from every repository of each connected forge organization
+where the forge lists them, linked or not (an unlinked repository keeps the
+collaborators the tracker gave it), best effort with the same "Couldn't
+remove" message when any call fails. Only real removals are logged.
 
 **Linking a repository someone made on the forge** first imports its current
 collaborators as grants, for people the tracker knows who could be granted
@@ -232,7 +234,7 @@ commits a run) takes commits with no `stats_computed_at`, oldest first:
 ### The report
 
 **Code activity** in the sidebar (shown when the user has git), at
-`/workspace/reports/code`, and `GET /api/v1/reports/code`.
+`/workspace/reports/code`, and `GET /api/v1/workspace/reports/code`.
 
 - **Filters:** a date range (7, 30 or 90 days, or from and to; at most 366
   days; default the last 30), a project or a program, and up to four people

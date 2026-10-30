@@ -17,8 +17,11 @@ use Illuminate\Support\Facades\Log;
  * hundred per run (the schedule runs it every five minutes). It also fills
  * `user_id` on commits ingested before their author had a forge username.
  *
- * A forge that can't be reached or answers 5xx is left alone for the rest of
- * the run, its commits waiting for the next; other connections go on.
+ * A forge that can't be reached (0) or refuses or throttles (401, 403, 429)
+ * is left alone for the rest of the run, its commits waiting for the next;
+ * other connections go on. Any other 4xx or a 5xx skips only that commit,
+ * until five consecutive 5xx from one forge leave it alone too. Every
+ * attempt, failed or not, counts toward --limit.
  */
 class ComputeCommitStats extends Command
 {
