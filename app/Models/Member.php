@@ -114,6 +114,17 @@ class Member extends Model
     }
 
     /**
+     * Programs this member manages (`programs.manager_id`). The power
+     * itself goes through {@see WorkspaceAccess::managedProgramIds()}.
+     *
+     * @return HasMany<Program, $this>
+     */
+    public function managedPrograms(): HasMany
+    {
+        return $this->hasMany(Program::class, 'manager_id');
+    }
+
+    /**
      * @return HasMany<ProjectAssignment, $this>
      */
     public function assignments(): HasMany

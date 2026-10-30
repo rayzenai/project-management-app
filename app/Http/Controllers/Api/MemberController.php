@@ -12,6 +12,8 @@ use App\Models\User;
 use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
+use App\Services\Workspace\UpdateMemberRolesService;
+use App\Support\ServiceResult;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,8 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * JSON sibling of the Workspace\MemberController. Reuses the same FormRequests
@@ -33,11 +37,11 @@ class MemberController extends Controller
 {
     use RespondsWithServiceResult;
 
-    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails): JsonResponse
+    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles): JsonResponse
     {
         $password = $request->validated('password') ?: Str::password(14, symbols: false);
 
-        $member = DB::transaction(function () use ($request, $password): Member {
+        $member = DB::transaction(function () use ($request, $password, $roles): Member {
             $user = User::create([
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
@@ -53,7 +57,9 @@ class MemberController extends Controller
                 'title' => $request->validated('title'),
             ]);
 
-            $member->teams()->sync($request->validated('team_ids', []));
+            if ($request->roles() !== []) {
+                $this->ensureSaved($roles->execute($member, $request->roles()));
+            }
 
             return $member;
         });
@@ -66,11 +72,11 @@ class MemberController extends Controller
             'message' => $sent->success
                 ? "Member added. {$sent->message}"
                 : 'Member added, but the email failed.',
-            'data' => new MemberResource($member->load('teams:id')),
+            'data' => new MemberResource($member->load(MemberResource::ROLE_RELATIONS)),
         ], 201);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge): JsonResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles): JsonResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return response()->json([
@@ -82,13 +88,13 @@ class MemberController extends Controller
         $deactivated = false;
         $ownersChanged = [];
 
-        DB::transaction(function () use ($request, $member, &$deactivated, &$ownersChanged): void {
-            $member->update($request->safe()->except(['team_ids', 'password']));
+        DB::transaction(function () use ($request, $member, $roles, &$deactivated, &$ownersChanged): void {
+            $member->update($request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password']));
             $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
             $ownersChanged = SyncForgeOwners::organizationsChangedBy($member);
 
-            if ($request->has('team_ids')) {
-                $member->teams()->sync($request->validated('team_ids', []));
+            if ($request->roles() !== []) {
+                $this->ensureSaved($roles->execute($member, $request->roles()));
             }
 
             $user = $member->user;
@@ -120,11 +126,13 @@ class MemberController extends Controller
 
         SyncForgeOwners::dispatchFor($ownersChanged);
 
+        $message = $request->roles() === [] ? 'Member updated.' : 'Member updated. Roles saved.';
+
         return response()->json([
             'message' => $deactivated
-                ? trim('Member updated. '.$forge->execute($member->user)->message)
-                : 'Member updated.',
-            'data' => new MemberResource($member->fresh()->load('teams:id')),
+                ? trim($message.' '.$forge->execute($member->user)->message)
+                : $message,
+            'data' => new MemberResource($member->fresh()->load(MemberResource::ROLE_RELATIONS)),
         ]);
     }
 
@@ -150,7 +158,24 @@ class MemberController extends Controller
 
         return $this->respondWithResult(
             $result,
-            $result->data instanceof Member ? new MemberResource($result->data->load('teams:id')) : null,
+            $result->data instanceof Member ? new MemberResource($result->data->load(MemberResource::ROLE_RELATIONS)) : null,
         );
+    }
+
+    /**
+     * A refused role change undoes the whole save: thrown inside the
+     * transaction, it rolls back and answers 422 on the field.
+     */
+    private function ensureSaved(ServiceResult $result): void
+    {
+        if ($result->success) {
+            return;
+        }
+
+        if (is_array($result->data) && $result->data !== []) {
+            throw ValidationException::withMessages($result->data);
+        }
+
+        throw new RuntimeException((string) $result->message);
     }
 }

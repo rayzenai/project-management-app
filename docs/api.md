@@ -242,7 +242,7 @@ returns it as `team { id, is_cross_organization, members: [{ id, name, email, ti
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/team` | the People directory: `{ teams (each with its project and roster), members, organizations, canCreateMember }`; super-admin may add `?organization=` |
+| GET | `/workspace/team` | the People directory: `{ teams (each with its project and roster), members, organizations, canCreateMember, canSetRoles, roleOptions }`; super-admin may add `?organization=`. Each member carries `team_ids`, `led_team_ids` (the teams they manage), `managed_project_ids` (those teams' projects) and `managed_program_ids`. `canSetRoles` is true for whoever may set people's roles (an organizational admin, a super-admin); `roleOptions` is then `{ programs: [{ id, name, organization_id, manager { id, name } \| null }], projects: [{ id, title, organization_id, team_id, manager { id, name } \| null }] }` (active projects only) for the organizations they administer (all of them for a super-admin, whatever the filter), and empty lists otherwise |
 | GET | `/workspace/teams/{team}/candidates?q=` | up to 8 people who can join (min 2 characters): its organization, or anyone for a cross-organization team |
 | POST | `/workspace/teams/{team}/members` | `member_id` (an existing person; 422 if they can't join) |
 | DELETE | `/workspace/teams/{team}/members/{member}` | 422 for the manager: make someone else manager first |
@@ -317,14 +317,40 @@ connection's webhook secret. See `docs/forgejo.md`, section 12.
 ## Members *(create/edit/delete: organizational admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login),
-optional `password` (min 8), `title` and `team_ids`. A super-admin also sends
+optional `password` (min 8), `title` and the role fields below. A super-admin also sends
 `organization_id` (required) and may send `is_office_admin`; an organizational admin's
 people always join their own organization. Every member gets a login: the
 password you send, or a generated one if you send none. Either way the member is
 emailed their email and password; if that email fails the member is still
 created and `message` says so. `PATCH` accepts `organization_id` and
-`is_office_admin` from a super-admin only. Deactivating (`is_active: false`)
-or deleting someone who has a forge account removes them from every connected
+`is_office_admin` from a super-admin only (403 otherwise).
+
+**Roles.** `POST` and `PATCH` take three optional role fields, each the
+complete wanted set of ids; a field left out leaves that role as it is:
+`managed_program_ids` (programs this person manages), `managed_project_ids`
+(projects this person manages) and `team_ids` (project teams this person is
+on; a team they manage counts as on). Anyone who may create or edit the
+person may send them, and every program, project or team they add or take
+away must be in an organization the caller administers, checked against the
+person's organization after any move in the same request (422 on the field,
+`{name} belongs to another organization.`, or `The {name} program belongs to
+another organization.`; a program must be of the person's own organization,
+and a project or team one they can join). Making someone manager of a program
+replaces its manager; of a project, makes them its team's one manager, and
+the old manager stays on the team as a member. A manager role is never taken
+away here: leaving out a program or project the person manages is a 422
+(`Choose another manager for the {name} program first.` / `Choose another
+manager for {title} first.`), and leaving out a team they manage keeps them on
+it. A manager role for an inactive person is a 422 (`Only an active person can
+manage.`). A refused role undoes the whole request. When a role field was sent,
+`PATCH`'s `message` starts `Member updated. Roles saved.`; the new manager or
+team member is notified as from the program and team routes. A super-admin
+moving someone to another organization must first choose other managers for
+the projects they manage there (422 on `organization_id`). The member payload
+returned by `POST`, `PATCH` and restore carries `team_ids`, `led_team_ids`,
+`managed_project_ids` and `managed_program_ids`.
+
+Deactivating (`is_active: false`) or deleting someone who has a forge account removes them from every connected
 forge organization and adds a sentence to `message`: `{git_username} was removed
 from the forge.` when every removal succeeded, or `Couldn't remove
 {git_username} from the forge; ask a super-admin to suspend them there today.`

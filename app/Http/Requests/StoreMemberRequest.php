@@ -2,7 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Team;
+use App\Http\Requests\Concerns\ChecksMemberRoles;
+use App\Models\Member;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -11,11 +12,14 @@ use Illuminate\Validation\Validator;
 /**
  * People are created by whoever administers their organization: a
  * super-admin (who picks the organization and may make them its office
- * admin) or that organization's office admin. Team leaders add existing
- * people to their teams instead.
+ * admin) or that organization's office admin. Either may give them their
+ * roles at once (checkRoles). Team leaders add existing people to their
+ * teams instead.
  */
 class StoreMemberRequest extends FormRequest
 {
+    use ChecksMemberRoles;
+
     public function authorize(): bool
     {
         return WorkspaceAccess::canCreateMember($this->user(), $this->organizationId());
@@ -41,8 +45,8 @@ class StoreMemberRequest extends FormRequest
                 'nullable', 'integer', Rule::exists('organizations', 'id'),
             ],
             'is_office_admin' => ['nullable', 'boolean'],
+            ...$this->roleRules(),
             'team_ids' => ['nullable', 'array'],
-            'team_ids.*' => ['integer', Rule::exists('teams', 'id')->whereNull('deleted_at')],
         ];
     }
 
@@ -59,18 +63,7 @@ class StoreMemberRequest extends FormRequest
                 return;
             }
 
-            $organizationId = $this->organizationId();
-
-            foreach (Team::query()->whereIn('id', (array) $this->input('team_ids', []))->get() as $team) {
-                $sameOrganization = (int) $team->organization_id === $organizationId;
-                $openTeam = $team->is_cross_organization && WorkspaceAccess::canManageRosterOf($this->user(), $team);
-
-                if (! $sameOrganization && ! $openTeam) {
-                    $validator->errors()->add('team_ids', "{$team->name} belongs to another organization.");
-
-                    return;
-                }
-            }
+            $this->checkRoles($validator, new Member(['organization_id' => $this->organizationId()]), null);
         });
     }
 

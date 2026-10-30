@@ -6,6 +6,8 @@ use App\Http\Resources\MemberResource;
 use App\Http\Resources\TeamResource;
 use App\Models\Member;
 use App\Models\Organization;
+use App\Models\Program;
+use App\Models\Project;
 use App\Models\Team;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\Request;
@@ -42,7 +44,7 @@ class TeamIndexQuery
         $members = Member::query()
             ->visibleTo($user)
             ->when($organizationFilter, fn ($q) => $q->where('organization_id', $organizationFilter))
-            ->with(['teams:id', 'user', 'organization:id,name'])
+            ->with([...MemberResource::ROLE_RELATIONS, 'user', 'organization:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -78,6 +80,7 @@ class TeamIndexQuery
         }
 
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
+        $canSetRoles = $isSuperAdmin || $officeAdminOf !== null;
 
         return [
             'teams' => $teamRows,
@@ -90,6 +93,49 @@ class TeamIndexQuery
                 ? null
                 : Organization::query()->whereKey($officeAdminOf)->first(['id', 'name'])?->only(['id', 'name']),
             'canCreateMember' => $isSuperAdmin || $officeAdminOf !== null,
+            // The person form's role fields: whoever may manage people sets
+            // them, from the organizations they administer.
+            'canSetRoles' => $canSetRoles,
+            'roleOptions' => $canSetRoles ? $this->roleOptions($isSuperAdmin ? null : $officeAdminOf) : ['programs' => [], 'projects' => []],
         ];
+    }
+
+    /**
+     * The programs and active projects a role can be given on, each with
+     * its manager now, for one organization (null: all of them). The form
+     * shows those of the person's organization. A constant number of
+     * queries, however many people there are.
+     *
+     * @return array{programs: array<int, array<string, mixed>>, projects: array<int, array<string, mixed>>}
+     */
+    private function roleOptions(?int $organizationId): array
+    {
+        $programs = Program::query()
+            ->when($organizationId !== null, fn ($q) => $q->where('organization_id', $organizationId))
+            ->with('manager:id,name')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Program $program): array => [
+                'id' => $program->id,
+                'name' => $program->name,
+                'organization_id' => $program->organization_id,
+                'manager' => $program->manager?->only(['id', 'name']),
+            ]);
+
+        $projects = Project::query()
+            ->active()
+            ->when($organizationId !== null, fn ($q) => $q->where('organization_id', $organizationId))
+            ->with(['teams:id', 'teams.leaders:id,name'])
+            ->orderBy('title')
+            ->get()
+            ->map(fn (Project $project): array => [
+                'id' => $project->id,
+                'title' => $project->title,
+                'organization_id' => $project->organization_id,
+                'team_id' => $project->team()?->id,
+                'manager' => $project->manager()?->only(['id', 'name']),
+            ]);
+
+        return ['programs' => $programs->values()->all(), 'projects' => $projects->values()->all()];
     }
 }

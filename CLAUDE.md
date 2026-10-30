@@ -158,9 +158,19 @@ Privilege-escalation protections — do not regress:
 - `canManageMember` blocks a super-admin's linked login and other organizational
   admins; managers manage no people at all (so a cross-organization manager
   can never reset an outsider's password).
-- Organization, organizational-admin flag and bulk team reassignment on a member are
-  super-admin only (`UpdateMemberRequest::authorize()` 403s otherwise);
-  `manager_id`, `is_cross_organization` and `is_public` on a project are
+- Organization and organizational-admin flag on a member are super-admin
+  only (`UpdateMemberRequest::authorize()` 403s otherwise). The person
+  form's role fields (`managed_program_ids`, `managed_project_ids`,
+  `team_ids`, each the complete wanted set, absent = unchanged) are open to
+  whoever passes `canManageMember` (create: `canCreateMember`), but every
+  program, project or team added or taken away must be in an organization
+  the user `administers` and fit the person after any move
+  (`Concerns\ChecksMemberRoles`); they are applied only by
+  `UpdateMemberRolesService`, which appoints through
+  `AppointProjectManagerService`, never takes a manager role away, never
+  takes anyone off a team they manage, and never `sync`s. A refused role
+  undoes the whole save (the member controllers throw inside their
+  transaction). `manager_id`, `is_cross_organization` and `is_public` on a project are
   silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
   `safe()`, which bypasses those overrides.
 - Mentions only notify people who can view the task's project. The comment

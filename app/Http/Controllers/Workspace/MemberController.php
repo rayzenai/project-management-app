@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
+use App\Services\Workspace\UpdateMemberRolesService;
+use App\Support\ServiceResult;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,6 +19,8 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * A member carries a login: create provisions a host user with the member's
@@ -26,11 +30,11 @@ use Illuminate\Support\Str;
  */
 class MemberController extends Controller
 {
-    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails): RedirectResponse
+    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles): RedirectResponse
     {
         $password = $request->validated('password') ?: Str::password(14, symbols: false);
 
-        $user = DB::transaction(function () use ($request, $password): User {
+        $user = DB::transaction(function () use ($request, $password, $roles): User {
             $user = User::create([
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
@@ -46,7 +50,9 @@ class MemberController extends Controller
                 'title' => $request->validated('title'),
             ]);
 
-            $member->teams()->sync($request->validated('team_ids', []));
+            if ($request->roles() !== []) {
+                $this->ensureSaved($roles->execute($member, $request->roles()));
+            }
 
             return $user;
         });
@@ -61,7 +67,7 @@ class MemberController extends Controller
         ]);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge): RedirectResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles): RedirectResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return back()->withErrors(['email' => 'An email is required to create a login.']);
@@ -70,13 +76,13 @@ class MemberController extends Controller
         $deactivated = false;
         $ownersChanged = [];
 
-        DB::transaction(function () use ($request, $member, &$deactivated, &$ownersChanged): void {
-            $member->update($request->safe()->except(['team_ids', 'password']));
+        DB::transaction(function () use ($request, $member, $roles, &$deactivated, &$ownersChanged): void {
+            $member->update($request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password']));
             $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
             $ownersChanged = SyncForgeOwners::organizationsChangedBy($member);
 
-            if ($request->has('team_ids')) {
-                $member->teams()->sync($request->validated('team_ids', []));
+            if ($request->roles() !== []) {
+                $this->ensureSaved($roles->execute($member, $request->roles()));
             }
 
             $user = $member->user;
@@ -109,7 +115,7 @@ class MemberController extends Controller
         SyncForgeOwners::dispatchFor($ownersChanged);
 
         $success = true;
-        $message = 'Member updated.';
+        $message = $request->roles() === [] ? 'Member updated.' : 'Member updated. Roles saved.';
         if ($deactivated) {
             $removal = $forge->execute($member->user);
             $message = trim($message.' '.$removal->message);
@@ -149,5 +155,22 @@ class MemberController extends Controller
         $service->execute($member);
 
         return back()->with('workspace_flash', ['success' => true, 'message' => 'Restored.']);
+    }
+
+    /**
+     * A refused role change undoes the whole save: thrown inside the
+     * transaction, it rolls back and answers 422 on the field.
+     */
+    private function ensureSaved(ServiceResult $result): void
+    {
+        if ($result->success) {
+            return;
+        }
+
+        if (is_array($result->data) && $result->data !== []) {
+            throw ValidationException::withMessages($result->data);
+        }
+
+        throw new RuntimeException((string) $result->message);
     }
 }

@@ -3,9 +3,21 @@
     import { Copy, RefreshCw } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import MemberRoleFields from '../../components/team/MemberRoleFields.svelte';
     import { writeToClipboard } from '../../lib/clipboard';
+    import {
+        heldRoles,
+        roleOptionsFor,
+        rolesToSend,
+    } from '../../lib/memberRoles';
     import { toast } from '../../lib/toast.svelte';
-    import type { Member, OrganizationOption, Team } from '../../lib/types';
+    import type {
+        Id,
+        Member,
+        OrganizationOption,
+        RoleOptions,
+        Team,
+    } from '../../lib/types';
 
     let {
         teams,
@@ -14,6 +26,8 @@
         organizationFilter = null,
         officeAdminOrganization = null,
         canCreateMember = false,
+        canSetRoles = false,
+        roleOptions = { programs: [], projects: [] },
     }: {
         teams: Team[];
         members: Member[];
@@ -21,6 +35,9 @@
         organizationFilter?: number | null;
         officeAdminOrganization?: OrganizationOption | null;
         canCreateMember?: boolean;
+        /** The viewer may set people's roles (the person form's role fields). */
+        canSetRoles?: boolean;
+        roleOptions?: RoleOptions;
     } = $props();
 
     const isSuperAdmin = $derived<boolean>(
@@ -77,6 +94,7 @@
         title: '',
         organization_id: null as number | null,
         is_office_admin: false,
+        ...heldRoles(null),
     });
 
     function openMemberForm() {
@@ -112,7 +130,22 @@
         title: '',
         organization_id: null as number | null,
         is_office_admin: false,
+        ...heldRoles(null),
     });
+
+    /** The organization a new person joins: chosen by a super-admin. */
+    const newMemberOrganizationId = $derived<Id | null>(
+        isSuperAdmin
+            ? memberForm.organization_id
+            : (officeAdminOrganization?.id ?? null),
+    );
+
+    /** The organization whose roles the edit form lists, after any move. */
+    function editOrganizationId(member: Member): Id | null {
+        return isSuperAdmin && member.organization_id
+            ? memberEditForm.organization_id
+            : (member.organization_id ?? null);
+    }
 
     function addMember(e: SubmitEvent) {
         e.preventDefault();
@@ -128,16 +161,25 @@
         };
 
         memberForm
-            .transform((data) =>
-                isSuperAdmin
-                    ? data
-                    : {
-                          name: data.name,
-                          email: data.email,
-                          password: data.password,
-                          title: data.title,
-                      },
-            )
+            .transform((data) => ({
+                name: data.name,
+                email: data.email,
+                password: data.password,
+                title: data.title,
+                ...(isSuperAdmin
+                    ? {
+                          organization_id: data.organization_id,
+                          is_office_admin: data.is_office_admin,
+                      }
+                    : {}),
+                ...(canSetRoles
+                    ? rolesToSend(
+                          data,
+                          roleOptionsFor(roleOptions, newMemberOrganizationId),
+                          null,
+                      )
+                    : {}),
+            }))
             .post('/workspace/members', {
                 preserveScroll: true,
                 onSuccess: () => {
@@ -158,6 +200,7 @@
         memberEditForm.title = member.title ?? '';
         memberEditForm.organization_id = member.organization_id ?? null;
         memberEditForm.is_office_admin = member.is_office_admin ?? false;
+        Object.assign(memberEditForm, heldRoles(member));
     }
 
     function saveMember(member: Member) {
@@ -172,13 +215,25 @@
 
                 // Organization and office-admin status are a super-admin's
                 // call, and a super-admin's own member has no organization.
-                return isSuperAdmin && member.organization_id
-                    ? {
-                          ...base,
-                          organization_id: data.organization_id,
-                          is_office_admin: data.is_office_admin,
-                      }
-                    : base;
+                return {
+                    ...base,
+                    ...(isSuperAdmin && member.organization_id
+                        ? {
+                              organization_id: data.organization_id,
+                              is_office_admin: data.is_office_admin,
+                          }
+                        : {}),
+                    ...(canSetRoles && member.organization_id
+                        ? rolesToSend(
+                              data,
+                              roleOptionsFor(
+                                  roleOptions,
+                                  editOrganizationId(member),
+                              ),
+                              member,
+                          )
+                        : {}),
+                };
             })
             .patch(`/workspace/members/${member.id}`, {
                 preserveScroll: true,
@@ -208,12 +263,42 @@
         });
     }
 
-    // The projects a person works on: each project's team carries its name.
+    // The projects a person works on but doesn't manage: each project's
+    // team carries its name.
     const memberTeamNames = $derived((member: Member) =>
         teams
-            .filter((t) => (member.team_ids ?? []).includes(t.id))
+            .filter(
+                (t) =>
+                    (member.team_ids ?? []).includes(t.id) &&
+                    !(member.led_team_ids ?? []).includes(t.id),
+            )
             .map((t) => t.name),
     );
+
+    // What a person is, listed before the teams they work on.
+    const memberRoles = $derived((member: Member) => {
+        const roles: string[] = [];
+        const programs = roleOptions.programs
+            .filter((p) => (member.managed_program_ids ?? []).includes(p.id))
+            .map((p) => p.name);
+        const managed = teams
+            .filter((t) => (member.led_team_ids ?? []).includes(t.id))
+            .map((t) => t.name);
+
+        if (member.is_office_admin) {
+            roles.push('Organizational admin');
+        }
+
+        if (programs.length > 0) {
+            roles.push(`Program manager of ${programs.join(', ')}`);
+        }
+
+        if (managed.length > 0) {
+            roles.push(`Manages ${managed.join(', ')}`);
+        }
+
+        return roles;
+    });
 
     const managesPeople = $derived(isSuperAdmin || canCreateMember);
 </script>
@@ -391,6 +476,18 @@
                         </div>
                     {/if}
                 </div>
+                {#if canSetRoles}
+                    <MemberRoleFields
+                        options={roleOptionsFor(
+                            roleOptions,
+                            newMemberOrganizationId,
+                        )}
+                        bind:programIds={memberForm.managed_program_ids}
+                        bind:projectIds={memberForm.managed_project_ids}
+                        bind:teamIds={memberForm.team_ids}
+                        errors={memberForm.errors}
+                    />
+                {/if}
                 <p class="text-xs text-fg-muted">
                     We email them this password too. After adding, you can copy
                     their login details to share or try yourself.
@@ -588,6 +685,23 @@
                                         </div>
                                     {/if}
                                 </div>
+                                {#if canSetRoles && member.organization_id}
+                                    <MemberRoleFields
+                                        options={roleOptionsFor(
+                                            roleOptions,
+                                            editOrganizationId(member),
+                                        )}
+                                        person={member}
+                                        bind:programIds={
+                                            memberEditForm.managed_program_ids
+                                        }
+                                        bind:projectIds={
+                                            memberEditForm.managed_project_ids
+                                        }
+                                        bind:teamIds={memberEditForm.team_ids}
+                                        errors={memberEditForm.errors}
+                                    />
+                                {/if}
                                 <div
                                     class="flex items-center justify-end gap-1.5"
                                 >
@@ -613,11 +727,6 @@
                                     <span class="truncate font-medium text-fg"
                                         >{member.name}</span
                                     >
-                                    {#if member.is_office_admin}
-                                        <span class="chip chip-accent"
-                                            >Organizational admin</span
-                                        >
-                                    {/if}
                                     {#if !member.user_id}
                                         <span class="chip">No login</span>
                                     {/if}
@@ -640,6 +749,9 @@
                                                 'No organization'}</span
                                         >
                                     {/if}
+                                    {#each memberRoles(member) as role (role)}
+                                        <span class="truncate">{role}</span>
+                                    {/each}
                                     {#if memberTeamNames(member).length > 0}
                                         <span class="truncate text-fg-faint"
                                             >{memberTeamNames(member).join(

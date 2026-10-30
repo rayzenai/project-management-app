@@ -23,6 +23,41 @@ export interface Member {
     is_office_admin?: boolean;
     /** The viewer may edit, deactivate or delete this person. */
     can_manage?: boolean;
+    /** Projects this person manages (their team's one leader). */
+    managed_project_ids?: Id[];
+    /** Programs this person manages. */
+    managed_program_ids?: Id[];
+}
+
+/** Who manages a program or project now, as the person form shows it. */
+export interface RoleManager {
+    id: Id;
+    name: string;
+}
+
+/** What the person form's role fields offer, for the organizations the viewer runs. */
+export interface RoleOptions {
+    programs: {
+        id: Id;
+        name: string;
+        organization_id: Id;
+        manager: RoleManager | null;
+    }[];
+    /** Active projects; `team_id` is what "Member of" sends. */
+    projects: {
+        id: Id;
+        title: string;
+        organization_id: Id;
+        team_id: Id | null;
+        manager: RoleManager | null;
+    }[];
+}
+
+/** The role fields of the person form, each the complete wanted set. */
+export interface MemberRoleFields {
+    managed_program_ids: Id[];
+    managed_project_ids: Id[];
+    team_ids: Id[];
 }
 
 /** A person as listed on one team, with what the viewer may do there. */

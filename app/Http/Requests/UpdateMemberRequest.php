@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ChecksMemberRoles;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Team;
@@ -13,6 +14,8 @@ use Illuminate\Validation\Validator;
 
 class UpdateMemberRequest extends FormRequest
 {
+    use ChecksMemberRoles;
+
     public function authorize(): bool
     {
         $member = $this->route('member');
@@ -21,9 +24,10 @@ class UpdateMemberRequest extends FormRequest
             return false;
         }
 
-        // Organization, office-admin status and bulk team reassignment are
-        // super-admin decisions; office admins use the team rosters.
-        foreach (['team_ids', 'organization_id', 'is_office_admin'] as $superAdminOnly) {
+        // Organization and organizational-admin status are super-admin
+        // decisions. The role fields are open to whoever manages the person,
+        // within the organizations they administer (checkRoles).
+        foreach (['organization_id', 'is_office_admin'] as $superAdminOnly) {
             if ($this->has($superAdminOnly) && ! WorkspaceAccess::isSuperAdmin($this->user())) {
                 return false;
             }
@@ -51,16 +55,16 @@ class UpdateMemberRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'organization_id' => ['sometimes', 'required', 'integer', Rule::exists('organizations', 'id')],
             'is_office_admin' => ['sometimes', 'boolean'],
-            'team_ids' => ['sometimes', 'array'],
-            'team_ids.*' => ['integer', Rule::exists('teams', 'id')->whereNull('deleted_at')],
+            ...$this->roleRules(),
         ];
     }
 
     /**
      * Only a super-admin may hand out a super-admin's email (the Gate matches
      * on email). Moving someone to another organization would leave them on
-     * teams they can no longer join, or managing programs of an organization
-     * they left, so it waits until they are off those teams and programs.
+     * teams they can no longer join, or managing projects or programs of an
+     * organization they left, so it waits until they are off those teams and
+     * someone else manages those projects and programs.
      */
     public function withValidator(Validator $validator): void
     {
@@ -80,20 +84,12 @@ class UpdateMemberRequest extends FormRequest
                 return;
             }
 
-            if ($this->has('team_ids')) {
-                $moved = $member->replicate();
-                $moved->organization_id = $this->has('organization_id') ? $this->integer('organization_id') : $member->organization_id;
+            // Roles are checked against the person as they will be.
+            $moved = $member->replicate();
+            $moved->organization_id = $this->has('organization_id') ? $this->integer('organization_id') : $member->organization_id;
+            $this->checkRoles($validator, $moved, $member);
 
-                foreach (Team::query()->whereIn('id', (array) $this->input('team_ids', []))->get() as $team) {
-                    if (! WorkspaceAccess::canJoinTeam($moved, $team)) {
-                        $validator->errors()->add('team_ids', "{$team->name} belongs to another organization.");
-
-                        return;
-                    }
-                }
-            }
-
-            if (! $this->has('organization_id')) {
+            if ($validator->errors()->isNotEmpty() || ! $this->has('organization_id')) {
                 return;
             }
 
@@ -103,14 +99,24 @@ class UpdateMemberRequest extends FormRequest
                 return;
             }
 
-            $stranded = $member->teams()
+            $teams = $member->teams()
                 ->where('teams.is_cross_organization', false)
                 ->where('teams.organization_id', '!=', $organizationId)
-                ->when($this->has('team_ids'), fn ($q) => $q->whereIn('teams.id', (array) $this->input('team_ids', [])))
-                ->pluck('teams.name');
+                ->orderBy('teams.name')
+                ->get();
+
+            // team_ids never takes a manager off their team, so its manager
+            // is chosen first.
+            $managed = $teams->filter(fn (Team $team): bool => ($team->pivot->role ?? 'member') === 'leader');
+            $stranded = $teams->diff($managed)
+                ->when($this->has('team_ids'), fn ($c) => $c->whereIn('id', (array) $this->input('team_ids', [])));
 
             if ($stranded->isNotEmpty()) {
-                $validator->errors()->add('organization_id', 'Take them off '.$stranded->implode(', ').' first.');
+                $validator->errors()->add('organization_id', 'Take them off '.$stranded->pluck('name')->implode(', ').' first.');
+            }
+
+            if ($managed->isNotEmpty()) {
+                $validator->errors()->add('organization_id', 'Choose another manager for '.$managed->pluck('name')->implode(', ').' first.');
             }
 
             $programs = Program::query()
