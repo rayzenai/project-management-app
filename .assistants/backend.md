@@ -21,12 +21,14 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `ShareWorkspaceData` middleware. Shared Inertia props: `statuses`,
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
-  `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`. Cross-cutting
+  `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
+  `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`. Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and office-admin
-  context plus `features: {task_notes, contacts}`. Cross-cutting API context
+  context plus `features: {task_notes, contacts}`, `managed_program_ids` and
+  `git_enabled`. Cross-cutting API context
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
@@ -52,11 +54,15 @@ queries and authorized note/contact endpoints remain available.
    manages organizations and everything inside them. Only this tier can mark a
    team cross-organization or make a person an office admin.
 2. **Office admin** — active member with `is_office_admin`. Full control inside
-   their organization: people, projects, managers, rosters and publication.
-3. **Project manager** — the one `member_team.role = 'leader'` on a project's
+   their organization: people, projects, programs, managers, rosters and publication.
+3. **Program manager** — active `programs.manager_id` in their own organization.
+   Runs each project in that program (edit/archive, roster, progress, code and
+   repositories) without joining its team. Never creates projects/programs,
+   chooses managers, publishes/rekeys projects or edits people.
+4. **Project manager** — the one `member_team.role = 'leader'` on a project's
    own team. Edits/archives that project, manages its roster and sees its
    progress; never edits people, chooses managers or creates projects.
-4. **Member** — sees their teams, teammates and projects plus public
+5. **Member** — sees their teams, teammates and projects plus public
    projects in their organization; manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (read-only),
@@ -66,8 +72,12 @@ Key methods: `isSuperAdmin`, `memberFor` (read-only),
 `canManageMember`, `canViewProject`,
 `canCreateProject`, `canManageProjectAccess`, `canPublishProject`,
 `canChangeProjectKey` (office admin/super-admin), `canManageGit` (super-admin),
-`ledTeamIds`. `Project::scopeVisibleTo` is the query twin of `canViewProject`;
-`Team` and `Member` also expose `visibleTo`. Per-user `WeakMap` memos flush on
+`canViewProjectCode`, `canManageProjectRepositories`, `ledTeamIds`,
+`managedProgramIds`, `managesProgramOf`, `canManagePrograms`, `canViewProgram`.
+`Project::scopeVisibleTo` and `Program::scopeVisibleTo` are query twins of their
+view predicates; `Team` and `Member` also expose `visibleTo`. Project/team/member
+scopes reach program projects through `Project::inPrograms`, checking both the
+program's and project's organization. Per-user `WeakMap` memos flush on
 both `RouteMatched` and `RequestHandled`.
 
 Do-not-regress protections: ordinary teams, projects and people never cross
@@ -84,13 +94,27 @@ a team's cross-organization flag. Project `manager_id`, `is_public` and
 current manager cannot be removed or demoted, only replaced. `project_team`
 is unique on each column; a partial unique index allows one leader per team.
 `NotifiesMentions::mentionableIds` filters stored mentions to eligible people;
-mention notifications only reach project viewers.
+mention notifications only reach project viewers. `TaskShowQuery` offers
+`mentionCandidates` (team plus program manager) as `{id, name}` only; `team` remains the
+assignee list. Program management grants no team leadership or people-editing
+rights. `UpdateMemberRequest` blocks organization changes while managing programs.
+Only organization admins may set `program_id`; other editors' values are dropped
+by `validated()`, and kept values must belong to the project's organization.
 
 ## Domain model
 
 - **Organization** — office/ministry tenant; has many members, teams and
   projects. `DeleteOrganizationService` refuses deletion until all three are
   empty.
+- **Program** — slug-routed named collection in one organization, one manager
+  chosen from its active members (nullable only after pruning that member). Optional
+  `projects.program_id` puts each project in at most one program. Paired
+  `ProgramController`s use shared Store/Update requests, Create/Update/Delete
+  services and `ProgramResource`; only office/super-admins manage them. Names
+  are unique within the organization ignoring case. Deletion detaches projects
+  individually so `ProjectObserver` logs moves; projects stay. Web show and API
+  `programs/{program:slug}/progress` use `ProgramProgressQuery` + `ProgressReport`
+  across active projects; API `GET programs` lists visible programs.
 - **Project** — belongs to an organization; slug-routed, `archived_at`
   soft-archive, `is_public` within that organization; scopes
   `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team (one each).
@@ -150,7 +174,7 @@ mention notifications only reach project viewers.
   assigned work, up to 500 project tasks (including dependency ids), workload
   and recent activity. The web polls `progress` every 15s while visible; old
   web team-progress links redirect here. No team-progress API remains.
-- **ProjectActivity** — polymorphic audit log, written only by the eight
+- **ProjectActivity** — polymorphic audit log, written only by
   observers via `ProjectActivityRecorder`. Each new row carries `project_id`;
   `task_id` is null for project-level entries. `TeamMembershipObserver` records
   roster additions/removals and manager handovers through `recordForProject`,
@@ -161,14 +185,18 @@ mention notifications only reach project viewers.
   visibility scopes `project_id` to projects `visibleTo` the viewer; progress
   and dashboard feeds also include team changes. Never filter the
   feed on `->public()` (observers write `is_public = false`).
+  `ProjectObserver` also records program moves; Git observers record repository
+  links and PR activity. Forge-originated entries have no actor; PR activity
+  belongs only to tasks of the repository's own project. Git activity also
+  requires code access, including in dashboard, task and activity feeds.
   **WorkspaceNote** — personal stickies.
   **ProjectAssignment/Note/Contact, TaskComment** — task children.
 
 ## Notifications
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
-`MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam` and
-`MadeProjectManager` share
+`MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam`,
+`MadeProjectManager` and `MadeProgramManager` share
 `Concerns\BuildsWorkspaceNotification`; stable payload
 `{kind, title, action, body, task, actor, url}` (`action` short-form,
 `body` long sentence). Dispatched from observers (assignment created;
@@ -177,7 +205,9 @@ status entering done/failed), the comment service (mentions via
 promotion notifies the linked user, except the actor; team payloads have
 `kind: team_added`/`made_manager`, `task: null`, a `project {slug, title}`
 and a URL to the project's People tab. `NotificationIndexQuery` groups both
-under the `team` filter/count on both surfaces.
+under the `team` filter/count on both surfaces. `ProgramObserver` sends
+`made_program_manager` for appointments/handovers except to the actor, with
+`task: null`, `program {slug, name}` and the program URL; also in the Teams filter.
 
 ## Scheduled / console commands
 
@@ -187,6 +217,8 @@ Daily schedule in `routes/console.php`. Commands: `workspace:api-token`,
 `--pretend`. Weekly digest mail, command and subscriber model/table are retired.
 `passport:purge` also runs daily. `git:oidc-client {redirect_uri}` creates/reuses
 the sole Forgejo client; reruns keep its id and rotate its secret.
+`git:reconcile [--connection=] [--allow-removals]` runs daily at 01:30 without
+overlapping; see the phase 1 map below for repair and removal safeguards.
 
 `php artisan db:seed --class=SdocProjectsSeeder --force` explicitly seeds SDOC
 and eight private projects with their own teams, initially without managers.
@@ -226,3 +258,44 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   suspension. Tokens/secrets must never reach resources, old input, errors or logs.
 - Runbook/deploy kit: `docs/forgejo.md`, `deploy/forgejo/`; broader design and
   later phases: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
+
+## Git / Forgejo (phase 1: code)
+
+- Models: `GitRepository` links to one project, unique per connection/forge id;
+  `GitBranch`, `GitCommit` (retained with `unreachable_at`), `GitPullRequest`
+  (`open|merged|closed`, `forge_updated_at` rejects older snapshots). `TaskGitLink`
+  is a morph pivot with repository cascade. The strict morph map includes
+  `git-repository`, `git-branch`, `git-commit`, `git-pull-request`.
+- Paired `ProjectRepositoryController`s, shared link/search/unlink requests and
+  `LinkRepositoryService`/`UnlinkRepositoryService` manage links; candidates come
+  from `RepositoryCandidatesQuery`. `canViewProjectCode` requires git and team
+  membership, program management, office administration or super-admin access;
+  public-project visibility alone is insufficient. Query twin:
+  `Project::scopeCodeVisibleTo`. Changes need `canManageProjectRepositories`.
+  `TaskCodeQuery::inVisibleRepositories` filters task code and board PR flags by
+  the source repository's project access, even for references across projects.
+- `Services/Git/GitIngest` is the single ingest/linking path for webhooks,
+  backfill and reconcile; `ForgeShapes` maps forge JSON. `Support/Git/TaskReferences`
+  parses uppercase text references, any-case branch references, skipping code
+  and URLs. Keys/aliases resolve inside the repository's organization; unknown
+  keys and trashed tasks link nothing. Git events never change task status.
+- `GitWebhookController`: sessionless, throttled `POST /git/webhooks/{connection}`;
+  raw-body HMAC-SHA256, 2 MB cap, UUID deduplication via `GitWebhookDelivery`.
+  `ProcessGitDelivery` applies each delivery once; unprocessed redeliveries retry.
+  `BackfillGitRepository` uses `RepositorySync::catchUp`. `Support/Background`
+  dispatches after the response on the sync queue, or to a configured worker.
+- `ReconcileGit` repairs hook settings/secret, reconciles repository snapshots,
+  marks unreachable commits, prunes branches, unlinks gone repositories, syncs
+  forge membership and prunes deliveries after 14 days. `RepositorySync::unlinkGone`
+  requires the bot still to own the forge organization; more than max(3, 25%)
+  unlinks are held back. `ForgeMembership` keeps Owners aligned with active office
+  admins and removes tracker-known logins no longer admitted by `GitAccess`,
+  preserving `forge-admin`, the bot and unknown logins. More than max(5, 25%)
+  login removals per step are held back. Breakers exit non-zero;
+  `--allow-removals` lifts both volume limits for one run, never the ownership check.
+  Changes log at warning. `SyncForgeOwners` runs on office-admin flag changes.
+- Repointing a connection unlinks its repositories; disabling git and unlinking
+  hand the forge its own issue tracker back. `GoToTaskController` handles
+  `/workspace/go/{org}/{index}` (including aliases); inaccessible tasks return
+  404 and sign-in uses a full page visit. Setup/worker runbook: `docs/forgejo.md`
+  section 12; plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`.

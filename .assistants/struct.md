@@ -5,8 +5,9 @@ Single-stack Laravel monolith; frontend is compiled by Vite from `resources/js`.
 ```
 app/
   Console/Commands/        # workspace:api-token, workspace:prune-trashed,
-                           # workspace:send-deadline-reminders, git:oidc-client
+                           # workspace:send-deadline-reminders, git:oidc-client, git:reconcile
   Http/
+    Controllers/GitWebhookController.php # signed, sessionless forge deliveries
     Controllers/Api/       # /api/v1 controllers (Sanctum) + Concerns/RespondsWithServiceResult
     Controllers/Workspace/ # /workspace Inertia controllers + Concerns/RedirectsWithServiceResult
     Middleware/            # ShareWorkspaceData, EnsureProjectVisible, HandleInertiaRequests,
@@ -14,26 +15,31 @@ app/
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
     Resources/             # JsonResources ($wrap = null)
   Mail/                    # new-member login-details mailable
-  Models/                  # Organization, Project, Task, TaskDependency, Subtask, Team, Member, User, TaskComment,
+  Jobs/                    # ProcessGitDelivery, BackfillGitRepository, SyncForgeOwners
+  Models/                  # Organization, Program, Project, Task, TaskDependency, Subtask, Team, Member, User, TaskComment,
                            # ProjectAssignment/Note/Contact/Activity,
                            # TeamMembership (member_team pivot), WorkspaceNote, UserPreference,
-                           # ProjectKeyAlias, GitConnection, OAuthClient (Passport)
+                           # ProjectKeyAlias, GitConnection, OAuthClient (Passport),
+                           # GitRepository/Branch/Commit/PullRequest, TaskGitLink, GitWebhookDelivery
   Notifications/           # TaskAssigned, TaskStatusChanged, MentionedInComment,
-                           # TaskDeadlineDue, AddedToProjectTeam, MadeProjectManager,
+                           # TaskDeadlineDue, AddedToProjectTeam, MadeProjectManager, MadeProgramManager,
                            # Concerns/BuildsWorkspaceNotification
-  Observers/               # eight observers — sole writers of the activity log
+  Observers/               # activity writers + ProgramObserver (manager notification)
   Providers/AppServiceProvider.php  # manage-workspace Gate, morph map, observer registry
   Queries/                 # heavy reads (ProjectShow, OrganizationIndex,
-                           # TeamIndex/Candidates, ProjectProgress + ProgressReport, ...)
+                           # TeamIndex/Candidates, ProjectProgress/ProgramProgress + ProgressReport,
+                           # RepositoryCandidates, TaskCode, ...)
   Services/Workspace/      # action services returning ServiceResult (+ Concerns/NotifiesMentions)
-                           # includes EnableGit, DisableGit, RemoveFromForge services
+                           # includes program CRUD, EnableGit, DisableGit, RemoveFromForge,
+                           # LinkRepository and UnlinkRepository services
   Services/Git/            # ForgejoClient + ForgejoException (token-safe HTTP boundary)
+                           # GitIngest, ForgeShapes, RepositorySync, ForgeMembership, removal breakers
   Support/                 # WorkspaceAccess (ALL role decisions), ServiceResult,
-                           # QuickAddParser, MentionParser, ApiResponser, ProjectKeys
-  Support/Git/             # GitAccess, GitUsernames, Oidc/{IdentityEntity,IdentityRepository}
+                           # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background
+  Support/Git/             # GitAccess, GitUsernames, TaskReferences, Oidc/{IdentityEntity,IdentityRepository}
 routes/
   web.php                  # /workspace/* Inertia routes (names workspace.*), guest login
-                           # /oauth/authorize + /oauth/token (forge sign-in)
+                           # /oauth/authorize + /oauth/token (forge sign-in), /git/webhooks/{connection}
   api.php                  # /api/v1/* Sanctum routes (names api.*)
   console.php              # daily schedule
 config/
@@ -47,18 +53,20 @@ database/
                            # one-team-per-project / one-leader-per-team constraints,
                            # digest retirement, project-level activity backfill,
                            # stable keys/task numbers, git connections and Passport tables,
-                           # optional task-note/contact preferences (both default off)
+                           # optional task-note/contact preferences (both default off),
+                           # Git code/link/delivery tables, programs + projects.program_id
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (idempotent, production-safe SDOC projects)
 resources/
   js/app.ts                # single Inertia entry
   js/pages/                # Home, MyWorkspace, PlanTracker, Guide, Auth/, Notifications/,
                            # Organizations/Index, Projects/{Index,Show,Progress}, Tasks/Show,
-                           # Team/Index (People directory)
+                           # Programs/Show, Team/Index (People directory)
   js/components/           # shared UI (AppShell, ThemeToggle, AppearanceConfig,
                            # StatusGlyph, QuickAdd*, AutosaveStatus, ...)
                            # plus project/ views + ProjectTeamPanel, ProgressReport,
-                           # team/{RosterSearch,GanttChart,TaskReportDrawer}, task dependency UI
+                           # team/{RosterSearch,GanttChart,TaskReportDrawer}, task dependency UI,
+                           # program/ProgramForm, project/CodeView, TaskCodePanel
   js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils,
                            # dependencies (board ordering/links), schedule (Gantt planning),
                            # taskCode (stored project key + permanent task number)
@@ -68,11 +76,11 @@ resources/
 tests/
   Feature/Workspace/       # web-surface feature tests
   Feature/Workspace/Api/   # API-surface feature tests
-  Unit/                    # parser units
+  Unit/                    # parsers + ForgejoClient HTTP boundary tests
 docs/api.md                # HTTP API reference + external-integration guide
-docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local proof
-docs/superpowers/          # design specs + implementation plans (Git phase 0 included)
-                           # 2026-10-29-programs-design.md is a draft, not implemented
+docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local proof,
+                           # section 12: webhooks, queue worker, nightly reconcile
+docs/superpowers/          # design specs + implementation plans (Programs, Git phases 0/1)
 deploy/forgejo/            # Compose + .env.example for forge/Postgres; local.sh laptop runner
 deploy.sh                  # SDOC Dokploy web/scheduler deploy + health verification
 Dockerfile, dock.sh        # production image and local image runner

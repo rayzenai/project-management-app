@@ -9,13 +9,13 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   permissions, quick-add, notifications, soft-delete/restore, reminders,
   seeder, plan tracker, appearance, login-detail email, organizations,
   project progress, task dependencies, multi-tenant isolation, stable task codes,
-  Git connections, OIDC sign-in and forge offboarding).
+  programs, Git connections/code/webhooks/reconcile, OIDC sign-in and forge offboarding).
 - `tests/Feature/Workspace/Api/**` — API-surface twins (`AuthApiTest`,
   `ProjectApiTest`, `TaskApiTest`, `TaskCommentApiTest`, `MemberApiTest`,
   `TeamRosterApiTest`, `NotificationApiTest`, `RestoreApiTest`).
 - `tests/Feature/` root — cross-cutting (WorkspaceAccessTest, theme tokens,
   user preferences, api-token command, seeders).
-- `tests/Unit/` — parsers (MentionParser).
+- `tests/Unit/` — parsers (MentionParser, TaskReferences) and ForgejoClient HTTP tests.
 - `ProjectProgressTest` covers both surfaces, access gates and legacy web
   redirects; `TaskDependencyTest` covers web/API links, cycle/scope validation,
   audit logging, quick-add and graph props. `OneTeamPerProjectMigrationTest`
@@ -47,6 +47,24 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   updates, preservation of other settings, boolean validation, shared task-note
   feed gating and API user feature context. `TaskNotesInWorkspaceFeedTest`
   explicitly enables task notes before testing feed contents.
+- Programs: `ProgramModelTest`, `ProgramAccessTest`, `ProgramManagementTest`,
+  `ProjectProgramTest`, `ProgramProgressTest`, `ProgramWorkspaceTest` and
+  `ProgramEditPageTest` cover model/scope behavior, tenant and inactive-manager
+  gates, CRUD, project moves/deletion audit, progress, grouping/shared context,
+  mention-candidate privacy and admin editing. `Api/ProgramApiTest` covers the
+  parallel list/CRUD surface; progress and project assignment also test API calls.
+- Code: `ProjectRepositoryTest` + `Api/ProjectRepositoryTest` cover link/search/
+  unlink gates, ownership, concurrency, secret redaction and backfill.
+  `ProjectCodeViewTest` covers project/task payloads, PR flags and repository
+  visibility across projects; `GitActivityVisibilityTest` covers scoped audit.
+  `GitIngestTest` covers references/aliases, link replacement, stale snapshots
+  and preservation of task status; `Unit/TaskReferencesTest` covers parsing.
+- `GitWebhookTest` covers signature/size/UUID checks, replay/retry safety,
+  queue failure handling and push/PR/branch/repository events. `GitReconcileTest`
+  covers hook repair, unreachable commits, gone repositories, ownership and
+  removal breakers, owner/member sync, logging and delivery retention.
+  `GoToTaskTest` covers forge links, tenant isolation, aliases, inaccessible-task
+  404s and guest sign-in. `Unit/ForgejoClientTest` covers pagination and forge APIs.
 
 ## Running
 

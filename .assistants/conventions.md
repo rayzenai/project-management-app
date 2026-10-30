@@ -13,6 +13,7 @@ php artisan test --compact tests/Feature/Workspace   # scoped test runs
 php artisan db:seed --class=WorkspaceDemoSeeder      # demo data (non-prod)
 php artisan passport:keys                            # local OIDC signing keys
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback
+php artisan git:reconcile --connection=1              # nightly forge repair, scoped by office connection
 deploy/forgejo/local.sh up                            # local forge against this tracker
 ./deploy.sh                                          # SDOC web + scheduler (VPN required)
 ```
@@ -71,3 +72,6 @@ Forge deployment is separate: `deploy/forgejo/compose.yml` and
 `docs/forgejo.md` cover bootstrap, OIDC, backups and upgrades. Production OIDC
 signing uses `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY`; rerunning
 `git:oidc-client` keeps the client id but rotates its secret.
+Git jobs use `App\Support\Background` (after the response with sync, queued with
+a worker). `docs/forgejo.md` section 12 describes adding `tasks-queue` and
+switching all services to Redis; `deploy.sh` still deploys only web/scheduler.
