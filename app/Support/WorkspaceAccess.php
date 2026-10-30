@@ -381,7 +381,7 @@ class WorkspaceAccess
 
     /**
      * Link and unlink repositories: whoever runs the project (its manager,
-     * its office admin, a super-admin).
+     * its program's manager, its office admin, a super-admin).
      */
     public static function canManageProjectRepositories(?Authenticatable $user, Project $project): bool
     {
