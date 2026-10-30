@@ -30,6 +30,8 @@ php artisan workspace:send-deadline-reminders --pretend
 php artisan passport:keys                         # local OIDC signing keys (storage/oauth-*.key)
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback   # the forge's OIDC client
 php artisan git:reconcile [--connection=1]        # the nightly forge repair, by hand
+php artisan git:sync-access [--connection=1]      # write every linked repository's collaborators to the forge
+php artisan git:commit-stats [--limit=300]        # count the lines of commits not counted yet
 ```
 
 Output of pint/phpstan/pest is rewritten to JSON by `laravel/pao`; when a PHP
@@ -42,7 +44,8 @@ vendor/bin/pest > file 2>&1` and read the file.
   `config('project-management.super_admins')`), the strict morph map (`user`,
   `project`, `task`, `task-comment`, `task-dependency`, `project-note`,
   `project-contact`, `subtask`, `project-assignment`, `team`, `member`,
-  `git-repository`, `git-branch`, `git-commit`, `git-pull-request`), and the
+  `git-repository`, `git-repository-grant`, `git-branch`, `git-commit`,
+  `git-pull-request`), and the
   observers (`ProgramObserver`, `ProjectObserver`, `TaskObserver`, ...).
 - `routes/web.php` — `/workspace/*` (Inertia, `auth` + `ShareWorkspaceData`),
   guest login routes, `/` redirect. `routes/api.php` — `/api/v1/*` (Sanctum).
@@ -147,7 +150,20 @@ role fields: whoever administers the organization), `canViewProject` (twin of
 (its organization's admins and its manager), `createsProjectsOnlyInPrograms`
 (a program manager who administers nothing), `canManageProjectAccess`,
 `canPublishProject`, `canViewProjectCode`, `canManageProjectRepositories`,
-`ledTeamIds`, `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
+`canManageRepositoryAccess` (give, change and remove a repository's grants:
+whoever passes `canManageProjectRepositories`),
+`canGrantRepositoryAccessTo` (who may be given access: never a maintainer,
+an inactive or deleted person or a super-admin's own member; an
+organizational admin gives it to their organization's people and the team,
+a manager or program manager only to the team; twin of
+`RepositoryAccessCandidatesQuery`, keep them in step),
+`repositoryMaintainerIds` (the active manager and the program's active
+manager, the latter as `managesProgramOf` counts them), `codeReportScope`
+(whose commits the code report shows: `{all, organization_ids, program_ids,
+project_ids, user_id}`, empty but the viewer's own commits for an inactive
+member), `ledTeamIds` (empty for a deactivated member: a deactivated manager
+has no manager powers, like inactive organizational admins and program
+managers), `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
 `canViewProgram` (twin of `Program::scopeVisibleTo`). Visibility scopes:
 `Project`, `Team`, `Member` and `Program::scopeVisibleTo` (the first three
 reach a program manager's projects through `Project::inPrograms`). Memos
@@ -447,6 +463,93 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
 - **UI**: the project's Code tab (`project/CodeView.svelte`), the task's Code
   section (`TaskCodePanel.svelte`, Peek and full page), the board card's
   pull-request mark; absent without git.
+
+## Git (Forgejo), phase 2
+
+Spec: `docs/superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md`.
+Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
+
+- **Models**: `GitRepositoryGrant` (`git_repository_grants`: `read|write`,
+  unique `(git_repository_id, member_id)`, `granted_by`; morph `git-repository-grant`;
+  `scopeEffective` = the member is active and in the project's organization
+  or on its team, the rest stays stored and gives nothing). `GitRepository`
+  gains `protects_main` (set only for repositories the tracker created and
+  protected) and `access_synced_at`. `GitCommit` gains `user_id` (the user
+  whose lowercased `git_username` equals `author_username`), `is_merge`,
+  `files_changed`, `additions`, `deletions`, the classified
+  `code|comment|blank|docs` `_added|_removed`, `generated_lines`,
+  `stats_status` (`ok|merge|too_large|missing`) and `stats_computed_at`.
+- **Create**: `CreateRepositoryService` (`POST .../repositories/new`, the web
+  Code tab's New repository): private, empty, `main` default; name = the
+  lowercased project key or that plus `-...`, forge-safe, at most 100
+  characters; protects `main` with `CreateRepositoryService::MAIN_RULE`
+  (push allow-list plus the Owners team, one approval), then links through
+  `LinkRepositoryService`. A refused rule still links (message says to
+  protect it); a failed link after creation says it exists.
+- **Link imports access**: `LinkRepositoryService` saves the row and
+  `RepositoryAccess::importExisting` (the forge's current collaborators the
+  tracker could grant, as `canGrantRepositoryAccessTo`: `admin`/`owner`/`write`
+  become `write`, `read` stays) in one transaction; if the forge cannot
+  answer, nothing is linked ("Couldn't read ... so it wasn't linked").
+- **Sync**: `App\Services\Git\RepositoryAccess::sync` writes a repository's
+  collaborators: maintainers `admin`, effective grants at their permission
+  (the higher when both). Order: removals of tracker-known logins no longer
+  wanted (a failure stops the run), then every PUT (a 422 = no forge user yet,
+  *waiting*; another refusal for one login does not stop the rest and fails
+  the run afterwards; unreachable stops at once), then, if `protects_main`,
+  the PATCH of `main`'s allow-list (last: the forge drops allow-listed users
+  who are not write collaborators at that moment; a 404 clears
+  `protects_main`). `{owner}-bot`, `forge-admin` and logins with no tracker
+  user are never touched (`ForgeMembership::untouchableLogins`). Logs at
+  `warning`, no token.
+- **Triggers**: `SyncRepositoryAccess` (a job: no unique lock, `afterCommit`,
+  3 tries, 60s backoff, reads its repository afresh, skips an unlinked one)
+  from `GitRepositoryGrantObserver` (also writes the activity row),
+  `TeamMembershipObserver` (add, role change, leave; leaving first deletes that
+  member's grants on the project's repositories, one by one, in the same
+  transaction), `ProjectObserver` (program change), `ProgramObserver` (new
+  manager), `MemberObserver` (organization change), `LinkRepositoryService`;
+  plus `git:sync-access` every ten minutes (`withoutOverlapping(15)`) and the
+  reconcile's per-repository `access` step. `Background::dispatch` on the sync
+  queue now waits for the surrounding transaction to commit (a rollback drops
+  the job); never dispatch forge work any other way.
+- **Offboarding**: `RemoveFromForgeService` removes a deactivated or deleted
+  person from every connected forge organization and every linked repository's
+  collaborators, per connection with its own token; an unreachable forge
+  short-circuits the connection's remaining calls, only real removals log,
+  and a forge failure never blocks the change (`meta.complete` false, the
+  message asks for a manual suspend).
+- **Access rules** (do not regress): grant, change and remove need
+  `canManageRepositoryAccess`; `StoreRepositoryGrantRequest` and
+  `UpdateRepositoryGrantRequest` check `canGrantRepositoryAccessTo` and answer
+  an unknown member, or one outside the project's organization and team, with
+  the same generic 422 on `member_id` (never naming outsiders); a manager
+  cannot change an organizational admin's grant to someone off the team, only
+  remove it. A maintainer's access is never a grant. A cross-organization
+  team's outsiders can hold grants only while on the team.
+- **Commit stats**: `git:commit-stats` (every five minutes, 300 commits per run,
+  oldest first; `--limit`) via `CommitStats::compute`: more than one parent is
+  a merge (marked, not counted); else the forge's totals plus the diff
+  (`ForgejoClient::commitDiff`, streamed, over 5 MB is `too_large`) classified
+  by `App\Support\Git\DiffStats` (`CommentSyntax` per file type; `GeneratedFiles`
+  skipped; docs by extension; block-comment state per hunk side); a 404 is
+  `missing`. Every attempt counts toward `--limit`; 0/401/403/429 stop that
+  connection for the run, other 4xx and 5xx skip only that commit, five
+  consecutive 5xx stop the connection. It also fills `user_id` on commits
+  ingested before their author had a `git_username`.
+- **Code activity report**: `CodeActivityQuery` over
+  `WorkspaceAccess::codeReportScope` (whole repositories of what the viewer
+  runs, plus anyone's own commits), non-merge and reachable commits by
+  `committed_at`; `CodeActivityRequest` (anyone `GitAccess` admits; range at
+  most 366 days, default 30; up to 4 compared people; a project or program
+  outside the scope, or unknown, is 403). People are ordered by name, never by
+  a figure; commits matched to no user are one "Not matched to anyone" row,
+  only for viewers of whole repositories. Web `/workspace/reports/code` (page
+  `Reports/CodeActivity`) and `/workspace/reports/code/people/{user}`; API
+  `/api/v1/workspace/reports/code[/people/{user}]`.
+- **UI**: the Code tab's New repository and Access (grants and maintainers),
+  the sidebar's Code activity (shown with git). Keep the Guide in step:
+  developers add their git email under SDOC Git, Settings, Emails.
 
 ## Semantic theming layer (web UI)
 
