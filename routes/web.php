@@ -32,6 +32,7 @@ use App\Http\Controllers\Workspace\TeamController;
 use App\Http\Controllers\Workspace\TeamMemberController;
 use App\Http\Controllers\Workspace\TeamProgressController;
 use App\Http\Controllers\Workspace\WorkspaceNoteController;
+use App\Http\Middleware\EnsureCanSignIn;
 use App\Http\Middleware\EnsureCanUseGit;
 use App\Http\Middleware\EnsureProjectVisible;
 use App\Http\Middleware\ShareWorkspaceData;
@@ -46,7 +47,7 @@ Route::redirect('/', '/workspace')->name('home');
 // signing key (/oauth/jwks). Only people GitAccess lets in get a code. The
 // forge calls the token endpoint server to server: no session, no CSRF.
 Route::get('/oauth/authorize', [AuthorizationController::class, 'authorize'])
-    ->middleware(['auth', EnsureCanUseGit::class])
+    ->middleware(['auth', EnsureCanSignIn::class, EnsureCanUseGit::class])
     ->name('passport.authorizations.authorize');
 Route::post('/oauth/token', [AccessTokenController::class, 'issueToken'])
     ->withoutMiddleware('web')
@@ -71,7 +72,7 @@ Route::middleware('guest')
         Route::post('/login', [AuthController::class, 'store'])->name('login.store');
     });
 
-Route::middleware(['auth', ShareWorkspaceData::class])
+Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
     ->prefix('workspace')
     ->name('workspace.')
     ->group(function () {

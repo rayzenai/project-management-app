@@ -491,11 +491,8 @@ it('lets whoever administers an organization set roles in it, and nobody else', 
         ->and(WorkspaceAccess::canSetRolesIn($this->underSecretary->user, $this->org->id))->toBeFalse()
         ->and(WorkspaceAccess::canSetRolesIn(null, $this->org->id))->toBeFalse();
 
-    // A deactivated organizational admin gets no role fields.
-    $props = $this->actingAs($deactivated)->get('/workspace/team')->assertOk()->viewData('page')['props'];
-
-    expect($props['canSetRoles'])->toBeFalse()
-        ->and($props['roleOptions'])->toEqual(['programs' => [], 'projects' => []]);
+    // A deactivated organizational admin is signed out before any role field.
+    $this->actingAs($deactivated)->get('/workspace/team')->assertRedirect('/workspace/login');
 });
 
 it('leaves archived projects out of the role options', function () {

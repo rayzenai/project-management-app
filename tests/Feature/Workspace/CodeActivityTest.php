@@ -11,6 +11,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
@@ -299,7 +300,9 @@ it('refuses anyone the tracker does not admit to git', function () {
 
     $this->actingAs($outsider)->get('/workspace/reports/code')->assertForbidden();
     $this->actingAs($outsider)->getJson("/workspace/reports/code/people/{$this->asha->id}")->assertForbidden();
-    $this->actingAs($deactivated)->get('/workspace/reports/code')->assertForbidden();
+    // A deactivated person is signed out before the report's own check.
+    expect(GitAccess::anyFor($deactivated))->toBeFalse();
+    $this->actingAs($deactivated)->get('/workspace/reports/code')->assertRedirect('/workspace/login');
 });
 
 // ---- Counting ----

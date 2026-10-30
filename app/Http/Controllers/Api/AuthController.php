@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Middleware\EnsureCanSignIn;
 use App\Models\Member;
 use App\Models\User;
 use App\Support\Git\GitAccess;
@@ -38,6 +39,12 @@ class AuthController extends Controller
         if ($user === null || ! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
+            ]);
+        }
+
+        if (! WorkspaceAccess::canSignIn($user)) {
+            throw ValidationException::withMessages([
+                'email' => [EnsureCanSignIn::DEACTIVATED],
             ]);
         }
 

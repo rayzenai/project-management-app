@@ -73,13 +73,12 @@ it('shares the programs a person manages', function () {
         ->assertJsonPath('managed_program_ids', []);
 });
 
-it('shares no programs with a deactivated program manager', function () {
+it('shares no programs with a deactivated program manager: they are signed out', function () {
     $this->jsMember->update(['is_active' => false]);
 
-    $this->actingAs($this->js)->get('/workspace/my')
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('managedProgramIds', [])
-            ->where('managedPrograms', []));
+    $this->actingAs($this->js)->get('/workspace/my')->assertRedirect('/workspace/login');
+
+    $this->assertGuest();
 });
 
 it('gives the projects page its programs and each project its program', function () {

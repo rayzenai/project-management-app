@@ -69,6 +69,18 @@ class WorkspaceAccess
     }
 
     /**
+     * Whether the user may sign in and stay signed in: not while their member
+     * is deactivated. A super-admin always may (their powers come from
+     * config, never their member), and so may a login with no member yet.
+     */
+    public static function canSignIn(Authenticatable $user): bool
+    {
+        $member = self::memberFor($user);
+
+        return self::isSuperAdmin($user) || $member === null || $member->is_active;
+    }
+
+    /**
      * Whether an email is one PM_SUPER_ADMINS grants super-admin to. Only a
      * super-admin may give a login such an email: the Gate matches on email,
      * so anyone else doing it would be minting a super-admin.

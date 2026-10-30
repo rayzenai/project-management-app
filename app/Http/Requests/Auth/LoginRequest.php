@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Http\Middleware\EnsureCanSignIn;
+use App\Support\WorkspaceAccess;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -42,7 +45,23 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $deactivated = false;
+
+        // The right password of a deactivated person signs nobody in, and
+        // says why (only to someone who knows the password).
+        $signsIn = function (Authenticatable $user) use (&$deactivated): bool {
+            $deactivated = ! WorkspaceAccess::canSignIn($user);
+
+            return ! $deactivated;
+        };
+
+        if (! Auth::attemptWhen($this->only('email', 'password'), $signsIn, $this->boolean('remember'))) {
+            if ($deactivated) {
+                throw ValidationException::withMessages([
+                    'email' => EnsureCanSignIn::DEACTIVATED,
+                ]);
+            }
+
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

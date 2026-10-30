@@ -415,8 +415,6 @@ it('shows code to the project\'s team, its office admins and super-admins, not t
         'an office admin' => codeViewActor('office admin', $this->project),
         'a super-admin' => User::factory()->create(['email' => 'boss@example.com']),
         'a colleague off the team' => codeViewActor('colleague', Project::factory()->create(['organization_id' => $this->organization->id])),
-        'a deactivated team member' => tap($this->member, fn (User $user) => Member::query()->where('user_id', $user->id)->update(['is_active' => false])),
-        'a deactivated office admin' => tap(codeViewActor('office admin', $this->project), fn (User $user) => Member::query()->where('user_id', $user->id)->update(['is_active' => false])),
     };
 
     // Everyone here can see the project itself.
@@ -446,9 +444,21 @@ it('shows code to the project\'s team, its office admins and super-admins, not t
     'an office admin' => ['an office admin', true],
     'a super-admin' => ['a super-admin', true],
     'a colleague off the team' => ['a colleague off the team', false],
-    'a deactivated team member' => ['a deactivated team member', false],
-    'a deactivated office admin' => ['a deactivated office admin', false],
 ]);
+
+it('never shows code to a deactivated team member or office admin, who are signed out', function () {
+    codeViewGit($this->organization);
+    $admin = codeViewActor('office admin', $this->project);
+    Member::query()->whereIn('user_id', [$this->member->id, $admin->id])->update(['is_active' => false]);
+    WorkspaceAccess::flush();
+
+    foreach ([$this->member, $admin] as $viewer) {
+        expect(WorkspaceAccess::canViewProjectCode($viewer, $this->project))->toBeFalse()
+            ->and(Project::query()->codeVisibleTo($viewer)->whereKey($this->project->id)->exists())->toBeFalse();
+
+        $this->actingAs($viewer)->get("/workspace/projects/{$this->project->slug}")->assertRedirect('/workspace/login');
+    }
+});
 
 it('keeps code from the scope where the organization has no git, even for a super-admin', function () {
     WorkspaceAccess::flush();

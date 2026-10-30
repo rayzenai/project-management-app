@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureCanSignIn;
 use App\Models\Member;
 use App\Models\Team;
 use App\Models\User;
@@ -124,4 +125,31 @@ it('revokes the token on logout so it can no longer be used', function () {
     $this->flushSession();
 
     $this->withToken($token)->getJson('/api/v1/user')->assertUnauthorized();
+});
+
+it('refuses a token to a deactivated person', function () {
+    $user = User::factory()->create(['password' => bcrypt('secret-pass-1')]);
+    Member::factory()->linkedTo($user)->inactive()->create();
+
+    $this->postJson('/api/v1/login', [
+        'email' => $user->email,
+        'password' => 'secret-pass-1',
+        'device_name' => 'pest',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['email' => EnsureCanSignIn::DEACTIVATED]);
+
+    expect(PersonalAccessToken::count())->toBe(0);
+});
+
+it('stops a deactivated person\'s existing token from working', function () {
+    $user = User::factory()->create();
+    $member = Member::factory()->linkedTo($user)->create();
+    $token = $user->createToken('pest')->plainTextToken;
+
+    $member->update(['is_active' => false]);
+
+    $this->withToken($token)->getJson('/api/v1/user')
+        ->assertUnauthorized()
+        ->assertJsonPath('message', EnsureCanSignIn::DEACTIVATED);
 });

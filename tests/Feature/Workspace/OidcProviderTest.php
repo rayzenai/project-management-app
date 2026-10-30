@@ -6,6 +6,7 @@ use App\Models\OAuthClient;
 use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
+use App\Support\Git\GitAccess;
 use App\Support\Git\GitUsernames;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Schedule;
@@ -195,11 +196,13 @@ it("refuses a member whose office hasn't switched git on", function () {
 it('refuses a deactivated member of a git office, even with a valid session', function () {
     $user = oidcPerson(oidcOrganization('sdoc'), ['is_active' => false]);
 
-    oidcAuthorize($user, oidcClient())
-        ->assertForbidden()
-        ->assertSee("You don't have access to git. Ask your organizational admin.");
+    expect(GitAccess::organizationsFor($user))->toBeEmpty();
+
+    // Signed out before the git check.
+    oidcAuthorize($user, oidcClient())->assertRedirect('/workspace/login');
 
     expect(DB::table('oauth_auth_codes')->count())->toBe(0);
+    $this->assertGuest();
 });
 
 it('refuses a login with no member at all', function () {
@@ -266,7 +269,8 @@ it('refuses a deactivated outsider on a git office project team', function () {
     $team->update(['is_cross_organization' => true]);
     $team->members()->attach(Member::query()->where('user_id', $outsider->id)->value('id'), ['role' => 'member']);
 
-    oidcAuthorize($outsider, oidcClient())->assertForbidden();
+    expect(GitAccess::organizationsFor($outsider))->toBeEmpty();
+    oidcAuthorize($outsider, oidcClient())->assertRedirect('/workspace/login');
 });
 
 it('refuses a member whose only project team is in an office without git', function () {

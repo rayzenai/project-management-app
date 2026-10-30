@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TeamMemberController;
 use App\Http\Controllers\Api\ThemeController;
 use App\Http\Controllers\Api\WorkspaceNoteController;
+use App\Http\Middleware\EnsureCanSignIn;
 use App\Http\Middleware\EnsureProjectVisible;
 use Illuminate\Support\Facades\Route;
 
@@ -39,7 +40,7 @@ Route::prefix('v1')->name('api.')->group(function () {
     // Unauthenticated: exchange credentials for a personal access token.
     Route::post('/login', [AuthController::class, 'login'])->name('login');
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', EnsureCanSignIn::class])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
         Route::get('/user', [AuthController::class, 'user'])->name('user');
 

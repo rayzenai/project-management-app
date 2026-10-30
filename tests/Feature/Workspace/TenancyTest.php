@@ -9,6 +9,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Notifications\MentionedInComment;
 use App\Notifications\TaskStatusChanged;
+use App\Support\WorkspaceAccess;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
@@ -368,7 +369,12 @@ it('takes the office admin\'s powers away while they are deactivated', function 
     tenancyMemberOf($admin)->update(['is_active' => false]);
     $manager = Member::factory()->create(['organization_id' => $this->orgA->id]);
 
-    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Ghost', 'manager_id' => $manager->id])->assertForbidden();
+    expect(WorkspaceAccess::canCreateProject($admin))->toBeFalse();
+
+    // Signed out before the request reaches the check.
+    $this->actingAs($admin)->post('/workspace/projects', ['title' => 'Ghost', 'manager_id' => $manager->id])->assertRedirect('/workspace/login');
+
+    expect(Project::query()->where('title', 'Ghost')->exists())->toBeFalse();
 });
 
 // ---- Projects ----

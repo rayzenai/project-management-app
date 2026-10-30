@@ -197,7 +197,7 @@ it('takes everything away from a deactivated program manager', function () {
         ->and(Member::query()->visibleTo($this->js)->pluck('id')->all())->not->toContain($this->officer->id)
         ->and(Program::query()->visibleTo($this->js)->count())->toBe(0);
 
-    $this->actingAs($this->js)->get("/workspace/projects/{$this->projectA->slug}")->assertForbidden();
+    $this->actingAs($this->js)->get("/workspace/projects/{$this->projectA->slug}")->assertRedirect('/workspace/login');
 });
 
 it('ends access when the project leaves the program or the program is deleted', function () {

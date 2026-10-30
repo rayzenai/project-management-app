@@ -21,7 +21,9 @@ the same `app/Services/Workspace/*` action service.
 - **Success:** `{ "message": string, "data": <resource|array> }` — `200`, or
   `201` on create.
 - **Error:** `{ "message": string, "errors": { field: message } }` — `401`
-  unauthenticated, `403` forbidden, `404` not found, `422` validation.
+  unauthenticated (also a deactivated person's token, with `This account is
+  deactivated. Ask your organizational admin to turn it back on.`), `403`
+  forbidden, `404` not found, `422` validation.
 - **Authorization** is enforced server-side via `App\Support\WorkspaceAccess`
   (super-admin → organizational admin → project manager → member). Clients mirror role
   gating in the UI only.
@@ -43,7 +45,7 @@ the same `app/Services/Workspace/*` action service.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| POST | `/login` | `email`, `password`, `device_name` | `{ token, user }` |
+| POST | `/login` | `email`, `password`, `device_name` | `{ token, user }`; a deactivated person (not a super-admin) gets 422 on `email` with `This account is deactivated. Ask your organizational admin to turn it back on.` and no token |
 | POST | `/logout` | — | `{ message }` (revokes the current token) |
 | GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, managed_program_ids, features, git_enabled }`; `managed_program_ids` lists the programs the person manages (while active, in their own organization), the web's `managedProgramIds`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled` |
 

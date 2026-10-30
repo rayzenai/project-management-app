@@ -10,6 +10,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\Git\ForgejoClient;
 use App\Services\Git\ForgejoException;
+use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -816,6 +817,6 @@ it('tells both surfaces whether the person may use git anywhere', function () {
     expect($gitEnabled($colleague))->toBe([true, true])
         ->and($gitEnabled($boss))->toBe([true, true])
         ->and($gitEnabled($outsider))->toBe([true, true])
-        ->and($gitEnabled($retired))->toBe([false, false])
+        ->and(GitAccess::anyFor($retired))->toBeFalse()
         ->and($gitEnabled($person(Organization::factory()->create())))->toBe([false, false]);
 });

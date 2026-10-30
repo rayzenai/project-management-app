@@ -343,11 +343,11 @@ it('takes the new powers away from a deactivated program manager', function () {
         'title' => 'Late Project',
         'program_id' => $this->programP->id,
         'manager_id' => $this->colleague->id,
-    ])->assertForbidden();
+    ])->assertRedirect('/workspace/login');
     $this->actingAs($this->js)->patch("/workspace/projects/{$this->projectA->slug}", ['manager_id' => $this->colleague->id])
-        ->assertForbidden();
+        ->assertRedirect('/workspace/login');
     $this->actingAs($this->js)->patch("/workspace/teams/{$this->teamA->id}/members/{$this->officer->id}", ['role' => 'leader'])
-        ->assertForbidden();
+        ->assertRedirect('/workspace/login');
 
     expect(Project::query()->where('title', 'Late Project')->exists())->toBeFalse()
         ->and($this->teamA->leaders()->pluck('members.id')->all())->toBe([$this->us->id]);
