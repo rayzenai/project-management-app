@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\Git\GitIngest;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -150,7 +151,7 @@ it('marks a commit the forge no longer has as missing', function () {
     expect($commit->stats_status)->toBe('missing')->and($commit->stats_computed_at)->not->toBeNull();
 });
 
-it('stops one connection on a 503 and carries on with the others', function () {
+it('skips commits failing with a 503 and carries on with the other connection', function () {
     Log::spy();
     $other = statsConnection(Organization::factory()->create(), 'other', 'git.other');
     $otherRepo = statsRepo($this->project, $other, 502, 'lib');
@@ -170,7 +171,7 @@ it('stops one connection on a 503 and carries on with the others', function () {
     expect($down1->refresh()->stats_computed_at)->toBeNull()
         ->and($down2->refresh()->stats_computed_at)->toBeNull()
         ->and($fine->refresh()->stats_status)->toBe('ok');
-    Http::assertSentCount(3);
+    Http::assertSentCount(4);
 });
 
 it('honours the limit and says what is left', function () {
@@ -233,4 +234,75 @@ it('fills user_id on older commits with one update per user', function () {
         ->and($nobody->refresh()->user_id)->toBeNull()
         ->and($none->refresh()->user_id)->toBeNull()
         ->and($updates)->toBe(2);
+});
+
+it('stops a connection that answers 401 after one call', function () {
+    $a = statsCommit($this->repo, 'u1', '2026-10-01 10:00:00');
+    $b = statsCommit($this->repo, 'u2', '2026-10-02 10:00:00');
+    Http::fake(['git.example/*' => Http::response(['message' => 'bad token'], 401)]);
+
+    $this->artisan('git:commit-stats')->assertSuccessful();
+
+    Http::assertSentCount(1);
+    expect($a->refresh()->stats_computed_at)->toBeNull()->and($b->refresh()->stats_computed_at)->toBeNull();
+});
+
+it('skips a commit the forge fails with a 500 and counts the next', function () {
+    $bad = statsCommit($this->repo, 'bad', '2026-10-01 10:00:00');
+    $good = statsCommit($this->repo, 'good', '2026-10-02 10:00:00');
+    Http::fake([
+        'git.example/api/v1/repos/sdoc/app/git/commits/bad?*' => Http::response('boom', 500),
+        'git.example/api/v1/repos/sdoc/app/git/commits/good.diff' => fn () => Http::response(STATS_DIFF."\n"),
+        'git.example/api/v1/repos/sdoc/app/git/commits/good?*' => Http::response([
+            'parents' => [['sha' => 'p1']], 'stats' => ['total' => 4, 'additions' => 3, 'deletions' => 1],
+        ]),
+    ]);
+
+    $this->artisan('git:commit-stats')->expectsOutput('Counted 1 commits.')->assertSuccessful();
+
+    expect($bad->refresh()->stats_computed_at)->toBeNull()->and($good->refresh()->stats_status)->toBe('ok');
+});
+
+it('stops a connection after five 500s in a row', function () {
+    foreach (range(1, 8) as $i) {
+        statsCommit($this->repo, "e{$i}", "2026-10-0{$i} 10:00:00");
+    }
+    Http::fake(['git.example/*' => Http::response('boom', 500)]);
+
+    $this->artisan('git:commit-stats')->expectsOutput('Counted 0 commits.')->assertSuccessful();
+
+    Http::assertSentCount(5);
+    expect(GitCommit::query()->whereNotNull('stats_computed_at')->count())->toBe(0);
+});
+
+it('stops an unreachable connection and logs the cause without the token', function () {
+    Log::spy();
+    statsCommit($this->repo, 'x1', '2026-10-01 10:00:00');
+    statsCommit($this->repo, 'x2', '2026-10-02 10:00:00');
+    $calls = 0;
+    Http::fake(['git.example/*' => function () use (&$calls) {
+        $calls++;
+
+        throw new ConnectionException('cURL error 7: refused token-sdoc-never-shown');
+    }]);
+
+    $this->artisan('git:commit-stats')->assertSuccessful();
+
+    expect($calls)->toBe(1);
+    Log::shouldHaveReceived('warning')->withArgs(function ($message, $context) {
+        return $context['status'] === 0
+            && str_contains($context['cause'], 'refused')
+            && ! str_contains(json_encode($context), 'never-shown');
+    })->once();
+});
+
+it('counts failed attempts toward the limit', function () {
+    foreach (['l1', 'l2', 'l3'] as $i => $sha) {
+        statsCommit($this->repo, $sha, '2026-10-0'.($i + 1).' 10:00:00');
+    }
+    Http::fake(['git.example/*' => Http::response(['message' => 'bad'], 422)]);
+
+    $this->artisan('git:commit-stats', ['--limit' => 2])->expectsOutput('Counted 0 commits. 3 left for the next run.')->assertSuccessful();
+
+    Http::assertSentCount(2);
 });

@@ -24,6 +24,9 @@ class ComputeCommitStats extends Command
 {
     private const PAGE = 100;
 
+    /** Consecutive 5xx answers after which a connection is left alone for the run. */
+    private const SERVER_ERROR_STREAK = 5;
+
     protected $signature = 'git:commit-stats {--limit=300 : The most commits to count in this run}';
 
     protected $description = "Count each commit's code, comment and blank lines from its diff";
@@ -35,13 +38,16 @@ class ComputeCommitStats extends Command
         $this->fillUserIds();
 
         $counted = 0;
+        $attempts = 0;
         /** @var array<int, true> $stopped connection ids not to ask again this run */
         $stopped = [];
-        /** @var list<int> $skipped commits that failed for good this run */
+        /** @var array<int, int> $serverErrors consecutive 5xx answers per connection id */
+        $serverErrors = [];
+        /** @var list<int> $skipped commits left for the next run (never more than the limit) */
         $skipped = [];
 
-        while ($counted < $limit) {
-            $commits = $this->pending($stopped, $skipped, min(self::PAGE, $limit - $counted));
+        while ($attempts < $limit) {
+            $commits = $this->pending($stopped, $skipped, min(self::PAGE, $limit - $attempts));
 
             if ($commits->isEmpty()) {
                 break;
@@ -55,23 +61,38 @@ class ComputeCommitStats extends Command
                     continue;
                 }
 
+                if ($attempts >= $limit) {
+                    break;
+                }
+
+                $attempts++;
+
                 try {
                     $stats->compute($commit);
                     $counted++;
+                    $serverErrors[$connectionId] = 0;
                 } catch (ForgejoException $e) {
                     $this->logFailure($repo, $commit, $e);
 
-                    if ($e->status === 0 || $e->status >= 500) {
+                    // Fails for every commit: unreachable, or refused or throttled.
+                    if (in_array($e->status, [0, 401, 403, 429], true)) {
                         $stopped[$connectionId] = true;
-                    } else {
-                        $skipped[] = $commit->id;
+
+                        continue;
+                    }
+
+                    $skipped[] = $commit->id;
+                    $serverErrors[$connectionId] = $e->status >= 500 ? ($serverErrors[$connectionId] ?? 0) + 1 : 0;
+
+                    if ($serverErrors[$connectionId] >= self::SERVER_ERROR_STREAK) {
+                        $stopped[$connectionId] = true;
                     }
                 }
             }
         }
 
-        $left = $this->pendingQuery($stopped, $skipped)->count();
-        $this->line("Counted {$counted} commits.".($left > 0 && $counted >= $limit ? " {$left} left for the next run." : ''));
+        $left = $this->pendingQuery($stopped, [])->count();
+        $this->line("Counted {$counted} commits.".($left > 0 && $attempts >= $limit ? " {$left} left for the next run." : ''));
 
         return self::SUCCESS;
     }
