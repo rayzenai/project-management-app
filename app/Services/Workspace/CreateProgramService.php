@@ -40,6 +40,10 @@ class CreateProgramService
                     throw new RuntimeException('The General project could not be created: '.$general->message);
                 }
 
+                if ($general->data->fresh()?->manager() === null) {
+                    throw new RuntimeException('The General project has no manager.');
+                }
+
                 return $program;
             });
 

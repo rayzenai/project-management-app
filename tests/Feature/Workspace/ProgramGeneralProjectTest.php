@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Models\User;
+use App\Queries\ProgramProgressQuery;
 use App\Services\Workspace\CreateProgramService;
 use App\Services\Workspace\CreateProjectService;
 use App\Support\ServiceResult;
@@ -145,14 +146,35 @@ it('shows New project on the program page to its manager and admins only', funct
     $this->actingAs($stranger)->get("/workspace/programs/{$otherProgram->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page->where('progress.program.can_create_project', true));
 
-    // A project manager of a project inside the program may view it but not create.
+    // Team membership never grants a view of the program page.
     $general = Project::query()->where('program_id', $program->id)->sole();
-    $team = $general->ensureTeam();
-    $team->members()->attach($strangerMember->id, ['role' => 'member']);
-    $response = $this->actingAs($stranger)->get("/workspace/programs/{$program->slug}");
-    if ($response->status() === 200) {
-        $response->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('progress.program.can_create_project', false)
-            ->where('managerCandidates', []));
-    }
+    $general->ensureTeam()->members()->attach($strangerMember->id, ['role' => 'member']);
+    $this->actingAs($stranger)->get("/workspace/programs/{$program->slug}")->assertForbidden();
+
+    // Nobody who can neither manage nor create in the program is offered candidates.
+    $otherAdmin = User::factory()->create();
+    Member::factory()->linkedTo($otherAdmin)->create(['organization_id' => $this->otherOrg->id, 'is_office_admin' => true]);
+
+    $query = app(ProgramProgressQuery::class);
+    expect($query->managerCandidates($program, $stranger))->toBe([])
+        ->and($query->managerCandidates($program, $otherAdmin))->toBe([])
+        ->and($query->managerCandidates($program, $this->jsUser))->not->toBe([]);
+
+    $this->actingAs($otherAdmin)->get("/workspace/programs/{$program->slug}")->assertForbidden();
+});
+
+it('rolls the program back when General would have no manager', function () {
+    $gone = Member::factory()->create(['organization_id' => $this->org->id]);
+    $id = $gone->id;
+    $gone->delete();
+
+    $result = app(CreateProgramService::class)->execute([
+        'name' => 'Leaderless',
+        'organization_id' => $this->org->id,
+        'manager_id' => $id,
+    ]);
+
+    expect($result->success)->toBeFalse()
+        ->and(Program::query()->where('name', 'Leaderless')->exists())->toBeFalse()
+        ->and(Project::query()->where('title', 'General')->exists())->toBeFalse();
 });
