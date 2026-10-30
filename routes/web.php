@@ -19,6 +19,7 @@ use App\Http\Controllers\Workspace\ProjectController;
 use App\Http\Controllers\Workspace\ProjectProgressController;
 use App\Http\Controllers\Workspace\ProjectRepositoryController;
 use App\Http\Controllers\Workspace\QuickAddController;
+use App\Http\Controllers\Workspace\RepositoryGrantController;
 use App\Http\Controllers\Workspace\SubtaskController;
 use App\Http\Controllers\Workspace\TaskCommentController;
 use App\Http\Controllers\Workspace\TaskController;
@@ -119,6 +120,15 @@ Route::middleware(['auth', ShareWorkspaceData::class])
             ->scopeBindings()
             ->name('projects.repositories.destroy');
         Route::get('/go/{org}/{index}', GoToTaskController::class)->name('go');
+
+        // Who may pull and push a linked repository (its maintainers and grants).
+        Route::scopeBindings()->group(function () {
+            Route::get('/projects/{project:slug}/repositories/{repository}/access', [RepositoryGrantController::class, 'index'])->name('projects.repositories.access.index');
+            Route::get('/projects/{project:slug}/repositories/{repository}/access/candidates', [RepositoryGrantController::class, 'candidates'])->name('projects.repositories.access.candidates');
+            Route::post('/projects/{project:slug}/repositories/{repository}/access', [RepositoryGrantController::class, 'store'])->name('projects.repositories.access.store');
+            Route::patch('/projects/{project:slug}/repositories/{repository}/access/{grant}', [RepositoryGrantController::class, 'update'])->name('projects.repositories.access.update');
+            Route::delete('/projects/{project:slug}/repositories/{repository}/access/{grant}', [RepositoryGrantController::class, 'destroy'])->name('projects.repositories.access.destroy');
+        });
 
         // Every route that acts on a task or a task-child is gated centrally by
         // EnsureProjectVisible: route-model binding has already resolved the

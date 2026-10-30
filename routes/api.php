@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectProgressController;
 use App\Http\Controllers\Api\ProjectRepositoryController;
 use App\Http\Controllers\Api\QuickAddController;
+use App\Http\Controllers\Api\RepositoryGrantController;
 use App\Http\Controllers\Api\SubtaskController;
 use App\Http\Controllers\Api\TaskCommentController;
 use App\Http\Controllers\Api\TaskController;
@@ -103,6 +104,15 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/projects/{project:slug}/repositories/candidates', [ProjectRepositoryController::class, 'candidates'])->name('projects.repositories.candidates');
             Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
             Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
+
+            // Who may pull and push a linked repository (its maintainers and grants).
+            Route::scopeBindings()->group(function () {
+                Route::get('/projects/{project:slug}/repositories/{repository}/access', [RepositoryGrantController::class, 'index'])->name('projects.repositories.access.index');
+                Route::get('/projects/{project:slug}/repositories/{repository}/access/candidates', [RepositoryGrantController::class, 'candidates'])->name('projects.repositories.access.candidates');
+                Route::post('/projects/{project:slug}/repositories/{repository}/access', [RepositoryGrantController::class, 'store'])->name('projects.repositories.access.store');
+                Route::patch('/projects/{project:slug}/repositories/{repository}/access/{grant}', [RepositoryGrantController::class, 'update'])->name('projects.repositories.access.update');
+                Route::delete('/projects/{project:slug}/repositories/{repository}/access/{grant}', [RepositoryGrantController::class, 'destroy'])->name('projects.repositories.access.destroy');
+            });
 
             // Tasks + task-children: gated centrally by EnsureProjectVisible
             // (binding has resolved the parameter to a model instance, so the

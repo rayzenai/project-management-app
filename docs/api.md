@@ -283,6 +283,113 @@ On the JSON API these are `/api/v1/workspace/projects/{slug}/repositories…`
 linking answers 201 with the repository. On the web they answer with a
 redirect and `workspace_flash`, except `candidates`, which is JSON.
 
+### Repository access *(its manager, its program's manager, its organizational admin or a super-admin; git on)*
+
+Who may pull and push a linked repository on the forge. Organizational
+admins (the forge organization's Owners) and super-admins reach every
+repository and are not listed. The **maintainers**, the project's manager
+and its program's manager (active), are admin on the forge; their access
+follows the role and can't be edited. Everyone else needs a **grant**,
+`read` or `write`, given here and never on the forge; the forge follows
+within moments. A grant counts while the person is active and belongs to
+the project's organization or is on its team.
+
+To whom: an organizational admin or a super-admin gives access to any
+active person of the project's organization or anyone on its team; the
+manager and the program manager only to people on its team. Never to
+someone inactive, a super-admin's own member or a maintainer. The same
+rule decides who may change a grant; removing one needs only the right to
+manage access.
+
+A grant is `{ id, permission, waiting, member: { id, name, title },
+granted_at }`. `waiting` is true while the person has never signed in to
+the forge (the forge can't have them until they do). No email anywhere.
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| GET | `/workspace/projects/{slug}/repositories/{repository}/access` | `{ data: { maintainers: [{ id, name, title, role, waiting }], grants } }`: `role` is `manager` or `program manager` (someone who is both is listed once, as `manager`); `grants` by name |
+| GET | `/workspace/projects/{slug}/repositories/{repository}/access/candidates?q=` | `{ data: [{ id, name, title }] }`: up to 20 people the caller may give access to and who have none yet, `q` matching the name or the email in any case |
+| POST | `/workspace/projects/{slug}/repositories/{repository}/access` | `member_id`, `permission` (`read` or `write`). `Gave {name} {permission} access to {full_name}.`; for someone who already has a grant it sets the permission (`{name} now has {permission} access to {full_name}.`). 422 on `member_id` with `You can't give {name} access to this repository.` when the caller may not |
+| PATCH | `/workspace/projects/{slug}/repositories/{repository}/access/{grant}` | `permission`. `{name} now has {permission} access to {full_name}.`; 422 on `permission` with `You can't give {name} access to this repository.` when the caller may not give that person access (a manager can't change an organizational admin's grant to someone off the team, only remove it) |
+| DELETE | `/workspace/projects/{slug}/repositories/{repository}/access/{grant}` | `Removed {name}'s access to {full_name}.` |
+
+On the JSON API these are `/api/v1/workspace/projects/{slug}/repositories/{repository}/access…`
+(names `api.workspace.projects.repositories.access.index|candidates|store|update|destroy`);
+`store` answers 201 with the grant, `update` 200 with the grant. On the web
+`index` and `candidates` are JSON and the others redirect with
+`workspace_flash`. A `{repository}` of another project or a `{grant}` of
+another repository is a 404. Every grant, change and removal writes a row
+into the project's activity.
+
+```bash
+# who reaches sdoc/tp-api (repository 7)
+curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
+  $BASE/workspace/projects/tax-portal/repositories/7/access
+```
+
+```json
+{
+  "message": "Repository access retrieved.",
+  "data": {
+    "maintainers": [
+      { "id": 3, "name": "Mira Thapa", "title": "PM", "role": "manager", "waiting": false },
+      { "id": 2, "name": "Pradeep Rai", "title": "Engineering head", "role": "program manager", "waiting": true }
+    ],
+    "grants": [
+      {
+        "id": 12,
+        "permission": "write",
+        "waiting": false,
+        "member": { "id": 9, "name": "Asha Gurung", "title": "Senior developer" },
+        "granted_at": "2026-10-30T09:15:00+00:00"
+      }
+    ]
+  }
+}
+```
+
+```bash
+# give Bina (member 14) read access
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
+  -H "Content-Type: application/json" -d '{"member_id":14,"permission":"read"}' \
+  $BASE/workspace/projects/tax-portal/repositories/7/access
+```
+
+```json
+{
+  "message": "Gave Bina Shrestha read access to sdoc/tp-api.",
+  "data": {
+    "id": 13,
+    "permission": "read",
+    "waiting": true,
+    "member": { "id": 14, "name": "Bina Shrestha", "title": "Analyst" },
+    "granted_at": "2026-10-30T10:02:11+00:00"
+  }
+}
+```
+
+```bash
+# raise it to write, then take it away
+curl -s -X PATCH -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
+  -H "Content-Type: application/json" -d '{"permission":"write"}' \
+  $BASE/workspace/projects/tax-portal/repositories/7/access/13
+# { "message": "Bina Shrestha now has write access to sdoc/tp-api.", "data": { "id": 13, "permission": "write", ... } }
+
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
+  $BASE/workspace/projects/tax-portal/repositories/7/access/13
+# { "message": "Removed Bina Shrestha's access to sdoc/tp-api.", "data": null }
+```
+
+```json
+{
+  "message": "You can't give Bina Shrestha access to this repository.",
+  "errors": { "member_id": ["You can't give Bina Shrestha access to this repository."] }
+}
+```
+
+(the 422 a project manager gets for someone of the organization who is not
+on the project's team).
+
 **The forge's link back** (web only): `GET /workspace/go/{org}/{index}` (name
 `workspace.go`), where the forge fills `{org}` with the forge organization
 (matched in any case) and `{index}` with a task code such as `TP-12`. The key
@@ -480,3 +587,9 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - The project show adds `git` and its tasks `has_pull_request`; the task
   show and the task preview add `code`. Each is `null` or absent where the
   organization has no git.
+
+**Git phase 2 (repositories, access and code reports).**
+
+- New: `GET|POST /workspace/projects/{slug}/repositories/{repository}/access`,
+  `GET …/access/candidates` and `PATCH|DELETE …/access/{grant}` (see
+  Repository access).
