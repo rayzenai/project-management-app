@@ -1,0 +1,3 @@
+/* SDOC Git, following the system's light or dark setting (the default). */
+@import url("./theme-sdoc-light.css");
+@import url("./theme-sdoc-dark.css") (prefers-color-scheme: dark);

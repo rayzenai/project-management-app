@@ -1,0 +1,49 @@
+/* SDOC Git, dark: Forgejo's dark theme on sdoc.gov.np's dark navy (its
+   dark --bg/--surface/--ink/--muted/--blue/--line tokens), with its light
+   government blue in place of Forgejo's orange. */
+@import url("./theme-forgejo-dark.css");
+@import url("./sdoc.css");
+
+:root {
+  --sdoc-crimson: #f08ba0;
+
+  --steel-900: #0e1722;
+  --steel-850: #111b27;
+  --steel-800: #141f2d;
+  --steel-750: #1a2738;
+  --steel-700: #1f2e42;
+  --steel-650: #263850;
+  --steel-600: #31445d;
+  --steel-550: #3d506a;
+  --steel-200: #abb9ca;
+  --steel-150: #c8d4e2;
+  --steel-100: #e5edf7;
+
+  --color-primary: #97c2f6;
+  --color-primary-contrast: #141f2d;
+  --color-primary-dark-1: #b1d1f8;
+  --color-primary-dark-2: #b1d1f8;
+  --color-primary-dark-3: #cbe0fa;
+  --color-primary-dark-4: #cbe0fa;
+  --color-primary-dark-5: #e5f0fd;
+  --color-primary-dark-6: #e5f0fd;
+  --color-primary-dark-7: #f5f9fe;
+  --color-primary-light-1: #88b4e9;
+  --color-primary-light-2: #78a5dc;
+  --color-primary-light-3: #6997ce;
+  --color-primary-light-4: #5786bf;
+  --color-primary-light-5: #5786bf;
+  --color-primary-light-6: #4576b0;
+  --color-primary-light-7: #4576b0;
+  --color-primary-alpha-10: #78a5dc19;
+  --color-primary-alpha-20: #78a5dc33;
+  --color-primary-alpha-30: #78a5dc4b;
+  --color-primary-alpha-40: #78a5dc66;
+  --color-primary-alpha-50: #78a5dc80;
+  --color-primary-alpha-60: #78a5dc99;
+  --color-primary-alpha-70: #78a5dcb3;
+  --color-primary-alpha-80: #78a5dccc;
+  --color-primary-alpha-90: #78a5dce1;
+  --color-primary-hover: #b2d2fc;
+  --color-primary-active: var(--color-primary-dark-2);
+}

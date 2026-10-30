@@ -1,0 +1,68 @@
+/* SDOC Git, light: Forgejo's light theme in sdoc.gov.np's colours (its
+   --bg/--surface/--ink/--muted/--blue/--line tokens), cool greys in place of
+   Forgejo's zinc, and its government blue in place of Forgejo's orange. */
+@import url("./theme-forgejo-light.css");
+@import url("./sdoc.css");
+
+:root {
+  --sdoc-crimson: #c32b44;
+
+  --zinc-50: #f8fafc;
+  --zinc-100: #f5f7fa;
+  --zinc-150: #edf1f6;
+  --zinc-200: #e1e6ed;
+  --zinc-250: #d8dee7;
+  --zinc-300: #cbd3de;
+  --zinc-350: #b3bdcb;
+  --zinc-400: #99a5b6;
+  --zinc-450: #808da0;
+  --zinc-500: #6a788c;
+  --zinc-550: #56657a;
+  --zinc-600: #4a596e;
+  --zinc-650: #3f4e63;
+  --zinc-700: #354459;
+  --zinc-750: #2b3a4f;
+  --zinc-800: #223146;
+  --zinc-850: #1a2738;
+  --zinc-900: #131d2a;
+
+  --color-primary: #174b88;
+  --color-primary-contrast: #ffffff;
+  --color-primary-dark-1: #174b88;
+  --color-primary-dark-2: #103b6d;
+  --color-primary-dark-3: #103b6d;
+  --color-primary-dark-4: #0e2d52;
+  --color-primary-dark-5: #0e2d52;
+  --color-primary-dark-6: #0e2d52;
+  --color-primary-dark-7: #0e2d52;
+  --color-primary-light-1: #3a669a;
+  --color-primary-light-2: #5d81ac;
+  --color-primary-light-3: #7f9cbe;
+  --color-primary-light-4: #a2b7cf;
+  --color-primary-light-5: #c5d2e1;
+  --color-primary-light-6: #e3e9f1;
+  --color-primary-light-7: #f1f4f8;
+  --color-primary-alpha-10: #174b8819;
+  --color-primary-alpha-20: #174b8833;
+  --color-primary-alpha-30: #174b884b;
+  --color-primary-alpha-40: #174b8866;
+  --color-primary-alpha-50: #174b8880;
+  --color-primary-alpha-60: #174b8899;
+  --color-primary-alpha-70: #174b88b3;
+  --color-primary-alpha-80: #174b88cc;
+  --color-primary-alpha-90: #174b88e1;
+
+  --color-text-dark: #0f2238;
+  --color-text: #193350;
+  --color-text-light: #2b3a4f;
+  --color-text-light-1: #3f4e63;
+  --color-text-light-2: #56657a;
+  --color-text-light-3: #6a788c;
+
+  --color-nav-bg: #ffffff;
+  --color-nav-hover-bg: var(--zinc-150);
+  --color-header-wrapper: var(--zinc-100);
+  --color-header-wrapper-transparent: #f5f7fa00;
+  --color-footer: var(--zinc-100);
+  --color-highlight-bg: #eef3fa;
+}

@@ -37,4 +37,15 @@ export FORGEJO__mailer__USER="$FORGEJO_SMTP_USER"
 export FORGEJO__mailer__PASSWD="$FORGEJO_SMTP_PASSWORD"
 export FORGEJO__mailer__FROM="$FORGEJO_MAIL_FROM"
 
+# The branding (forgejo/custom). Forgejo reads custom files from GITEA_CUSTOM,
+# /data/gitea on the volume, so they are copied there on every start, over
+# whatever was there: the image is their only source.
+custom="${GITEA_CUSTOM:-/data/gitea}"
+mkdir -p "$custom"
+for dir in public templates; do
+    rm -rf "${custom:?}/$dir"
+    cp -R "/usr/local/share/sdoc-forgejo/custom/$dir" "$custom/$dir"
+    chown -R git:git "$custom/$dir"
+done
+
 exec /usr/bin/entrypoint "$@"

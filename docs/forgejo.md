@@ -11,8 +11,9 @@ tracker.
 
 In production since 2026-10-30: DNS ([section 1](#1-dns-at-nitc)) and the
 Dokploy project ([section 4](#4-the-dokploy-project)) are done, and
-`https://git.sdoc.gov.np` answers. Nobody can sign in until the
-[bootstrap](#7-bootstrap), which is next. The sign-in was proved end
+`https://git.sdoc.gov.np` answers. The [bootstrap](#7-bootstrap) ran the
+same day, git is on for SDOC, and the forge carries SDOC's
+[branding](#branding). The sign-in was proved end
 to end on a laptop (Forgejo 17.0.1 against this tracker), with and without the
 two-factor requirement, and the account, organization and suspension steps
 were checked against the same settings; see
@@ -328,11 +329,62 @@ Environment tab, each checked against the 15.0 and 17.0 configuration cheat shee
 | `webhook.ALLOWED_HOST_LIST` | `tasks.sdoc.gov.np` | Webhooks may call the tracker's intake and nothing else |
 | `migrations.ALLOW_LOCALNETWORKS` | `false` | Migrations and mirrors can't reach private addresses (the default, set explicitly) |
 | `mailer.*` | SDOC SMTP over `smtps` | Notifications and admin mail |
+| `APP_NAME`, `other.SHOW_FOOTER_*`, `ui.*`, `ui.meta.*` | `SDOC Git`, `false`, the SDOC themes, SDOC's name | [Branding](#branding) |
 
 Left at their defaults on purpose: `oauth2_client.REGISTER_EMAIL_CONFIRM`
 (off, so new accounts are active at once) and the source's
 `--allow-username-change` (off: "Non-local users are not allowed to change
 their username").
+
+### Branding
+
+The forge is "SDOC Git", a sibling of the tracker in sdoc.gov.np's identity:
+the Nepal emblem, its Nepali and English names, Public Sans with Noto Sans
+Devanagari, and its colours (navy ink, government blue, crimson for the
+centre's Nepali name, the same dark navy in dark mode). All of it rides on the
+stock image through Forgejo's own customization points, so an upgrade is
+still a `FROM` bump:
+
+- **Settings** (`forgejo/Dockerfile`): `APP_NAME = SDOC Git` (page titles,
+  the "©" line at the foot of every email; it lives in app.ini's unnamed top
+  section, so its variable is `FORGEJO____APP_NAME`, four underscores);
+  `other.SHOW_FOOTER_POWERED_BY`, `SHOW_FOOTER_VERSION` and
+  `SHOW_FOOTER_TEMPLATE_LOAD_TIME` off (site admins still see the version on
+  admin pages); `ui.DEFAULT_THEME = sdoc-auto` and `ui.THEMES` the three SDOC
+  themes; `ui.meta` author, description and keywords (`ui_0X2E_meta`, the
+  escape for the dot).
+- **Files** ([`forgejo/custom/`](../forgejo/custom)), laid out as Forgejo's
+  custom directory, which `start.sh` copies over `/data/gitea/public` and
+  `/data/gitea/templates` on every start (`GITEA_CUSTOM`, on the volume): so
+  the repository is their only source, and nothing is edited on the VM.
+  - `public/assets/img/`: `logo.svg`, `favicon.svg` (the emblem, from
+    `../sdoc/public/assets/nepal-emblem.png`, padded square, inside an SVG),
+    `logo.png`, `favicon.png`, `apple-touch-icon.png`, and `sdoc-tasks.svg`
+    (the tracker's mark, the sign-in button's icon).
+  - `public/assets/css/`: `sdoc.css` (fonts, the home page, and hiding
+    Forgejo's hard-coded Help link to its own documentation) and the themes
+    `theme-sdoc-light.css`, `theme-sdoc-dark.css`, `theme-sdoc-auto.css`. Each
+    imports Forgejo's own theme and overrides only its colour variables.
+  - `public/assets/fonts/`: Public Sans and Noto Sans Devanagari (OFL 1.1),
+    from sdoc's `node_modules`.
+  - `templates/home.tmpl`: the signed-out home page, in place of Forgejo's.
+    Its button goes straight to `/user/oauth2/sdoc-tasks`.
+    `templates/custom/extra_links.tmpl` adds **Tasks** to the navbar, and
+    `extra_links_footer.tmpl` adds sdoc.gov.np to the footer (Forgejo's empty
+    hooks for exactly this).
+- **The sign-in button's icon**, stored with the OIDC source, set once:
+
+  ```sh
+  fj admin auth update-oauth --id 1 --icon-url https://git.sdoc.gov.np/assets/img/sdoc-tasks.svg
+  ```
+
+  then restart the forge. The button's label stays "Sign in with
+  sdoc-tasks": the source name is also in the callback URL.
+
+Forgejo's name stays only where admins and developers look (Site
+administration, the API's Swagger page). To try a change, run a stock
+`forgejo web --custom-path forgejo/custom` against a scratch `app.ini`
+(Homebrew's 17 renders these templates the same way).
 
 ## 7. Bootstrap
 
@@ -795,7 +847,10 @@ alternative for the volume copy once such a destination exists.
   codeberg.org, run the backup, bump the `FROM` tag in `forgejo/Dockerfile`
   (`codeberg.org/forgejo/forgejo:15.0.N`), push, deploy `git-forgejo` in
   Dokploy (auto deploy is off), then
-  `fj doctor check --all` and the [checks](#8-check). Forgejo publishes
+  `fj doctor check --all` and the [checks](#8-check). Then compare
+  Forgejo's `templates/home.tmpl` at the new tag with ours (the one page we
+  replace) and look over the home, sign-in and a repository page in both
+  themes ([Branding](#branding)). Forgejo publishes
   security advisories on its blog and release notes; watch them.
 - **15 → 19 LTS** (19.0 is due in April 2027; 15 is supported to 15 July
   2027): Forgejo's upgrade guide says to back up fully, then go straight to the

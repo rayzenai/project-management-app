@@ -1,0 +1,46 @@
+{{/* SDOC Git's home page, in place of Forgejo's (templates/home.tmpl in 15.0).
+     Only visitors who are signed out see it; the button goes straight to the
+     tracker's sign-in, the OIDC source "sdoc-tasks" (docs/forgejo.md, step 5). */}}
+{{template "base/head" .}}
+<div role="main" aria-label="{{if .IsSigned}}{{ctx.Locale.Tr "dashboard"}}{{else}}{{ctx.Locale.Tr "home"}}{{end}}" class="page-content home sdoc-home">
+	<a class="sdoc-identity" href="https://sdoc.gov.np">
+		<img src="{{AssetUrlPrefix}}/img/logo.svg" width="76" height="76" alt="Emblem of Nepal">
+		<span class="sdoc-identity-text">
+			<span class="sdoc-ministry" lang="ne">प्रधानमन्त्री तथा मन्त्रिपरिषद्को कार्यालय</span>
+			<strong lang="ne">सफ्टवेयर विकास तथा सञ्चालन केन्द्र</strong>
+			<span class="sdoc-english" lang="en">Software Development and Operation Centre</span>
+		</span>
+	</a>
+
+	<section class="sdoc-hero">
+		<h1>{{AppName}}</h1>
+		<p class="sdoc-lead">The centre's code forge: repositories, reviews and history for SDOC projects, each linked to its tasks in SDOC Tasks.</p>
+		<div class="sdoc-actions">
+			<a class="ui primary button" href="{{AppSubUrl}}/user/oauth2/sdoc-tasks">
+				<img src="{{AssetUrlPrefix}}/img/sdoc-tasks.svg" alt="" aria-hidden="true">
+				Sign in with SDOC Tasks
+			</a>
+			<a class="ui basic button" href="https://tasks.sdoc.gov.np">Open SDOC Tasks</a>
+		</div>
+		<p class="sdoc-note">Your SDOC Tasks account is your account here, protected by two-factor authentication.</p>
+	</section>
+
+	<div class="sdoc-points">
+		<section class="sdoc-point">
+			{{svg "octicon-git-commit" 20}}
+			<h2>Code beside its tasks</h2>
+			<p>Put a task's code, such as <code>EGP-12</code>, in a commit message, branch or pull request, and it shows on that task in SDOC Tasks.</p>
+		</section>
+		<section class="sdoc-point">
+			{{svg "octicon-lock" 20}}
+			<h2>Private to your office</h2>
+			<p>Repositories belong to your office's organization. Its people and the project's team see them; nobody else does.</p>
+		</section>
+		<section class="sdoc-point">
+			{{svg "octicon-shield-check" 20}}
+			<h2>Two-factor sign-in</h2>
+			<p>Everyone signs in through SDOC Tasks and then enters the code from their authenticator app.</p>
+		</section>
+	</div>
+</div>
+{{template "base/footer" .}}

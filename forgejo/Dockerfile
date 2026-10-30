@@ -48,9 +48,25 @@ ENV FORGEJO__server__HTTP_PORT=3000 \
     FORGEJO__oauth2_client__USERNAME=nickname \
     FORGEJO__oauth2_client__ACCOUNT_LINKING=login \
     FORGEJO__migrations__ALLOW_LOCALNETWORKS=false \
-    FORGEJO__mailer__PROTOCOL=smtps
+    FORGEJO__mailer__PROTOCOL=smtps \
+    # Branding: the name in page titles and every email's footer, no
+    # "Powered by", version or timings in the page footer, sdoc.gov.np's
+    # colours and type (custom/, installed by start.sh). APP_NAME sits in
+    # app.ini's unnamed top section, hence the empty section name (____).
+    FORGEJO____APP_NAME="SDOC Git" \
+    FORGEJO__other__SHOW_FOOTER_POWERED_BY=false \
+    FORGEJO__other__SHOW_FOOTER_VERSION=false \
+    FORGEJO__other__SHOW_FOOTER_TEMPLATE_LOAD_TIME=false \
+    FORGEJO__ui__DEFAULT_THEME=sdoc-auto \
+    FORGEJO__ui__THEMES=sdoc-auto,sdoc-light,sdoc-dark \
+    FORGEJO__ui_0X2E_meta__AUTHOR="Software Development and Operation Centre" \
+    FORGEJO__ui_0X2E_meta__DESCRIPTION="SDOC Git, the code forge of the Software Development and Operation Centre" \
+    FORGEJO__ui_0X2E_meta__KEYWORDS="SDOC,git,Government of Nepal"
 
 COPY --chmod=755 start.sh /usr/local/bin/sdoc-start
+# Logo, favicon, themes, fonts and templates; start.sh puts them in place
+# (docs/forgejo.md, Branding).
+COPY custom /usr/local/share/sdoc-forgejo/custom
 
 # start.sh checks the environment, then hands over to the image's own
 # entrypoint. Setting ENTRYPOINT clears the base image's CMD, so it is
