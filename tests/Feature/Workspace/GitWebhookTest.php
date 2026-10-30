@@ -326,7 +326,7 @@ it('throttles webhooks on their own counter, so a busy forge never locks out for
     }
 
     // The forge's token call, from the same address.
-    expect($this->post('/oauth/token')->status())->not->toBe(429);
+    expect($this->post('/oauth/token')->getStatusCode())->not->toBe(429);
 });
 
 it('answers 413 for a body over 2 MB, and stores nothing', function () {
