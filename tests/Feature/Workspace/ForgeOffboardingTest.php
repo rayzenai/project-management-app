@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\GitConnection;
+use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Project;
@@ -48,6 +49,29 @@ function forgeAdmin(Organization $organization): User
     Member::factory()->linkedTo($user)->create(['organization_id' => $organization->id, 'is_office_admin' => true]);
 
     return $user;
+}
+
+/**
+ * Links {$owner}/{$name} to a project of the organization whose forge
+ * organization $owner is.
+ */
+function forgeRepository(string $owner, string $name, int $forgeId): GitRepository
+{
+    $connection = GitConnection::query()->where('owner', $owner)->sole();
+    $host = (string) parse_url($connection->base_url, PHP_URL_HOST);
+
+    return GitRepository::query()->create([
+        'git_connection_id' => $connection->id,
+        'project_id' => Project::factory()->create(['organization_id' => $connection->organization_id])->id,
+        'forge_id' => $forgeId,
+        'owner' => $owner,
+        'name' => $name,
+        'full_name' => "{$owner}/{$name}",
+        'html_url' => "https://{$host}/{$owner}/{$name}",
+        'clone_url' => "https://{$host}/{$owner}/{$name}.git",
+        'ssh_url' => "git@{$host}:{$owner}/{$name}.git",
+        'default_branch' => 'main',
+    ]);
 }
 
 function forgeDeletes(): int
@@ -311,4 +335,139 @@ it('logs why an unreachable forge was unreachable on removal, without the token'
             && str_contains($context['cause'], '[token]')
             && ! str_contains(json_encode($context), 'token-sdoc');
     })->once();
+});
+
+// Repository collaborators
+
+it('deactivating someone removes them as a collaborator from every linked repository', function () {
+    Http::fake(['*' => Http::response('', 204)]);
+    $sdoc = forgeOffice('sdoc');
+    forgeOffice('opmcm', 'git.other.test');
+    forgeRepository('sdoc', 'app', 501);
+    forgeRepository('sdoc', 'web', 502);
+    forgeRepository('opmcm', 'portal', 601);
+    [, $member] = forgePerson($sdoc);
+
+    $this->actingAs(forgeAdmin($sdoc))->patch("/workspace/members/{$member->id}", ['is_active' => false])
+        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => 'Member updated. ram.k was removed from the forge.']);
+
+    foreach (['git.example.test/api/v1/repos/sdoc/app', 'git.example.test/api/v1/repos/sdoc/web', 'git.other.test/api/v1/repos/opmcm/portal'] as $repository) {
+        Http::assertSent(fn (Request $r) => $r->method() === 'DELETE' && $r->url() === "https://{$repository}/collaborators/ram.k");
+    }
+    Http::assertSent(fn (Request $r) => $r->url() === 'https://git.other.test/api/v1/repos/opmcm/portal/collaborators/ram.k'
+        && $r->header('Authorization') === ['token token-opmcm']);
+    expect(forgeDeletes())->toBe(5);
+});
+
+it('reports where a person was taken off, organizations first', function () {
+    Http::fake(['*' => Http::response('', 204)]);
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data)->toBe(['removed' => ['sdoc', 'sdoc/app'], 'failed' => []])
+        ->and($result->meta)->toBe(['complete' => true]);
+});
+
+it('a failed collaborator removal makes the result incomplete', function () {
+    Http::fake([
+        'git.example.test/api/v1/orgs/*' => Http::response('', 204),
+        'git.example.test/api/v1/repos/sdoc/app/*' => Http::response(['message' => 'boom'], 500),
+        'git.example.test/api/v1/repos/sdoc/web/*' => Http::response('', 204),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    forgeRepository('sdoc', 'web', 502);
+    [$user, $member] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->success)->toBeTrue()
+        ->and($result->meta)->toBe(['complete' => false])
+        ->and($result->data)->toBe(['removed' => ['sdoc', 'sdoc/web'], 'failed' => ['sdoc/app']])
+        ->and($result->message)->toBe("Couldn't remove ram.k from the forge; ask a super-admin to suspend them there today.");
+
+    $this->actingAs(forgeAdmin($sdoc))->patch("/workspace/members/{$member->id}", ['is_active' => false])
+        ->assertSessionHas('workspace_flash', ['success' => false, 'message' => "Member updated. Couldn't remove ram.k from the forge; ask a super-admin to suspend them there today."]);
+    expect($member->refresh()->is_active)->toBeFalse();
+});
+
+it('counts a repository the forge no longer has, or a login it has no user for, as removed', function (int $status) {
+    Http::fake([
+        'git.example.test/api/v1/orgs/*' => Http::response('', 404),
+        'git.example.test/api/v1/repos/*' => Http::response(['message' => 'gone'], $status),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data)->toBe(['removed' => ['sdoc', 'sdoc/app'], 'failed' => []])
+        ->and($result->meta)->toBe(['complete' => true]);
+})->with(['repository gone' => 404, 'no such forge user' => 422]);
+
+it('logs collaborator removals like organization removals, without the token', function () {
+    Log::spy();
+    Http::fake([
+        'git.example.test/api/v1/orgs/*' => Http::response('', 204),
+        'git.example.test/api/v1/repos/sdoc/app/*' => Http::response('', 204),
+        'git.example.test/api/v1/repos/sdoc/web/*' => Http::response(['message' => 'boom'], 500),
+        'git.example.test/api/v1/repos/sdoc/api/*' => fn () => throw new ConnectionException('cURL error 7: Failed to connect token-sdoc'),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    forgeRepository('sdoc', 'web', 502);
+    forgeRepository('sdoc', 'api', 503);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data['failed'])->toBe(['sdoc/web', 'sdoc/api']);
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === "Took someone off a forge repository's collaborators."
+        && $context === ['owner' => 'sdoc', 'repository' => 'app', 'login' => 'ram.k'])->once();
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === 'Forge collaborator removal failed.'
+        && $context === ['owner' => 'sdoc', 'repository' => 'web', 'status' => 500])->once();
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === 'Forge collaborator removal failed.'
+        && $context['repository'] === 'api'
+        && $context['status'] === 0
+        && $context['url'] === 'https://git.example.test'
+        && str_contains($context['cause'], 'cURL error 7')
+        && str_contains($context['cause'], '[token]')
+        && ! str_contains((string) json_encode($context), 'token-sdoc'))->once();
+});
+
+it('keeps going and reports without the token when a connection is unusable for its repositories', function () {
+    Exceptions::fake();
+    Http::fake(['git.other.test/*' => Http::response('', 204)]);
+    $sdoc = forgeOffice('sdoc');
+    forgeOffice('opmcm', 'git.other.test');
+    forgeRepository('sdoc', 'app', 501);
+    forgeRepository('opmcm', 'portal', 601);
+    DB::table('git_connections')->where('owner', 'sdoc')->update(['token' => 'garbage-not-encrypted']);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data)->toBe(['removed' => ['opmcm', 'opmcm/portal'], 'failed' => ['sdoc', 'sdoc/app']])
+        ->and($result->meta)->toBe(['complete' => false]);
+    Exceptions::assertReported(ForgejoException::class);
+    foreach (Exceptions::reported() ?? [] as $e) {
+        for ($c = $e; $c !== null; $c = $c->getPrevious()) {
+            expect($c->getMessage())->not->toContain('garbage-not-encrypted')->not->toContain('token-');
+        }
+    }
+});
+
+it('makes no collaborator call for a member without a forge account', function () {
+    Http::fake();
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    [$user] = forgePerson($sdoc, null);
+
+    app(RemoveFromForgeService::class)->execute($user);
+
+    Http::assertNothingSent();
 });

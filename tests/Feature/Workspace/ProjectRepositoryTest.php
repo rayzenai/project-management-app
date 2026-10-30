@@ -223,6 +223,7 @@ function repoFakeForge(array $stubs = []): void
         'git.example/api/v1/repos/sdoc/app/pulls*' => repoPage([]),
         'git.example/api/v1/repos/sdoc/app/branches*' => repoPage([]),
         'git.example/api/v1/repos/sdoc/app/commits*' => repoPage([]),
+        'git.example/api/v1/repos/sdoc/app/collaborators*' => repoPage([]),
     ], $stubs));
 }
 
@@ -250,8 +251,9 @@ it('lets the manager, the office admin and a super-admin link a repository', fun
 
 it('lets the manager, the office admin and a super-admin search candidates and unlink', function (string $role) {
     Http::fake(['git.example/api/v1/orgs/sdoc/repos*' => repoPage([])]);
-    $repo = repoLinked($this->project, $this->connection);
+    // On the team before the link: joining a team with repositories syncs their access.
     $this->actingAs(repoActor($role, $this->project));
+    $repo = repoLinked($this->project, $this->connection);
 
     $this->getJson("{$this->base}/candidates")->assertOk()->assertExactJson(['data' => []]);
     $this->delete("{$this->base}/{$repo->id}")->assertSessionHasNoErrors();
@@ -261,8 +263,9 @@ it('lets the manager, the office admin and a super-admin search candidates and u
 
 it('refuses a team member and another organization\'s office admin on every route', function (string $role) {
     Http::fake();
-    $repo = repoLinked($this->project, $this->connection);
+    // On the team before the link: joining a team with repositories syncs their access.
     $this->actingAs(repoActor($role, $this->project));
+    $repo = repoLinked($this->project, $this->connection);
 
     $this->getJson("{$this->base}/candidates")->assertForbidden();
     $this->post($this->base, ['full_name' => 'sdoc/app'])->assertForbidden();
@@ -297,6 +300,7 @@ it('answers 403 on every route, even to a super-admin, when the organization has
 // Candidates
 
 it('lists the forge organization\'s repositories that no project links, filtered by name in any case', function () {
+    $this->actingAs(repoActor('manager', $this->project));
     $sms = Project::factory()->create(['organization_id' => $this->organization->id, 'title' => 'SMS Gateway', 'key' => 'SG']);
     repoLinked($this->project, $this->connection, 501, 'app');
     repoLinked($sms, $this->connection, 503, 'docs');
@@ -309,7 +313,6 @@ it('lists the forge organization\'s repositories that no project links, filtered
         repoForge(502, 'sdoc', 'api'),
         repoForge(503, 'sdoc', 'docs'),
     ])]);
-    $this->actingAs(repoActor('manager', $this->project));
 
     expect($this->getJson("{$this->base}/candidates")->assertOk()->json('data'))->toEqual([
         ['full_name' => 'sdoc/api', 'name' => 'api', 'description' => 'The api code', 'html_url' => 'https://git.example/sdoc/api'],
@@ -500,6 +503,7 @@ it('keeps the link when the forge refuses the link back, and logs why without th
         'git.example/api/v1/repos/sdoc/app' => fn (Request $r) => $r->method() === 'PATCH'
             ? Http::response(['message' => 'token does not have at least one of required scope(s): [write:repository]'], 403)
             : Http::response(repoForge()),
+        'git.example/api/v1/repos/sdoc/app/collaborators*' => repoPage([]),
     ]);
 
     $this->actingAs(repoActor('manager', $this->project))
@@ -520,6 +524,7 @@ it('logs an unreachable forge\'s cause for the link back with the token masked',
         'git.example/api/v1/repos/sdoc/app' => fn (Request $r) => $r->method() === 'PATCH'
             ? throw new ConnectionException('cURL error 28: timed out after bot-token-never-shown')
             : Http::response(repoForge()),
+        'git.example/api/v1/repos/sdoc/app/collaborators*' => repoPage([]),
     ]);
 
     $this->actingAs(repoActor('manager', $this->project))->post($this->base, ['full_name' => 'sdoc/app']);

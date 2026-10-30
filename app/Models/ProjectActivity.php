@@ -114,8 +114,9 @@ class ProjectActivity extends Model
 
     /**
      * Entries the user may read: everything except the git ones (a linked
-     * repository, a pull request, a branch, a commit), which name code and
-     * so follow {@see Project::scopeCodeVisibleTo()}. The one place that
+     * repository, a pull request, a branch, a commit, someone's access to a
+     * repository), which name code and so follow
+     * {@see Project::scopeCodeVisibleTo()}. The one place that
      * rule is applied to activity; every reader of the log goes through it.
      *
      * @param  Builder<ProjectActivity>  $query
@@ -125,7 +126,7 @@ class ProjectActivity extends Model
     {
         $gitTypes = array_map(
             fn (string $model): string => (new $model)->getMorphClass(),
-            [GitRepository::class, GitBranch::class, GitCommit::class, GitPullRequest::class],
+            [GitRepository::class, GitBranch::class, GitCommit::class, GitPullRequest::class, GitRepositoryGrant::class],
         );
 
         return $query->where(function (Builder $q) use ($gitTypes, $user): void {

@@ -113,6 +113,7 @@ function apiRepoFakeForge(array $stubs = []): void
         'git.example/api/v1/repos/sdoc/app/pulls*' => apiRepoPage([]),
         'git.example/api/v1/repos/sdoc/app/branches*' => apiRepoPage([]),
         'git.example/api/v1/repos/sdoc/app/commits*' => apiRepoPage([]),
+        'git.example/api/v1/repos/sdoc/app/collaborators*' => apiRepoPage([]),
     ], $stubs));
 }
 
@@ -136,9 +137,10 @@ function apiRepoResource(GitRepository $repo): array
 // Listing
 
 it('lists a project\'s repositories to anyone who can see the project', function (string $role) {
+    // On the team before the link: joining a team with repositories syncs their access.
+    apiRepoActor($role, $this->project);
     $repo = apiRepoLinked($this->project, $this->connection);
     $repo->forceFill(['last_pushed_at' => now()->subHour()])->save();
-    apiRepoActor($role, $this->project);
 
     $response = $this->getJson($this->base)->assertOk();
 
@@ -181,8 +183,9 @@ it('lets the manager, the office admin and a super-admin link, search and unlink
 
 it('refuses a team member and another organization\'s office admin on every change', function (string $role) {
     Http::fake();
-    $repo = apiRepoLinked($this->project, $this->connection);
+    // On the team before the link: joining a team with repositories syncs their access.
     apiRepoActor($role, $this->project);
+    $repo = apiRepoLinked($this->project, $this->connection);
 
     $this->getJson("{$this->base}/candidates")->assertForbidden();
     $this->postJson($this->base, ['full_name' => 'sdoc/app'])->assertForbidden();

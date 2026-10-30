@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Jobs\SyncRepositoryAccess;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectActivity;
@@ -9,7 +10,8 @@ use App\Services\ProjectActivityRecorder;
 
 /**
  * Putting a project into a program, moving it or taking it out goes into
- * the project's activity.
+ * the project's activity, and its repositories' forge access follows the
+ * program's manager.
  */
 class ProjectObserver
 {
@@ -29,6 +31,7 @@ class ProjectObserver
         }
 
         $this->record($project, $project->getOriginal('program_id'), $project->program_id);
+        SyncRepositoryAccess::forProject($project);
     }
 
     private function record(Project $project, ?int $from, ?int $to, bool $started = false): void

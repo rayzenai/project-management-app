@@ -23,6 +23,7 @@ use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Observers\GitPullRequestObserver;
+use App\Observers\GitRepositoryGrantObserver;
 use App\Observers\GitRepositoryObserver;
 use App\Observers\ProgramObserver;
 use App\Observers\ProjectAssignmentObserver;
@@ -153,6 +154,7 @@ class AppServiceProvider extends ServiceProvider
         TaskDependency::observe(TaskDependencyObserver::class);
         TeamMembership::observe(TeamMembershipObserver::class);
         GitRepository::observe(GitRepositoryObserver::class);
+        GitRepositoryGrant::observe(GitRepositoryGrantObserver::class);
         TaskGitLink::observe(TaskGitLinkObserver::class);
         GitPullRequest::observe(GitPullRequestObserver::class);
     }

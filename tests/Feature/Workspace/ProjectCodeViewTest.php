@@ -14,6 +14,7 @@ use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Sanctum\Sanctum;
 
@@ -396,7 +397,9 @@ it('leaves code from a repository of a project the viewer cannot see off the tas
 
     $shownTo(User::factory()->create(['email' => 'boss@example.com']));
 
-    // Put on the other project's team, the member sees them too.
+    // Put on the other project's team, the member sees them too. Joining
+    // queues an access sync of its repositories; there is no forge here.
+    Queue::fake();
     $secret->ensureTeam()->members()->attach(Member::query()->where('user_id', $this->member->id)->value('id'), ['role' => 'member']);
     $shownTo($this->member);
 });

@@ -3,12 +3,15 @@
 namespace App\Services\Workspace;
 
 use App\Jobs\BackfillGitRepository;
+use App\Jobs\SyncRepositoryAccess;
 use App\Models\GitConnection;
 use App\Models\GitRepository;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\Git\ForgejoClient;
 use App\Services\Git\ForgejoException;
 use App\Services\Git\ForgeShapes;
+use App\Services\Git\RepositoryAccess;
 use App\Services\Git\RepositorySync;
 use App\Support\Background;
 use App\Support\ServiceResult;
@@ -21,12 +24,16 @@ use Illuminate\Support\Facades\Log;
 /**
  * Links a forge repository to a project. The forge is asked first: the
  * repository must be in the organization's forge organization and linked to
- * no project yet. Then the forge is pointed back here (best effort) and the
- * backfill is queued.
+ * no project yet. Then the forge is pointed back here (best effort), the
+ * people it already has become grants (best effort, so linking never quietly
+ * takes their access away), and the access sync and the backfill are queued.
  */
 class LinkRepositoryService
 {
-    public function __construct(private readonly RepositorySync $sync) {}
+    public function __construct(
+        private readonly RepositorySync $sync,
+        private readonly RepositoryAccess $access,
+    ) {}
 
     public function execute(Project $project, string $fullName, ?Authenticatable $actor): ServiceResult
     {
@@ -75,9 +82,31 @@ class LinkRepositoryService
             $message .= " The forge link back couldn't be set; the nightly reconcile will retry.";
         }
 
+        $this->importCollaborators($repo, $connection, $actor);
+        Background::dispatch(new SyncRepositoryAccess($repo));
         Background::dispatch(new BackfillGitRepository($repo));
 
         return ServiceResult::success($repo, $message);
+    }
+
+    /**
+     * A forge failure leaves the link as it is: anyone not imported can be
+     * given access in the tracker.
+     */
+    private function importCollaborators(GitRepository $repo, GitConnection $connection, ?Authenticatable $actor): void
+    {
+        try {
+            $this->access->importExisting($repo, $actor instanceof User ? $actor : null);
+        } catch (ForgejoException $e) {
+            $context = ['owner' => $repo->owner, 'repository' => $repo->name, 'status' => $e->status];
+
+            if ($e->status === 0) {
+                $context['url'] = $connection->base_url;
+                $context['cause'] = $e->causeMessage($connection->token);
+            }
+
+            Log::warning("Couldn't import a forge repository's collaborators.", $context);
+        }
     }
 
     private function linkedAs(GitConnection $connection, int $forgeId): ?GitRepository

@@ -2,11 +2,14 @@
 
 namespace App\Observers;
 
+use App\Jobs\SyncRepositoryAccess;
 use App\Models\Program;
 use App\Notifications\MadeProgramManager;
 
 /**
- * A new program manager is told, unless they did it themselves.
+ * A new program manager is told, unless they did it themselves, and the
+ * forge access of the program's repositories follows them (the program's
+ * manager maintains its projects' repositories).
  */
 class ProgramObserver
 {
@@ -19,6 +22,10 @@ class ProgramObserver
     {
         if ($program->wasChanged('manager_id')) {
             $this->tellManager($program);
+
+            foreach ($program->projects()->orderBy('id')->get() as $project) {
+                SyncRepositoryAccess::forProject($project);
+            }
         }
     }
 

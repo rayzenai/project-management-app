@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Jobs\SyncRepositoryAccess;
 use App\Models\Member;
 use App\Models\Project;
 use App\Models\ProjectActivity;
@@ -15,7 +16,9 @@ use Illuminate\Notifications\Notification;
 /**
  * Who joins or leaves a project's team, and who manages it, goes into the
  * project's activity; the person joining, or made manager, is told (unless
- * they did it themselves).
+ * they did it themselves). Each change syncs the forge access of the
+ * project's repositories; leaving the team first takes away that person's
+ * grants on them, whoever made them.
  */
 class TeamMembershipObserver
 {
@@ -43,6 +46,8 @@ class TeamMembershipObserver
         $this->tell($member, $managing
             ? new MadeProjectManager($project, $this->actorName())
             : new AddedToProjectTeam($project, $this->actorName()));
+
+        SyncRepositoryAccess::forProject($project);
     }
 
     public function updated(TeamMembership $membership): void
@@ -73,6 +78,8 @@ class TeamMembershipObserver
         if ($managing) {
             $this->tell($member, new MadeProjectManager($project, $this->actorName()));
         }
+
+        SyncRepositoryAccess::forProject($project);
     }
 
     public function deleted(TeamMembership $membership): void
@@ -92,6 +99,15 @@ class TeamMembershipObserver
             description: "Removed {$member->name} from the {$project->title} team",
             changes: ['member_id' => $member->id],
         );
+
+        // One by one, so each removal is recorded and synced.
+        $member->repositoryGrants()
+            ->whereIn('git_repository_id', $project->repositories()->select('id'))
+            ->orderBy('id')
+            ->get()
+            ->each->delete();
+
+        SyncRepositoryAccess::forProject($project);
     }
 
     /**

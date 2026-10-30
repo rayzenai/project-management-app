@@ -11,6 +11,7 @@ use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ProjectActivityRecorder;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Sanctum\Sanctum;
 
@@ -24,6 +25,8 @@ use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
+    // Joining a team queues an access sync of its repositories; there is no forge here.
+    Queue::fake();
 
     $this->organization = Organization::factory()->create(['slug' => 'sdoc']);
     $this->project = Project::factory()->create(['organization_id' => $this->organization->id, 'key' => 'TP', 'is_public' => true]);
