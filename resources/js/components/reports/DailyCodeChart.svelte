@@ -3,7 +3,7 @@
 
     /**
      * Series colours by slot, in the fixed order of app.css's `--ws-series-*`
-     * tokens (blue, orange, aqua, violet). Whole class names, so Tailwind
+     * tokens (blue, magenta, purple, teal-blue). Whole class names, so Tailwind
      * sees them; the slot follows the person, never their rank.
      */
     export const SERIES_STROKE = [
@@ -162,30 +162,28 @@
         ),
     );
 
-    /** End labels from the top down, skipping any that would overlap. */
+    /**
+     * A name at the end of each line that ends clear of the others. Lines
+     * ending close together get none (their markers overlap, so a name
+     * could point at the wrong one); the legend and tooltip name them.
+     */
     const endLabels = $derived.by(() => {
         if (!labelled || count === 0) {
             return [];
         }
 
-        const ends = series
-            .map((s) => ({
-                key: s.key,
-                name: s.name.split(/\s+/)[0],
-                y: y(s.days[count - 1].code_changed),
-            }))
-            .sort((a, b) => a.y - b.y);
-        const placed: typeof ends = [];
+        const ends = series.map((s) => ({
+            key: s.key,
+            name: s.name.split(/\s+/)[0],
+            y: y(s.days[count - 1].code_changed),
+        }));
 
-        for (const end of ends) {
-            const last = placed[placed.length - 1];
-
-            if (!last || end.y - last.y >= LABEL_GAP) {
-                placed.push(end);
-            }
-        }
-
-        return placed;
+        return ends.filter((end) =>
+            ends.every(
+                (other) =>
+                    other === end || Math.abs(other.y - end.y) >= LABEL_GAP,
+            ),
+        );
     });
 
     function pick(clientX: number) {
@@ -257,6 +255,12 @@
             </li>
         {/each}
     </ul>
+
+    {#if peak === 0}
+        <p class="mb-2 text-xs text-fg-muted">
+            No code lines changed in this range.
+        </p>
+    {/if}
 
     <!-- A slider over the days: arrow keys move the crosshair. -->
     <div
@@ -365,14 +369,6 @@
                     {/each}
                 {/if}
             </svg>
-
-            {#if peak === 0}
-                <p
-                    class="pointer-events-none absolute inset-x-0 top-16 text-center text-xs text-fg-muted"
-                >
-                    No code lines changed in this range.
-                </p>
-            {/if}
 
             {#if active !== null}
                 {@const flip = x(active) > width / 2}

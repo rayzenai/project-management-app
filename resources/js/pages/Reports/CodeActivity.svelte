@@ -1,6 +1,6 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
-    import { GitCommitHorizontal } from '@lucide/svelte';
+    import { ArrowDown, ArrowUp, GitCommitHorizontal } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
@@ -245,8 +245,77 @@
             { label: 'Tasks', value: (p) => p.tasks },
         ];
 
+    // ---- Sorting: by name unless the viewer picks a column ----
+    type SortKey =
+        | 'name'
+        | 'commits'
+        | 'active_days'
+        | 'code'
+        | 'comments'
+        | 'blank'
+        | 'docs'
+        | 'pull_requests'
+        | 'tasks';
+
+    const SORT_VALUE: Record<
+        Exclude<SortKey, 'name'>,
+        (p: CodeActivityPerson) => number
+    > = {
+        commits: (p) => p.commits,
+        active_days: (p) => p.active_days,
+        code: (p) => p.code_added + p.code_removed,
+        comments: (p) => p.comment_added + p.comment_removed,
+        blank: (p) => p.blank_added + p.blank_removed,
+        docs: (p) => p.docs_added + p.docs_removed,
+        pull_requests: (p) => p.pull_requests_opened,
+        tasks: (p) => p.tasks,
+    };
+
+    let sort = $state<{ key: SortKey; dir: 'asc' | 'desc' }>({
+        key: 'name',
+        dir: 'asc',
+    });
+
+    function sortBy(key: SortKey) {
+        sort = {
+            key,
+            dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc',
+        };
+    }
+
+    const byName = (a: CodeActivityPerson, b: CodeActivityPerson) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+
+    /** The people in the chosen order; the unmatched row always last. */
+    const rows = $derived.by(() => {
+        const sign = sort.dir === 'asc' ? 1 : -1;
+        const key = sort.key;
+
+        return [...people].sort((a, b) => {
+            if ((a.user_id === null) !== (b.user_id === null)) {
+                return a.user_id === null ? 1 : -1;
+            }
+
+            const order =
+                key === 'name'
+                    ? byName(a, b)
+                    : SORT_VALUE[key](a) - SORT_VALUE[key](b);
+
+            return sign * order || byName(a, b);
+        });
+    });
+
     // ---- One person's commits ----
     let openId = $state<Id | null>(null);
+
+    // Someone who leaves the report (another range or project) closes
+    // their drawer for good, rather than reopening it if they come back.
+    $effect(() => {
+        if (openId !== null && !people.some((p) => p.user_id === openId)) {
+            openId = null;
+        }
+    });
+
     const openPerson = $derived(
         people.find((p) => p.user_id !== null && p.user_id === openId) ?? null,
     );
@@ -283,6 +352,37 @@
 </script>
 
 <svelte:head><title>Code activity · Workspace</title></svelte:head>
+
+{#snippet sortHead(
+    key: SortKey,
+    label: string,
+    align: 'left' | 'right' = 'right',
+)}
+    {@const active = sort.key === key}
+    {@const Arrow = sort.dir === 'asc' ? ArrowUp : ArrowDown}
+    <th
+        class={`col-head py-1.5 font-normal ${align === 'left' ? 'pr-3 text-left' : 'px-3 text-right last:pr-0'}`}
+        aria-sort={active
+            ? sort.dir === 'asc'
+                ? 'ascending'
+                : 'descending'
+            : undefined}
+    >
+        <button
+            type="button"
+            class={`inline-flex items-center gap-1 hover:text-fg ${active ? 'text-fg-muted' : ''}`}
+            onclick={() => sortBy(key)}
+        >
+            {#if active && align === 'right'}
+                <Arrow class="h-3 w-3" />
+            {/if}
+            {label}
+            {#if active && align === 'left'}
+                <Arrow class="h-3 w-3" />
+            {/if}
+        </button>
+    </th>
+{/snippet}
 
 <AppShell>
     {#snippet bar()}
@@ -412,37 +512,22 @@
                                 <th class="w-8 py-1.5"
                                     ><span class="sr-only">Compare</span></th
                                 >
-                                <th class="col-head py-1.5 pr-3 font-normal"
-                                    >Person</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Commits</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Active days</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Code</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Comments</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Blank</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Docs</th
-                                >
-                                <th class="col-head px-3 text-right font-normal"
-                                    >Pull requests</th
-                                >
-                                <th class="col-head pl-3 text-right font-normal"
-                                    >Tasks</th
-                                >
+                                {@render sortHead('name', 'Person', 'left')}
+                                {@render sortHead('commits', 'Commits')}
+                                {@render sortHead('active_days', 'Active days')}
+                                {@render sortHead('code', 'Code')}
+                                {@render sortHead('comments', 'Comments')}
+                                {@render sortHead('blank', 'Blank')}
+                                {@render sortHead('docs', 'Docs')}
+                                {@render sortHead(
+                                    'pull_requests',
+                                    'Pull requests',
+                                )}
+                                {@render sortHead('tasks', 'Tasks')}
                             </tr>
                         </thead>
                         <tbody>
-                            {#each people as person (person.user_id ?? 'unmatched')}
+                            {#each rows as person (person.user_id ?? 'unmatched')}
                                 {@const id = person.user_id}
                                 {@const ticked =
                                     id !== null && chosen.includes(id)}
@@ -463,7 +548,7 @@
                                             >
                                                 <input
                                                     type="checkbox"
-                                                    class="accent-[var(--ws-accent)]"
+                                                    class="accent-accent"
                                                     checked={ticked}
                                                     disabled={!ticked &&
                                                         chosen.length >=

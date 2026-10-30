@@ -105,8 +105,9 @@ class CodeActivityQuery
     }
 
     /**
-     * One row per person, most code changed first; the commits no user is
-     * matched to are one row, only for a viewer who sees whole repositories.
+     * One row per person, by name (never ranked by a figure); the commits
+     * no user is matched to are one row, last, only for a viewer who sees
+     * whole repositories.
      *
      * @param  Scope  $scope
      * @param  Filters  $filters
@@ -159,9 +160,8 @@ class CodeActivityQuery
 
         $names = $this->names(array_values(array_filter(array_keys($rows), fn ($key): bool => $key !== '')));
         $name = fn (int|string $key): string => $key === '' ? self::UNMATCHED : ($names[(int) $key]['name'] ?? '');
-        $changed = array_map(fn (array $counts): int => ($counts['code_added'] ?? 0) + ($counts['code_removed'] ?? 0), $rows);
 
-        uksort($rows, fn (int|string $a, int|string $b): int => $changed[$b] <=> $changed[$a] ?: strcasecmp($name($a), $name($b)));
+        uksort($rows, fn (int|string $a, int|string $b): int => ($a === '') <=> ($b === '') ?: strcasecmp($name($a), $name($b)) ?: (int) $a <=> (int) $b);
 
         $people = [];
 

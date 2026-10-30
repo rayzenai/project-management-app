@@ -106,8 +106,8 @@ it('reports a super-admin every organization and an organizational admin only th
     Sanctum::actingAs($this->sdocAdmin, ['*']);
     $admin = $this->getJson('/api/v1/workspace/reports/code')->assertOk();
 
-    expect(collect($boss->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev', 'Chandra Dev', 'Not matched to anyone', 'Bikash Dev'])
-        ->and(collect($admin->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev', 'Not matched to anyone', 'Bikash Dev'])
+    expect(collect($boss->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'Chandra Dev', 'Not matched to anyone'])
+        ->and(collect($admin->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'Not matched to anyone'])
         ->and($admin->json('data.people.0.code_added'))->toBe(15)
         ->and($admin->json('data.range'))->toBe(['from' => '2026-09-29', 'to' => '2026-10-28'])
         ->and($admin->json('data.uncounted'))->toBe(0)

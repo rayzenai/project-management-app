@@ -42,9 +42,11 @@
     --color-danger-soft: var(--ws-danger-soft);
     --color-success-soft: var(--ws-success-soft);
     --color-selection: var(--ws-selection);
-    /* Chart series (people compared): blue, orange, aqua, violet, in this
-       fixed order; never status colours. Validated with the dataviz
-       palette checks against the panel surface in both modes. */
+    /* Chart series (people compared): blue, magenta, purple, teal-blue, in
+       this fixed order. No hue near the status red, amber or green, so no
+       line reads as good or bad. Checked with the dataviz palette validator
+       against the panel surface in both modes: all four pass on adjacent
+       pairs, the first three on all pairs. */
     --color-series-1: var(--ws-series-1);
     --color-series-2: var(--ws-series-2);
     --color-series-3: var(--ws-series-3);
@@ -82,9 +84,9 @@
     --ws-success-soft: rgba(31, 157, 98, 0.1);
     --ws-selection: rgba(59, 111, 224, 0.07);
     --ws-series-1: #2a78d6;
-    --ws-series-2: #eb6834;
-    --ws-series-3: #1baf7a;
-    --ws-series-4: #6250d6;
+    --ws-series-2: #b55386;
+    --ws-series-3: #812794;
+    --ws-series-4: #2695ac;
     color-scheme: light;
 }
 
@@ -111,9 +113,9 @@
         --ws-success-soft: rgba(62, 201, 138, 0.13);
         --ws-selection: rgba(109, 148, 245, 0.08);
         --ws-series-1: #3987e5;
-        --ws-series-2: #d95926;
-        --ws-series-3: #199e70;
-        --ws-series-4: #9085e9;
+        --ws-series-2: #d162a5;
+        --ws-series-3: #8451a7;
+        --ws-series-4: #2695ac;
         color-scheme: dark;
     }
 }
@@ -122,9 +124,9 @@
    takes the dark steps here. */
 :root[data-theme='dark'] {
     --ws-series-1: #3987e5;
-    --ws-series-2: #d95926;
-    --ws-series-3: #199e70;
-    --ws-series-4: #9085e9;
+    --ws-series-2: #d162a5;
+    --ws-series-3: #8451a7;
+    --ws-series-4: #2695ac;
 }
 
 @layer base {

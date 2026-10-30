@@ -65,11 +65,13 @@
         }
     }
 
-    // Another person, or the filters changed: load afresh.
+    // Another person, or the filters changed: load afresh. Tracks the id,
+    // not the row, which every visit rebuilds.
+    const userId = $derived(person?.user_id ?? null);
     let wasOpen = false;
 
     $effect(() => {
-        const id = person?.user_id ?? null;
+        const id = userId;
         const search = query;
 
         untrack(() => {
@@ -177,9 +179,8 @@
                     <button
                         type="button"
                         class="btn-ghost"
-                        onclick={() =>
-                            person?.user_id != null &&
-                            load(person.user_id, query)}>Try again</button
+                        onclick={() => userId !== null && load(userId, query)}
+                        >Try again</button
                     >
                 </div>
             {:else if commits === null}

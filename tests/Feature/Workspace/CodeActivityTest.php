@@ -166,16 +166,26 @@ function codeActivityPeople(array $report): array
 
 // ---- Who sees what ----
 
-it('shows a super-admin the people of every organization, most code first', function () {
+it('shows a super-admin the people of every organization, by name, with the commits no one is matched to last', function () {
     $report = codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code'));
 
-    expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Chandra Dev', 'Not matched to anyone', 'Bikash Dev']);
+    expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'Chandra Dev', 'Not matched to anyone']);
+});
+
+it('never ranks people by how much code they wrote: the order is by name, in any case', function () {
+    $bina = codeActivityPerson($this->sdoc, 'bina Dev', team: $this->hr, gitUsername: 'bina');
+    codeActivityCommit($this->hrRepo, $bina, 'n1', '2026-10-25 10:00:00', ['code_added' => 5000]);
+    codeActivityCommit($this->hrRepo, null, 'u9', '2026-10-25 11:00:00', ['code_added' => 9000]);
+
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
+
+    expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'bina Dev', 'Not matched to anyone']);
 });
 
 it('shows an organizational admin only their organization, with the commits no one is matched to', function () {
     $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
 
-    expect(array_keys($people))->toBe(['Asha Dev', 'Not matched to anyone', 'Bikash Dev'])
+    expect(array_keys($people))->toBe(['Asha Dev', 'Bikash Dev', 'Not matched to anyone'])
         ->and($people['Not matched to anyone']['user_id'])->toBeNull()
         ->and($people['Not matched to anyone']['commits'])->toBe(1)
         ->and($people['Asha Dev'])->toMatchArray([
