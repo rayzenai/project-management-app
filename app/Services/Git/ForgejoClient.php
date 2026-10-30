@@ -199,6 +199,103 @@ class ForgejoClient
     }
 
     /**
+     * Creates a private, empty repository (default branch `main`) in the forge
+     * organization and returns its JSON. A taken name is a 409.
+     *
+     * @return array<string, mixed>
+     */
+    public function createOrganizationRepository(string $org, string $name, ?string $description): array
+    {
+        return $this->json($this->send('post', '/orgs/'.rawurlencode($org).'/repos', [
+            'name' => $name,
+            'description' => $description ?? '',
+            'private' => true,
+            'auto_init' => false,
+            'default_branch' => 'main',
+        ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $rule
+     */
+    public function protectBranch(string $owner, string $name, array $rule): void
+    {
+        $this->send('post', $this->repoPath($owner, $name).'/branch_protections', $rule);
+    }
+
+    /**
+     * @param  array<string, mixed>  $changes
+     */
+    public function updateBranchProtection(string $owner, string $name, string $rule, array $changes): void
+    {
+        $this->send('patch', $this->repoPath($owner, $name).'/branch_protections/'.rawurlencode($rule), $changes);
+    }
+
+    /**
+     * @return list<string> logins
+     */
+    public function collaborators(string $owner, string $name, int $max = 500): array
+    {
+        return $this->logins($this->paged($this->repoPath($owner, $name).'/collaborators', [], $max));
+    }
+
+    /**
+     * Adds the collaborator, or changes the permission of an existing one
+     * (204 both ways). A login the forge has no user for is a 422.
+     */
+    public function setCollaborator(string $owner, string $name, string $login, string $permission): void
+    {
+        $this->send('put', $this->collaboratorPath($owner, $name, $login), ['permission' => $permission]);
+    }
+
+    /**
+     * The forge answers 204 for a collaborator that is not there as well.
+     */
+    public function removeCollaborator(string $owner, string $name, string $login): void
+    {
+        $this->send('delete', $this->collaboratorPath($owner, $name, $login));
+    }
+
+    public function collaboratorPermission(string $owner, string $name, string $login): string
+    {
+        $data = $this->get($this->collaboratorPath($owner, $name, $login).'/permission');
+
+        return is_string($data['permission'] ?? null) ? $data['permission'] : '';
+    }
+
+    /**
+     * One commit with its `parents` and `stats` {total, additions, deletions}.
+     *
+     * @return array<string, mixed>
+     */
+    public function commit(string $owner, string $name, string $sha): array
+    {
+        return $this->json($this->send(
+            'get',
+            $this->repoPath($owner, $name).'/git/commits/'.rawurlencode($sha),
+            query: ['stat' => 'true', 'verification' => 'false', 'files' => 'false'],
+        ));
+    }
+
+    /**
+     * The commit's raw unified diff, or null when it is over $maxBytes (by its
+     * Content-Length when the forge sends one, else by the body read).
+     */
+    public function commitDiff(string $owner, string $name, string $sha, int $maxBytes): ?string
+    {
+        $response = $this->send('get', $this->repoPath($owner, $name).'/git/commits/'.rawurlencode($sha).'.diff');
+
+        $length = $response->header('Content-Length');
+        if ($length !== '' && (int) $length > $maxBytes) {
+            return null;
+        }
+
+        $body = $response->body();
+
+        return strlen($body) > $maxBytes ? null : $body;
+    }
+
+    /**
      * Makes the forge link KEY-12 in commits and pull requests back to the tracker.
      */
     public function setExternalTracker(string $owner, string $name, string $format): void
@@ -380,6 +477,11 @@ class ForgejoClient
     private function repoPath(string $owner, string $name): string
     {
         return '/repos/'.rawurlencode($owner).'/'.rawurlencode($name);
+    }
+
+    private function collaboratorPath(string $owner, string $name, string $login): string
+    {
+        return $this->repoPath($owner, $name).'/collaborators/'.rawurlencode($login);
     }
 
     private function request(): PendingRequest

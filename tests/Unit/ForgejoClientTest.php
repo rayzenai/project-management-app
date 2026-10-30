@@ -295,3 +295,150 @@ it('reports status 0 and keeps the cause when the forge cannot be reached', func
         expect($e->status)->toBe(0)->and($e->getPrevious())->toBeInstanceOf(ConnectionException::class);
     }
 });
+
+it('creates a private empty organization repository with main as default branch', function () {
+    Http::fake([FORGE.'/orgs/sdoc/repos' => Http::response(['id' => 7, 'name' => 'egp-api'], 201)]);
+
+    expect(forgeClient()->createOrganizationRepository('sdoc', 'egp-api', null))->toBe(['id' => 7, 'name' => 'egp-api']);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && $r->url() === FORGE.'/orgs/sdoc/repos' && $r->data() === [
+        'name' => 'egp-api',
+        'description' => '',
+        'private' => true,
+        'auto_init' => false,
+        'default_branch' => 'main',
+    ]);
+});
+
+it('sends the description of a new repository', function () {
+    Http::fake([FORGE.'/orgs/sdoc/repos' => Http::response(['id' => 7], 201)]);
+
+    forgeClient()->createOrganizationRepository('sdoc', 'egp-api', 'The API');
+
+    Http::assertSent(fn (Request $r) => $r->data()['description'] === 'The API');
+});
+
+it('reports a taken repository name as a 409', function () {
+    Http::fake([FORGE.'/orgs/sdoc/repos' => Http::response(['message' => 'The repository with the same name already exists.'], 409)]);
+
+    try {
+        forgeClient()->createOrganizationRepository('sdoc', 'egp-api', null);
+        $this->fail('Expected a ForgejoException.');
+    } catch (ForgejoException $e) {
+        expect($e->status)->toBe(409);
+    }
+});
+
+it('lists every collaborator login across pages', function () {
+    Http::fake(function (Request $request) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+        $page = (int) ($query['page'] ?? 1);
+
+        return Http::response(match ($page) {
+            1 => array_map(fn (int $i) => ['login' => "user{$i}"], range(1, 50)),
+            2 => [['login' => 'user51']],
+            default => [],
+        });
+    });
+
+    $logins = forgeClient()->collaborators('sdoc', 'egp-api');
+
+    expect($logins)->toHaveCount(51)->and($logins[0])->toBe('user1')->and($logins[50])->toBe('user51');
+    Http::assertSent(fn (Request $r) => str_starts_with($r->url(), FORGE.'/repos/sdoc/egp-api/collaborators?') && str_contains($r->url(), 'limit=50'));
+});
+
+it('sets a collaborator\'s permission', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/collaborators/asha' => Http::response('', 204)]);
+
+    forgeClient()->setCollaborator('sdoc', 'egp-api', 'asha', 'write');
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
+        && $r->url() === FORGE.'/repos/sdoc/egp-api/collaborators/asha'
+        && $r->data() === ['permission' => 'write']);
+});
+
+it('reports a collaborator the forge doesn\'t have as a 422', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/collaborators/ghost' => Http::response(['message' => 'user does not exist [uid: 0, name: ghost]'], 422)]);
+
+    try {
+        forgeClient()->setCollaborator('sdoc', 'egp-api', 'ghost', 'read');
+        $this->fail('Expected a ForgejoException.');
+    } catch (ForgejoException $e) {
+        expect($e->status)->toBe(422);
+    }
+});
+
+it('removes a collaborator', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/collaborators/asha' => Http::response('', 204)]);
+
+    forgeClient()->removeCollaborator('sdoc', 'egp-api', 'asha');
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'DELETE' && $r->url() === FORGE.'/repos/sdoc/egp-api/collaborators/asha');
+});
+
+it('reads a collaborator\'s permission', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/collaborators/asha/permission' => Http::response(['permission' => 'write', 'role_name' => 'write', 'user' => ['login' => 'asha']])]);
+
+    expect(forgeClient()->collaboratorPermission('sdoc', 'egp-api', 'asha'))->toBe('write');
+    Http::assertSent(fn (Request $r) => $r->method() === 'GET' && $r->url() === FORGE.'/repos/sdoc/egp-api/collaborators/asha/permission');
+});
+
+it('protects a branch', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/branch_protections' => Http::response(['rule_name' => 'main'], 201)]);
+    $rule = ['rule_name' => 'main', 'branch_name' => 'main', 'enable_push' => true, 'push_whitelist_teams' => ['Owners']];
+
+    forgeClient()->protectBranch('sdoc', 'egp-api', $rule);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST'
+        && $r->url() === FORGE.'/repos/sdoc/egp-api/branch_protections'
+        && $r->data() === $rule);
+});
+
+it('updates a branch protection', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/branch_protections/main' => Http::response(['rule_name' => 'main'])]);
+
+    forgeClient()->updateBranchProtection('sdoc', 'egp-api', 'main', ['push_whitelist_usernames' => ['asha']]);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH'
+        && $r->url() === FORGE.'/repos/sdoc/egp-api/branch_protections/main'
+        && $r->data() === ['push_whitelist_usernames' => ['asha']]);
+});
+
+it('reads a commit with its stats and parents', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123*' => Http::response([
+        'sha' => 'abc123',
+        'parents' => [['sha' => 'def456']],
+        'stats' => ['total' => 12, 'additions' => 9, 'deletions' => 3],
+    ])]);
+
+    $commit = forgeClient()->commit('sdoc', 'egp-api', 'abc123');
+
+    expect($commit['stats'])->toBe(['total' => 12, 'additions' => 9, 'deletions' => 3])->and($commit['parents'])->toHaveCount(1);
+    Http::assertSent(function (Request $r) {
+        parse_str((string) parse_url($r->url(), PHP_URL_QUERY), $query);
+
+        return $r->method() === 'GET'
+            && str_starts_with($r->url(), FORGE.'/repos/sdoc/egp-api/git/commits/abc123?')
+            && ($query['stat'] ?? null) === 'true' && ($query['verification'] ?? null) === 'false' && ($query['files'] ?? null) === 'false';
+    });
+});
+
+it('returns a commit\'s diff', function () {
+    $diff = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+b\n";
+    Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123.diff' => Http::response($diff, 200, ['Content-Type' => 'text/plain'])]);
+
+    expect(forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 1000))->toBe($diff);
+    Http::assertSent(fn (Request $r) => $r->url() === FORGE.'/repos/sdoc/egp-api/git/commits/abc123.diff');
+});
+
+it('skips a diff larger than the cap', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123.diff' => Http::response('12345678901', 200)]);
+
+    expect(forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 10))->toBeNull();
+});
+
+it('skips a diff whose Content-Length is over the cap', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123.diff' => Http::response('tiny', 200, ['Content-Length' => '11'])]);
+
+    expect(forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 10))->toBeNull();
+});
