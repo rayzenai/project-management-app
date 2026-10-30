@@ -49,8 +49,11 @@
     }
 </script>
 
+<!-- `program` follows the label muted: it tells apart the programs'
+     General projects, as projectLabel does in text. -->
 {#snippet option(
     label: string,
+    program: string | null,
     note: string | null,
     checked: boolean,
     disabled: boolean,
@@ -65,7 +68,10 @@
             onchange={(e) => onchange(e.currentTarget.checked)}
         />
         <span class="min-w-0">
-            <span class="block truncate">{label}</span>
+            <span class="block truncate"
+                >{label}{#if program}
+                    <span class="ml-1 text-fg-muted">{program}</span>{/if}</span
+            >
             {#if note}
                 <span class="block truncate text-xs text-fg-muted">{note}</span>
             {/if}
@@ -73,95 +79,95 @@
     </label>
 {/snippet}
 
-{#if options.programs.length > 0 || options.projects.length > 0}
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {#if options.programs.length > 0}
-            <fieldset class="min-w-0 space-y-1">
-                <legend class="label mb-1">Program manager of</legend>
-                <div class="max-h-56 space-y-1 overflow-y-auto">
-                    {#each options.programs as program (program.id)}
-                        {@render option(
-                            program.name,
-                            managerNote(program.manager),
-                            programIds.includes(program.id),
-                            heldPrograms.includes(program.id),
-                            (on) =>
-                                (programIds = toggled(
-                                    programIds,
-                                    program.id,
-                                    on,
-                                )),
-                        )}
-                    {/each}
-                </div>
+<!-- The lists scroll and cut their last row, so the hints under them keep
+     a clear gap. -->
+<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <fieldset class="min-w-0 space-y-1">
+        <legend class="label mb-1">Program manager of</legend>
+        {#if options.programs.length === 0}
+            <!-- Shown anyway, so the role can be found. -->
+            <p class="text-xs text-fg-muted">
+                No programs yet. Create one from Projects.
+            </p>
+        {:else}
+            <div class="max-h-56 space-y-1 overflow-y-auto">
+                {#each options.programs as program (program.id)}
+                    {@render option(
+                        program.name,
+                        null,
+                        managerNote(program.manager),
+                        programIds.includes(program.id),
+                        heldPrograms.includes(program.id),
+                        (on) =>
+                            (programIds = toggled(programIds, program.id, on)),
+                    )}
+                {/each}
+            </div>
+            <p class="mt-2 text-xs text-fg-muted">
+                In a ministry, usually a Joint Secretary.
+            </p>
+            {#if holdsAProgram}
                 <p class="text-xs text-fg-muted">
-                    In a ministry, usually a Joint Secretary.
+                    To hand this over, choose another manager.
                 </p>
-                {#if holdsAProgram}
-                    <p class="text-xs text-fg-muted">
-                        To hand this over, choose another manager.
-                    </p>
-                {/if}
-                {#if errors.managed_program_ids}
-                    <p class="text-xs text-danger">
-                        {errors.managed_program_ids}
-                    </p>
-                {/if}
-            </fieldset>
+            {/if}
         {/if}
-        {#if options.projects.length > 0}
-            <fieldset class="min-w-0 space-y-1">
-                <legend class="label mb-1">Project manager of</legend>
-                <div class="max-h-56 space-y-1 overflow-y-auto">
-                    {#each options.projects as project (project.id)}
-                        {@render option(
-                            project.title,
-                            managerNote(project.manager),
-                            projectIds.includes(project.id),
-                            heldProjects.includes(project.id),
-                            (on) =>
-                                (projectIds = toggled(
-                                    projectIds,
-                                    project.id,
-                                    on,
-                                )),
-                        )}
-                    {/each}
-                </div>
+        {#if errors.managed_program_ids}
+            <p class="text-xs text-danger">
+                {errors.managed_program_ids}
+            </p>
+        {/if}
+    </fieldset>
+    {#if options.projects.length > 0}
+        <fieldset class="min-w-0 space-y-1">
+            <legend class="label mb-1">Project manager of</legend>
+            <div class="max-h-56 space-y-1 overflow-y-auto">
+                {#each options.projects as project (project.id)}
+                    {@render option(
+                        project.title,
+                        project.program,
+                        managerNote(project.manager),
+                        projectIds.includes(project.id),
+                        heldProjects.includes(project.id),
+                        (on) =>
+                            (projectIds = toggled(projectIds, project.id, on)),
+                    )}
+                {/each}
+            </div>
+            <p class="mt-2 text-xs text-fg-muted">
+                In a ministry, usually an Under Secretary.
+            </p>
+            {#if holdsAProject}
                 <p class="text-xs text-fg-muted">
-                    In a ministry, usually an Under Secretary.
+                    To hand this over, choose another manager.
                 </p>
-                {#if holdsAProject}
-                    <p class="text-xs text-fg-muted">
-                        To hand this over, choose another manager.
-                    </p>
-                {/if}
-                {#if errors.managed_project_ids}
-                    <p class="text-xs text-danger">
-                        {errors.managed_project_ids}
-                    </p>
-                {/if}
-            </fieldset>
-            <fieldset class="min-w-0 space-y-1">
-                <legend class="label mb-1">Member of</legend>
-                <div class="max-h-56 space-y-1 overflow-y-auto">
-                    {#each memberOptions as project (project.id)}
-                        {@const teamId = project.team_id as Id}
-                        <!-- A manager is on their team: that wins. -->
-                        {@render option(
-                            project.title,
-                            null,
-                            teamIds.includes(teamId) ||
-                                projectIds.includes(project.id),
+            {/if}
+            {#if errors.managed_project_ids}
+                <p class="text-xs text-danger">
+                    {errors.managed_project_ids}
+                </p>
+            {/if}
+        </fieldset>
+        <fieldset class="min-w-0 space-y-1">
+            <legend class="label mb-1">Member of</legend>
+            <div class="max-h-56 space-y-1 overflow-y-auto">
+                {#each memberOptions as project (project.id)}
+                    {@const teamId = project.team_id as Id}
+                    <!-- A manager is on their team: that wins. -->
+                    {@render option(
+                        project.title,
+                        project.program,
+                        null,
+                        teamIds.includes(teamId) ||
                             projectIds.includes(project.id),
-                            (on) => (teamIds = toggled(teamIds, teamId, on)),
-                        )}
-                    {/each}
-                </div>
-                {#if errors.team_ids}
-                    <p class="text-xs text-danger">{errors.team_ids}</p>
-                {/if}
-            </fieldset>
-        {/if}
-    </div>
-{/if}
+                        projectIds.includes(project.id),
+                        (on) => (teamIds = toggled(teamIds, teamId, on)),
+                    )}
+                {/each}
+            </div>
+            {#if errors.team_ids}
+                <p class="mt-2 text-xs text-danger">{errors.team_ids}</p>
+            {/if}
+        </fieldset>
+    {/if}
+</div>

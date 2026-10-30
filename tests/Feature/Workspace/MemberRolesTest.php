@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\AddedToProjectTeam;
 use App\Notifications\MadeProgramManager;
 use App\Notifications\MadeProjectManager;
+use App\Support\WorkspaceAccess;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -194,7 +195,7 @@ it('refuses to take a program from its manager without a new one, changing nothi
 it('refuses to take a project from its manager without a new one, changing nothing', function () {
     $this->actingAs($this->admin)
         ->patch("/workspace/members/{$this->underSecretary->id}", ['name' => 'Renamed', 'managed_project_ids' => []])
-        ->assertSessionHasErrors(['managed_project_ids' => 'Choose another manager for Tax Portal first.']);
+        ->assertSessionHasErrors(['managed_project_ids' => 'Choose another manager for Tax Portal (Revenue) first.']);
 
     expect(memberRolesLeaderIds($this->teamA))->toBe([$this->underSecretary->id])
         ->and($this->underSecretary->fresh()->name)->not->toBe('Renamed');
@@ -321,7 +322,7 @@ it('checks roles against the organization a super-admin moves the person to', fu
     $this->patch("/workspace/members/{$stayer->id}", [
         'organization_id' => $this->otherOrg->id,
         'team_ids' => [$this->teamA->id],
-    ])->assertSessionHasErrors(['team_ids' => 'Tax Portal belongs to another organization.']);
+    ])->assertSessionHasErrors(['team_ids' => 'Tax Portal (Revenue) belongs to another organization.']);
 
     expect($stayer->fresh()->organization_id)->toBe($this->org->id)
         ->and($stayer->teams()->exists())->toBeFalse();
@@ -333,7 +334,7 @@ it('never leaves a team without its manager when a super-admin moves them', func
             'organization_id' => $this->otherOrg->id,
             'team_ids' => [],
         ])
-        ->assertSessionHasErrors(['organization_id' => 'Choose another manager for Tax Portal first.']);
+        ->assertSessionHasErrors(['organization_id' => 'Choose another manager for Tax Portal (Revenue) first.']);
 
     expect($this->underSecretary->fresh()->organization_id)->toBe($this->org->id)
         ->and(memberRolesLeaderIds($this->teamA))->toBe([$this->underSecretary->id]);
@@ -414,6 +415,7 @@ it('gives the People page the role options of the organizations the viewer runs'
             [
                 'id' => $this->projectB->id,
                 'title' => 'Customs',
+                'program' => null,
                 'organization_id' => $this->org->id,
                 'team_id' => $this->teamB->id,
                 'manager' => ['id' => $this->managerB->id, 'name' => $this->managerB->name],
@@ -421,6 +423,7 @@ it('gives the People page the role options of the organizations the viewer runs'
             [
                 'id' => $this->projectA->id,
                 'title' => 'Tax Portal',
+                'program' => 'Revenue',
                 'organization_id' => $this->org->id,
                 'team_id' => $this->teamA->id,
                 'manager' => ['id' => $this->underSecretary->id, 'name' => $this->underSecretary->name],
@@ -444,6 +447,55 @@ it('gives the People page the role options of the organizations the viewer runs'
 
     expect($member['canSetRoles'])->toBeFalse()
         ->and($member['roleOptions'])->toEqual(['programs' => [], 'projects' => []]);
+});
+
+it('names each project with its program, so two General projects can be told apart', function () {
+    $customs = Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->managerB->id, 'name' => 'Customs Reform']);
+    $generalR = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->program->id, 'title' => 'General']);
+    $generalR->ensureTeam()->members()->attach($this->jointSecretary->id, ['role' => 'leader']);
+    $generalC = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $customs->id, 'title' => 'General']);
+    $generalC->ensureTeam()->members()->attach($this->managerB->id, ['role' => 'leader']);
+
+    expect($generalR->label())->toBe('General (Revenue)')
+        ->and($this->projectB->label())->toBe('Customs');
+
+    $props = $this->actingAs($this->admin)->get('/workspace/team')->assertOk()->viewData('page')['props'];
+    $options = collect($props['roleOptions']['projects'])->keyBy('id');
+    $teams = collect($props['teams'])->keyBy('id');
+
+    expect($options[$generalR->id]['program'])->toBe('Revenue')
+        ->and($options[$generalC->id]['program'])->toBe('Customs Reform')
+        ->and($options[$this->projectB->id]['program'])->toBeNull()
+        // The rows read "Manages General (Revenue)".
+        ->and($teams[$generalR->team()->id]['project']['program'])->toBe('Revenue')
+        ->and($teams[$this->teamB->id]['project']['program'])->toBeNull();
+
+    $this->patch("/workspace/members/{$this->jointSecretary->id}", ['managed_project_ids' => []])
+        ->assertSessionHasErrors(['managed_project_ids' => 'Choose another manager for General (Revenue) first.']);
+
+    expect(memberRolesLeaderIds($generalR->team()))->toBe([$this->jointSecretary->id]);
+});
+
+it('lets whoever administers an organization set roles in it, and nobody else', function () {
+    $boss = memberRolesBoss();
+    $deactivated = User::factory()->create();
+    Member::factory()->linkedTo($deactivated)->inactive()->create(['organization_id' => $this->org->id, 'is_office_admin' => true]);
+
+    expect(WorkspaceAccess::canSetRolesIn($boss, null))->toBeTrue()
+        ->and(WorkspaceAccess::canSetRolesIn($boss, $this->otherOrg->id))->toBeTrue()
+        ->and(WorkspaceAccess::canSetRolesIn($this->admin, $this->org->id))->toBeTrue()
+        ->and(WorkspaceAccess::canSetRolesIn($this->admin, $this->otherOrg->id))->toBeFalse()
+        ->and(WorkspaceAccess::canSetRolesIn($this->admin, null))->toBeFalse()
+        ->and(WorkspaceAccess::canSetRolesIn($deactivated, $this->org->id))->toBeFalse()
+        ->and(WorkspaceAccess::canSetRolesIn($this->jointSecretary->user, $this->org->id))->toBeFalse()
+        ->and(WorkspaceAccess::canSetRolesIn($this->underSecretary->user, $this->org->id))->toBeFalse()
+        ->and(WorkspaceAccess::canSetRolesIn(null, $this->org->id))->toBeFalse();
+
+    // A deactivated organizational admin gets no role fields.
+    $props = $this->actingAs($deactivated)->get('/workspace/team')->assertOk()->viewData('page')['props'];
+
+    expect($props['canSetRoles'])->toBeFalse()
+        ->and($props['roleOptions'])->toEqual(['programs' => [], 'projects' => []]);
 });
 
 it('leaves archived projects out of the role options', function () {

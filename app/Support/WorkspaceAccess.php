@@ -285,6 +285,18 @@ class WorkspaceAccess
     }
 
     /**
+     * Whether the person form offers role fields (program manager, project
+     * manager, member of) for the organization's people: whoever
+     * administers it. A super-admin sets them anywhere, so null (no one
+     * organization) answers for them alone. Which programs and teams a
+     * save may touch is ChecksMemberRoles' check.
+     */
+    public static function canSetRolesIn(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return self::administers($user, $organizationId);
+    }
+
+    /**
      * True when the user may edit this member's attributes (name, email,
      * password, active flag) or delete them: a super-admin anyone; an office
      * admin the people of their own organization except other office admins.

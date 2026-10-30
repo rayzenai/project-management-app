@@ -10,6 +10,7 @@
         roleOptionsFor,
         rolesToSend,
     } from '../../lib/memberRoles';
+    import { projectLabel } from '../../lib/projectLabel';
     import { toast } from '../../lib/toast.svelte';
     import type {
         Id,
@@ -263,8 +264,12 @@
         });
     }
 
-    // The projects a person works on but doesn't manage: each project's
-    // team carries its name.
+    /** A team named by its project, with the project's program. */
+    function teamLabel(team: Team): string {
+        return team.project ? projectLabel(team.project) : team.name;
+    }
+
+    // The projects a person works on but doesn't manage.
     const memberTeamNames = $derived((member: Member) =>
         teams
             .filter(
@@ -272,7 +277,7 @@
                     (member.team_ids ?? []).includes(t.id) &&
                     !(member.led_team_ids ?? []).includes(t.id),
             )
-            .map((t) => t.name),
+            .map(teamLabel),
     );
 
     // What a person is, listed before the teams they work on.
@@ -283,7 +288,7 @@
             .map((p) => p.name);
         const managed = teams
             .filter((t) => (member.led_team_ids ?? []).includes(t.id))
-            .map((t) => t.name);
+            .map(teamLabel);
 
         if (member.is_office_admin) {
             roles.push('Organizational admin');
@@ -476,7 +481,7 @@
                         </div>
                     {/if}
                 </div>
-                {#if canSetRoles}
+                {#if canSetRoles && newMemberOrganizationId !== null}
                     <MemberRoleFields
                         options={roleOptionsFor(
                             roleOptions,

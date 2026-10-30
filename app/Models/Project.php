@@ -116,6 +116,16 @@ class Project extends Model
     }
 
     /**
+     * How a message names the project: its title, with its program's name
+     * when it has one ("General (Revenue)"), since every program has its
+     * own General. The twin of projectLabel() in resources/js/lib.
+     */
+    public function label(): string
+    {
+        return $this->program === null ? $this->title : "{$this->title} ({$this->program->name})";
+    }
+
+    /**
      * Keys the project used to have; they keep resolving to it.
      *
      * @return HasMany<ProjectKeyAlias, $this>

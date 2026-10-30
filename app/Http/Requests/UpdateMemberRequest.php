@@ -8,6 +8,7 @@ use App\Models\Program;
 use App\Models\Team;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -102,8 +103,10 @@ class UpdateMemberRequest extends FormRequest
             $teams = $member->teams()
                 ->where('teams.is_cross_organization', false)
                 ->where('teams.organization_id', '!=', $organizationId)
+                ->with('projects.program:id,name')
                 ->orderBy('teams.name')
                 ->get();
+            $names = fn (Collection $named): string => $named->map(fn (Team $team): string => $team->project()?->label() ?? $team->name)->implode(', ');
 
             // team_ids never takes a manager off their team, so its manager
             // is chosen first.
@@ -112,11 +115,11 @@ class UpdateMemberRequest extends FormRequest
                 ->when($this->has('team_ids'), fn ($c) => $c->whereIn('id', (array) $this->input('team_ids', [])));
 
             if ($stranded->isNotEmpty()) {
-                $validator->errors()->add('organization_id', 'Take them off '.$stranded->pluck('name')->implode(', ').' first.');
+                $validator->errors()->add('organization_id', 'Take them off '.$names($stranded).' first.');
             }
 
             if ($managed->isNotEmpty()) {
-                $validator->errors()->add('organization_id', 'Choose another manager for '.$managed->pluck('name')->implode(', ').' first.');
+                $validator->errors()->add('organization_id', 'Choose another manager for '.$names($managed).' first.');
             }
 
             $programs = Program::query()

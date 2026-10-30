@@ -47,6 +47,8 @@ export interface RoleOptions {
     projects: {
         id: Id;
         title: string;
+        /** Its program's name: tells apart the programs' General projects. */
+        program: string | null;
         organization_id: Id;
         team_id: Id | null;
         manager: RoleManager | null;
@@ -88,6 +90,13 @@ export interface Team {
     can_manage_roster?: boolean;
     can_view_progress?: boolean;
     roster?: RosterEntry[];
+    /** The project it is the team of, as the People page gets it. */
+    project?: {
+        slug: string;
+        title: string;
+        program: string | null;
+        is_archived: boolean;
+    } | null;
 }
 
 /** A person on a project's team, as the project page lists them. */

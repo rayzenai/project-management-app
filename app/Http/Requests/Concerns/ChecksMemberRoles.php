@@ -94,13 +94,13 @@ trait ChecksMemberRoles
                 ->pluck('id')
                 ->all();
 
-            foreach (Project::query()->whereKey(array_diff($projectIds, $held))->with('teams')->orderBy('title')->get() as $project) {
+            foreach (Project::query()->whereKey(array_diff($projectIds, $held))->with(['teams', 'program:id,name'])->orderBy('title')->get() as $project) {
                 // A teamless project gets its team, in its organization, when the manager is appointed.
                 $team = $project->team() ?? new Team(['organization_id' => $project->organization_id]);
 
                 if (! WorkspaceAccess::administers($user, $project->organization_id)
                     || ! WorkspaceAccess::canAppointAsProjectManager($user, $team, $person)) {
-                    $validator->errors()->add('managed_project_ids', "{$project->title} belongs to another organization.");
+                    $validator->errors()->add('managed_project_ids', $project->label().' belongs to another organization.');
 
                     return;
                 }
@@ -115,9 +115,9 @@ trait ChecksMemberRoles
 
         $onNow = $current?->teams()->pluck('teams.id')->all() ?? [];
 
-        foreach (Team::query()->whereKey(array_diff($teamIds, $onNow))->with('projects')->orderBy('name')->get() as $team) {
+        foreach (Team::query()->whereKey(array_diff($teamIds, $onNow))->with('projects.program:id,name')->orderBy('name')->get() as $team) {
             if (! WorkspaceAccess::administers($user, $team->organization_id) || ! WorkspaceAccess::canJoinTeam($person, $team)) {
-                $validator->errors()->add('team_ids', ($team->project()->title ?? $team->name).' belongs to another organization.');
+                $validator->errors()->add('team_ids', ($team->project()?->label() ?? $team->name).' belongs to another organization.');
 
                 return;
             }
@@ -132,13 +132,13 @@ trait ChecksMemberRoles
         $leaving = $current->teams()
             ->wherePivot('role', '!=', 'leader')
             ->whereNotIn('teams.id', $teamIds)
-            ->with('projects')
+            ->with('projects.program:id,name')
             ->orderBy('teams.name')
             ->get();
 
         foreach ($leaving as $team) {
             if (! WorkspaceAccess::administers($user, $team->organization_id)) {
-                $validator->errors()->add('team_ids', ($team->project()->title ?? $team->name).' belongs to another organization.');
+                $validator->errors()->add('team_ids', ($team->project()?->label() ?? $team->name).' belongs to another organization.');
 
                 return;
             }

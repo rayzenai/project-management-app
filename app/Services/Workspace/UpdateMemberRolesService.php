@@ -55,12 +55,13 @@ class UpdateMemberRolesService
         if (array_key_exists('managed_project_ids', $roles)) {
             $held = Project::query()
                 ->whereHas('teams', fn ($t) => $t->whereIn('teams.id', $member->ledTeams()->select('teams.id')))
+                ->with('program:id,name')
                 ->orderBy('title')
                 ->get();
             $dropped = $held->reject(fn (Project $project): bool => in_array($project->id, $roles['managed_project_ids'], true));
 
             if ($dropped->isNotEmpty()) {
-                return $this->refuse('managed_project_ids', 'Choose another manager for '.$dropped->pluck('title')->implode(', ').' first.');
+                return $this->refuse('managed_project_ids', 'Choose another manager for '.$dropped->map(fn (Project $project): string => $project->label())->implode(', ').' first.');
             }
 
             $newProjects = Project::query()->whereKey($roles['managed_project_ids'])->whereKeyNot($held->modelKeys())->get();

@@ -3,6 +3,7 @@
     import { page } from '@inertiajs/svelte';
     import { Plus } from '@lucide/svelte';
     import { untrack } from 'svelte';
+    import { projectLabel } from '../lib/projectLabel';
     import type {
         Member,
         Priority,
@@ -532,11 +533,7 @@
         <option value={GENERAL}>General (new)</option>
     {/if}
     {#each projects as project (project.id)}
-        <option value={project.id}
-            >{project.title}{project.program
-                ? ` (${project.program})`
-                : ''}</option
-        >
+        <option value={project.id}>{projectLabel(project)}</option>
     {/each}
 {/snippet}
 

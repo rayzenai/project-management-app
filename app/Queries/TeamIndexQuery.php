@@ -37,7 +37,7 @@ class TeamIndexQuery
             ->visibleTo($user)
             ->when($organizationFilter, fn ($q) => $q->where('organization_id', $organizationFilter))
             ->withCount('members')
-            ->with(['members' => fn ($q) => $q->with('organization:id,name')->orderBy('name'), 'organization:id,name', 'projects:id,slug,title,archived_at'])
+            ->with(['members' => fn ($q) => $q->with('organization:id,name')->orderBy('name'), 'organization:id,name', 'projects:id,slug,title,program_id,archived_at', 'projects.program:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -57,6 +57,7 @@ class TeamIndexQuery
             $teamRows[$i]['project'] = $project === null ? null : [
                 'slug' => $project->slug,
                 'title' => $project->title,
+                'program' => $project->program?->name,
                 'is_archived' => $project->archived_at !== null,
             ];
 
@@ -80,7 +81,7 @@ class TeamIndexQuery
         }
 
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
-        $canSetRoles = $isSuperAdmin || $officeAdminOf !== null;
+        $canSetRoles = WorkspaceAccess::canSetRolesIn($user, $officeAdminOf);
 
         return [
             'teams' => $teamRows,
@@ -125,12 +126,13 @@ class TeamIndexQuery
         $projects = Project::query()
             ->active()
             ->when($organizationId !== null, fn ($q) => $q->where('organization_id', $organizationId))
-            ->with(['teams:id', 'teams.leaders:id,name'])
+            ->with(['program:id,name', 'teams:id', 'teams.leaders:id,name'])
             ->orderBy('title')
             ->get()
             ->map(fn (Project $project): array => [
                 'id' => $project->id,
                 'title' => $project->title,
+                'program' => $project->program?->name,
                 'organization_id' => $project->organization_id,
                 'team_id' => $project->team()?->id,
                 'manager' => $project->manager()?->only(['id', 'name']),
