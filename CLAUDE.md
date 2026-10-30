@@ -102,8 +102,8 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
 1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
    Belongs to no organization. Manages organizations and everything in them;
    the only one who can open a project's team to other organizations or make
-   a person an organizational admin.
-2. **Organizational admin (`is_office_admin`)**: a member with `is_office_admin` (and `is_active`). Full
+   a person an organizational admin (`is_office_admin`).
+2. **Organizational admin**: a member with `is_office_admin` (and `is_active`). Full
    control inside their own organization: creates its people and projects,
    chooses each project's manager, sees every project, can publish projects
    (public means "everyone in this organization"), creates its programs and
@@ -146,7 +146,7 @@ Privilege-escalation protections — do not regress:
   `leader` per team: never attach a second team to a project or a second
   leader to a team; appoint through `AppointProjectManagerService`. The
   manager cannot be removed or demoted, only replaced.
-- `canManageMember` blocks a super-admin's linked login and other office
+- `canManageMember` blocks a super-admin's linked login and other organizational
   admins; managers manage no people at all (so a cross-organization manager
   can never reset an outsider's password).
 - Organization, organizational-admin flag and bulk team reassignment on a member are
@@ -342,7 +342,7 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
   manager, its organization's organizational admins or a super-admin; not other
   viewers of a public project. Its query twin is
   `Project::scopeCodeVisibleTo`; keep them in step. Linking and unlinking
-  needs `canManageProjectRepositories` (manager, program manager, office
+  needs `canManageProjectRepositories` (manager, program manager, organizational
   admin, super-admin, git on). A task shows code only from repositories whose
   project's code the viewer may see (`TaskCodeQuery::inVisibleRepositories`,
   on `codeVisibleTo`, also on the board's `has_pull_request`), and a pull
@@ -374,7 +374,7 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
   (`TooManyForgeRemovals`) and the command exits non-zero;
   `--allow-removals` lifts both breakers (not the ownership check) for one
   run. Membership changes and unlinks log at `warning` (production's level).
-  Office-admin flag changes run `SyncForgeOwners` at once. Re-pointing a
+  Organizational-admin flag changes run `SyncForgeOwners` at once. Re-pointing a
   connection (another forge or owner) unlinks its repositories; turning git
   off points each back at the forge's own issue tracker first.
 - **UI**: the project's Code tab (`project/CodeView.svelte`), the task's Code

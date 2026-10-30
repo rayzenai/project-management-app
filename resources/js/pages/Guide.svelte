@@ -218,8 +218,8 @@
                 </li>
                 <li>
                     You see the projects whose team you are on. A program
-                    manager sees every project in their programs, and an office
-                    admin every project of the office.
+                    manager sees every project in their programs, and an
+                    organizational admin every project of the office.
                 </li>
             </ul>
         </section>
