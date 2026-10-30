@@ -9,6 +9,7 @@ use App\Services\Git\ForgejoClient;
 use App\Services\Git\ForgejoException;
 use App\Services\Git\ForgeMembership;
 use App\Services\Git\ForgeShapes;
+use App\Services\Git\RepositoryAccess;
 use App\Services\Git\RepositorySync;
 use App\Services\Git\TooManyForgeRemovals;
 use App\Services\Git\UnlinksHeldBack;
@@ -23,10 +24,10 @@ use Throwable;
 /**
  * The nightly repair. Forgejo never retries a webhook, and forge owners can
  * change what the tracker set up, so for each connection it puts back a
- * missing webhook, reconciles every linked repository (RepositorySync),
- * unlinks the ones the forge no longer has, syncs the Owners team, removes
- * the people the tracker no longer lets in (ForgeMembership) and prunes old
- * deliveries.
+ * missing webhook, reconciles every linked repository (RepositorySync) and
+ * writes its access (RepositoryAccess), unlinks the ones the forge no longer
+ * has, syncs the Owners team, removes the people the tracker no longer lets
+ * in (ForgeMembership) and prunes old deliveries.
  *
  * Breakers hold back mass removals and unlinks, which the tracker can't
  * undo; `--allow-removals` lifts them for one run, after a person checked.
@@ -46,7 +47,7 @@ class ReconcileGit extends Command
 
     protected $description = 'Put back missing webhooks, catch linked repositories up, and keep forge owners and members in step';
 
-    public function handle(RepositorySync $sync, ForgeMembership $membership): int
+    public function handle(RepositorySync $sync, ForgeMembership $membership, RepositoryAccess $access): int
     {
         $only = $this->option('connection');
         $connections = GitConnection::query()
@@ -72,7 +73,7 @@ class ReconcileGit extends Command
             $label = "{$connection->owner} at {$connection->base_url}";
 
             try {
-                $failed = ! $this->reconcile($connection, $label, $sync, $membership, $allowRemovals) || $failed;
+                $failed = ! $this->reconcile($connection, $label, $sync, $membership, $access, $allowRemovals) || $failed;
             } catch (Throwable $e) {
                 $this->error("{$label}: failed ({$this->reportSafely($connection, 'connection', $e)}).");
                 $failed = true;
@@ -85,7 +86,7 @@ class ReconcileGit extends Command
     /**
      * @return bool false when any step failed
      */
-    private function reconcile(GitConnection $connection, string $label, RepositorySync $sync, ForgeMembership $membership, bool $allowRemovals): bool
+    private function reconcile(GitConnection $connection, string $label, RepositorySync $sync, ForgeMembership $membership, RepositoryAccess $access, bool $allowRemovals): bool
     {
         $webhook = null;
         $reconciled = 0;
@@ -109,6 +110,12 @@ class ReconcileGit extends Command
                     $reconciled++;
                 } else {
                     $gone[] = [$repo, $why];
+                }
+            }];
+            // After its repository step, which may have found it gone.
+            $steps[] = ["{$repo->full_name} access", function () use ($access, $repo, &$gone): void {
+                if (! in_array($repo, array_column($gone, 0), true)) {
+                    $access->sync($repo);
                 }
             }];
         }

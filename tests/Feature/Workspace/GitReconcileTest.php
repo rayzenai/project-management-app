@@ -233,6 +233,8 @@ function recForge(string $host = 'git.example', string $owner = 'sdoc', string $
         "{$repo}/pulls?*" => recPage([]),
         "{$repo}/branches?*" => recPage([]),
         "{$repo}/commits?*" => recPage([]),
+        // Each repository's access step: no collaborators, nobody wanted on a project without a team.
+        "{$api}/repos/{$owner}/*/collaborators?*" => recPage([]),
         "{$api}/orgs/{$owner}/teams?*" => recPage([['id' => 4, 'name' => 'Readers'], ['id' => 5, 'name' => 'Owners']]),
         "{$api}/teams/5/members?*" => recLogins(["{$owner}-bot"]),
         "{$api}/teams/5/members/*" => Http::response('', 204),

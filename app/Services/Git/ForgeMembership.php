@@ -55,7 +55,7 @@ class ForgeMembership
 
         $isOwner = array_flip(array_map(mb_strtolower(...), $owners));
         $isAdmin = array_flip(array_map(mb_strtolower(...), $admins));
-        $untouchable = $this->untouchable();
+        $untouchable = self::untouchableLogins();
 
         foreach ($admins as $login) {
             if (isset($isOwner[mb_strtolower($login)]) || isset($untouchable[mb_strtolower($login)])) {
@@ -72,7 +72,7 @@ class ForgeMembership
             }
         }
 
-        $known = $this->known($owners);
+        $known = self::known($owners);
         $leaving = array_values(array_filter($known, fn (array $owner): bool => ! isset($isAdmin[mb_strtolower($owner['login'])])));
 
         if (! $allowRemovals) {
@@ -97,7 +97,7 @@ class ForgeMembership
     public function removeStrangers(GitConnection $connection, bool $allowRemovals = false): void
     {
         $client = ForgejoClient::for($connection);
-        $known = $this->known($client->organizationMembers($connection->owner));
+        $known = self::known($client->organizationMembers($connection->owner));
         $strangers = array_values(array_filter(
             $known,
             fn (array $member): bool => ! GitAccess::organizationsFor($member['user'])->contains('id', $connection->organization_id),
@@ -143,9 +143,9 @@ class ForgeMembership
      * @param  list<string>  $logins
      * @return list<array{login: string, user: User}> the login as the forge wrote it
      */
-    private function known(array $logins): array
+    public static function known(array $logins): array
     {
-        $untouchable = $this->untouchable();
+        $untouchable = self::untouchableLogins();
         $logins = array_values(array_filter($logins, fn (string $login): bool => ! isset($untouchable[mb_strtolower($login)])));
 
         if ($logins === []) {
@@ -171,11 +171,12 @@ class ForgeMembership
     }
 
     /**
-     * `forge-admin` and every connection's `{owner}-bot`, lowercased.
+     * `forge-admin` and every connection's `{owner}-bot`, lowercased: logins
+     * the tracker never adds, removes or changes on a forge.
      *
      * @return array<string, true>
      */
-    private function untouchable(): array
+    public static function untouchableLogins(): array
     {
         $names = [GitUsernames::FORGE_ADMIN => true];
 
