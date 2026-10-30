@@ -7,7 +7,6 @@ use App\Models\Project;
 use App\Services\Git\ForgejoException;
 use App\Services\Git\RepositoryAccess;
 use App\Support\Background;
-use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -19,13 +18,9 @@ use Illuminate\Foundation\Queue\Queueable;
  * runs is skipped.
  *
  * Dispatched inside a transaction, it waits for the commit, so it reads what
- * was saved. It is unique by repository until it starts: a second sync
- * dispatched while one waits is dropped (the waiting one reads the latest
- * state), and a change made while a sync runs still queues the next. Only a
- * dispatch that takes the lock is dropped (dispatch(), PendingDispatch);
- * Background::dispatch goes through Bus::dispatch, which takes none.
+ * was saved.
  */
-class SyncRepositoryAccess implements ShouldBeUniqueUntilProcessing, ShouldQueue
+class SyncRepositoryAccess implements ShouldQueue
 {
     use Queueable;
 
@@ -33,19 +28,11 @@ class SyncRepositoryAccess implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public int $backoff = 60;
 
-    /** Seconds the unique lock is held at most. */
-    public int $uniqueFor = 60;
-
     public bool $deleteWhenMissingModels = true;
 
     public function __construct(public GitRepository $repository)
     {
         $this->afterCommit = true;
-    }
-
-    public function uniqueId(): string
-    {
-        return (string) $this->repository->getKey();
     }
 
     /**

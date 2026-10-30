@@ -539,21 +539,6 @@ it('waits for the transaction it was dispatched in to commit', function () {
     Http::assertSent(fn (Request $r) => $r->method() === 'PUT');
 });
 
-it('queues one sync of a repository while another waits, until it starts', function () {
-    config(['queue.default' => 'database']);
-    Queue::fake();
-    $web = accLinked($this->project, 'tp-web', 502);
-
-    dispatch(new SyncRepositoryAccess($this->repo));
-    dispatch(new SyncRepositoryAccess($this->repo));
-    dispatch(new SyncRepositoryAccess($web));
-
-    expect(Queue::pushed(SyncRepositoryAccess::class)->map(fn (SyncRepositoryAccess $job) => $job->repository->full_name)->all())
-        ->toBe(['sdoc/tp-api', 'sdoc/tp-web'])
-        ->and((new SyncRepositoryAccess($this->repo))->uniqueId())->toBe((string) $this->repo->id)
-        ->and((new SyncRepositoryAccess($this->repo))->uniqueFor)->toBe(60);
-});
-
 it('skips a repository unlinked before the job runs', function () {
     Http::fake(accForge());
     $job = new SyncRepositoryAccess($this->repo);
