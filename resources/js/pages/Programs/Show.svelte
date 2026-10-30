@@ -65,7 +65,8 @@
             <span class="truncate font-medium">{progress.program.name}</span>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
-            <span class="text-xs text-fg-muted"
+            <!-- From sm only: a phone's bar keeps the breadcrumb. -->
+            <span class="hidden text-xs text-fg-muted sm:inline"
                 >Live · updated <span class="font-mono tabular-nums"
                     >{updatedAt}</span
                 ></span
@@ -102,11 +103,19 @@
                 </p>
             {/if}
             {#if progress.program.manager}
-                <p class="mt-1 text-xs text-fg-muted">
-                    Managed by {progress.program.manager.name}{progress.program
-                        .manager.title
-                        ? `, ${progress.program.manager.title}`
-                        : ''}
+                <p
+                    class="mt-1 flex flex-wrap items-baseline gap-x-2 text-xs text-fg-muted"
+                >
+                    <span
+                        >Managed by <span class="font-medium text-fg"
+                            >{progress.program.manager.name}</span
+                        ></span
+                    >
+                    {#if progress.program.manager.title}
+                        <span class="text-fg-faint"
+                            >{progress.program.manager.title}</span
+                        >
+                    {/if}
                 </p>
             {/if}
         </header>
@@ -121,18 +130,22 @@
                     No active projects in this program yet.
                 </p>
             {:else}
+                <!-- A phone drops Manager and Open (Done shows done of all);
+                     between sm and the full width the table scrolls in here. -->
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[640px] text-[13px]">
+                    <table class="w-full text-[13px] sm:min-w-[640px]">
                         <thead>
                             <tr class="border-b border-line text-left">
                                 <th class="col-head py-1.5 pr-3 font-normal"
                                     >Project</th
                                 >
-                                <th class="col-head px-3 font-normal"
+                                <th
+                                    class="col-head hidden px-3 font-normal sm:table-cell"
                                     >Manager</th
                                 >
                                 <th class="col-head px-3 font-normal">Done</th>
-                                <th class="col-head px-3 text-right font-normal"
+                                <th
+                                    class="col-head hidden px-3 text-right font-normal sm:table-cell"
                                     >Open</th
                                 >
                                 <th class="col-head px-3 text-right font-normal"
@@ -158,7 +171,8 @@
                                             >{project.code}</span
                                         >
                                     </td>
-                                    <td class="px-3 text-fg-muted"
+                                    <td
+                                        class="hidden px-3 text-fg-muted sm:table-cell"
                                         >{project.manager?.name ?? '-'}</td
                                     >
                                     <td class="px-3">
@@ -178,7 +192,7 @@
                                         </span>
                                     </td>
                                     <td
-                                        class="px-3 text-right font-mono text-fg-muted tabular-nums"
+                                        class="hidden px-3 text-right font-mono text-fg-muted tabular-nums sm:table-cell"
                                         >{project.tasks_count -
                                             project.done_tasks_count}</td
                                     >

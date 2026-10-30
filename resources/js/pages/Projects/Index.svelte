@@ -43,7 +43,7 @@
         isSuperAdmin?: boolean;
         canPublish?: boolean;
         organizations?: OrganizationOption[];
-        /** The programs the viewer may open; the page groups by them. */
+        /** The programs the viewer may open: their headings link to them. */
         programs?: Program[];
         canManagePrograms?: boolean;
     } = $props();
@@ -151,38 +151,38 @@
           }
         | { key: string; kind: 'none'; projects: Project[] };
 
-    // With programs to show, projects sit under their program, programs by
-    // name, then the ones in none. An empty program still shows on the
-    // active tab, so a new one has its place.
-    const byProgram = $derived(programs.length > 0);
-
+    // Projects in a program sit under it, programs by name. Each row says
+    // which program it is in; `programs` only says which ones the viewer may
+    // open (their heading links there), and an empty one of those still
+    // shows on the active tab, so a new program has its place.
     const programGroups = $derived.by((): Group[] => {
-        const list = programs.map((program) => ({
-            key: `p-${program.slug}`,
-            kind: 'program' as const,
-            program: { slug: program.slug, name: program.name },
-            details: program as Program | null,
-            projects: [] as Project[],
-        }));
-        const none: Project[] = [];
+        const list = archivedView
+            ? []
+            : programs.map((program) => ({
+                  key: `p-${program.slug}`,
+                  kind: 'program' as const,
+                  program: { slug: program.slug, name: program.name },
+                  details: program as Program | null,
+                  projects: [] as Project[],
+              }));
 
         for (const project of projects) {
             const program = project.program;
 
             if (!program) {
-                none.push(project);
                 continue;
             }
 
             let group = list.find((g) => g.program.slug === program.slug);
 
-            // A program the viewer works in but may not open.
+            // On the archived tab, or a program the viewer may not open.
             if (!group) {
                 group = {
                     key: `p-${program.slug}`,
                     kind: 'program',
                     program,
-                    details: null,
+                    details:
+                        programs.find((p) => p.slug === program.slug) ?? null,
                     projects: [],
                 };
                 list.push(group);
@@ -191,18 +191,15 @@
             group.projects.push(project);
         }
 
-        return [
-            ...list
-                .filter((g) => !archivedView || g.projects.length > 0)
-                .sort((a, b) => a.program.name.localeCompare(b.program.name)),
-            ...(none.length > 0
-                ? [{ key: 'none', kind: 'none' as const, projects: none }]
-                : []),
-        ];
+        return list.sort((a, b) =>
+            a.program.name.localeCompare(b.program.name),
+        );
     });
 
-    // The portfolio: projects grouped under their manager, managers by name,
-    // projects still waiting for one last.
+    const unprogrammed = $derived(projects.filter((p) => !p.program));
+
+    // The rest of the portfolio: projects grouped under their manager,
+    // managers by name, projects still waiting for one last.
     const managerGroups = $derived.by((): Group[] => {
         const byManager: {
             key: string;
@@ -211,7 +208,7 @@
             projects: Project[];
         }[] = [];
 
-        for (const project of projects) {
+        for (const project of unprogrammed) {
             const key = project.manager ? `m${project.manager.id}` : 'none';
             let group = byManager.find((g) => g.key === key);
 
@@ -237,7 +234,15 @@
         );
     });
 
-    const groups = $derived(byProgram ? programGroups : managerGroups);
+    // With no program shown this is the manager grouping alone, as it was
+    // before programs; otherwise "No program" heads the manager groups.
+    const groups = $derived([
+        ...programGroups,
+        ...(programGroups.length > 0 && unprogrammed.length > 0
+            ? [{ key: 'none', kind: 'none' as const, projects: unprogrammed }]
+            : []),
+        ...managerGroups,
+    ]);
 
     function summary(list: Project[]): string {
         const open = list.reduce((n, p) => n + (p.open_tasks_count ?? 0), 0);
@@ -285,13 +290,17 @@
                     >
                 {:else}
                     {#if canManagePrograms}
+                        <!-- Icon only on a phone, so the bar keeps its title. -->
                         <button
                             type="button"
-                            class="btn"
+                            class="btn max-sm:w-7 max-sm:justify-center max-sm:px-0"
+                            title="New program"
+                            aria-label="New program"
                             onclick={() => (creatingProgram = true)}
                         >
-                            <Plus class="h-3.5 w-3.5" />
-                            New program
+                            <Plus class="hidden h-3.5 w-3.5 sm:block" />
+                            <FolderTree class="h-3.5 w-3.5 sm:hidden" />
+                            <span class="hidden sm:inline">New program</span>
                         </button>
                     {/if}
                     {#if canCreate}
@@ -530,180 +539,197 @@
                     {/if}
                 </div>
                 {#each groups as group (group.key)}
-                    <div
-                        class="group-head flex items-center gap-2.5 border-b border-line bg-surface-alt px-4 py-2 lg:px-8"
-                    >
-                        {#if group.kind === 'program'}
-                            <FolderTree
-                                class="h-4 w-4 shrink-0 text-fg-faint"
-                            />
-                            {#if group.details}
-                                <a
-                                    href={`/workspace/programs/${group.program.slug}`}
-                                    use:inertia
-                                    class="truncate font-medium text-fg hover:text-accent"
-                                    >{group.program.name}</a
-                                >
-                                {#if group.details.manager}
-                                    <span
-                                        class="hidden min-w-0 items-center gap-1.5 text-xs text-fg-muted sm:inline-flex"
-                                    >
-                                        <Avatar
-                                            name={group.details.manager.name}
-                                        />
-                                        <span class="truncate"
-                                            >{group.details.manager.name}</span
-                                        >
-                                    </span>
-                                {/if}
-                            {:else}
-                                <span class="truncate font-medium text-fg"
-                                    >{group.program.name}</span
-                                >
-                            {/if}
-                        {:else if group.kind === 'none'}
-                            <span class="font-medium text-fg-muted"
-                                >No program</span
-                            >
-                        {:else if group.manager}
-                            <Avatar name={group.manager.name} size="md" />
-                            <span class="truncate font-medium text-fg"
-                                >{group.manager.name}</span
-                            >
-                            {#if group.manager.title}
-                                <span
-                                    class="hidden truncate text-xs text-fg-muted sm:inline"
-                                    >{group.manager.title}</span
-                                >
-                            {/if}
-                        {:else}
-                            <span class="font-medium text-warn"
-                                >No manager yet</span
-                            >
-                        {/if}
-                        {#if group.projects.length > 0}
+                    {#if group.kind === 'none'}
+                        <!-- Heads the manager groups below; its rows are theirs. -->
+                        <div
+                            class="flex items-baseline gap-2.5 border-b border-line px-4 pt-6 pb-2 lg:px-8"
+                        >
+                            <h2 class="section-title">No program</h2>
                             <span class="ml-auto shrink-0 text-xs text-fg-muted"
                                 >{summary(group.projects)}</span
                             >
-                        {/if}
-                    </div>
-                    {#if group.projects.length === 0}
-                        <p
-                            class="border-b border-line-soft px-4 py-2.5 text-xs text-fg-muted lg:px-8"
+                        </div>
+                    {:else}
+                        <div
+                            class="group-head flex items-center gap-2.5 border-b border-line bg-surface-alt px-4 py-2 lg:px-8"
                         >
-                            No projects in this program yet.{canCreate
-                                ? ' Choose it when you create or edit a project.'
-                                : ''}
-                        </p>
-                    {/if}
-                    {#each group.projects as project (project.id)}
-                        <a
-                            href={`/workspace/projects/${project.slug}`}
-                            class={`row group min-h-10 py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
-                        >
-                            <ProgressRing
-                                percent={project.percent_complete ?? 0}
-                                class={archivedView ? 'opacity-50' : ''}
-                            />
-                            <div class="min-w-0 flex-1">
-                                <div
-                                    class="flex min-w-0 items-baseline gap-2.5"
-                                >
-                                    <span
-                                        class={`truncate font-medium group-hover:text-accent ${archivedView ? 'text-fg-muted' : 'text-fg'}`}
-                                        >{project.title}</span
+                            {#if group.kind === 'program'}
+                                <FolderTree
+                                    class="h-4 w-4 shrink-0 text-fg-faint"
+                                />
+                                {#if group.details}
+                                    <a
+                                        href={`/workspace/programs/${group.program.slug}`}
+                                        use:inertia
+                                        class="truncate font-medium text-fg hover:text-accent"
+                                        >{group.program.name}</a
                                     >
-                                    <span
-                                        class="shrink-0 font-mono text-xs text-fg-muted tabular-nums"
-                                        >{project.percent_complete ?? 0}%</span
-                                    >
-                                    {#if project.title_np}
+                                    {#if group.details.manager}
                                         <span
-                                            class="font-np truncate text-xs text-fg-muted"
-                                            >{project.title_np}</span
+                                            class="hidden min-w-0 items-center gap-1.5 text-xs text-fg-muted sm:inline-flex"
                                         >
-                                    {/if}
-                                    {#if project.is_public}
-                                        <span class="chip">public</span>
-                                    {/if}
-                                    {#if byProgram}
-                                        {#if project.manager}
-                                            <span
-                                                class="hidden truncate text-xs text-fg-muted sm:inline"
-                                                >{project.manager.name}</span
+                                            <Avatar
+                                                name={group.details.manager
+                                                    .name}
+                                            />
+                                            <span class="truncate"
+                                                >{group.details.manager
+                                                    .name}</span
                                             >
-                                        {:else}
+                                        </span>
+                                    {/if}
+                                {:else}
+                                    <span class="truncate font-medium text-fg"
+                                        >{group.program.name}</span
+                                    >
+                                {/if}
+                            {:else if group.manager}
+                                <Avatar name={group.manager.name} size="md" />
+                                <span class="truncate font-medium text-fg"
+                                    >{group.manager.name}</span
+                                >
+                                {#if group.manager.title}
+                                    <span
+                                        class="hidden truncate text-xs text-fg-muted sm:inline"
+                                        >{group.manager.title}</span
+                                    >
+                                {/if}
+                            {:else}
+                                <span class="font-medium text-warn"
+                                    >No manager yet</span
+                                >
+                            {/if}
+                            {#if group.projects.length > 0}
+                                <span
+                                    class="ml-auto shrink-0 text-xs text-fg-muted"
+                                    >{summary(group.projects)}</span
+                                >
+                            {/if}
+                        </div>
+                        {#if group.kind === 'program' && group.projects.length === 0}
+                            <p
+                                class="border-b border-line-soft px-4 py-2.5 text-xs text-fg-muted lg:px-8"
+                            >
+                                {#if (group.details?.projects_count ?? 0) > 0}
+                                    No active projects in this program.
+                                {:else}
+                                    No projects in this program yet.{canCreate
+                                        ? ' Choose it when you create or edit a project.'
+                                        : ''}
+                                {/if}
+                            </p>
+                        {/if}
+                        {#each group.projects as project (project.id)}
+                            <a
+                                href={`/workspace/projects/${project.slug}`}
+                                class={`row group min-h-10 py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
+                            >
+                                <ProgressRing
+                                    percent={project.percent_complete ?? 0}
+                                    class={archivedView ? 'opacity-50' : ''}
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <div
+                                        class="flex min-w-0 items-baseline gap-2.5"
+                                    >
+                                        <span
+                                            class={`truncate font-medium group-hover:text-accent ${archivedView ? 'text-fg-muted' : 'text-fg'}`}
+                                            >{project.title}</span
+                                        >
+                                        <span
+                                            class="shrink-0 font-mono text-xs text-fg-muted tabular-nums"
+                                            >{project.percent_complete ??
+                                                0}%</span
+                                        >
+                                        {#if project.title_np}
                                             <span
-                                                class="hidden shrink-0 text-xs text-warn sm:inline"
-                                                >No manager yet</span
+                                                class="font-np truncate text-xs text-fg-muted"
+                                                >{project.title_np}</span
                                             >
                                         {/if}
-                                    {/if}
-                                    {#if isSuperAdmin && project.organization}
-                                        <span
-                                            class="truncate text-xs text-fg-faint"
-                                            >{project.organization}</span
+                                        {#if project.is_public}
+                                            <span class="chip">public</span>
+                                        {/if}
+                                        {#if group.kind === 'program'}
+                                            {#if project.manager}
+                                                <span
+                                                    class="hidden truncate text-xs text-fg-muted sm:inline"
+                                                    >{project.manager
+                                                        .name}</span
+                                                >
+                                            {:else}
+                                                <span
+                                                    class="hidden shrink-0 text-xs text-warn sm:inline"
+                                                    >No manager yet</span
+                                                >
+                                            {/if}
+                                        {/if}
+                                        {#if isSuperAdmin && project.organization}
+                                            <span
+                                                class="truncate text-xs text-fg-faint"
+                                                >{project.organization}</span
+                                            >
+                                        {/if}
+                                    </div>
+                                    {#if project.description}
+                                        <p
+                                            class="mt-0.5 line-clamp-1 text-xs text-fg-muted"
                                         >
+                                            {project.description}
+                                        </p>
                                     {/if}
                                 </div>
-                                {#if project.description}
-                                    <p
-                                        class="mt-0.5 line-clamp-1 text-xs text-fg-muted"
-                                    >
-                                        {project.description}
-                                    </p>
-                                {/if}
-                            </div>
-                            <span
-                                class="hidden w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
-                                title="People on its team"
-                                >{project.team?.members_count ?? 0}</span
-                            >
-                            <span
-                                class="hidden w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
-                                >{project.open_tasks_count ?? 0}</span
-                            >
-                            <span
-                                class={`hidden w-16 shrink-0 text-right font-mono text-xs tabular-nums sm:inline ${(project.overdue_tasks_count ?? 0) > 0 ? 'text-danger' : 'text-fg-faint'}`}
-                                >{project.overdue_tasks_count ?? 0}</span
-                            >
-                            <span
-                                class="hidden w-28 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
-                                >{project.next_deadline_at
-                                    ? formatDate(project.next_deadline_at)
-                                    : ''}</span
-                            >
-                            {#if project.can_archive}
                                 <span
-                                    class="flex w-[72px] shrink-0 justify-end"
+                                    class="hidden w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
+                                    title="People on its team"
+                                    >{project.team?.members_count ?? 0}</span
                                 >
-                                    {#if project.is_archived}
-                                        <button
-                                            type="button"
-                                            class="btn"
-                                            onclick={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                restore(project);
-                                            }}>Restore</button
-                                        >
-                                    {:else}
-                                        <button
-                                            type="button"
-                                            class="btn-ghost"
-                                            onclick={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                archive(project);
-                                            }}>Archive</button
-                                        >
-                                    {/if}
-                                </span>
-                            {:else if showArchiveColumn}
-                                <span class="w-[72px] shrink-0"></span>
-                            {/if}
-                        </a>
-                    {/each}
+                                <span
+                                    class="hidden w-14 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
+                                    >{project.open_tasks_count ?? 0}</span
+                                >
+                                <span
+                                    class={`hidden w-16 shrink-0 text-right font-mono text-xs tabular-nums sm:inline ${(project.overdue_tasks_count ?? 0) > 0 ? 'text-danger' : 'text-fg-faint'}`}
+                                    >{project.overdue_tasks_count ?? 0}</span
+                                >
+                                <span
+                                    class="hidden w-28 shrink-0 text-right font-mono text-xs text-fg-muted tabular-nums sm:inline"
+                                    >{project.next_deadline_at
+                                        ? formatDate(project.next_deadline_at)
+                                        : ''}</span
+                                >
+                                {#if project.can_archive}
+                                    <span
+                                        class="flex w-[72px] shrink-0 justify-end"
+                                    >
+                                        {#if project.is_archived}
+                                            <button
+                                                type="button"
+                                                class="btn"
+                                                onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    restore(project);
+                                                }}>Restore</button
+                                            >
+                                        {:else}
+                                            <button
+                                                type="button"
+                                                class="btn-ghost"
+                                                onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    archive(project);
+                                                }}>Archive</button
+                                            >
+                                        {/if}
+                                    </span>
+                                {:else if showArchiveColumn}
+                                    <span class="w-[72px] shrink-0"></span>
+                                {/if}
+                            </a>
+                        {/each}
+                    {/if}
                 {/each}
             </div>
         {/if}

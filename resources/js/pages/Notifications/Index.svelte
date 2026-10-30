@@ -116,6 +116,7 @@
         task_deadline_due: CalendarClock,
         team_added: Users,
         made_manager: UserCheck,
+        made_program_manager: UserCheck,
     };
 
     const TYPE_CHIPS = [

@@ -105,11 +105,13 @@ it('gives the projects page its programs and each project its program', function
             ->has('programs', 1)
             ->where('programs.0.name', 'Revenue'));
 
-    // A project manager or officer sees none: their page groups by manager.
+    // A project manager or officer may open none, but each of their rows
+    // still names its program, which the page groups by.
     $this->actingAs($this->officerUser)->get('/workspace/projects')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('canManagePrograms', false)
-            ->where('programs', []));
+            ->where('programs', [])
+            ->where('projects', fn ($projects) => collect($projects)->firstWhere('title', 'Tax Portal')['program'] === ['slug' => $this->revenue->slug, 'name' => 'Revenue']));
 
     // A super-admin sees every organization's programs.
     $this->actingAs(User::factory()->create(['email' => 'boss@example.com']))->get('/workspace/projects')

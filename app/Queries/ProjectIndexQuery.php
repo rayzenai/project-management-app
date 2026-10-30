@@ -16,8 +16,8 @@ use Illuminate\Http\Request;
 /**
  * Assembles the project list payload shared by the Inertia web index and the
  * JSON API index: each project with its manager, program, team size and how
- * its work stands (the page groups them by program when the viewer sees any,
- * else by manager), the programs the viewer may open, the archived-count
+ * its work stands (the page groups the ones in a program under it and the
+ * rest by manager), the programs the viewer may open, the archived-count
  * badge, and the create-form context.
  */
 class ProjectIndexQuery
@@ -74,7 +74,7 @@ class ProjectIndexQuery
             ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'title' => $m->title, 'organization_id' => $m->organization_id])
             ->all();
 
-        // The programs the viewer may open, so the page can group by them.
+        // The programs the viewer may open: the page links their headings.
         $programs = Program::query()
             ->visibleTo($user)
             ->with(['organization:id,name', 'manager:id,name,title'])

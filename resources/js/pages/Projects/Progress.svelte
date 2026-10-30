@@ -50,7 +50,8 @@
                 <span class="chip">Archived</span>
             {/if}
         </div>
-        <span class="shrink-0 text-xs text-fg-muted"
+        <!-- From sm only: a phone's bar keeps the breadcrumb. -->
+        <span class="hidden shrink-0 text-xs text-fg-muted sm:inline"
             >Live · updated <span class="font-mono tabular-nums"
                 >{updatedAt}</span
             ></span

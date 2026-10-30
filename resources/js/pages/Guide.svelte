@@ -64,7 +64,7 @@
                 "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team.',
                 'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
-                'Watch everything from the Projects page: projects sit under their program, or under their manager when there are no programs, with how much is done, what is overdue and the next deadline.',
+                'Watch everything from the Projects page: projects in a program sit under it and the rest under their manager, with how much is done, what is overdue and the next deadline.',
             ],
         },
         {
@@ -130,7 +130,7 @@
     const code = [
         [
             'Link a repository',
-            "On the project's Code tab, its manager or office admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
+            "On the project's Code tab, its manager, its program's manager or an office admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
         ],
         [
             'Name a branch',
@@ -186,7 +186,9 @@
             <h2 class="section-title mb-3">The idea</h2>
             <ol class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 {#each model as step, i (step.title)}
-                    <li class="flex items-center gap-2 sm:flex-1">
+                    <li
+                        class="flex items-center gap-2 sm:flex-1 sm:items-stretch"
+                    >
                         <div class="panel flex-1 px-3 py-2.5">
                             <div class="flex items-center gap-1.5 font-medium">
                                 <step.icon class="h-4 w-4 text-accent" />
@@ -198,7 +200,7 @@
                         </div>
                         {#if i < model.length - 1}
                             <ChevronRight
-                                class="hidden h-4 w-4 shrink-0 text-fg-faint sm:block"
+                                class="hidden h-4 w-4 shrink-0 self-center text-fg-faint sm:block"
                             />
                         {/if}
                     </li>
@@ -315,8 +317,8 @@
                     When your office keeps its code on the forge, each project
                     has a Code tab with its repositories, and each task a Code
                     section with the pull requests, branches and commits that
-                    name its code. Both are for the project's team and the
-                    office admins.
+                    name its code. Both are for the project's team, its
+                    program's manager and the office admins.
                 </p>
                 <dl class="border-t border-line">
                     {#each code as [term, meaning] (term)}
