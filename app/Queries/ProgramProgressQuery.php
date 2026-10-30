@@ -99,14 +99,16 @@ class ProgramProgressQuery
     }
 
     /**
-     * Who the program can be handed to, for its Edit form: the active people
-     * of its organization. Only for whoever may manage it; empty otherwise.
+     * The active people of the program's organization: who it can be handed
+     * to (Edit) and who may manage a new project in it (New project). Only for
+     * whoever may do either; empty otherwise.
      *
      * @return list<array{id: int, name: string, title: string|null}>
      */
     public function managerCandidates(Program $program, ?Authenticatable $user): array
     {
-        if (! WorkspaceAccess::canManagePrograms($user, $program->organization_id)) {
+        if (! WorkspaceAccess::canManagePrograms($user, $program->organization_id)
+            && ! WorkspaceAccess::canCreateProjectInProgram($user, $program)) {
             return [];
         }
 

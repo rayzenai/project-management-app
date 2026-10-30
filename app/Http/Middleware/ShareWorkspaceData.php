@@ -73,8 +73,8 @@ class ShareWorkspaceData
 
             return [
                 'projects' => Project::query()->visibleTo($request->user())->active()->orderBy('title')
-                    ->with(['teams.members' => fn ($q) => $q->where('is_active', true)])
-                    ->get(['id', 'slug', 'title', 'organization_id'])
+                    ->with(['program:id,name', 'teams.members' => fn ($q) => $q->where('is_active', true)])
+                    ->get(['id', 'slug', 'title', 'organization_id', 'program_id'])
                     ->map(function (Project $p) use (&$organizationMemberIds): array {
                         // Members assignable within this project: its teams' active members,
                         // or its organization's when a public project has no teams. Mirrors
@@ -89,6 +89,7 @@ class ShareWorkspaceData
                             'id' => $p->id,
                             'slug' => $p->slug,
                             'title' => $p->title,
+                            'program' => $p->program?->name,
                             'member_ids' => $p->teams->isEmpty()
                                 ? $organizationMemberIds[$p->organization_id]
                                 : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),

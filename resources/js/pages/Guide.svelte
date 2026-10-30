@@ -73,7 +73,8 @@
             steps: [
                 'Open your program page every week, from Programs in the sidebar: how far each project has got, what is overdue and who is working on what.',
                 "Manage each project's team and tasks as its manager would: add people on its People tab, break the work into tasks and keep them moving.",
-                'Ask an organizational admin to add a project to your program or take one out.',
+                "Create projects in your program with New project on its page, and choose or replace each project's manager. A new program comes with a General project to start from: add a task and assign someone straight away.",
+                'Ask an organizational admin to move a project into your program or take one out.',
             ],
         },
         {

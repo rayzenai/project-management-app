@@ -51,6 +51,12 @@
             : null,
     );
 
+    const lockedProgramName = $derived(
+        lockProject
+            ? (projects.find((p) => p.id === defaultProjectId)?.program ?? null)
+            : null,
+    );
+
     // Empty picker values are stripped before POSTing so parsed title tokens
     // (#project @assignee !priority dates) can fill the gaps server-side;
     // anything explicitly picked here still wins over tokens.
@@ -421,12 +427,18 @@
             <span class="flex items-center gap-1.5 text-xs text-fg-muted">
                 Project
                 <span class="font-medium text-fg">{lockedProjectName}</span>
+                {#if lockedProgramName}
+                    <span class="text-fg-faint">{lockedProgramName}</span>
+                {/if}
             </span>
         {/if}
     {:else if tokenProject}
         <span class="flex items-center gap-1.5 text-xs text-fg-muted">
             Project
             <span class="font-medium text-fg">{tokenProject.title}</span>
+            {#if tokenProject.program}
+                <span class="text-fg-faint">{tokenProject.program}</span>
+            {/if}
             <span class="text-fg-faint">from your #tag</span>
         </span>
     {:else}
@@ -434,7 +446,11 @@
             Project
             <select bind:value={form.project_id} class="input h-7 w-auto py-0">
                 {#each projects as project (project.id)}
-                    <option value={project.id}>{project.title}</option>
+                    <option value={project.id}
+                        >{project.title}{project.program
+                            ? ` (${project.program})`
+                            : ''}</option
+                    >
                 {/each}
             </select>
         </label>

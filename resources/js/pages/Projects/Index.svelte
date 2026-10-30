@@ -1,11 +1,11 @@
 <script lang="ts">
-    import { inertia, router, useForm } from '@inertiajs/svelte';
+    import { inertia, router } from '@inertiajs/svelte';
     import { FolderTree, Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
-    import AssigneePicker from '../../components/AssigneePicker.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import ProgramForm from '../../components/program/ProgramForm.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
+    import ProjectCreateForm from '../../components/project/ProjectCreateForm.svelte';
     import { formatDate } from '../../lib/format';
     import type {
         OrganizationOption,
@@ -60,78 +60,6 @@
         typeof window !== 'undefined' &&
             new URLSearchParams(window.location.search).has('new'),
     );
-    const uid = $props.id();
-
-    // A new project may join a program the viewer may create in (all of an
-    // admin's; a program manager's own).
-    function creatablePrograms() {
-        return programs.filter((p) => p.can_create_project);
-    }
-
-    // Seeded once; read inside a function so the one-time capture is deliberate.
-    function seed() {
-        const own = creatablePrograms();
-
-        return {
-            title: '',
-            title_np: '',
-            description: '',
-            is_public: false,
-            manager_id: null as number | null,
-            // With a single program to choose from there is nothing to choose.
-            program_id:
-                programRequired && own.length === 1
-                    ? own[0].id
-                    : (null as number | null),
-            // With a single organization there is nothing to choose.
-            organization_id:
-                organizations.length === 1
-                    ? organizations[0].id
-                    : (null as number | null),
-        };
-    }
-
-    const form = useForm(seed());
-
-    function seedManager(): number[] {
-        return defaultManagerId === null ? [] : [defaultManagerId];
-    }
-
-    /** The picked manager: the searchable picker works on a list of ids. */
-    let managerIds = $state<number[]>(seedManager());
-
-    // A super-admin picks the organization first; the manager comes from it.
-    const formManagers = $derived(
-        isSuperAdmin
-            ? managerCandidates.filter(
-                  (m) => m.organization_id === form.organization_id,
-              )
-            : managerCandidates,
-    );
-
-    // Those of the organization it lands in.
-    const formPrograms = $derived(
-        isSuperAdmin
-            ? creatablePrograms().filter(
-                  (p) => p.organization.id === form.organization_id,
-              )
-            : creatablePrograms(),
-    );
-
-    function submit(e: SubmitEvent) {
-        e.preventDefault();
-        form.transform((data) => ({
-            ...data,
-            manager_id: managerIds[0] ?? null,
-        })).post('/workspace/projects', {
-            preserveScroll: true,
-            onSuccess: () => {
-                form.reset();
-                managerIds = seedManager();
-                creating = false;
-            },
-        });
-    }
 
     let creatingProgram = $state(false);
 
@@ -378,172 +306,16 @@
 
         {#if creating}
             <div class="mb-6 max-w-2xl border-b border-line pb-6">
-                <form onsubmit={submit}>
-                    <h2 class="mb-4 text-[15px] font-semibold text-fg">
-                        New project
-                    </h2>
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                            <label for={`${uid}-title`} class="label mb-1 block"
-                                >Title</label
-                            >
-                            <input
-                                id={`${uid}-title`}
-                                type="text"
-                                bind:value={form.title}
-                                required
-                                class="input"
-                            />
-                        </div>
-                        <div>
-                            <label
-                                for={`${uid}-title-np`}
-                                class="label mb-1 block">Title (Nepali)</label
-                            >
-                            <input
-                                id={`${uid}-title-np`}
-                                type="text"
-                                bind:value={form.title_np}
-                                class="input font-np"
-                            />
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <label
-                            for={`${uid}-description`}
-                            class="label mb-1 block">Description</label
-                        >
-                        <textarea
-                            id={`${uid}-description`}
-                            bind:value={form.description}
-                            rows="2"
-                            class="input"
-                        ></textarea>
-                    </div>
-                    {#if isSuperAdmin}
-                        <div class="mt-3">
-                            <label
-                                for={`${uid}-organization`}
-                                class="label mb-1 block">Organization</label
-                            >
-                            <select
-                                id={`${uid}-organization`}
-                                class="input"
-                                required
-                                value={form.organization_id ?? ''}
-                                onchange={(e) => {
-                                    form.organization_id = e.currentTarget.value
-                                        ? Number(e.currentTarget.value)
-                                        : null;
-                                    managerIds = [];
-                                    form.program_id = null;
-                                }}
-                            >
-                                <option value="" disabled
-                                    >Choose an organization</option
-                                >
-                                {#each organizations as organization (organization.id)}
-                                    <option value={organization.id}
-                                        >{organization.name}</option
-                                    >
-                                {/each}
-                            </select>
-                            {#if form.errors.organization_id}<p
-                                    class="mt-1 text-xs text-danger"
-                                >
-                                    {form.errors.organization_id}
-                                </p>{/if}
-                        </div>
-                    {/if}
-                    <div class="mt-3">
-                        <span class="label mb-1 block">Project manager</span>
-                        {#if isSuperAdmin && form.organization_id === null}
-                            <p class="text-xs text-fg-muted">
-                                Choose an organization first.
-                            </p>
-                        {:else}
-                            <AssigneePicker
-                                team={formManagers}
-                                bind:selectedIds={managerIds}
-                                placeholder="Search or choose who manages it"
-                            />
-                        {/if}
-                        <p class="mt-1 text-xs text-fg-muted">
-                            In a ministry, usually an Under Secretary.
-                        </p>
-                        <p class="mt-1 text-xs text-fg-muted">
-                            The project gets its own team, led by its manager,
-                            who then adds the people.
-                        </p>
-                        {#if form.errors.manager_id}<p
-                                class="mt-1 text-xs text-danger"
-                            >
-                                {form.errors.manager_id}
-                            </p>{/if}
-                    </div>
-                    {#if formPrograms.length > 0}
-                        <div class="mt-3">
-                            <label
-                                for={`${uid}-program`}
-                                class="label mb-1 block"
-                                >{programRequired
-                                    ? 'Program'
-                                    : 'Program (optional)'}</label
-                            >
-                            <select
-                                id={`${uid}-program`}
-                                class="input"
-                                required={programRequired}
-                                value={form.program_id ?? ''}
-                                onchange={(e) =>
-                                    (form.program_id = e.currentTarget.value
-                                        ? Number(e.currentTarget.value)
-                                        : null)}
-                            >
-                                {#if programRequired}
-                                    <option value="" disabled
-                                        >Choose one of your programs</option
-                                    >
-                                {:else}
-                                    <option value="">No program</option>
-                                {/if}
-                                {#each formPrograms as program (program.id)}
-                                    <option value={program.id}
-                                        >{program.name}</option
-                                    >
-                                {/each}
-                            </select>
-                            {#if form.errors.program_id}<p
-                                    class="mt-1 text-xs text-danger"
-                                >
-                                    {form.errors.program_id}
-                                </p>{/if}
-                        </div>
-                    {/if}
-
-                    {#if canPublish}
-                        <label
-                            class="mt-4 flex items-center gap-2 text-fg-muted"
-                        >
-                            <input
-                                type="checkbox"
-                                bind:checked={form.is_public}
-                            /> Public (everyone in its organization can see it)
-                        </label>
-                    {/if}
-
-                    <div class="mt-4 flex items-center gap-2">
-                        <div class="flex-1"></div>
-                        <button
-                            type="submit"
-                            disabled={form.processing}
-                            class="btn-primary">Create</button
-                        >
-                    </div>
-                    {#if form.errors.title}<p class="mt-2 text-xs text-danger">
-                            {form.errors.title}
-                        </p>{/if}
-                </form>
+                <ProjectCreateForm
+                    {managerCandidates}
+                    {programRequired}
+                    {defaultManagerId}
+                    {isSuperAdmin}
+                    {canPublish}
+                    {organizations}
+                    {programs}
+                    onsaved={() => (creating = false)}
+                />
             </div>
         {/if}
 
@@ -647,9 +419,11 @@
                                 {#if (group.details?.projects_count ?? 0) > 0}
                                     No active projects in this program.
                                 {:else}
-                                    No projects in this program yet.{canCreate
-                                        ? ' Choose it when you create or edit a project.'
-                                        : ''}
+                                    No projects in this program yet.{programRequired
+                                        ? ' Add one with New project.'
+                                        : canCreate
+                                          ? ' Choose it when you create or edit a project.'
+                                          : ''}
                                 {/if}
                             </p>
                         {/if}

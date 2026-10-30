@@ -556,6 +556,8 @@ export interface ProgramProgress extends ProgressReport {
 
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
 export interface QuickAddProject extends ProjectSummary {
+    /** Its program's name; tells apart several projects of one title. */
+    program?: string | null;
     member_ids?: Id[];
 }
 

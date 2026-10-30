@@ -1,9 +1,11 @@
 <script lang="ts">
-    import { inertia, router } from '@inertiajs/svelte';
+    import { inertia, page, router } from '@inertiajs/svelte';
+    import { Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import ProgramForm from '../../components/program/ProgramForm.svelte';
     import ProgressReport from '../../components/ProgressReport.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
+    import ProjectCreateForm from '../../components/project/ProjectCreateForm.svelte';
     import { formatDate } from '../../lib/format';
     import type { Member, ProgramProgress } from '../../lib/types';
 
@@ -12,11 +14,27 @@
         managerCandidates = [],
     }: {
         progress: ProgramProgress;
-        /** Who it can be handed to; empty unless the viewer may manage it. */
+        /** Who it can be handed to or manage a new project; empty unless the viewer may do either. */
         managerCandidates?: Member[];
     } = $props();
 
     let editing = $state(false);
+    let creating = $state(false);
+
+    // The viewer's own person, when they are on the list: who a new project's
+    // manager picker starts on.
+    const ownMemberId = $derived(
+        (
+            page.props as {
+                quickAddContext?: { currentMemberId: number | null } | null;
+            }
+        ).quickAddContext?.currentMemberId ?? null,
+    );
+    const defaultManagerId = $derived(
+        managerCandidates.some((m) => m.id === ownMemberId)
+            ? ownMemberId
+            : null,
+    );
 
     function destroy() {
         if (
@@ -71,7 +89,24 @@
                     >{updatedAt}</span
                 ></span
             >
-            {#if progress.program.can_manage && !editing}
+            {#if progress.program.can_create_project && !creating && !editing}
+                <button
+                    type="button"
+                    class="btn-primary"
+                    onclick={() => (creating = true)}
+                >
+                    <Plus class="h-3.5 w-3.5" />
+                    New project
+                </button>
+            {/if}
+            {#if creating}
+                <button
+                    type="button"
+                    class="btn"
+                    onclick={() => (creating = false)}>Cancel</button
+                >
+            {/if}
+            {#if progress.program.can_manage && !editing && !creating}
                 <button
                     type="button"
                     class="btn-ghost"
@@ -92,6 +127,16 @@
                     {managerCandidates}
                     onsaved={() => (editing = false)}
                     oncancel={() => (editing = false)}
+                />
+            </div>
+        {/if}
+        {#if creating}
+            <div class="max-w-2xl border-b border-line pb-6">
+                <ProjectCreateForm
+                    {managerCandidates}
+                    {defaultManagerId}
+                    program={progress.program}
+                    onsaved={() => (creating = false)}
                 />
             </div>
         {/if}

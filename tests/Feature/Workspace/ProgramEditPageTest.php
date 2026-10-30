@@ -35,7 +35,7 @@ beforeEach(function () {
     Member::factory()->create(['organization_id' => $this->otherOrg->id, 'name' => 'Outsider']);
 });
 
-it('gives the program page manager candidates only to those who manage programs', function () {
+it('gives the program page manager candidates only to those who manage programs or create projects in it', function () {
     $expected = [
         ['id' => $this->admin->id, 'name' => 'Admin', 'title' => $this->admin->title],
         ['id' => $this->jsMember->id, 'name' => 'Joint Secretary', 'title' => 'Joint Secretary'],
@@ -56,7 +56,8 @@ it('gives the program page manager candidates only to those who manage programs'
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('progress.program.can_manage', false)
-            ->where('managerCandidates', []));
+            ->where('progress.program.can_create_project', true)
+            ->where('managerCandidates', $expected));
 
     // A project manager in the program never opens the program page at all.
     $this->actingAs($this->managerUser)->get("/workspace/programs/{$this->program->slug}")
