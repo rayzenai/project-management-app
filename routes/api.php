@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AssignmentController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CodeActivityController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\HomeController;
@@ -103,6 +104,10 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/projects/{project:slug}/repositories/candidates', [ProjectRepositoryController::class, 'candidates'])->name('projects.repositories.candidates');
             Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
             Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
+
+            // Code activity
+            Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
+            Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
             // Tasks + task-children: gated centrally by EnsureProjectVisible
             // (binding has resolved the parameter to a model instance, so the

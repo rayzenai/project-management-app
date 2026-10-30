@@ -3,6 +3,7 @@
 use App\Http\Controllers\GitWebhookController;
 use App\Http\Controllers\Workspace\AssignmentController;
 use App\Http\Controllers\Workspace\AuthController;
+use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\HomeController;
@@ -119,6 +120,10 @@ Route::middleware(['auth', ShareWorkspaceData::class])
             ->scopeBindings()
             ->name('projects.repositories.destroy');
         Route::get('/go/{org}/{index}', GoToTaskController::class)->name('go');
+
+        // Code activity: who committed what, within what each viewer runs.
+        Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
+        Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
         // Every route that acts on a task or a task-child is gated centrally by
         // EnsureProjectVisible: route-model binding has already resolved the
