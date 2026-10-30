@@ -11,6 +11,7 @@ vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
 php artisan test --compact tests/Feature/Workspace   # scoped test runs
 php artisan db:seed --class=WorkspaceDemoSeeder      # demo data (non-prod)
+php artisan db:seed --class=SdocProjectsSeeder       # fresh databases only; never production
 php artisan passport:keys                            # local OIDC signing keys
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback
 php artisan git:reconcile --connection=1              # nightly forge repair, scoped by office connection
@@ -32,9 +33,16 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
   privilege-escalation tests.
 - Organizations are the tenant boundary. Nothing crosses them except membership
   in a team explicitly marked cross-organization by a super-admin.
-- Sensitive capability-filtered fields (`organization_id`, office-admin/team
+- Sensitive capability-filtered fields (`organization_id`, organizational-admin/team
   flags, project publication) must be read through the FormRequest's
   overridden `validated()`, not `safe()`.
+- Person-form role sets are complete wanted sets; omitted fields stay unchanged.
+  Apply through `UpdateMemberRolesService`, with request checks in
+  `Concerns/ChecksMemberRoles`. Manager roles are handed over, never cleared.
+- Assignment scope goes through `Assignees` (existing assignees plus permitted
+  same-organization joiners); keep its candidate list and access predicate in step.
+- User-facing role copy says Organizational admin; identifiers remain
+  `is_office_admin` / `officeAdminOrganizationId`.
 - Audit trail written only by observers via `ProjectActivityRecorder`.
 - New polymorphic subjects must be added to the morph map in
   `AppServiceProvider` (strict morph map: `user`, `task`, `task-comment`, ...).

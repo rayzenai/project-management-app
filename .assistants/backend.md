@@ -26,7 +26,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
-  twin of `ShareWorkspaceData`; it includes organization and office-admin
+  twin of `ShareWorkspaceData`; it includes organization and organizational-admin
   context plus `features: {task_notes, contacts}`, `managed_program_ids` and
   `git_enabled`. Cross-cutting API context
   goes there.
@@ -52,13 +52,16 @@ queries and authorized note/contact endpoints remain available.
 1. **Super-admin** — `manage-workspace` Gate (emails in `PM_SUPER_ADMINS` /
    `config('project-management.super_admins')`). Belongs to no organization;
    manages organizations and everything inside them. Only this tier can mark a
-   team cross-organization or make a person an office admin.
-2. **Office admin** — active member with `is_office_admin`. Full control inside
-   their organization: people, projects, programs, managers, rosters and publication.
+   team cross-organization or make a person an organizational admin.
+2. **Organizational admin** — active member with `is_office_admin`. Full control
+   inside their organization: people, projects, programs, managers, rosters and
+   publication.
 3. **Program manager** — active `programs.manager_id` in their own organization.
    Runs each project in that program (edit/archive, roster, progress, code and
-   repositories) without joining its team. Never creates projects/programs,
-   chooses managers, publishes/rekeys projects or edits people.
+   repositories) without joining its team. Creates projects in their programs
+   and chooses/replaces their managers, from the project's organization even
+   on a cross-organization team. Never removes a manager, creates programs,
+   publishes/rekeys/moves projects or edits people.
 4. **Project manager** — the one `member_team.role = 'leader'` on a project's
    own team. Edits/archives that project, manages its roster and sees its
    progress; never edits people, chooses managers or creates projects.
@@ -66,12 +69,17 @@ queries and authorized note/contact endpoints remain available.
    projects in their organization; manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (read-only),
-`officeAdminOrganizationId`, `administers`, `canEditTeam` (choose the manager),
-`canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
+`officeAdminOrganizationId`, `administers`, `canEditTeam` (organization admins),
+`canAppointProjectManager` / project twin `canChooseManagerOf`,
+`canAppointAsProjectManager` (eligible replacement),
+`canManageRosterOf` / `canManageRosterOfProject` (loaded-project twin, no query
+per project; keep in step), `canRemoveFromTeam`, `canJoinTeam`,
+`canAssignOutsideTeam`, `canStartGeneralProject`, `canSetRolesIn`,
 `canViewTeamProgress`, `canViewProjectProgress`, `canCreateMember`,
 `canManageMember`, `canViewProject`,
-`canCreateProject`, `canManageProjectAccess`, `canPublishProject`,
-`canChangeProjectKey` (office admin/super-admin), `canManageGit` (super-admin),
+`canCreateProject`, `canCreateProjectInProgram`, `createsProjectsOnlyInPrograms`,
+`canManageProjectAccess`, `canPublishProject`,
+`canChangeProjectKey` (organizational admin/super-admin), `canManageGit` (super-admin),
 `canViewProjectCode`, `canManageProjectRepositories`, `ledTeamIds`,
 `managedProgramIds`, `managesProgramOf`, `canManagePrograms`, `canViewProgram`.
 `Project::scopeVisibleTo` and `Program::scopeVisibleTo` are query twins of their
@@ -84,11 +92,13 @@ Do-not-regress protections: ordinary teams, projects and people never cross
 organizations; every roster add goes through `canJoinTeam`; project teams must
 share the project's organization; organization changes cannot strand a person
 on foreign ordinary teams. `canManageMember` blocks a super-admin's linked
-login, reserved super-admin emails and other office admins; managers cannot
+login, reserved super-admin emails and other organizational admins; managers cannot
 reset anyone's password. `StoreMemberRequest`/`UpdateMemberRequest` also block
 non-super-admins from assigning a reserved email (`isSuperAdminEmail`). Only a
-super-admin may change a person's organization/office-admin flag/bulk teams or
-a team's cross-organization flag. Project `manager_id`, `is_public` and
+super-admin may change a person's organization/organizational-admin flag or a
+team's cross-organization flag. Organizational admins may set their people's
+program, project-manager and team roles through the person form (see below).
+Project `manager_id`, `is_public` and
 `is_cross_organization` are capability-filtered by `validated()`. Appoint through
 `AppointProjectManagerService`: the previous manager stays as a member; the
 current manager cannot be removed or demoted, only replaced. `project_team`
@@ -96,10 +106,53 @@ is unique on each column; a partial unique index allows one leader per team.
 `NotifiesMentions::mentionableIds` filters stored mentions to eligible people;
 mention notifications only reach project viewers. `TaskShowQuery` offers
 `mentionCandidates` (team plus program manager) as `{id, name}` only; `team` remains the
-assignee list. Program management grants no team leadership or people-editing
+existing assignee list; off-team `joinCandidates` are never mentionable.
+Program management grants no team leadership or people-editing
 rights. `UpdateMemberRequest` blocks organization changes while managing programs.
-Only organization admins may set `program_id`; other editors' values are dropped
-by `validated()`, and kept values must belong to the project's organization.
+Only organization admins may change an existing project's `program_id`; other
+editors' values are dropped by `validated()`, and kept values must belong to the
+project's organization.
+`StoreProjectRequest` requires program-only creators to pick one of their own
+programs (`Choose one of your programs.`), derives its organization and drops
+`key`/`is_public`; a super-admin may also derive the organization from a posted
+program. `ProjectResource.can_choose_manager` and each roster member's
+`can_make_manager` expose the appointment capabilities.
+
+## People roles and task assignment
+
+- `StoreMemberRequest` / `UpdateMemberRequest` share `Concerns/ChecksMemberRoles`:
+  `managed_program_ids`, `managed_project_ids`, `team_ids` are complete wanted
+  sets; omitted fields stay unchanged. Changes require administration of each
+  affected organization and must fit the person's organization after any move.
+  `UpdateMemberRolesService` hands over programs and appoints projects through
+  `AppointProjectManagerService`; never clears a manager, removes them from
+  their team or blindly syncs memberships. Inactive people cannot gain manager
+  roles. Both member controllers roll the whole save back on a refused role.
+  `MemberResource::ROLE_RELATIONS` loads all four role-id lists (including
+  `led_team_ids`); `TeamIndexQuery` supplies `canSetRoles` and `roleOptions`
+  (programs and active projects with current managers, bounded query count).
+- `Support/Assignees::joiners` is the shared assignment rule for quick add and
+  `StoreAssignmentRequest` / `AssignMemberService`: existing
+  `Member::scopeAssignableFor` people, plus active people of the project's own
+  organization for whoever manages its roster (`canAssignOutsideTeam`).
+  `AddTeamMemberService` joins newcomers before assigning in one transaction;
+  the same service powers the People tab, preserving membership notifications
+  and activity. No foreign newcomer, even on cross-organization teams.
+  `Assignees::joinCandidates` is the list twin; task show uses `joinCandidates`,
+  preview uses `join_candidates`, each `{id, name, title}` only.
+- `QuickAddTaskRequest.start_general` with no `project_id` is allowed only for
+  an organizational admin whose organization has no active project; otherwise
+  422 `Pick a project.` on `project_id`. `StartGeneralProjectService` locks the
+  organization, rechecks and creates General with the caller as manager through
+  `CreateProjectService`. `QuickAddDispatcher` creates General and its task in
+  one transaction; failure leaves neither. Parsed `@tokens` and default-to-self
+  still resolve only through `scopeAssignableFor`.
+- `ShareWorkspaceData.quickAddContext` adds project `organization_id`, program
+  name, `member_ids`, `can_add_people`; `organizationPeople` (`{id, name, title}`)
+  is the viewer's active organization people only when they run a team there or
+  may start General. `startGeneral` signals that option; `team` and
+  `currentMemberId` remain. Roster capability uses the loaded-project twin to
+  avoid a query per project.
 
 ## Domain model
 
@@ -110,18 +163,24 @@ by `validated()`, and kept values must belong to the project's organization.
   chosen from its active members (nullable only after pruning that member). Optional
   `projects.program_id` puts each project in at most one program. Paired
   `ProgramController`s use shared Store/Update requests, Create/Update/Delete
-  services and `ProgramResource`; only office/super-admins manage them. Names
-  are unique within the organization ignoring case. Deletion detaches projects
+  services and `ProgramResource`; only organizational admins/super-admins manage
+  them. `CreateProgramService` atomically creates its private General project,
+  managed by the program manager; failure or a missing General manager rolls
+  back both. Names are unique within the organization ignoring case. Deletion detaches projects
   individually so `ProjectObserver` logs moves; projects stay. Web show and API
   `programs/{program:slug}/progress` use `ProgramProgressQuery` + `ProgressReport`
   across active projects; API `GET programs` lists visible programs.
+  `ProgramResource.can_create_project` and `ProgramProgressQuery.managerCandidates`
+  support project creation from the program page as well as admin editing.
 - **Project** — belongs to an organization; slug-routed, `archived_at`
   soft-archive, `is_public` within that organization; scopes
   `visibleTo`/`active`/`archived`; hasMany Task, belongsToMany Team (one each).
   `team()`/`ensureTeam()`/`manager()` expose its own team and manager;
   `CreateProjectService` creates both atomically; `StoreProjectRequest`
-  requires `manager_id` for interactive creation. `ProjectResource.can_publish`
-  exposes the office-admin/super-admin publication capability.
+  requires `manager_id` for interactive creation. `label()` names it with its
+  program ("General (Revenue)"), mirrored by `lib/projectLabel.ts`.
+  `ProjectResource.can_publish` exposes the organizational-admin/super-admin
+  publication capability.
   Stored `key` (1 to 10 uppercase ASCII letters) is also its `code`;
   `ProjectKeys` suggests a unique key from the title (fallback `P`). Current keys
   and `ProjectKeyAlias` entries reserve keys within the organization. Renaming
@@ -156,10 +215,11 @@ by `validated()`, and kept values must belong to the project's organization.
   initial dependency ids, ignoring tasks outside the chosen project.
 - **Subtask** — personal (`user_id`). **Member** — belongs to one organization
   (except a super-admin's own member), optionally links to a `User`, and may be
-  an office admin. `Member::forUser` `firstOrCreate`s (never call in
-  authorization); `scopeAssignableFor(Project)` is the source of truth for
-  assignees. Creating a person also creates a login and synchronously emails
-  its supplied/generated password via `SendLoginDetailsService`; passwords are
+  an organizational admin. `Member::forUser` `firstOrCreate`s (never call in
+  authorization); `managedPrograms()` exposes its managed programs.
+  `scopeAssignableFor(Project)` supplies existing assignees; `Assignees` adds
+  eligible newcomers for roster managers. Creating a person also creates a login
+  and synchronously emails its supplied/generated password via `SendLoginDetailsService`; passwords are
   never queued.
 - **Team** — made with its project and named after it (`Team::project()`);
   belongs to the same organization, is auto-slugged, may be
@@ -220,11 +280,12 @@ the sole Forgejo client; reruns keep its id and rotate its secret.
 `git:reconcile [--connection=] [--allow-removals]` runs daily at 01:30 without
 overlapping; see the phase 1 map below for repair and removal safeguards.
 
-`php artisan db:seed --class=SdocProjectsSeeder --force` explicitly seeds SDOC
-and eight private projects with their own teams, initially without managers.
-It is production-safe and creates missing records. It applies agreed project
-keys to existing automatic keys via the alias-preserving rename service,
-leaves admin-chosen keys alone, and is not called by `DatabaseSeeder`.
+`SdocProjectsSeeder` seeds SDOC and eight private projects with their own teams,
+initially without managers; not called by `DatabaseSeeder`. Per `CLAUDE.md`, use
+it only on fresh databases, never production. Existing production projects get
+agreed keys from `2026_10_31_140000_give_sdoc_projects_their_agreed_keys.php`:
+its own frozen SDOC/title/key map, alias-preserving `UpdateProjectService`,
+automatic keys only, conflicts logged and skipped, no records created.
 
 Application and PostgreSQL session timezones are fixed to `Asia/Kathmandu`.
 The one-time timestamp migration converts existing UTC wall-clock values.
@@ -269,7 +330,7 @@ The one-time timestamp migration converts existing UTC wall-clock values.
 - Paired `ProjectRepositoryController`s, shared link/search/unlink requests and
   `LinkRepositoryService`/`UnlinkRepositoryService` manage links; candidates come
   from `RepositoryCandidatesQuery`. `canViewProjectCode` requires git and team
-  membership, program management, office administration or super-admin access;
+  membership, program management, organizational administration or super-admin access;
   public-project visibility alone is insufficient. Query twin:
   `Project::scopeCodeVisibleTo`. Changes need `canManageProjectRepositories`.
   `TaskCodeQuery::inVisibleRepositories` filters task code and board PR flags by
@@ -293,7 +354,7 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   preserving `forge-admin`, the bot and unknown logins. More than max(5, 25%)
   login removals per step are held back. Breakers exit non-zero;
   `--allow-removals` lifts both volume limits for one run, never the ownership check.
-  Changes log at warning. `SyncForgeOwners` runs on office-admin flag changes.
+  Changes log at warning. `SyncForgeOwners` runs on organizational-admin flag changes.
 - Repointing a connection unlinks its repositories; disabling git and unlinking
   hand the forge its own issue tracker back. `GoToTaskController` handles
   `/workspace/go/{org}/{index}` (including aliases); inaccessible tasks return

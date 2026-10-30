@@ -13,7 +13,8 @@ personal inbox + workspace activity feed, `?tab=activity`),
 `Tasks/Show`, `Team/Index` (organization-aware People directory),
 `Projects/Progress` (workload, Gantt, activity; polls every 15s while visible),
 `Programs/Show` (project summary, workload, Gantt and activity across active
-projects; polls `progress` every 15s while visible, with admin edit/delete).
+projects; polls `progress` every 15s while visible, with admin edit/delete and
+New project for admins and its manager).
 Pages wrap themselves in `AppShell` and supply the 44px top bar through its
 `bar` snippet (breadcrumb left, actions right); `flush` drops content padding
 for full-bleed registers/boards. The sidebar collapses to an icon rail (`[`
@@ -33,6 +34,16 @@ Shell + chrome: `AppShell`, `CommandPalette`, `Popover`, `Toasts`, and
 uses `applyAppearance` for the immediate transition).
 Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 `lib/quickAddTokens.ts` (server twin: `App\Support\QuickAddParser`).
+`QuickAddForm` mirrors resolved `#project`/`@assignee` tokens, scopes picks to
+the effective project and clears incompatible assignments/dependencies when it
+changes. Self defaults only when eligible; choosing someone else replaces that
+automatic self pick. Roster managers also see organization people marked
+"Joins the team"; an organizational admin with no active project gets General
+(created on submit). Missing project disables submit; validation and service
+errors stay visible. Overlay creates redirect to the project board unless
+"Create another" is selected. `AssigneePicker` closes outside on click capture
+so an expanded list cannot shift the submit button between press and release;
+`QuickAddOverlay` closes only for a press begun and ended on the backdrop.
 Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
 `TaskCode` (mono `KEY-12` id chip from stored project key + permanent task number,
 shared formatter `lib/taskCode.ts`; `#12` when the project code is unknown),
@@ -47,14 +58,24 @@ Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
 `lib/notesBoard.svelte.ts`, `lib/noteColors.ts`.
 Teams: `project/ProjectTeamPanel` manages the project's roster in its People
 tab; `team/RosterSearch` performs debounced server-side eligible-person search.
-`lib/clipboard.ts` provides Clipboard API + legacy fallback for copied login
-details in the People directory.
+`Team/Index` offers `team/MemberRoleFields` to whoever may manage people:
+Program manager of, Project manager of, Member of. Held manager roles stay
+checked/locked until handed over; new choices name the current manager.
+`lib/memberRoles.ts` filters options by organization, preserves held roles
+outside those lists and sends only changed complete sets. Directory rows show
+roles followed by other memberships; `lib/projectLabel.ts` includes the
+program name ("General (Revenue)") in project labels, matching `Project::label()`.
+`lib/clipboard.ts` provides Clipboard API + legacy fallback for copied logins.
 Notifications: inbox Teams filter covers team additions and project/program manager appointments;
 the activity tab includes project-level team changes with no task.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
-TaskTableRow,ProjectFilters,ProjectSummaryStrip,ProjectEditForm,ColumnComposer}`.
+TaskTableRow,ProjectFilters,ProjectSummaryStrip,ProjectCreateForm,ProjectEditForm,
+ColumnComposer}`. `ProjectCreateForm` is shared by Projects/Index and Programs/Show;
+program managers must choose their own program (auto-selected when only one),
+with themselves as default manager on the index. A program page fixes program
+and organization and defaults to its active manager, including for super-admins.
 `ProjectEditForm` gates publication with `project.can_publish` and key editing
-with `project.can_change_key` (office admins and super-admins); old keys remain
+with `project.can_change_key` (organizational admins and super-admins); old keys remain
 searchable aliases. Cross-organization access remains super-admin-only.
 Admins also choose the project's optional program within its organization.
 Programs: `program/ProgramForm` handles create/edit and choosing a manager from
@@ -62,8 +83,11 @@ active organization members. `Projects/Index` creates programs and projects;
 groups use each project's `program` reference, while the separate `programs`
 list determines which headings link to a program page. Unopenable programs
 still group visible projects; empty visible programs appear on the active tab.
-Program/project manager pickers and the People office-admin toggle carry ministry
-role hints. Program edits/deletion also live on `Programs/Show`.
+Program/project manager pickers and the People organizational-admin toggle carry ministry
+role hints. The visible role name is Organizational admin; stored flags and
+capability names still use `is_office_admin`/`isOfficeAdmin`. Program
+edits/deletion also live on `Programs/Show`. Project roster "Make manager"
+uses each member's `can_make_manager`, including program-manager tenant limits.
 Command-palette search, dependencies and Gantt labels use the permanent task
 number. Plan `item_number` stays editable; task details show it separately only
 when it differs from `number`. `Organizations/Index` connects/updates Git using
@@ -82,7 +106,10 @@ show `has_pull_request`. Code data is access-gated by the backend; public-projec
 visibility alone does not expose the Code tab. `lib/types.ts` holds Program,
 Git repository/PR/task-code and shared program/git context shapes.
 Comments: the full task page passes `mentionCandidates` (`{id, name}` only,
-team plus program manager) to `CommentThread`; `team` stays the assignee list.
+team plus program manager) to `CommentThread`; `team` stays the existing
+assignee list. Full task `joinCandidates` and Peek `join_candidates` feed
+`AssigneeStack.others`; newcomers are marked "Joins the team" and are never
+offered as mentions.
 
 ## Task editing and optional features
 

@@ -12,7 +12,7 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   programs, Git connections/code/webhooks/reconcile, OIDC sign-in and forge offboarding).
 - `tests/Feature/Workspace/Api/**` — API-surface twins (`AuthApiTest`,
   `ProjectApiTest`, `TaskApiTest`, `TaskCommentApiTest`, `MemberApiTest`,
-  `TeamRosterApiTest`, `NotificationApiTest`, `RestoreApiTest`).
+  `TeamRosterApiTest`, `MemberRolesApiTest`, `NotificationApiTest`, `RestoreApiTest`).
 - `tests/Feature/` root — cross-cutting (WorkspaceAccessTest, theme tokens,
   user preferences, api-token command, seeders).
 - `tests/Unit/` — parsers (MentionParser, TaskReferences) and ForgejoClient HTTP tests.
@@ -29,7 +29,9 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `GuidePageTest` checks signed-in access and guest redirects;
   `SdocProjectsSeederTest` checks project/team creation, safe reruns and
   isolation from another organization's same-named project, plus agreed-key
-  migration with aliases and preservation of admin-chosen keys.
+  updates with aliases and preservation of admin-chosen keys.
+  `SdocKeysMigrationTest` separately covers the deployed key migration: aliases,
+  chosen-key preservation, conflicts, absent SDOC and independence from seeders.
 - `ProjectKeyTest` covers suggestion/backfill, tenant uniqueness, reserved aliases
   and web/API key-change permissions; `ProjectCodeTest` covers resource/query
   code loading. `TaskNumberTest` covers backfill, counter non-reuse after purge,
@@ -53,6 +55,23 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   gates, CRUD, project moves/deletion audit, progress, grouping/shared context,
   mention-candidate privacy and admin editing. `Api/ProgramApiTest` covers the
   parallel list/CRUD surface; progress and project assignment also test API calls.
+- `ProgramManagerBuildsTest` covers web/API creation within managed programs,
+  manager replacement (including teamless projects), filtered admin-only fields,
+  same-organization appointments even on cross-organization teams, inactive
+  managers, unchanged member powers and super-admin creation from a program page.
+  `ProgramGeneralProjectTest` covers atomic program/General creation, rollback
+  on failure or a missing manager, task creation, program labels and page controls.
+- `MemberRolesTest` + `Api/MemberRolesApiTest` cover person create/update role
+  sets, manager handovers and membership retention, whole-save rollback on
+  refusal, inactive people, tenant and cross-organization boundaries, forbidden
+  fields/callers, unchanged omitted roles, resource/options shapes, archived
+  exclusions, program-qualified labels and bounded People-page query counts.
+- `QuickAddEverywhereTest` covers General creation and rollback on web/API,
+  start authorization and project validation, assignments that join a team,
+  off-team/member/inactive/foreign refusals, task/preview candidate privacy,
+  shared context, bounded query counts and the roster predicate twins.
+  `AssignmentMemberTest` also checks blank roles do not add empty parentheses
+  to assignment activity descriptions.
 - Code: `ProjectRepositoryTest` + `Api/ProjectRepositoryTest` cover link/search/
   unlink gates, ownership, concurrency, secret redaction and backfill.
   `ProjectCodeViewTest` covers project/task payloads, PR flags and repository
@@ -82,7 +101,7 @@ rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&1`.
 - Any change to `WorkspaceAccess` or an action service needs happy-path +
   failure-path + privilege-escalation tests.
 - Tenant changes must prove both isolation and the deliberate
-  cross-organization-team exception across super-admin, office-admin, leader
+  cross-organization-team exception across super-admin, organizational-admin, leader
   and member roles (`TenancyTest` is the broad regression suite).
 - New features touch both surfaces, so test both (web dir + Api dir).
 - Frontend gate: `npm run lint && npm run format && npm run types:check &&
