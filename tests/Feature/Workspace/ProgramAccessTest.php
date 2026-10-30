@@ -127,7 +127,7 @@ it('keeps a program manager out of projects outside the program', function () {
     expect($this->projectB->fresh()->title)->toBe('Customs');
 });
 
-it('lets a program manager manage the roster of the program projects but never the manager', function () {
+it('lets a program manager manage the roster of the program projects but never remove the manager', function () {
     expect(WorkspaceAccess::canManageRosterOf($this->js, $this->teamA))->toBeTrue()
         ->and(WorkspaceAccess::canViewTeamProgress($this->js, $this->teamA))->toBeTrue()
         ->and(WorkspaceAccess::canRemoveFromTeam($this->js, $this->teamA, $this->officer))->toBeTrue()
@@ -143,13 +143,9 @@ it('lets a program manager manage the roster of the program projects but never t
     $this->actingAs($this->js)->delete("/workspace/teams/{$this->teamA->id}/members/{$this->officer->id}")
         ->assertRedirect();
 
-    // Never the manager: not removed, not replaced, not doubled.
+    // Never the manager removed (replacing one: ProgramManagerBuildsTest).
     $this->actingAs($this->js)->delete("/workspace/teams/{$this->teamA->id}/members/{$this->underSecretary->id}")
         ->assertForbidden();
-    $this->actingAs($this->js)->patch("/workspace/teams/{$this->teamA->id}/members/{$colleague->id}", ['role' => 'leader'])
-        ->assertForbidden();
-    $this->actingAs($this->js)->patch("/workspace/projects/{$this->projectA->slug}", ['manager_id' => $colleague->id])
-        ->assertSessionHasNoErrors();
 
     expect($this->teamA->members()->whereKey($colleague->id)->exists())->toBeTrue()
         ->and($this->teamA->members()->whereKey($this->officer->id)->exists())->toBeFalse()
@@ -158,8 +154,7 @@ it('lets a program manager manage the roster of the program projects but never t
 });
 
 it('gives a program manager no power the office admin keeps', function () {
-    expect(WorkspaceAccess::canCreateProject($this->js))->toBeFalse()
-        ->and(WorkspaceAccess::canPublishProject($this->js, $this->org->id))->toBeFalse()
+    expect(WorkspaceAccess::canPublishProject($this->js, $this->org->id))->toBeFalse()
         ->and(WorkspaceAccess::canChangeProjectKey($this->js, $this->projectA))->toBeFalse()
         ->and(WorkspaceAccess::canManagePrograms($this->js, $this->org->id))->toBeFalse()
         ->and(WorkspaceAccess::canCreateMember($this->js, $this->org->id))->toBeFalse();
@@ -168,7 +163,9 @@ it('gives a program manager no power the office admin keeps', function () {
         expect(WorkspaceAccess::canManageMember($this->js, $member))->toBeFalse();
     }
 
-    $this->actingAs($this->js)->post('/workspace/projects', ['title' => 'Mine', 'manager_id' => $this->officer->id])->assertForbidden();
+    // Creating outside their programs (in them: ProgramManagerBuildsTest).
+    $this->actingAs($this->js)->post('/workspace/projects', ['title' => 'Mine', 'manager_id' => $this->officer->id])
+        ->assertSessionHasErrors(['program_id' => 'Choose one of your programs.']);
     $this->actingAs($this->js)->patch("/workspace/members/{$this->officer->id}", ['name' => 'Renamed'])->assertForbidden();
     $this->actingAs($this->js)->patch("/workspace/members/{$this->underSecretary->id}", ['password' => 'taken-over-1'])->assertForbidden();
 

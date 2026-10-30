@@ -74,6 +74,7 @@ export interface ProjectTeam {
     members: ProjectTeamMember[];
     /** Add and remove people: its manager, office admin, super-admin. */
     can_manage: boolean;
+    /** Make someone its manager: office admin, super-admin, program manager. */
     can_choose_manager: boolean;
 }
 
@@ -180,7 +181,7 @@ export interface Project extends ProjectSummary {
     can_archive?: boolean;
     can_manage_access?: boolean;
     can_view_progress?: boolean;
-    /** Choosing the manager is the office admin's (or a super-admin's). */
+    /** Choosing the manager: office admin, super-admin, its program's manager. */
     can_choose_manager?: boolean;
     /** Stored project key, the code half of KEY-12. */
     key?: string;
@@ -531,6 +532,8 @@ export interface Program {
     manager: { id: number; name: string; title: string | null } | null;
     projects_count?: number;
     can_manage: boolean;
+    /** Whether the viewer may create a project in it. */
+    can_create_project: boolean;
 }
 
 export interface ProgramProjectRow {

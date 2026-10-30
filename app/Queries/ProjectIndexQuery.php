@@ -62,13 +62,18 @@ class ProjectIndexQuery
         $isSuperAdmin = WorkspaceAccess::isSuperAdmin($user);
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
         $canCreate = WorkspaceAccess::canCreateProject($user);
+        // Anyone else who may create is a program manager: only in their own
+        // programs, managed by default by themselves.
+        $programRequired = $canCreate && ! $isSuperAdmin && $officeAdminOf === null;
+        $self = $programRequired ? WorkspaceAccess::memberFor($user) : null;
 
         // Who may manage a new project: active people of the organization it
-        // lands in (a super-admin's list is narrowed by the chosen one).
+        // lands in (a super-admin's list is narrowed by the chosen one; a
+        // program manager's programs are all in their own).
         $managerCandidates = ! $canCreate ? [] : Member::query()
             ->active()
             ->whereNotNull('organization_id')
-            ->when(! $isSuperAdmin, fn ($q) => $q->where('organization_id', $officeAdminOf))
+            ->when(! $isSuperAdmin, fn ($q) => $q->where('organization_id', $officeAdminOf ?? $self?->organization_id))
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'title', 'organization_id'])
             ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'title' => $m->title, 'organization_id' => $m->organization_id])
@@ -90,6 +95,8 @@ class ProjectIndexQuery
             'archivedCount' => Project::query()->visibleTo($user)->archived()->count(),
             'managerCandidates' => $managerCandidates,
             'canCreate' => $canCreate,
+            'programRequired' => $programRequired,
+            'defaultManagerId' => $self?->id,
             'isSuperAdmin' => $isSuperAdmin,
             'canPublish' => $isSuperAdmin || $officeAdminOf !== null,
             'organizations' => $isSuperAdmin

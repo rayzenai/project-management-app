@@ -20,7 +20,8 @@ use Illuminate\Routing\Controller;
 /**
  * A project team's roster, the surface its manager works through: search for
  * a person, add them, take them off. The manager (the team's one leader) is
- * chosen by the office admin or a super-admin, never by a manager.
+ * chosen by the office admin, a super-admin or the project's program
+ * manager, never by a manager.
  */
 class TeamMemberController extends Controller
 {

@@ -112,8 +112,10 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
    their own organization only; a ministry's Joint Secretary). On every
    project in the program, exactly what its project manager can do (see,
    edit, archive, progress, roster, code and repositories), without sitting
-   on its team. Never chooses managers, never creates projects or programs,
-   never publishes or rekeys a project, never edits people.
+   on its team. Creates projects in their programs and chooses or replaces
+   their managers (never removes one). Never creates programs, never
+   publishes or rekeys a project, never opens its team to other
+   organizations, never moves it between programs, never edits people.
 4. **Project manager**: `member_team.role = 'leader'` on a project's team (a
    partial unique index allows one per team). Edits and archives their
    projects, manages their teams' rosters by searching people
@@ -124,11 +126,14 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
    public projects); manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
-`officeAdminOrganizationId`, `administers`, `canEditTeam` (choose the
-manager), `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
+`officeAdminOrganizationId`, `administers`, `canEditTeam` (whoever
+administers the team's organization), `canAppointProjectManager` (choose
+the manager: `canEditTeam` or the project's program manager),
+`canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
 `canViewTeamProgress`, `canViewProjectProgress`,
 `canCreateMember`, `canManageMember`, `canViewProject` (twin of
-`Project::scopeVisibleTo`), `canCreateProject`, `canManageProjectAccess`,
+`Project::scopeVisibleTo`), `canCreateProject`, `canCreateProjectInProgram`
+(its organization's admins and its manager), `canManageProjectAccess`,
 `canPublishProject`, `canViewProjectCode`, `canManageProjectRepositories`,
 `ledTeamIds`, `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
 `canViewProgram` (twin of `Program::scopeVisibleTo`). Visibility scopes:
@@ -158,12 +163,21 @@ Privilege-escalation protections — do not regress:
   box offers `TaskShowQuery`'s `mentionCandidates` (the team plus the
   program's manager, `{id, name}` only: no email or login of someone the
   teammate may not otherwise see); `team` stays the assignees.
-- A program manager is never a team leader (never added to the team, never
-  `leadsTeam`), reaches only projects of programs in their own organization
+- A program manager's program powers never make them a team leader (they
+  lead a team only when chosen as its manager, as on create by default),
+  reach only projects of programs in their own organization
   (`managedProgramIds` and `managesProgramOf` check both the program's and
   the project's organization; a person cannot change organization while
-  managing a program), and gains no power over people (`canManageMember`,
+  managing a program), and give no power over people (`canManageMember`,
   `canCreateMember`, `canEditTeam` unchanged).
+- A program manager creates projects only in their programs
+  (`StoreProjectRequest`: `program_id` required and passing
+  `canCreateProjectInProgram`, else 422 `Choose one of your programs.`; the
+  organization is the program's; `key`, `is_public` dropped) and appoints
+  managers only through `AppointProjectManagerService`, only on their
+  program's projects (`canAppointProjectManager`: the project update's
+  `manager_id`, the team role route), and never removes a manager
+  (`canRemoveFromTeam` keeps `canEditTeam`).
 
 Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 

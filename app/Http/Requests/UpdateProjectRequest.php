@@ -13,10 +13,12 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Its manager edits the project's details. Choosing the manager and making
- * it public belong to whoever administers its organization; letting people
- * from other organizations onto its team is a super-admin's call. Anyone
- * else's values for those are dropped (read them through `validated()`).
+ * Its manager edits the project's details. Choosing the manager belongs to
+ * whoever administers its organization and to its program's manager; making
+ * it public, its key and its program to whoever administers its
+ * organization; letting people from other organizations onto its team is a
+ * super-admin's call. Anyone else's values for those are dropped (read them
+ * through `validated()`).
  */
 class UpdateProjectRequest extends FormRequest
 {
@@ -84,7 +86,7 @@ class UpdateProjectRequest extends FormRequest
                 'is_cross_organization' => $this->crossOrganization($current),
             ]);
 
-            if ($this->has('manager_id') && WorkspaceAccess::administers($this->user(), $project->organization_id)) {
+            if ($this->has('manager_id') && $this->appointsManager()) {
                 $manager = Member::query()->with('user')->find($this->integer('manager_id'));
 
                 if ($manager === null || ! $manager->is_active || ! WorkspaceAccess::canJoinTeam($manager, $team)) {
@@ -112,6 +114,20 @@ class UpdateProjectRequest extends FormRequest
         return $project;
     }
 
+    /**
+     * Whether the caller may choose the project's manager. A project still
+     * without a team gets one from whoever administers its organization.
+     */
+    private function appointsManager(): bool
+    {
+        $project = $this->project();
+        $team = $project->team();
+
+        return $team === null
+            ? WorkspaceAccess::administers($this->user(), $project->organization_id)
+            : WorkspaceAccess::canAppointProjectManager($this->user(), $team);
+    }
+
     private function crossOrganization(?Team $team): bool
     {
         if (WorkspaceAccess::isSuperAdmin($this->user()) && $this->has('is_cross_organization')) {
@@ -134,8 +150,11 @@ class UpdateProjectRequest extends FormRequest
             unset($data['is_public']);
         }
 
-        if (! WorkspaceAccess::administers($this->user(), $project->organization_id)) {
+        if (! $this->appointsManager()) {
             unset($data['manager_id']);
+        }
+
+        if (! WorkspaceAccess::administers($this->user(), $project->organization_id)) {
             unset($data['program_id']);
         }
 

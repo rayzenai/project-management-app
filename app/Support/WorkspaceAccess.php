@@ -22,8 +22,9 @@ use Illuminate\Support\Facades\Gate;
  *   leaders.
  * - Program manager: `programs.manager_id` (while active, programs of their
  *   own organization only). On every project in the program, what its own
- *   manager can do, without sitting on its team; never chooses a manager
- *   and has no power over people.
+ *   manager can do, without sitting on its team; also creates projects in
+ *   the program and chooses or replaces their managers, but never removes
+ *   one and has no power over people.
  * - Team leader: the `role` column on the member_team pivot. Manages the
  *   roster of the teams they lead and sees their progress.
  * - Member: sees their teams' projects and teammates; manages own subtasks.
@@ -163,6 +164,16 @@ class WorkspaceAccess
         return self::administers($user, $team->organization_id);
     }
 
+    /**
+     * Make someone a project team's manager (replacing the one it has):
+     * whoever may edit the team, or the manager of the program its project
+     * is in. Never removes a manager: see canRemoveFromTeam.
+     */
+    public static function canAppointProjectManager(?Authenticatable $user, Team $team): bool
+    {
+        return self::canEditTeam($user, $team) || self::managesProgramOfTeam($user, $team);
+    }
+
     public static function leadsTeam(?Authenticatable $user, Team $team): bool
     {
         return in_array($team->getKey(), self::ledTeamIds($user), true);
@@ -179,8 +190,9 @@ class WorkspaceAccess
     }
 
     /**
-     * The manager is chosen by the office admin: a manager (or the program's
-     * manager) may take members off the team but not the manager.
+     * A manager (or the program's manager) may take members off the team but
+     * not its manager, who is replaced (canAppointProjectManager), never
+     * removed.
      */
     public static function canRemoveFromTeam(?Authenticatable $user, Team $team, Member $member): bool
     {
@@ -294,12 +306,23 @@ class WorkspaceAccess
     }
 
     /**
-     * Creating a project means choosing its manager, which is the office
-     * admin's (or a super-admin's) call.
+     * Creating a project means choosing its manager: the office admin's (or
+     * a super-admin's) call, or a program manager's in their own programs
+     * (see canCreateProjectInProgram).
      */
     public static function canCreateProject(?Authenticatable $user): bool
     {
-        return self::isSuperAdmin($user) || self::officeAdminOrganizationId($user) !== null;
+        return self::isSuperAdmin($user) || self::officeAdminOrganizationId($user) !== null || self::managedProgramIds($user) !== [];
+    }
+
+    /**
+     * Create a project in this program: whoever administers its
+     * organization, or its manager.
+     */
+    public static function canCreateProjectInProgram(?Authenticatable $user, Program $program): bool
+    {
+        return self::administers($user, $program->organization_id)
+            || in_array((int) $program->getKey(), self::managedProgramIds($user), true);
     }
 
     public static function canManageProjectAccess(?Authenticatable $user, Project $project): bool
@@ -397,8 +420,9 @@ class WorkspaceAccess
 
     // ---- Programs ----
     // A named collection of projects in one organization with one manager,
-    // who runs every project in it as its own manager does, from above: never
-    // on its team, never choosing its manager, no power over people.
+    // who runs every project in it as its own manager does, from above:
+    // without joining its team, choosing (never removing) its manager, no
+    // power over people.
 
     /**
      * Create, edit and delete an organization's programs, and choose their

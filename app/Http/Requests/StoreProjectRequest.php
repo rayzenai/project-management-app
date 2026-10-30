@@ -11,9 +11,11 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * A project belongs to one organization (the one a super-admin picks, or an
- * office admin's own) and is created with its team, led by the manager
- * chosen here: an active person of that organization.
+ * A project belongs to one organization (the one a super-admin picks, an
+ * office admin's own, or for a program manager their program's) and is
+ * created with its team, led by the manager chosen here: an active person
+ * of that organization. A program manager creates in their own programs
+ * only, and without the administrators' fields (key, public).
  */
 class StoreProjectRequest extends FormRequest
 {
@@ -39,8 +41,19 @@ class StoreProjectRequest extends FormRequest
                 'nullable', 'integer', Rule::exists('organizations', 'id'),
             ],
             'manager_id' => ['required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
-            'program_id' => ['nullable', 'integer', Rule::exists('programs', 'id')],
+            'program_id' => [
+                Rule::requiredIf(fn (): bool => ! $this->isAdministrator()),
+                'nullable', 'integer', Rule::exists('programs', 'id'),
+            ],
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return ['program_id.required' => 'Choose one of your programs.'];
     }
 
     protected function prepareForValidation(): void
@@ -57,7 +70,20 @@ class StoreProjectRequest extends FormRequest
                 return;
             }
 
-            if ($this->filled('key') && ProjectKeys::isTaken((int) $this->organizationId(), (string) $this->input('key'))) {
+            // A program manager's project lands in one of their programs.
+            if (! $this->isAdministrator()) {
+                $program = $this->program();
+
+                if ($program === null || ! WorkspaceAccess::canCreateProjectInProgram($this->user(), $program)) {
+                    $validator->errors()->add('program_id', 'Choose one of your programs.');
+
+                    return;
+                }
+            }
+
+            // Only for those whose key is kept; anyone else's is dropped.
+            if ($this->filled('key') && $this->isAdministrator()
+                && ProjectKeys::isTaken((int) $this->organizationId(), (string) $this->input('key'))) {
                 $validator->errors()->add('key', 'That key is already used in this organization.');
             }
 
@@ -80,7 +106,33 @@ class StoreProjectRequest extends FormRequest
             return $this->integer('organization_id') ?: null;
         }
 
-        return WorkspaceAccess::officeAdminOrganizationId($this->user());
+        $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($this->user());
+
+        if ($officeAdminOf !== null) {
+            return $officeAdminOf;
+        }
+
+        // A program manager's: the organization of their program, and only
+        // of one of theirs.
+        $program = $this->program();
+
+        return $program !== null && WorkspaceAccess::canCreateProjectInProgram($this->user(), $program)
+            ? (int) $program->organization_id
+            : null;
+    }
+
+    /**
+     * A super-admin or an office admin, who create in any organization they
+     * administer; anyone else allowed here is a program manager.
+     */
+    private function isAdministrator(): bool
+    {
+        return WorkspaceAccess::isSuperAdmin($this->user()) || WorkspaceAccess::officeAdminOrganizationId($this->user()) !== null;
+    }
+
+    private function program(): ?Program
+    {
+        return $this->filled('program_id') ? Program::query()->find($this->integer('program_id')) : null;
     }
 
     public function validated($key = null, $default = null): mixed
@@ -93,10 +145,10 @@ class StoreProjectRequest extends FormRequest
             unset($data['is_public']);
         }
 
-        // Choosing the key is the administrators' call; the title suggests one otherwise.
+        // Choosing the key is the administrators' call; the title suggests one
+        // otherwise. A program manager's program_id passed the checks above.
         if (! WorkspaceAccess::administers($this->user(), $this->organizationId())) {
             unset($data['key']);
-            unset($data['program_id']);
         }
 
         return data_get($data, $key, $default);

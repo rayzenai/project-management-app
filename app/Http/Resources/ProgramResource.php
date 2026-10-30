@@ -34,6 +34,7 @@ class ProgramResource extends JsonResource
             ],
             'projects_count' => $this->whenCounted('projects'),
             'can_manage' => WorkspaceAccess::canManagePrograms($request->user(), $this->organization_id),
+            'can_create_project' => WorkspaceAccess::canCreateProjectInProgram($request->user(), $this->resource),
         ];
     }
 }

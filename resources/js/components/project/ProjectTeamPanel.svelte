@@ -7,7 +7,8 @@
     /**
      * A project's team: its manager first, then everyone who can be given
      * its tasks. Its manager (or the office admin) adds and removes people;
-     * only the office admin makes someone the manager.
+     * only the office admin or its program's manager makes someone the
+     * manager (`team.can_choose_manager`).
      */
     let {
         team,

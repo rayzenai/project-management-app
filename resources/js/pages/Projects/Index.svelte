@@ -28,6 +28,8 @@
         archivedCount = 0,
         managerCandidates = [],
         canCreate = false,
+        programRequired = false,
+        defaultManagerId = null,
         isSuperAdmin = false,
         canPublish = false,
         organizations = [],
@@ -40,6 +42,10 @@
         /** Who may manage a new project: active people of its organization. */
         managerCandidates?: ManagerCandidate[];
         canCreate?: boolean;
+        /** A program manager creates only in their programs: one is required. */
+        programRequired?: boolean;
+        /** Who the manager picker starts on: a program manager themselves. */
+        defaultManagerId?: number | null;
         isSuperAdmin?: boolean;
         canPublish?: boolean;
         organizations?: OrganizationOption[];
@@ -56,15 +62,27 @@
     );
     const uid = $props.id();
 
+    // A new project may join a program the viewer may create in (all of an
+    // admin's; a program manager's own).
+    function creatablePrograms() {
+        return programs.filter((p) => p.can_create_project);
+    }
+
     // Seeded once; read inside a function so the one-time capture is deliberate.
     function seed() {
+        const own = creatablePrograms();
+
         return {
             title: '',
             title_np: '',
             description: '',
             is_public: false,
             manager_id: null as number | null,
-            program_id: null as number | null,
+            // With a single program to choose from there is nothing to choose.
+            program_id:
+                programRequired && own.length === 1
+                    ? own[0].id
+                    : (null as number | null),
             // With a single organization there is nothing to choose.
             organization_id:
                 organizations.length === 1
@@ -74,8 +92,13 @@
     }
 
     const form = useForm(seed());
+
+    function seedManager(): number[] {
+        return defaultManagerId === null ? [] : [defaultManagerId];
+    }
+
     /** The picked manager: the searchable picker works on a list of ids. */
-    let managerIds = $state<number[]>([]);
+    let managerIds = $state<number[]>(seedManager());
 
     // A super-admin picks the organization first; the manager comes from it.
     const formManagers = $derived(
@@ -86,11 +109,13 @@
             : managerCandidates,
     );
 
-    // A new project may join a program of the organization it lands in.
+    // Those of the organization it lands in.
     const formPrograms = $derived(
         isSuperAdmin
-            ? programs.filter((p) => p.organization.id === form.organization_id)
-            : programs,
+            ? creatablePrograms().filter(
+                  (p) => p.organization.id === form.organization_id,
+              )
+            : creatablePrograms(),
     );
 
     function submit(e: SubmitEvent) {
@@ -102,7 +127,7 @@
             preserveScroll: true,
             onSuccess: () => {
                 form.reset();
-                managerIds = [];
+                managerIds = seedManager();
                 creating = false;
             },
         });
@@ -461,18 +486,27 @@
                             <label
                                 for={`${uid}-program`}
                                 class="label mb-1 block"
-                                >Program (optional)</label
+                                >{programRequired
+                                    ? 'Program'
+                                    : 'Program (optional)'}</label
                             >
                             <select
                                 id={`${uid}-program`}
                                 class="input"
+                                required={programRequired}
                                 value={form.program_id ?? ''}
                                 onchange={(e) =>
                                     (form.program_id = e.currentTarget.value
                                         ? Number(e.currentTarget.value)
                                         : null)}
                             >
-                                <option value="">No program</option>
+                                {#if programRequired}
+                                    <option value="" disabled
+                                        >Choose one of your programs</option
+                                    >
+                                {:else}
+                                    <option value="">No program</option>
+                                {/if}
                                 {#each formPrograms as program (program.id)}
                                     <option value={program.id}
                                         >{program.name}</option

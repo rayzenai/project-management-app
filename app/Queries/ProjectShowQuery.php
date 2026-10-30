@@ -88,7 +88,7 @@ class ProjectShowQuery
         }
 
         $user = request()->user();
-        $canChooseManager = WorkspaceAccess::canEditTeam($user, $team);
+        $canChooseManager = WorkspaceAccess::canAppointProjectManager($user, $team);
         $canManage = WorkspaceAccess::canManageRosterOf($user, $team);
 
         $members = $team->members

@@ -11,8 +11,9 @@ use Illuminate\Validation\Validator;
 
 /**
  * Choosing a project's manager (its team's leader) belongs to whoever
- * administers the team's organization (its office admin or a super-admin),
- * never to a manager. The new manager must be able to join the team.
+ * administers the team's organization (its office admin or a super-admin)
+ * and to the manager of its project's program, never to a manager. The new
+ * manager must be able to join the team.
  */
 class UpdateTeamMemberRoleRequest extends FormRequest
 {
@@ -23,7 +24,7 @@ class UpdateTeamMemberRoleRequest extends FormRequest
 
         return $team instanceof Team
             && $member instanceof Member
-            && WorkspaceAccess::canEditTeam($this->user(), $team);
+            && WorkspaceAccess::canAppointProjectManager($this->user(), $team);
     }
 
     /**
