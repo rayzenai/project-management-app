@@ -197,6 +197,32 @@ it('lets people who may not manage the repository\'s access grant nobody', funct
     }
 });
 
+it('takes repository access away from a deactivated :dataset', function (string $user, string $member) {
+    // Deactivated people can still sign in: the power must go with the flag.
+    $this->{$member}->update(['is_active' => false]);
+    WorkspaceAccess::flush();
+    $project = $this->project->fresh();
+
+    expect(WorkspaceAccess::canManageRepositoryAccess($this->{$user}, $this->repository->fresh()))->toBeFalse()
+        ->and(app(RepositoryAccessCandidatesQuery::class)->get($this->{$user}, $this->repository->fresh(), ''))->toBe([]);
+
+    foreach ([$this->teammate, $this->colleague] as $grantee) {
+        expect(WorkspaceAccess::canGrantRepositoryAccessTo($this->{$user}, $project, $grantee))->toBeFalse();
+    }
+})->with([
+    'project manager' => ['managerUser', 'manager'],
+    'program manager' => ['programManagerUser', 'programManager'],
+    'organizational admin' => ['adminUser', 'admin'],
+]);
+
+it('lets nobody grant a deleted person', function () {
+    $this->colleague->delete();
+    $this->teammate->delete();
+
+    expect(WorkspaceAccess::canGrantRepositoryAccessTo($this->adminUser, $this->project, $this->colleague))->toBeFalse()
+        ->and(WorkspaceAccess::canGrantRepositoryAccessTo($this->managerUser, $this->project, $this->teammate))->toBeFalse();
+});
+
 it('makes the manager and the program\'s manager the maintainers', function () {
     expect(grantRulesSorted(WorkspaceAccess::repositoryMaintainerIds($this->project)))
         ->toBe(grantRulesSorted([$this->manager->id, $this->programManager->id]));

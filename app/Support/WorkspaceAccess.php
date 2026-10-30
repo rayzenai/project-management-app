@@ -515,7 +515,7 @@ class WorkspaceAccess
     /**
      * Whether the user may give this person access to the project's
      * repositories: only whoever passes canManageProjectRepositories, and
-     * never to someone inactive, a super-admin's own member (no
+     * never to someone inactive or deleted, a super-admin's own member (no
      * organization) or a maintainer, whose access follows the role.
      * Whoever administers the project's organization gives it to its people
      * and to anyone on the project's team; its manager and its program's
@@ -527,6 +527,7 @@ class WorkspaceAccess
     {
         if (! self::canManageProjectRepositories($user, $project)
             || ! $member->is_active
+            || $member->trashed()
             || $member->organization_id === null
             || in_array((int) $member->getKey(), self::repositoryMaintainerIds($project), true)) {
             return false;
@@ -659,8 +660,9 @@ class WorkspaceAccess
     }
 
     /**
-     * The team ids the user's linked member leads. Memoized per user instance
-     * for the request.
+     * The team ids the user's linked member leads, while they are active (a
+     * deactivated manager keeps the row but loses the power, as a program
+     * manager does). Memoized per user instance for the request.
      *
      * @return list<int>
      */
@@ -678,7 +680,7 @@ class WorkspaceAccess
 
         $member = self::memberFor($user);
 
-        $ids = $member === null
+        $ids = $member === null || ! $member->is_active
             ? []
             : array_values($member->ledTeams()->pluck('teams.id')->map(fn ($id): int => (int) $id)->all());
 
