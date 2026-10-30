@@ -46,10 +46,58 @@ it('counts code, line comments, a docblock and a blank line in php', function ()
     expect(DiffStats::classify($diff))->toBe(stats(['code_added' => 2, 'comment_added' => 4, 'blank_added' => 1]));
 });
 
-it('treats code before a block opener as code', function () {
-    $diff = fileDiff('a.php', ['+$x = 1; /* note */', '+$y = 2; /* open', '+still comment', '+*/']);
+it('treats code before a block opener as code and opens no block', function () {
+    $diff = fileDiff('a.php', ['+$x = 1; /* note */', '+$y = 2; /* open', '+more();', '+*/']);
 
-    expect(DiffStats::classify($diff))->toBe(stats(['code_added' => 2, 'comment_added' => 2]));
+    expect(DiffStats::classify($diff))->toBe(stats(['code_added' => 4]));
+});
+
+it('is not fooled by a slash-star glob or accept header', function () {
+    $glob = fileDiff('a.php', ["+\$g = glob('app/*');", '+a();', '+b();', '+c();']);
+    $accept = fileDiff('a.sh', ["+curl -H 'Accept: */*' x", '+a', '+b']);
+
+    expect(DiffStats::classify($glob))->toBe(stats(['code_added' => 4]))
+        ->and(DiffStats::classify($accept))->toBe(stats(['code_added' => 3]));
+});
+
+it('still counts a leading multi-line block as comment', function () {
+    $diff = fileDiff('a.php', ['+/* one', '+two', '+three */', '+code();']);
+
+    expect(DiffStats::classify($diff))->toBe(stats(['comment_added' => 3, 'code_added' => 1]));
+});
+
+it('reads code after a block closes on the same line', function () {
+    $diff = fileDiff('a.js', [' /* open', '+end */ run();', '+next();']);
+
+    expect(DiffStats::classify($diff))->toBe(stats(['code_added' => 2]));
+});
+
+it('classifies a 2 MB line in linear time', function (string $line) {
+    $diff = fileDiff('a.js', ['+'.$line]);
+
+    $start = microtime(true);
+    $result = DiffStats::classify($diff);
+
+    expect(microtime(true) - $start)->toBeLessThan(1.0)
+        ->and($result['code_added'] + $result['comment_added'])->toBe(1);
+})->with([
+    'code then openers' => fn () => 'x=1;'.str_repeat('a/**/', 400000),
+    'only openers' => fn () => str_repeat('/**/', 500000),
+    'unclosed openers' => fn () => str_repeat('/*', 1000000),
+]);
+
+it('unquotes git paths with special characters', function () {
+    $php = "diff --git \"a/n\\303\\251 x.php\" \"b/n\\303\\251 x.php\"\n--- \"a/n\\303\\251 x.php\"\n+++ \"b/n\\303\\251 x.php\"\n@@ -1 +1 @@\n+// note\n+run();\n";
+    $lock = "diff --git \"a/my dir/package-lock.json\" \"b/my dir/package-lock.json\"\nindex 1..2 100644\n--- \"a/my dir/package-lock.json\"\n+++ \"b/my dir/package-lock.json\"\n@@ -1 +1 @@\n+x\n-y\n";
+
+    expect(DiffStats::classify($php))->toBe(stats(['comment_added' => 1, 'code_added' => 1]))
+        ->and(DiffStats::classify($lock))->toBe(stats(['generated_lines' => 2]));
+});
+
+it('unquotes a path from the header alone', function () {
+    $diff = "diff --git \"a/x y/package-lock.json\" \"b/x y/package-lock.json\"\n@@ -1 +1 @@\n+x\n";
+
+    expect(DiffStats::classify($diff))->toBe(stats(['generated_lines' => 1]));
 });
 
 it('counts hash comments and a python docstring', function () {

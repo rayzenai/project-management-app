@@ -9,7 +9,9 @@ namespace App\Support\Git;
  *
  * Comment detection is a heuristic like `cloc`: a line is a comment when,
  * after its indentation, it starts with a line marker or sits inside, opens
- * or closes a block comment. Code before a block opener makes it code.
+ * or closes a block comment. Code before a block opener makes the line
+ * code and does not open a block (a glob, a route or a regex that holds a
+ * slash and a star).
  * Block state is tracked per side through each hunk and resets at every
  * hunk and file.
  */
@@ -50,7 +52,7 @@ final class DiffStats
                     // The old path, used only when the new side is /dev/null.
                     $path = self::stripPrefix(substr($line, 4), 'a/');
                 } elseif (str_starts_with($line, 'rename to ')) {
-                    $path = substr($line, 10);
+                    $path = self::unquote(substr($line, 10));
                 } elseif (str_starts_with($line, '@@')) {
                     $inHunk = true;
                     $oldBlock = $newBlock = null;
@@ -125,17 +127,37 @@ final class DiffStats
     {
         $rest = substr($line, 11);
 
-        if (preg_match('#^a/(.+) b/(.+)$#', $rest, $m) === 1) {
-            return $m[2];
+        $quoted = '"(?:[^"\\\\]|\\\\.)*"';
+        if (preg_match('#^(?:'.$quoted.'|a/.+?) ('.$quoted.'|b/.+)$#', $rest, $m) === 1) {
+            return self::stripPrefix($m[1], 'b/');
         }
 
         return $rest;
     }
 
+    /** Git quotes paths with special characters in C style: `"b/n\303\251.php"`. */
+    private static function unquote(string $path): string
+    {
+        if (strlen($path) < 2 || $path[0] !== '"' || ! str_ends_with($path, '"')) {
+            return $path;
+        }
+
+        return (string) preg_replace_callback(
+            '/\\\\([0-7]{3}|.)/s',
+            static fn (array $m): string => match (true) {
+                strlen($m[1]) === 3 => chr(octdec($m[1]) & 0xFF),
+                $m[1] === 't' => "\t",
+                $m[1] === 'n' => "\n",
+                default => $m[1],
+            },
+            substr($path, 1, -1),
+        );
+    }
+
     private static function stripPrefix(string $path, string $prefix): string
     {
         // Git appends a tab to paths with spaces on the ---/+++ lines.
-        $path = rtrim($path, "\t");
+        $path = self::unquote(rtrim($path, "\t"));
 
         return str_starts_with($path, $prefix) ? substr($path, strlen($prefix)) : $path;
     }
@@ -155,13 +177,12 @@ final class DiffStats
 
         $length = strlen($text);
         $pos = 0;
-        $hasCode = false;
 
         while ($pos < $length) {
             if ($closer !== null) {
                 $end = strpos($text, $closer, $pos);
                 if ($end === false) {
-                    return [$hasCode, $closer];
+                    return [false, $closer];
                 }
                 $pos = $end + strlen($closer);
                 $closer = null;
@@ -175,23 +196,12 @@ final class DiffStats
                 break;
             }
 
-            if ($hasCode) {
-                // Code seen: the next marker decides what follows it.
-                $next = self::nextMarker($text, $pos, $syntax);
-                if ($next === null || $next[0] === 'line') {
-                    break;
-                }
-                $pos = $next[1] + strlen($next[2]);
-                $closer = $next[3];
-
-                continue;
-            }
-
             $at = self::markerAt($text, $pos, $syntax);
             if ($at === null) {
-                $hasCode = true;
-
-                continue;
+                // Code. Whatever follows on this line (a line comment, a
+                // block opener closed or not) leaves the state as it is, so
+                // the rest is not read: one pass, linear in the line.
+                return [true, null];
             }
             if ($at[0] === 'line') {
                 break;
@@ -200,7 +210,7 @@ final class DiffStats
             $closer = $at[3];
         }
 
-        return [$hasCode, $closer];
+        return [false, $closer];
     }
 
     /**
@@ -221,31 +231,5 @@ final class DiffStats
         }
 
         return null;
-    }
-
-    /**
-     * The earliest marker at or after $from; a block opener wins a tie.
-     *
-     * @param  array{line: list<string>, block: list<array{0: string, 1: string}>}  $syntax
-     * @return array{0: string, 1: int, 2: string, 3: string|null}|null
-     */
-    private static function nextMarker(string $text, int $from, array $syntax): ?array
-    {
-        $best = null;
-
-        foreach ($syntax['block'] as [$open, $close]) {
-            $at = strpos($text, $open, $from);
-            if ($at !== false && ($best === null || $at < $best[1])) {
-                $best = ['block', $at, $open, $close];
-            }
-        }
-        foreach ($syntax['line'] as $marker) {
-            $at = strpos($text, $marker, $from);
-            if ($at !== false && ($best === null || $at < $best[1])) {
-                $best = ['line', $at, $marker, null];
-            }
-        }
-
-        return $best;
     }
 }
