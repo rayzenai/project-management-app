@@ -80,4 +80,13 @@ class GitRepositoryGrant extends Model
                 ->orWhereHas('teams.projects.repositories', fn (Builder $repository): Builder => $repository
                     ->whereColumn('git_repositories.id', 'git_repository_grants.git_repository_id'))));
     }
+
+    /**
+     * Whether this grant counts now, asked of scopeEffective (one query). A
+     * list asks the scope once for all of them instead.
+     */
+    public function isEffective(): bool
+    {
+        return static::query()->whereKey($this->getKey())->effective()->exists();
+    }
 }

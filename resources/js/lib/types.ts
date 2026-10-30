@@ -194,6 +194,8 @@ export interface RepositoryGrant {
     id: Id;
     permission: 'read' | 'write';
     waiting: boolean;
+    /** False while it gives nothing: the person is deactivated, or no longer in the project's organization or on its team. */
+    effective: boolean;
     member: { id: Id; name: string; title: string | null };
     granted_at: string | null;
 }

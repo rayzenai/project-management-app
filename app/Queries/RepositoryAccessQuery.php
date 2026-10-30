@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Http\Resources\GitRepositoryGrantResource;
 use App\Models\GitRepository;
+use App\Models\GitRepositoryGrant;
 use App\Models\Member;
 use App\Support\WorkspaceAccess;
 
@@ -12,9 +13,10 @@ use App\Support\WorkspaceAccess;
  * (the project's manager and its program's manager, admin on the forge,
  * their access following the role) and the people given access, by name.
  * `waiting` marks someone the forge can't have yet (never signed in to
- * it). Organizational admins and super-admins reach every repository and
- * are not listed, nor are a deleted person's grants (which give nothing).
- * No email.
+ * it), `effective` false a grant that gives nothing now (scopeEffective,
+ * asked once for the list). Organizational admins and super-admins reach
+ * every repository and are not listed, nor are a deleted person's grants
+ * (which give nothing). No email.
  */
 class RepositoryAccessQuery
 {
@@ -50,10 +52,13 @@ class RepositoryAccessQuery
             ->orderBy(Member::query()->select('name')->whereColumn('members.id', 'git_repository_grants.member_id'))
             ->orderBy('id')
             ->get();
+        $effective = array_flip($repository->grants()->effective()->pluck('id')->map(fn ($id): int => (int) $id)->all());
 
         return [
             'maintainers' => $maintainers,
-            'grants' => array_values(GitRepositoryGrantResource::collection($grants)->resolve()),
+            'grants' => array_values($grants
+                ->map(fn (GitRepositoryGrant $grant): array => (new GitRepositoryGrantResource($grant))->withEffective(isset($effective[$grant->id]))->resolve())
+                ->all()),
         ];
     }
 }

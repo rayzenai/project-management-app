@@ -10,6 +10,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -136,6 +137,7 @@ it('lets an organizational admin give someone of the organization who is not on 
         'id' => $grant->id,
         'permission' => 'write',
         'waiting' => true,
+        'effective' => true,
         'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => 'Analyst'],
         'granted_at' => $grant->created_at->toIso8601String(),
     ])
@@ -193,9 +195,32 @@ it('lists the maintainers with their role and the grants by name, each saying wh
         ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'title' => 'Engineering head', 'role' => 'program manager', 'waiting' => true],
     ])
         ->and($response->json('data.grants'))->toEqual([
-            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'title' => 'Senior developer'], 'granted_at' => $asha->created_at->toIso8601String()],
-            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => 'Analyst'], 'granted_at' => $bina->created_at->toIso8601String()],
+            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'effective' => true, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'title' => 'Senior developer'], 'granted_at' => $asha->created_at->toIso8601String()],
+            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'effective' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => 'Analyst'], 'granted_at' => $bina->created_at->toIso8601String()],
         ]);
+});
+
+it('lists a grant that gives nothing now as not effective: a deactivated person, or one moved to another organization and off the team', function () {
+    $asha = grantApiGrant($this->api, $this->asha);
+    $bina = grantApiGrant($this->api, $this->bina, GitRepositoryGrant::READ);
+    $tara = grantApiGrant($this->api, $this->teamMember);
+    DB::table('members')->where('id', $this->asha->id)->update(['is_active' => false]);
+    DB::table('members')->where('id', $this->bina->id)->update(['organization_id' => Organization::factory()->create()->id]);
+    Sanctum::actingAs($this->adminUser, ['*']);
+
+    $grants = $this->getJson($this->base)->assertOk()->json('data.grants');
+
+    expect(collect($grants)->mapWithKeys(fn (array $g): array => [$g['id'] => $g['effective']])->all())
+        ->toEqual([$asha->id => false, $bina->id => false, $tara->id => true]);
+});
+
+it('says whether a grant it answers with is effective', function () {
+    $grant = grantApiGrant($this->api, $this->asha, GitRepositoryGrant::READ);
+    Sanctum::actingAs($this->adminUser, ['*']);
+
+    $this->patchJson("{$this->base}/{$grant->id}", ['permission' => 'write'])
+        ->assertOk()
+        ->assertJsonPath('data.effective', true);
 });
 
 // Failures

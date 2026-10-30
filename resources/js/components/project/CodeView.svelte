@@ -65,6 +65,7 @@
     let createErrors = $state<Record<string, string>>({});
     let submitting = $state(false);
     let nameInput = $state<HTMLInputElement | null>(null);
+    let newButton = $state<HTMLButtonElement | null>(null);
 
     /** Repositories whose access panel is open. */
     const accessOpen = new SvelteSet<Id>();
@@ -220,6 +221,13 @@
         await tick();
         nameInput?.focus();
         nameInput?.setSelectionRange(newName.length, newName.length);
+    }
+
+    /** Back to the row that opened the form, so Escape and Tab still work. */
+    async function stopCreating() {
+        creating = false;
+        await tick();
+        newButton?.focus();
     }
 
     function create(event: SubmitEvent) {
@@ -439,10 +447,19 @@
                                     onkeydown={keepKeys}
                                     maxlength="255"
                                     autocomplete="off"
+                                    aria-invalid={createErrors.description
+                                        ? 'true'
+                                        : undefined}
+                                    aria-describedby={createErrors.description
+                                        ? `${uid}-description-note`
+                                        : undefined}
                                     class="input"
                                 />
                                 {#if createErrors.description}
-                                    <p class="mt-1 text-xs text-danger">
+                                    <p
+                                        id="{uid}-description-note"
+                                        class="mt-1 text-xs text-danger"
+                                    >
                                         {createErrors.description}
                                     </p>
                                 {/if}
@@ -464,7 +481,7 @@
                                         <button
                                             type="button"
                                             class="btn-ghost"
-                                            onclick={() => (creating = false)}
+                                            onclick={stopCreating}
                                             >Cancel</button
                                         >
                                     {/if}
@@ -482,6 +499,7 @@
                                 type="button"
                                 data-popover-item
                                 class="menu-item"
+                                bind:this={newButton}
                                 disabled={linking !== null}
                                 onclick={startCreating}
                                 ><Plus class="h-3.5 w-3.5" />New repository</button
@@ -524,6 +542,9 @@
                                 type="button"
                                 class="btn-ghost shrink-0 aria-expanded:bg-hover aria-expanded:text-fg"
                                 aria-expanded={accessOpen.has(repository.id)}
+                                aria-controls={accessOpen.has(repository.id)
+                                    ? `${uid}-access-${repository.id}`
+                                    : undefined}
                                 onclick={() => toggleAccess(repository)}
                                 ><Users class="h-3.5 w-3.5" />Access</button
                             >
@@ -553,6 +574,7 @@
                     {#if git.can_manage && accessOpen.has(repository.id)}
                         <RepositoryAccess
                             {repository}
+                            id={`${uid}-access-${repository.id}`}
                             url={`${base}/${repository.id}/access`}
                         />
                     {/if}

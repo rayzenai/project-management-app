@@ -205,11 +205,32 @@ it('lists the maintainers with their role and the grants by name, each saying wh
         ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'title' => 'Engineering head', 'role' => 'program manager', 'waiting' => true],
     ])
         ->and(collect($data['grants'])->map(fn (array $g): array => collect($g)->except('granted_at')->all())->all())->toEqual([
-            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'title' => 'Senior developer']],
-            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => $this->bina->title]],
-            ['id' => $chitraGrant->id, 'permission' => 'write', 'waiting' => true, 'member' => ['id' => $chitra->id, 'name' => 'Chitra Nousername', 'title' => 'Junior developer']],
+            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'effective' => true, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'title' => 'Senior developer']],
+            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'effective' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => $this->bina->title]],
+            ['id' => $chitraGrant->id, 'permission' => 'write', 'waiting' => true, 'effective' => true, 'member' => ['id' => $chitra->id, 'name' => 'Chitra Nousername', 'title' => 'Junior developer']],
         ])
         ->and($data['grants'][0]['granted_at'])->toBe($asha->created_at->toIso8601String());
+});
+
+it('lists a grant that gives nothing now as not effective: a deactivated person, or one moved to another organization and off the team', function () {
+    [, $chitra] = grantWebPerson($this->organization, 'Chitra Colleague');
+    $asha = grantWebGrant($this->api, $this->asha);
+    $bina = grantWebGrant($this->api, $this->bina, GitRepositoryGrant::READ);
+    $chitraGrant = grantWebGrant($this->api, $chitra);
+    grantWebGrant($this->api, $this->teamMember);
+    DB::table('members')->where('id', $this->asha->id)->update(['is_active' => false]);
+    DB::table('members')->where('id', $this->bina->id)->update(['organization_id' => Organization::factory()->create()->id]);
+
+    $grants = $this->actingAs($this->adminUser)->getJson($this->base)->assertOk()->json('data.grants');
+
+    expect(collect($grants)->mapWithKeys(fn (array $g): array => [$g['id'] => $g['effective']])->all())->toEqual([
+        $asha->id => false,
+        $bina->id => false,
+        $chitraGrant->id => true,
+        GitRepositoryGrant::query()->where('member_id', $this->teamMember->id)->value('id') => true,
+    ])
+        ->and(GitRepositoryGrant::query()->effective()->where('git_repository_id', $this->api->id)->pluck('id')->sort()->values()->all())
+        ->toEqual(collect($grants)->where('effective', true)->pluck('id')->sort()->values()->all());
 });
 
 it('lists a program manager who also manages the project once, as its manager', function () {

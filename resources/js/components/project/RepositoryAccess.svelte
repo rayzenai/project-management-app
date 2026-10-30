@@ -21,10 +21,13 @@
     let {
         repository,
         url,
+        id,
     }: {
         repository: GitRepository;
         /** The repository's access route. */
         url: string;
+        /** The panel's id, for the toggle's aria-controls. */
+        id?: string;
     } = $props();
 
     interface Candidate {
@@ -37,6 +40,8 @@
 
     const uid = $props.id();
     const WAITING = "Hasn't signed in to SDOC Git yet";
+    const NO_ACCESS =
+        'No access now: deactivated or no longer in this organization or team';
 
     let access = $state<RepositoryAccess | null>(null);
     let failed = $state(false);
@@ -58,7 +63,7 @@
         'X-Requested-With': 'XMLHttpRequest',
     };
 
-    async function load(address: string) {
+    async function load(address: string): Promise<void> {
         const mine = ++seq;
         failed = false;
 
@@ -137,29 +142,40 @@
 
     /**
      * One change at a time. Nothing on the page changes but the flash, so
-     * only that is reloaded; the list is asked for again either way.
+     * only that is reloaded; the list is asked for again either way, and
+     * the controls stay locked until it is back, so a grant just removed
+     * can't be removed twice. `undo` runs whenever the change didn't save:
+     * refused, forbidden, an expired page, no network or a cancelled visit.
      */
-    function visit(after?: () => void, refused?: () => void) {
+    function visit(after?: () => void, undo?: () => void) {
         saving = true;
         error = null;
+        let saved = false;
 
         return {
             only: ['flash'],
             preserveScroll: true,
             preserveState: true,
-            onSuccess: () => after?.(),
+            onSuccess: () => {
+                saved = true;
+                after?.();
+            },
             onError: (errors: Record<string, string>) => {
                 error =
                     errors.member_id ??
                     errors.permission ??
                     errors.__global ??
                     "That change didn't save.";
-                refused?.();
             },
             onFinish: () => {
-                saving = false;
-                adding = null;
-                void load(url);
+                if (!saved) {
+                    undo?.();
+                }
+
+                void load(url).finally(() => {
+                    saving = false;
+                    adding = null;
+                });
             },
         };
     }
@@ -176,7 +192,7 @@
         );
     }
 
-    /** A refused change puts the select back as it was. */
+    /** A change that didn't save puts the select back as it was. */
     function change(grant: RepositoryGrant, select: HTMLSelectElement) {
         router.patch(
             `${url}/${grant.id}`,
@@ -190,20 +206,21 @@
     }
 </script>
 
-{#snippet person(name: string, title: string | null, waiting: boolean)}
+{#snippet person(name: string, title: string | null, note: string | null)}
     <Avatar {name} size="md" />
     <div class="min-w-0 flex-1 leading-tight">
         <div class="truncate font-medium text-fg">{name}</div>
         {#if title}
             <div class="truncate text-xs text-fg-muted">{title}</div>
         {/if}
-        {#if waiting}
-            <div class="text-xs text-warn">{WAITING}</div>
+        {#if note}
+            <div class="text-xs text-warn">{note}</div>
         {/if}
     </div>
 {/snippet}
 
 <section
+    {id}
     class="mt-2 rounded-md border border-line px-3 py-2.5"
     aria-label={`Who can reach ${repository.full_name}`}
 >
@@ -245,7 +262,7 @@
                             ]
                                 .filter(Boolean)
                                 .join(' · '),
-                            maintainer.waiting,
+                            maintainer.waiting ? WAITING : null,
                         )}
                         <span class="shrink-0 text-xs text-fg-muted"
                             >Manages the repository</span
@@ -269,13 +286,17 @@
                         {@render person(
                             grant.member.name,
                             grant.member.title,
-                            grant.waiting,
+                            !grant.effective
+                                ? NO_ACCESS
+                                : grant.waiting
+                                  ? WAITING
+                                  : null,
                         )}
                         <select
                             class="input h-7 w-auto shrink-0 py-0"
                             aria-label={`${grant.member.name}'s access`}
                             value={grant.permission}
-                            disabled={saving}
+                            disabled={saving || !grant.effective}
                             onchange={(e) => change(grant, e.currentTarget)}
                         >
                             <option value="read">Read</option>
@@ -330,7 +351,7 @@
                     <li
                         class="flex min-h-10 items-center gap-2.5 border-b border-line-soft px-2 py-1 last:border-b-0"
                     >
-                        {@render person(candidate.name, candidate.title, false)}
+                        {@render person(candidate.name, candidate.title, null)}
                         <button
                             type="button"
                             class="btn-ghost shrink-0"
