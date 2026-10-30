@@ -177,7 +177,7 @@ it('lets the manager, the office admin and a super-admin link, search and unlink
 
     $this->deleteJson("{$this->base}/{$repo->id}")
         ->assertOk()
-        ->assertExactJson(['message' => 'Unlinked sdoc/app. The repository is untouched on the forge.', 'data' => null]);
+        ->assertExactJson(['message' => "Unlinked sdoc/app. The repository is untouched on the forge. People who had access keep it on the forge until it's changed there or the repository is linked again.", 'data' => null]);
     expect(GitRepository::query()->count())->toBe(0);
 })->with(['manager', 'office admin', 'super-admin']);
 

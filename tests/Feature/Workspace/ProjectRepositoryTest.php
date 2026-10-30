@@ -548,7 +548,7 @@ it('unlinks a repository with its code and links, and leaves the forge alone', f
 
     $this->actingAs(repoActor('manager', $this->project))
         ->delete("{$this->base}/{$repo->id}")
-        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => 'Unlinked sdoc/app. The repository is untouched on the forge.']);
+        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => "Unlinked sdoc/app. The repository is untouched on the forge. People who had access keep it on the forge until it's changed there or the repository is linked again."]);
 
     expect(GitRepository::query()->count())->toBe(0)
         ->and(GitBranch::query()->count())->toBe(0)

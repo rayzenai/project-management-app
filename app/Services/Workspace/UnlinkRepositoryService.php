@@ -11,7 +11,9 @@ use App\Support\ServiceResult;
  * task links go with the row (database cascades). The repository itself is
  * untouched on the forge, except that its own issue tracker is handed back
  * (best effort, so `TP-12` there stops leading here); a forge that refuses
- * or is down never blocks the unlink.
+ * or is down never blocks the unlink. Its collaborators stay as they are: the
+ * access sync no longer writes them, and offboarding still takes a
+ * deactivated person off them.
  */
 class UnlinkRepositoryService
 {
@@ -23,6 +25,6 @@ class UnlinkRepositoryService
 
         $repo->delete();
 
-        return ServiceResult::success(null, "Unlinked {$repo->full_name}. The repository is untouched on the forge.");
+        return ServiceResult::success(null, "Unlinked {$repo->full_name}. The repository is untouched on the forge. People who had access keep it on the forge until it's changed there or the repository is linked again.");
     }
 }
