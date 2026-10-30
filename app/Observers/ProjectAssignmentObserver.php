@@ -12,12 +12,13 @@ class ProjectAssignmentObserver
     public function created(ProjectAssignment $assignment): void
     {
         $name = $assignment->member->name ?? 'member #'.$assignment->member_id;
+        $role = trim((string) $assignment->role);
 
         ProjectActivityRecorder::record(
             taskId: $assignment->task_id,
             subject: $assignment,
             action: ProjectActivity::ACTION_CREATED,
-            description: 'Assigned to '.$name.' ('.((string) $assignment->role).')',
+            description: 'Assigned to '.$name.($role === '' ? '' : " ({$role})"),
         );
 
         $user = $assignment->member?->user;

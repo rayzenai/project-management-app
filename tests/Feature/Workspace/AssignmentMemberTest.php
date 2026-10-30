@@ -2,6 +2,7 @@
 
 use App\Models\Member;
 use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\ProjectAssignment;
 use App\Models\Task;
 use App\Models\Team;
@@ -173,4 +174,16 @@ it('shares members and the current member id in quickAddContext', function () {
         ->assertInertia(fn ($page) => $page
             ->where('quickAddContext.currentMemberId', Member::query()->where('user_id', $user->id)->first()->id)
             ->where('quickAddContext.team', fn ($team) => collect($team)->pluck('name')->doesntContain('Gone Person')));
+});
+
+it('logs an assignment with its role, and without empty brackets when it has none', function () {
+    $this->actingAs(User::factory()->withMember()->create());
+    $task = Task::factory()->create();
+
+    foreach ([['Sita', null], ['Gita', ''], ['Ram', 'reviewer']] as [$name, $role]) {
+        ProjectAssignment::create(['task_id' => $task->id, 'member_id' => Member::factory()->create(['name' => $name])->id, 'role' => $role]);
+    }
+
+    expect(ProjectActivity::query()->where('task_id', $task->id)->where('action', ProjectActivity::ACTION_CREATED)->where('subject_type', 'project-assignment')->orderBy('id')->pluck('description')->all())
+        ->toBe(['Assigned to Sita', 'Assigned to Gita', 'Assigned to Ram (reviewer)']);
 });

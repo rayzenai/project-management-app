@@ -23,7 +23,7 @@ composer types:check                            # PHPStan level 7 over app/ conf
 vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
 php artisan db:seed --class=WorkspaceDemoSeeder  # full demo workspace (idempotent, non-prod only)
-php artisan db:seed --class=SdocProjectsSeeder --force  # SDOC + its projects (idempotent, prod-safe)
+php artisan db:seed --class=SdocProjectsSeeder  # SDOC + its projects, fresh databases only (production got SDOC's keys from the 2026_10_31_140000 migration; never run it there)
 php artisan workspace:api-token bot@example.com --name=crm-sync   # token for an external system
 php artisan workspace:prune-trashed --pretend
 php artisan workspace:send-deadline-reminders --pretend
@@ -141,7 +141,8 @@ project's own organization who passes `canJoinTeam`; list twin
 `Assignees::joinCandidates`), `canStartGeneralProject` (an organizational
 admin whose organization has no active project),
 `canViewTeamProgress`, `canViewProjectProgress`,
-`canCreateMember`, `canManageMember`, `canViewProject` (twin of
+`canCreateMember`, `canManageMember`, `canSetRolesIn` (the person form's
+role fields: whoever administers the organization), `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canCreateProjectInProgram`
 (its organization's admins and its manager), `createsProjectsOnlyInPrograms`
 (a program manager who administers nothing), `canManageProjectAccess`,
@@ -232,6 +233,11 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 - **Program** — a named collection of projects in one organization with one
   program manager (`manager_id`, a member). `projects.program_id` is nullable:
   a project is in at most one program, and deleting a program keeps its projects.
+  Creating a program creates its "General" project, managed by its manager;
+  an organizational admin's quick add starts an organization-level "General"
+  (no program) when the organization has no project. Messages name a project
+  with its program (`Project::label()`, "General (Revenue)"; the UI's twin is
+  `resources/js/lib/projectLabel.ts`).
 - **Task** — slug-routed (`{project_id}-{slug}`); plan fields (`item_number`,
   `category`, `deadline_type`, `responsible_ministry`, `title_np`,
   `description_np`) stored in the `metadata` jsonb column via `Attribute`

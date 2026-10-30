@@ -57,3 +57,29 @@ it('does nothing without SDOC', function () {
 
     expect($egp->fresh()->key)->toBe('EV');
 });
+
+it('keeps its own copy of the agreed keys, so a seeder edit cannot change it', function () {
+    $source = (string) file_get_contents(base_path('database/migrations/2026_10_31_140000_give_sdoc_projects_their_agreed_keys.php'));
+
+    expect($source)->not->toContain('SdocProjectsSeeder::');
+
+    $sdoc = Organization::factory()->create(['name' => 'SDOC']);
+    $agreed = [
+        'SMS Gateway' => 'SG',
+        'eGP v2' => 'EGP',
+        'GIWMS v2' => 'GIWMS',
+        'SuTRA' => 'SUTRA',
+        'GIOMS' => 'GIOMS',
+        'Hello Sarkar' => 'HS',
+        'Nagarik App' => 'NAGARIK',
+        'Open Source OS with Office Packages' => 'OSOP',
+    ];
+    $projects = collect($agreed)->map(fn (string $key, string $title): Project => Project::factory()->create([
+        'organization_id' => $sdoc->id,
+        'title' => $title,
+    ]));
+
+    runSdocKeysMigration();
+
+    expect($projects->map(fn (Project $project): ?string => $project->fresh()->key)->all())->toBe($agreed);
+});
