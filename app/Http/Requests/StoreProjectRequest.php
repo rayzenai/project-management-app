@@ -11,8 +11,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * A project belongs to one organization (the one a super-admin picks, an
- * office admin's own, or for a program manager their program's) and is
+ * A project belongs to one organization (the one a super-admin picks, or
+ * the program's when they post one without; an office admin's own; for a
+ * program manager their program's) and is
  * created with its team, led by the manager chosen here: an active person
  * of that organization. A program manager creates in their own programs
  * only, and without the administrators' fields (key, public).
@@ -40,7 +41,7 @@ class StoreProjectRequest extends FormRequest
             'key' => ['nullable', 'string', 'regex:/^[A-Z]{1,10}$/'],
             'is_public' => ['nullable', 'boolean'],
             'organization_id' => [
-                Rule::requiredIf(fn (): bool => WorkspaceAccess::isSuperAdmin($this->user())),
+                Rule::requiredIf(fn (): bool => WorkspaceAccess::isSuperAdmin($this->user()) && ! $this->filled('program_id')),
                 'nullable', 'integer', Rule::exists('organizations', 'id'),
             ],
             'manager_id' => ['required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
@@ -106,7 +107,8 @@ class StoreProjectRequest extends FormRequest
     public function organizationId(): ?int
     {
         if (WorkspaceAccess::isSuperAdmin($this->user())) {
-            return $this->integer('organization_id') ?: null;
+            // A program's page fixes the program, and so the organization.
+            return $this->integer('organization_id') ?: (int) $this->program()?->organization_id ?: null;
         }
 
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($this->user());

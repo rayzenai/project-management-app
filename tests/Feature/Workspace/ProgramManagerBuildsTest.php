@@ -383,3 +383,65 @@ it('changes nothing for a project manager or member', function () {
     expect(Project::query()->where('title', 'Not Mine')->exists())->toBeFalse()
         ->and($this->teamA->leaders()->pluck('members.id')->all())->toBe([$this->us->id]);
 });
+
+it('lets a super-admin create a project from a program page, whose form names no organization', function () {
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+
+    // The program page's New project form: the program is fixed, so there
+    // is no organization to choose and none was sent.
+    $this->actingAs($boss)->post('/workspace/projects', [
+        'title' => 'Revenue Archive',
+        'title_np' => '',
+        'description' => '',
+        'is_public' => false,
+        'manager_id' => $this->colleague->id,
+        'program_id' => $this->programP->id,
+        'organization_id' => null,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $project = Project::query()->where('title', 'Revenue Archive')->firstOrFail();
+
+    expect($project->organization_id)->toBe($this->org->id)
+        ->and($project->program_id)->toBe($this->programP->id)
+        ->and($project->team()->leaders()->pluck('members.id')->all())->toBe([$this->colleague->id]);
+
+    // Its manager still comes from the program's organization.
+    $this->actingAs($boss)->post('/workspace/projects', [
+        'title' => 'Foreign Hand',
+        'manager_id' => $this->outsider->id,
+        'program_id' => $this->programP->id,
+    ])->assertSessionHasErrors('manager_id');
+
+    // Without a program the organization is still theirs to choose.
+    $this->actingAs($boss)->post('/workspace/projects', [
+        'title' => 'Nowhere',
+        'manager_id' => $this->colleague->id,
+    ])->assertSessionHasErrors('organization_id');
+
+    expect(Project::query()->whereIn('title', ['Foreign Hand', 'Nowhere'])->exists())->toBeFalse();
+});
+
+it('lets a program manager choose the manager of a project in their program that has no team yet', function () {
+    $bare = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->programP->id, 'title' => 'Bare Project']);
+
+    expect($bare->team())->toBeNull()
+        ->and(WorkspaceAccess::canChooseManagerOf($this->js, $bare))->toBeTrue();
+
+    // Never someone of another organization.
+    $this->actingAs($this->js)->patch("/workspace/projects/{$bare->slug}", ['manager_id' => $this->outsider->id])
+        ->assertSessionHasErrors('manager_id');
+
+    $this->actingAs($this->js)->patch("/workspace/projects/{$bare->slug}", ['manager_id' => $this->colleague->id])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($bare->fresh()->team()?->leaders()->pluck('members.id')->all())->toBe([$this->colleague->id]);
+
+    // A teamless project of another program stays out of reach.
+    $other = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->programQ->id, 'title' => 'Other Bare']);
+
+    $this->actingAs($this->js)->patch("/workspace/projects/{$other->slug}", ['manager_id' => $this->colleague->id])
+        ->assertForbidden();
+
+    expect($other->fresh()->team())->toBeNull();
+});

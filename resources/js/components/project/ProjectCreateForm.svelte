@@ -1,5 +1,6 @@
 <script lang="ts">
     import { useForm } from '@inertiajs/svelte';
+    import { untrack } from 'svelte';
     import type { OrganizationOption, Program } from '../../lib/types';
     import AssigneePicker from '../AssigneePicker.svelte';
 
@@ -68,22 +69,26 @@
                 (programRequired && own.length === 1
                     ? own[0].id
                     : (null as number | null)),
-            // With a single organization there is nothing to choose.
+            // A fixed program fixes its organization; with a single
+            // organization there is nothing to choose either.
             organization_id:
-                organizations.length === 1
+                program?.organization.id ??
+                (organizations.length === 1
                     ? organizations[0].id
-                    : (null as number | null),
+                    : (null as number | null)),
         };
     }
 
     const form = useForm(seed());
 
-    function seedManager(): number[] {
-        return defaultManagerId === null ? [] : [defaultManagerId];
-    }
+    // Seeded once too. Not read again after a create: that lands on the new
+    // project, so the page that passed it (and its derived) is gone by then.
+    const seededManagerIds = untrack((): number[] =>
+        defaultManagerId === null ? [] : [defaultManagerId],
+    );
 
     /** The picked manager: the searchable picker works on a list of ids. */
-    let managerIds = $state<number[]>(seedManager());
+    let managerIds = $state<number[]>([...seededManagerIds]);
 
     // A super-admin picks the organization first; the manager comes from it.
     const formManagers = $derived(
@@ -103,6 +108,20 @@
             : creatablePrograms(),
     );
 
+    // The errors of fields shown above sit under them; any other field's
+    // (the program page hides the organization and the program) shows at
+    // the bottom, so a refused create always says why.
+    const errorsBelow = $derived(
+        Object.entries(form.errors).flatMap(([field, message]) => {
+            const shownAbove =
+                field === 'manager_id' ||
+                (field === 'organization_id' && isSuperAdmin && !program) ||
+                (field === 'program_id' && !program && formPrograms.length > 0);
+
+            return message && !shownAbove ? [{ field, message }] : [];
+        }),
+    );
+
     function submit(e: SubmitEvent) {
         e.preventDefault();
         form.transform((data) => ({
@@ -112,7 +131,7 @@
             preserveScroll: true,
             onSuccess: () => {
                 form.reset();
-                managerIds = seedManager();
+                managerIds = [...seededManagerIds];
                 onsaved();
             },
         });
@@ -257,7 +276,7 @@
             >Create</button
         >
     </div>
-    {#if form.errors.title}<p class="mt-2 text-xs text-danger">
-            {form.errors.title}
-        </p>{/if}
+    {#each errorsBelow as error (error.field)}
+        <p class="mt-2 text-xs text-danger">{error.message}</p>
+    {/each}
 </form>

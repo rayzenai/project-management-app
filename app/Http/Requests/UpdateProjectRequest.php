@@ -116,7 +116,7 @@ class UpdateProjectRequest extends FormRequest
 
     /**
      * Whether the caller may choose the project's manager. A project still
-     * without a team gets one from whoever administers its organization.
+     * without a team is answered by the project twin, canChooseManagerOf.
      */
     private function appointsManager(): bool
     {
@@ -124,7 +124,7 @@ class UpdateProjectRequest extends FormRequest
         $team = $project->team();
 
         return $team === null
-            ? WorkspaceAccess::administers($this->user(), $project->organization_id)
+            ? WorkspaceAccess::canChooseManagerOf($this->user(), $project)
             : WorkspaceAccess::canAppointProjectManager($this->user(), $team);
     }
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { inertia, page, router } from '@inertiajs/svelte';
+    import { inertia, router } from '@inertiajs/svelte';
     import { Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import ProgramForm from '../../components/program/ProgramForm.svelte';
@@ -21,20 +21,16 @@
     let editing = $state(false);
     let creating = $state(false);
 
-    // The viewer's own person, when they are on the list: who a new project's
-    // manager picker starts on.
-    const ownMemberId = $derived(
-        (
-            page.props as {
-                quickAddContext?: { currentMemberId: number | null } | null;
-            }
-        ).quickAddContext?.currentMemberId ?? null,
-    );
-    const defaultManagerId = $derived(
-        managerCandidates.some((m) => m.id === ownMemberId)
-            ? ownMemberId
-            : null,
-    );
+    // A new project's manager picker starts on the program's manager (the
+    // viewer, when the program is theirs), when they may manage it; an
+    // administrator is not put in charge of it by default.
+    const defaultManagerId = $derived.by(() => {
+        const managerId = progress.program.manager?.id ?? null;
+
+        return managerCandidates.some((m) => m.id === managerId)
+            ? managerId
+            : null;
+    });
 
     function destroy() {
         if (
