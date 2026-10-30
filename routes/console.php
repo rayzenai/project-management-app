@@ -16,4 +16,4 @@ Schedule::command('passport:purge')->daily()->withoutOverlapping();
 Schedule::command('git:reconcile')->dailyAt('01:30')->withoutOverlapping();
 
 // Each linked repository's forge collaborators in step with the tracker.
-Schedule::command('git:sync-access')->everyTenMinutes()->withoutOverlapping();
+Schedule::command('git:sync-access')->everyTenMinutes()->withoutOverlapping(15);

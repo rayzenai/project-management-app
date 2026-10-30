@@ -7,14 +7,18 @@ use App\Models\GitRepository;
 use App\Services\Git\ForgejoException;
 use App\Services\Git\RepositoryAccess;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
+use RuntimeException;
+use Throwable;
 
 /**
  * Every ten minutes, writes each linked repository's access to the forge
  * (RepositoryAccess::sync): it picks up people whose first forge sign-in
  * came after their grant, and anything an event's job missed. One line per
- * repository and a non-zero exit when any failed. A failure is logged
- * without the token; an unreachable forge fails its connection's other
- * repositories without waiting for it again.
+ * repository and a non-zero exit when any failed; one failing never holds
+ * up the next. A forge failure is logged without the token; an unreachable
+ * forge fails its connection's other repositories without waiting for it
+ * again. Anything else is reported by its class alone.
  */
 class SyncGitAccess extends Command
 {
@@ -60,6 +64,14 @@ class SyncGitAccess extends Command
                 if ($e->status === 0) {
                     $unreachable[$repository->git_connection_id] = true;
                 }
+
+                continue;
+            } catch (Throwable $e) {
+                // Never the original: a failed query's message carries its bindings.
+                $summary = class_basename($e).($e instanceof QueryException ? " (SQLSTATE {$e->getCode()})" : '');
+                report(new RuntimeException("The git access sync of {$repository->full_name} failed: {$summary}."));
+                $this->error("{$repository->full_name}: failed ({$summary}).");
+                $failed = true;
 
                 continue;
             }

@@ -10,6 +10,7 @@ use App\Services\Git\ForgejoException;
 use App\Services\Git\ForgeMembership;
 use App\Services\Git\ForgeShapes;
 use App\Services\Git\RepositoryAccess;
+use App\Services\Git\RepositoryAccessFailed;
 use App\Services\Git\RepositorySync;
 use App\Services\Git\TooManyForgeRemovals;
 use App\Services\Git\UnlinksHeldBack;
@@ -254,7 +255,12 @@ class ReconcileGit extends Command
 
     private function logFailure(GitConnection $connection, string $step, ForgejoException $e): void
     {
-        $context = ['owner' => $connection->owner, 'step' => $step, 'status' => $e->status];
+        $context = [
+            'owner' => $connection->owner,
+            'step' => $step,
+            ...($e instanceof RepositoryAccessFailed ? $e->context() : []),
+            'status' => $e->status,
+        ];
 
         if ($e->status === 0) {
             $context['url'] = $connection->base_url;

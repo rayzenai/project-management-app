@@ -32,6 +32,7 @@ class RepositoryAccess
      * users.git_username: the maintainers `admin`, the effective grants at
      * their permission. `waiting` are the member ids among them with no
      * login or no forge username yet (they never signed in to the forge).
+     * The bots and `forge-admin` are never wanted, whoever carries the name.
      *
      * @return array{logins: array<string, string>, waiting: list<int>}
      */
@@ -45,6 +46,7 @@ class RepositoryAccess
             $permissions[$grant->member_id] = self::higher($permissions[$grant->member_id] ?? null, $grant->permission);
         }
 
+        $untouchable = ForgeMembership::untouchableLogins();
         $logins = [];
         $waiting = [];
 
@@ -57,6 +59,10 @@ class RepositoryAccess
                 continue;
             }
 
+            if (isset($untouchable[mb_strtolower($login)])) {
+                continue;
+            }
+
             $logins[$login] = self::higher($logins[$login] ?? null, $permissions[$member->id]);
         }
 
@@ -64,13 +70,20 @@ class RepositoryAccess
     }
 
     /**
-     * Writes the repository's access to the forge: PUTs every wanted login
-     * (a 422, no such forge user, leaves them waiting), takes off every
-     * collaborator the tracker knows who is not wanted and, when the tracker
-     * protects `main`, rewrites the rule's push allow-list to the
-     * maintainers now on it. That comes last: the forge drops allow-listed
-     * users who lack write access. A rule deleted on the forge (404) was a
-     * maintainer's choice, so the tracker stops protecting it.
+     * Writes the repository's access to the forge. First it takes off every
+     * collaborator the tracker knows who is not wanted: that needs no grant
+     * to have worked, and a failure stops the run before anyone gains
+     * access. Then it PUTs every wanted login (a 422, no such forge user,
+     * leaves them waiting) and, when the tracker protects `main`, rewrites
+     * the rule's push allow-list to the maintainers now on it. That comes
+     * last: the forge drops allow-listed users who lack write access. A rule
+     * deleted on the forge (404) was a maintainer's choice, so the tracker
+     * stops protecting it.
+     *
+     * A PUT the forge refuses otherwise (an account it disabled answers 500,
+     * a blocked one 403) holds up nobody else: the others and the allow-list
+     * are still written, then the run fails with the first refusal. An
+     * unreachable forge fails it at once.
      *
      * New collaborators and removals are logged at warning, which production
      * keeps. A PUT for someone already there restates their permission (the
@@ -79,7 +92,8 @@ class RepositoryAccess
      *
      * @return array{granted: list<string>, removed: list<string>, waiting: list<string>} `granted` the logins PUT, `waiting` logins the forge has no user for and the names of people with no forge username
      *
-     * @throws ForgejoException anything but a 422 on a PUT
+     * @throws ForgejoException listing the collaborators
+     * @throws RepositoryAccessFailed any later call, but a 422 on a PUT or a 404 on the rule
      */
     public function sync(GitRepository $repository): array
     {
@@ -88,10 +102,29 @@ class RepositoryAccess
         $name = $repository->name;
         $wanted = $this->wanted($repository);
         $collaborators = $client->collaborators($owner, $name);
+        $isWanted = array_flip(array_map(fn (int|string $login): string => mb_strtolower((string) $login), array_keys($wanted['logins'])));
+        $removed = [];
+
+        foreach (ForgeMembership::known($collaborators) as ['login' => $login]) {
+            if (isset($isWanted[mb_strtolower($login)])) {
+                continue;
+            }
+
+            try {
+                $client->removeCollaborator($owner, $name, $login);
+            } catch (ForgejoException $e) {
+                throw new RepositoryAccessFailed($e, 'delete', $login);
+            }
+
+            $removed[] = $login;
+            Log::warning("Took someone off a forge repository's collaborators.", ['owner' => $owner, 'repository' => $name, 'login' => $login, 'permission' => 'none']);
+        }
+
         $isCollaborator = array_flip(array_map(mb_strtolower(...), $collaborators));
         $granted = [];
         $maintainers = [];
         $waiting = [];
+        $refused = null;
 
         foreach ($wanted['logins'] as $login => $permission) {
             $login = (string) $login;
@@ -99,11 +132,20 @@ class RepositoryAccess
             try {
                 $client->setCollaborator($owner, $name, $login, $permission);
             } catch (ForgejoException $e) {
-                if ($e->status !== 422) {
-                    throw $e;
+                if ($e->status === 422) {
+                    $waiting[] = $login;
+
+                    continue;
                 }
 
-                $waiting[] = $login;
+                $failure = new RepositoryAccessFailed($e, 'put', $login);
+
+                // Unreachable: every other call would only wait for it too.
+                if ($e->status === 0) {
+                    throw $failure;
+                }
+
+                $refused ??= $failure;
 
                 continue;
             }
@@ -119,19 +161,6 @@ class RepositoryAccess
             }
         }
 
-        $isWanted = array_flip(array_map(fn (int|string $login): string => mb_strtolower((string) $login), array_keys($wanted['logins'])));
-        $removed = [];
-
-        foreach (ForgeMembership::known($collaborators) as ['login' => $login]) {
-            if (isset($isWanted[mb_strtolower($login)])) {
-                continue;
-            }
-
-            $client->removeCollaborator($owner, $name, $login);
-            $removed[] = $login;
-            Log::warning("Took someone off a forge repository's collaborators.", ['owner' => $owner, 'repository' => $name, 'login' => $login, 'permission' => 'none']);
-        }
-
         if ($repository->protects_main) {
             try {
                 $client->updateBranchProtection($owner, $name, 'main', [
@@ -142,12 +171,16 @@ class RepositoryAccess
                 ]);
             } catch (ForgejoException $e) {
                 if ($e->status !== 404) {
-                    throw $e;
+                    throw new RepositoryAccessFailed($e, 'patch');
                 }
 
-                $repository->forceFill(['protects_main' => false]);
+                $repository->forceFill(['protects_main' => false])->save();
                 Log::warning("The forge repository's main rule is gone; the tracker no longer protects it.", ['owner' => $owner, 'repository' => $name]);
             }
+        }
+
+        if ($refused !== null) {
+            throw $refused;
         }
 
         $repository->forceFill(['access_synced_at' => now()])->save();
@@ -228,12 +261,18 @@ class RepositoryAccess
     }
 
     /**
-     * Logs a failed sync at warning without the token: the status, and for
-     * an unreachable forge its address and the cause with the token masked.
+     * Logs a failed sync at warning without the token: the call and login
+     * that failed when it says, the status, and for an unreachable forge its
+     * address and the cause with the token masked.
      */
     public static function logFailure(GitRepository $repository, ForgejoException $e): void
     {
-        $context = ['owner' => $repository->owner, 'repository' => $repository->name, 'status' => $e->status];
+        $context = [
+            'owner' => $repository->owner,
+            'repository' => $repository->name,
+            ...($e instanceof RepositoryAccessFailed ? $e->context() : []),
+            'status' => $e->status,
+        ];
 
         if ($e->status === 0) {
             $connection = $repository->gitConnection;

@@ -10,12 +10,14 @@ use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
-use App\Services\Git\ForgejoException;
 use App\Services\Git\RepositoryAccess;
+use App\Services\Git\RepositoryAccessFailed;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
@@ -136,7 +138,7 @@ function accLogins(array $logins): Closure
 
 /**
  * PUT and DELETE of single collaborators: 204, unless $answers names a
- * status for a PUT of that login.
+ * status for that login.
  *
  * @param  array<string, int>  $answers  login => status
  */
@@ -144,7 +146,7 @@ function accCollaboratorWrites(array $answers = []): Closure
 {
     return function (Request $request) use ($answers) {
         $login = rawurldecode(basename((string) parse_url($request->url(), PHP_URL_PATH)));
-        $status = $request->method() === 'PUT' ? ($answers[$login] ?? 204) : 204;
+        $status = $answers[$login] ?? 204;
 
         return match ($status) {
             204 => Http::response('', 204),
@@ -285,6 +287,32 @@ it('never removes the bot or forge-admin, even when a user carries their name', 
         ->and(array_filter(accWrites(), fn (string $w) => str_starts_with($w, 'DELETE')))->toBe([]);
 });
 
+it('never wants the bot or forge-admin, even when a person carries their name', function () {
+    $this->repo->forceFill(['protects_main' => true])->save();
+    $this->managerUser->forceFill(['git_username' => 'SDOC-bot'])->save();
+    [, $forgeAdmin] = accPerson($this->organization, 'forge-admin');
+    accGrant($this->repo, $forgeAdmin, GitRepositoryGrant::WRITE);
+    Http::fake(accForge());
+
+    expect(app(RepositoryAccess::class)->wanted($this->repo)['logins'])->toEqual(['pradeep' => 'admin', 'asha' => 'write', 'bikash' => 'read']);
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    expect(accSorted(array_values(array_filter(accWrites(), fn (string $w) => str_starts_with($w, 'PUT')))))->toBe(['PUT asha write', 'PUT bikash read', 'PUT pradeep admin']);
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r['push_whitelist_usernames'] === ['pradeep']);
+});
+
+it('keeps a collaborator the forge spells in another case: one PUT, no removal', function () {
+    Log::spy();
+    Http::fake(accForge(['sdoc-bot', 'mira', 'ASHA', 'Chet']));
+
+    $result = app(RepositoryAccess::class)->sync($this->repo);
+
+    expect(array_values(array_filter(accWrites(), fn (string $w) => str_contains($w, 'asha') || str_contains($w, 'ASHA'))))->toBe(['PUT asha write'])
+        ->and($result['removed'])->toBe(['Chet']);
+    Log::shouldNotHaveReceived('warning', fn (string $message, array $context = []) => mb_strtolower((string) ($context['login'] ?? '')) === 'asha');
+});
+
 // Who is waiting
 
 it('does not want a deactivated person, and takes them off', function () {
@@ -328,14 +356,45 @@ it('marks a login the forge has no user for as waiting, and goes on', function (
         ->and($this->repo->refresh()->access_synced_at)->not->toBeNull();
 });
 
-it('stops the run when a PUT fails otherwise', function () {
+it('still removes, grants the others and rewrites main when one PUT is refused, then fails the run', function () {
+    // The forge answers 500 for an account it disabled.
+    $this->repo->forceFill(['protects_main' => true])->save();
     Http::fake(accForge(stubs: ['git.example/api/v1/repos/sdoc/tp-api/collaborators/*' => accCollaboratorWrites(['asha' => 500])]));
 
     expect(fn () => app(RepositoryAccess::class)->sync($this->repo))
-        ->toThrow(fn (ForgejoException $e) => expect($e->status)->toBe(500));
+        ->toThrow(fn (RepositoryAccessFailed $e) => expect([$e->status, $e->operation, $e->login, $e->getMessage()])
+            ->toBe([500, 'put', 'asha', 'The forge answered 500 (put asha).']));
 
-    expect(accWrites())->not->toContain('DELETE Chet')
+    expect(accWrites())->toContain('DELETE Chet', 'PUT mira admin', 'PUT pradeep admin', 'PUT bikash read', 'PATCH main')
+        ->and(accWrites()[0])->toBe('DELETE Chet')
         ->and($this->repo->refresh()->access_synced_at)->toBeNull();
+});
+
+it('stops before any grant when a removal fails', function () {
+    Http::fake(accForge(stubs: ['git.example/api/v1/repos/sdoc/tp-api/collaborators/*' => accCollaboratorWrites(['Chet' => 500])]));
+
+    expect(fn () => app(RepositoryAccess::class)->sync($this->repo))
+        ->toThrow(fn (RepositoryAccessFailed $e) => expect([$e->status, $e->operation, $e->login])->toBe([500, 'delete', 'Chet']));
+
+    expect(accWrites())->toBe(['DELETE Chet']);
+});
+
+it('stops at once when the forge stops answering a PUT', function () {
+    $calls = 0;
+    Http::fake(accForge(stubs: ['git.example/api/v1/repos/sdoc/tp-api/collaborators/*' => function (Request $request) use (&$calls) {
+        if ($request->method() !== 'PUT') {
+            return Http::response('', 204);
+        }
+
+        $calls++;
+
+        throw new ConnectionException('cURL error 28: timed out');
+    }]));
+
+    expect(fn () => app(RepositoryAccess::class)->sync($this->repo))
+        ->toThrow(fn (RepositoryAccessFailed $e) => expect([$e->status, $e->operation])->toBe([0, 'put']));
+
+    expect($calls)->toBe(1);
 });
 
 // The main rule
@@ -451,6 +510,50 @@ it('logs and returns when the forge fails, without the token', function () {
         && ! str_contains((string) json_encode($context), 'never-shown'))->once();
 });
 
+it('names the call and login that failed in the job\'s log', function (string $operation) {
+    Log::spy();
+    $this->repo->forceFill(['protects_main' => true])->save();
+    $writes = 'git.example/api/v1/repos/sdoc/tp-api/collaborators/*';
+    [$stubs, $expected] = match ($operation) {
+        'put' => [[$writes => accCollaboratorWrites(['bikash' => 500])], ['operation' => 'put', 'login' => 'bikash']],
+        'delete' => [[$writes => accCollaboratorWrites(['Chet' => 500])], ['operation' => 'delete', 'login' => 'Chet']],
+        'patch' => [['git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'Internal Server Error'], 500)], ['operation' => 'patch']],
+    };
+    Http::fake(accForge(stubs: $stubs));
+
+    SyncRepositoryAccess::dispatchSync($this->repo);
+
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === "Couldn't sync a forge repository's access."
+        && $context == ['owner' => 'sdoc', 'repository' => 'tp-api', ...$expected, 'status' => 500])->once();
+})->with(['put', 'delete', 'patch']);
+
+it('waits for the transaction it was dispatched in to commit', function () {
+    Http::fake(accForge());
+
+    DB::transaction(function () {
+        SyncRepositoryAccess::dispatchSync($this->repo);
+
+        Http::assertNothingSent();
+    });
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'PUT');
+});
+
+it('queues one sync of a repository while another waits, until it starts', function () {
+    config(['queue.default' => 'database']);
+    Queue::fake();
+    $web = accLinked($this->project, 'tp-web', 502);
+
+    dispatch(new SyncRepositoryAccess($this->repo));
+    dispatch(new SyncRepositoryAccess($this->repo));
+    dispatch(new SyncRepositoryAccess($web));
+
+    expect(Queue::pushed(SyncRepositoryAccess::class)->map(fn (SyncRepositoryAccess $job) => $job->repository->full_name)->all())
+        ->toBe(['sdoc/tp-api', 'sdoc/tp-web'])
+        ->and((new SyncRepositoryAccess($this->repo))->uniqueId())->toBe((string) $this->repo->id)
+        ->and((new SyncRepositoryAccess($this->repo))->uniqueFor)->toBe(60);
+});
+
 it('skips a repository unlinked before the job runs', function () {
     Http::fake(accForge());
     $job = new SyncRepositoryAccess($this->repo);
@@ -537,12 +640,34 @@ it('fails the rest of an unreachable forge\'s repositories without waiting for i
         && ! str_contains((string) json_encode($context), 'never-shown'))->once();
 });
 
-it('runs every ten minutes, one at a time', function () {
+it('reports an unexpected failure by its class alone and goes on to the next repository', function () {
+    Exceptions::fake();
+    accLinked($this->project, 'tp-web', 502);
+    $this->mock(RepositoryAccess::class)->shouldReceive('sync')->twice()->andReturnUsing(function (GitRepository $repo) {
+        if ($repo->name === 'tp-api') {
+            throw new RuntimeException('update git_repositories set ... (bot-token-never-shown)');
+        }
+
+        return ['granted' => ['mira'], 'removed' => [], 'waiting' => []];
+    });
+
+    $this->artisan('git:sync-access')
+        ->expectsOutput('sdoc/tp-api: failed (RuntimeException).')
+        ->expectsOutput('sdoc/tp-web: 1 with access, 0 waiting.')
+        ->doesntExpectOutputToContain('never-shown')
+        ->assertFailed();
+
+    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The git access sync of sdoc/tp-api failed: RuntimeException.');
+    Exceptions::assertNotReported(fn (Throwable $e) => str_contains($e->getMessage(), 'never-shown'));
+});
+
+it('runs every ten minutes, one at a time, a killed run\'s lock lapsing after 15 minutes', function () {
     $event = collect(app(Schedule::class)->events())->first(fn ($e) => str_contains((string) $e->command, 'git:sync-access'));
 
     expect($event)->not->toBeNull()
         ->and($event->expression)->toBe('*/10 * * * *')
-        ->and($event->withoutOverlapping)->toBeTrue();
+        ->and($event->withoutOverlapping)->toBeTrue()
+        ->and($event->expiresAt)->toBe(15);
 });
 
 // The nightly reconcile
@@ -621,6 +746,21 @@ it('writes no access to a repository the reconcile found gone', function () {
 
     Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/collaborators'));
     expect(GitRepository::query()->count())->toBe(0);
+});
+
+it('names the login in a failed access step\'s log', function () {
+    Log::spy();
+    Http::fake([
+        ...accReconcileForge(),
+        ...accForge(stubs: ['git.example/api/v1/repos/sdoc/tp-api/collaborators/*' => accCollaboratorWrites(['asha' => 403])]),
+    ]);
+
+    $this->artisan('git:reconcile')
+        ->expectsOutputToContain('sdoc/tp-api access: The forge answered 403 (put asha)')
+        ->assertFailed();
+
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === 'A git reconcile step failed.'
+        && $context == ['owner' => 'sdoc', 'step' => 'sdoc/tp-api access', 'operation' => 'put', 'login' => 'asha', 'status' => 403])->once();
 });
 
 it('reports a failed access step like the reconcile\'s other steps', function () {
