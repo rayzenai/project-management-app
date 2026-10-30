@@ -138,8 +138,8 @@
                     {/if}
                 </div>
                 <p class="text-xs text-fg-muted">
-                    Then add its office admin from the Team page: Add person,
-                    choose this organization, tick Office admin.
+                    Then add its organizational admin from the Team page: Add
+                    person, choose this organization, tick Organizational admin.
                 </p>
                 <div class="flex justify-end gap-1.5">
                     <button
@@ -329,8 +329,8 @@
                                     <span class="truncate">
                                         {(organization.office_admins ?? [])
                                             .length > 0
-                                            ? `Office admin: ${(organization.office_admins ?? []).map((a) => a.name).join(', ')}`
-                                            : 'No office admin yet'}
+                                            ? `Organizational admin: ${(organization.office_admins ?? []).map((a) => a.name).join(', ')}`
+                                            : 'No organizational admin yet'}
                                     </span>
                                     {#if organization.git}
                                         <span class="truncate font-mono"

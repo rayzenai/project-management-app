@@ -187,7 +187,7 @@ it("refuses a member whose office hasn't switched git on", function () {
 
     oidcAuthorize($user, oidcClient())
         ->assertForbidden()
-        ->assertSee("You don't have access to git. Ask your office admin.");
+        ->assertSee("You don't have access to git. Ask your organizational admin.");
 
     expect(DB::table('oauth_auth_codes')->count())->toBe(0);
 });
@@ -197,7 +197,7 @@ it('refuses a deactivated member of a git office, even with a valid session', fu
 
     oidcAuthorize($user, oidcClient())
         ->assertForbidden()
-        ->assertSee("You don't have access to git. Ask your office admin.");
+        ->assertSee("You don't have access to git. Ask your organizational admin.");
 
     expect(DB::table('oauth_auth_codes')->count())->toBe(0);
 });
@@ -235,7 +235,7 @@ it('refuses a member who was deleted, even with a valid session', function () {
 
     oidcAuthorize($user, oidcClient())
         ->assertForbidden()
-        ->assertSee("You don't have access to git. Ask your office admin.");
+        ->assertSee("You don't have access to git. Ask your organizational admin.");
 });
 
 it('leaves git_orgs out of the id_token of a member deactivated after the code was issued', function () {

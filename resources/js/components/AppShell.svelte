@@ -571,7 +571,7 @@
                                 {shared.isSuperAdmin
                                     ? 'Super admin'
                                     : shared.isOfficeAdmin
-                                      ? `Office admin · ${shared.organization?.name ?? ''}`
+                                      ? `Organizational admin · ${shared.organization?.name ?? ''}`
                                       : (shared.organization?.name ??
                                         user.email)}
                             </div>

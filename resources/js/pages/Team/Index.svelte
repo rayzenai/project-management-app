@@ -382,7 +382,7 @@
                                     type="checkbox"
                                     bind:checked={memberForm.is_office_admin}
                                 />
-                                Office admin of this organization
+                                Organizational admin of this organization
                             </label>
                             <p class="text-xs text-fg-muted">
                                 In a ministry: the Minister, Secretary and
@@ -579,7 +579,7 @@
                                                         memberEditForm.is_office_admin
                                                     }
                                                 />
-                                                Office admin of this organization
+                                                Organizational admin of this organization
                                             </label>
                                             <p class="text-xs text-fg-muted">
                                                 In a ministry: the Minister,
@@ -615,7 +615,7 @@
                                     >
                                     {#if member.is_office_admin}
                                         <span class="chip chip-accent"
-                                            >Office admin</span
+                                            >Organizational admin</span
                                         >
                                     {/if}
                                     {#if !member.user_id}

@@ -22,7 +22,7 @@ class EnsureCanUseGit
         abort_unless(
             $user instanceof User && GitAccess::organizationsFor($user)->isNotEmpty(),
             403,
-            "You don't have access to git. Ask your office admin.",
+            "You don't have access to git. Ask your organizational admin.",
         );
 
         return $next($request);

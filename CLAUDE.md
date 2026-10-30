@@ -102,8 +102,8 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
 1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
    Belongs to no organization. Manages organizations and everything in them;
    the only one who can open a project's team to other organizations or make
-   a person an office admin.
-2. **Office admin**: a member with `is_office_admin` (and `is_active`). Full
+   a person an organizational admin.
+2. **Organizational admin (`is_office_admin`)**: a member with `is_office_admin` (and `is_active`). Full
    control inside their own organization: creates its people and projects,
    chooses each project's manager, sees every project, can publish projects
    (public means "everyone in this organization"), creates its programs and
@@ -149,7 +149,7 @@ Privilege-escalation protections — do not regress:
 - `canManageMember` blocks a super-admin's linked login and other office
   admins; managers manage no people at all (so a cross-organization manager
   can never reset an outsider's password).
-- Organization, office-admin flag and bulk team reassignment on a member are
+- Organization, organizational-admin flag and bulk team reassignment on a member are
   super-admin only (`UpdateMemberRequest::authorize()` 403s otherwise);
   `manager_id`, `is_cross_organization` and `is_public` on a project are
   silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
@@ -236,10 +236,10 @@ manager, from `ProgramObserver`) carries a `program {slug, name}` instead.
 
 The sidebar's **Guide** (`pages/Guide.svelte`, `/workspace/guide`) explains
 to users the model (Organization, Program, Project, Team, Tasks), each role's
-routine (office admin, program manager, project manager, member) and how a
+routine (organizational admin, program manager, project manager, member) and how a
 ministry's titles map onto those roles ("In a ministry"): keep it in step
 when a feature changes how people work. The same mapping shows as hints by
-the office admin switch and the program and project manager pickers.
+the organizational admin switch and the program and project manager pickers.
 
 ## Two delivery surfaces
 
@@ -264,7 +264,7 @@ Spec: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
   capital letters, unique in the organization across current keys **and**
   `project_key_aliases` (a rename leaves the old key as an alias, so an old
   commit never points at another project). Suggested from the title (`P`
-  when it has no ASCII letters); only `canChangeProjectKey` (office admin,
+  when it has no ASCII letters); only `canChangeProjectKey` (organizational admin,
   super-admin) may change it. `Project::code` is the key.
 - **Task numbers** (`Task::$number`): assigned once in the `creating` hook
   from `projects.last_task_number`, a counter that only goes up, so a number
@@ -339,7 +339,7 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
   phase 1 changes a task's status, a merge included.
 - **Access**: viewing code needs `canViewProjectCode`: git on, and the
   project's team (any role, while the member is active), its program's
-  manager, its organization's office admins or a super-admin; not other
+  manager, its organization's organizational admins or a super-admin; not other
   viewers of a public project. Its query twin is
   `Project::scopeCodeVisibleTo`; keep them in step. Linking and unlinking
   needs `canManageProjectRepositories` (manager, program manager, office
@@ -367,7 +367,7 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
   then `RepositorySync::unlinkGone` (all or none: only while the bot still
   owns the forge organization under that name, and at most max(3, 25%) of
   the linked repositories, else `UnlinksHeldBack`), `ForgeMembership`
-  (Owners = active office admins; remove people `GitAccess` no longer
+  (Owners = active organizational admins; remove people `GitAccess` no longer
   admits), prune deliveries. Never touches `forge-admin`, `{owner}-bot` or
   logins the tracker doesn't know. Circuit breaker: a step that would remove
   more than max(5, 25%) of the tracker-known logins removes nobody

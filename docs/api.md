@@ -23,14 +23,14 @@ the same `app/Services/Workspace/*` action service.
 - **Error:** `{ "message": string, "errors": { field: message } }` — `401`
   unauthenticated, `403` forbidden, `404` not found, `422` validation.
 - **Authorization** is enforced server-side via `App\Support\WorkspaceAccess`
-  (super-admin → office admin → project manager → member). Clients mirror role
+  (super-admin → organizational admin → project manager → member). Clients mirror role
   gating in the UI only.
 - **Projects and teams:** every project has exactly one team of its own, made
   with it, and that team's one leader is the project's **manager**. People on
   several projects sit on several project teams.
 - **Project visibility:** a project is visible to a user iff it is public within
   their organization, OR the user is on its team, OR they are its organization's
-  office admin, OR a super-admin.
+  organizational admin, OR a super-admin.
   Implemented as `Project::scopeVisibleTo($user)` and enforced on the project
   index, project/task `show` (403 otherwise), dashboard, My Workspace, search,
   and the quick-add picker.
@@ -90,15 +90,15 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | --- | --- | --- |
 | GET | `/workspace/projects` | list — visibility-scoped. `?archived=1` for archived |
 | GET | `/workspace/projects` | each project also carries `program { slug, name }` (or `null`), `manager { id, name, title }`, `team { id, is_cross_organization, members_count }`, `percent_complete`, `open_tasks_count`, `overdue_tasks_count`, `next_deadline_at`; plus `managerCandidates` for the create form, `programs` (the programs the caller may see, each a program payload with `projects_count`) and `canManagePrograms`. The web page groups projects in a program under it (by each project's `program`; the heading links to the program only when it is in `programs`) and the rest by manager |
-| POST | `/workspace/projects` | create (office admin or super-admin). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization); optional `key` (see below), otherwise the title suggests a free one. A super-admin sends `organization_id`; otherwise it is the office admin's organization. Optional `program_id` (a program of that organization, else 422 on `program_id`; office admin / super-admin only, ignored for anyone else) |
-| GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller. `programs: [{ id, slug, name }]` lists its organization's programs for whoever may move it (office admin, super-admin), else `[]` |
-| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. `project` carries `code`; each task carries `number` and `project { slug, title, code }`. For its manager, its program's manager, its office admin and super-admins (`project.can_view_progress`) |
-| PATCH | `/workspace/projects/{slug}` | update (its manager, its program's manager, office admin or super-admin). `manager_id` (office admin / super-admin; the old manager stays on the team), `is_public` (office admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team), `key` (office admin / super-admin, see below), `program_id` (a program of the project's organization, or `null` to take it out; office admin / super-admin; 422 on `program_id` for another organization's program); dropped silently for anyone else. The team keeps the project's title |
-| PATCH | `/workspace/projects/{slug}/archive` | soft-archive (its manager, its program's manager, its office admin, or a super-admin) |
+| POST | `/workspace/projects` | create (organizational admin or super-admin). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization); optional `key` (see below), otherwise the title suggests a free one. A super-admin sends `organization_id`; otherwise it is the organizational admin's organization. Optional `program_id` (a program of that organization, else 422 on `program_id`; organizational admin / super-admin only, ignored for anyone else) |
+| GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller. `programs: [{ id, slug, name }]` lists its organization's programs for whoever may move it (organizational admin, super-admin), else `[]` |
+| GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. `project` carries `code`; each task carries `number` and `project { slug, title, code }`. For its manager, its program's manager, its organizational admin and super-admins (`project.can_view_progress`) |
+| PATCH | `/workspace/projects/{slug}` | update (its manager, its program's manager, organizational admin or super-admin). `manager_id` (organizational admin / super-admin; the old manager stays on the team), `is_public` (organizational admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team), `key` (organizational admin / super-admin, see below), `program_id` (a program of the project's organization, or `null` to take it out; organizational admin / super-admin; 422 on `program_id` for another organization's program); dropped silently for anyone else. The team keeps the project's title |
+| PATCH | `/workspace/projects/{slug}/archive` | soft-archive (its manager, its program's manager, its organizational admin, or a super-admin) |
 | PATCH | `/workspace/projects/{slug}/restore` | un-archive |
 
 **Keys.** A project's `key` is the first half of its task codes (`SG` in
-`SG-12`). Only its organization's office admin or a super-admin may set it, on
+`SG-12`). Only its organization's organizational admin or a super-admin may set it, on
 create or update; anyone else's well-formed `key` is dropped silently. It is
 1 to 10 letters, sent in any case and stored upper case (`^[A-Z]{1,10}$`), and
 unique in the organization across every project's current key and old keys: a
@@ -189,11 +189,11 @@ Mentions are stored canonically as `@[Display Name](member:ID)`; the resolved
 Every project (and its team) and member (except super-admins) belongs to one
 organization. Everything below is scoped to what the caller may see: a member
 sees their projects and teammates, a manager the same plus their projects'
-progress, an office admin their whole organization, a super-admin everything.
+progress, an organizational admin their whole organization, a super-admin everything.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/organizations` | `{ organizations }` with counts and office admins |
+| GET | `/workspace/organizations` | `{ organizations }` with counts and organizational admins |
 | POST | `/workspace/organizations` | `name` (unique) |
 | PATCH | `/workspace/organizations/{organization}` | `name` |
 | DELETE | `/workspace/organizations/{organization}` | 422 unless it has no people, teams or projects |
@@ -205,7 +205,7 @@ On the JSON API these are `POST|DELETE /api/v1/workspace/organizations/{organiza
 organization. The token is write-only: organization payloads show only
 `git: { base_url, owner, url }` (or `null`), and only to a super-admin.
 
-## Programs *(create/edit/delete: office admin of their organization or super-admin)*
+## Programs *(create/edit/delete: organizational admin of their organization or super-admin)*
 
 A program is a named collection of projects in one organization with one
 program manager, who runs every project in it as that project's own manager
@@ -213,16 +213,16 @@ does. Deleting a program keeps its projects.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/programs` | `{ data: [program] }`, only the programs the caller may see: all for a super-admin, their organization's for an office admin, the ones they manage for a program manager, none for anyone else |
-| POST | `/workspace/programs` | `name` (unique in the organization), `description` (optional), `manager_id` (required: an active person of the program's organization; 422 on `manager_id` otherwise). A super-admin sends `organization_id`; for an office admin it is always their own, whatever is posted. 201 with the program; the manager is notified |
+| GET | `/workspace/programs` | `{ data: [program] }`, only the programs the caller may see: all for a super-admin, their organization's for an organizational admin, the ones they manage for a program manager, none for anyone else |
+| POST | `/workspace/programs` | `name` (unique in the organization), `description` (optional), `manager_id` (required: an active person of the program's organization; 422 on `manager_id` otherwise). A super-admin sends `organization_id`; for an organizational admin it is always their own, whatever is posted. 201 with the program; the manager is notified |
 | PATCH | `/workspace/programs/{slug}` | any of `name`, `description`, `manager_id` (same checks; a new manager is notified). The organization never changes |
 | DELETE | `/workspace/programs/{slug}` | the program goes, its projects stay with no program |
-| GET | `/workspace/programs/{slug}/progress` | the program manager's weekly view (its manager, its organization's office admin or a super-admin; else 403): `{ data: { program, projects: [{ slug, title, code, manager { id, name } \| null, tasks_count, done_tasks_count, overdue_tasks_count, next_deadline_at }], members, tasks, truncated, activity, generated_at } }`. `projects` lists only active (not archived) projects, by title; `members`, `tasks` (first 500) and `activity` are the project progress report across all of them, each person once, `role: leader` for anyone who manages one of the projects or the program. The web page is `GET /workspace/programs/{slug}` (Inertia `Programs/Show`, prop `progress`) |
+| GET | `/workspace/programs/{slug}/progress` | the program manager's weekly view (its manager, its organization's organizational admin or a super-admin; else 403): `{ data: { program, projects: [{ slug, title, code, manager { id, name } \| null, tasks_count, done_tasks_count, overdue_tasks_count, next_deadline_at }], members, tasks, truncated, activity, generated_at } }`. `projects` lists only active (not archived) projects, by title; `members`, `tasks` (first 500) and `activity` are the project progress report across all of them, each person once, `role: leader` for anyone who manages one of the projects or the program. The web page is `GET /workspace/programs/{slug}` (Inertia `Programs/Show`, prop `progress`) |
 
 Program payload: `{ id, slug, name, description, organization { id, name },
 manager { id, name, title } | null, projects_count (index only), can_manage }`.
 `manager` is `null` while the manager's person is in the trash, and after
-they were pruned. Anyone who is not an office admin of the program's
+they were pruned. Anyone who is not an organizational admin of the program's
 organization or a super-admin gets 403 on POST, PATCH and DELETE. The web surface has the same writes at
 `/workspace/programs` (names `workspace.programs.store|update|destroy`); a web
 DELETE lands on the Projects page, since the program's page is gone. The web
@@ -230,7 +230,7 @@ program page also gets `managerCandidates: [{ id, name, title }]` (the
 organization's active people, for its Edit form) outside `progress`, empty
 for anyone who may not manage the program.
 
-## Project teams *(roster: the project's manager, its program's manager, its office admin or a super-admin; choosing the manager: office admin or super-admin)*
+## Project teams *(roster: the project's manager, its program's manager, its organizational admin or a super-admin; choosing the manager: organizational admin or super-admin)*
 
 A team is made with its project and never on its own; `GET /workspace/projects/{slug}`
 returns it as `team { id, is_cross_organization, members: [{ id, name, email, title, organization, is_active, is_manager, can_remove }], can_manage, can_choose_manager }`.
@@ -243,7 +243,7 @@ returns it as `team { id, is_cross_organization, members: [{ id, name, email, ti
 | DELETE | `/workspace/teams/{team}/members/{member}` | 422 for the manager: make someone else manager first |
 | PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member); `role: member` on the manager is a 422 |
 
-## Code repositories *(only in an organization with git on; list: the project's team, its program's manager, its office admin or a super-admin; the rest: its manager, its program's manager, its office admin or a super-admin)*
+## Code repositories *(only in an organization with git on; list: the project's team, its program's manager, its organizational admin or a super-admin; the rest: its manager, its program's manager, its organizational admin or a super-admin)*
 
 A project links repositories of its organization's forge organization. Every
 route answers 403 when the organization has no git connection, whoever asks.
@@ -278,13 +278,13 @@ caller can't see the task. A guest signs in first and lands on the task.
 
 **Code on projects and tasks.** Only where the project's organization has
 git and the caller may see its code: someone on the project's team (any
-role, while active), its program's manager, its office admin or a
+role, while active), its program's manager, its organizational admin or a
 super-admin, not other viewers of a public project. Elsewhere `git` and
 `code` are `null` and `has_pull_request` is absent.
 
 - `GET /workspace/projects/{slug}` adds `git: { repositories, can_manage }`:
   the linked repositories by `full_name`, and whether the caller may link
-  and unlink (its manager, its program's manager, its office admin or a
+  and unlink (its manager, its program's manager, its organizational admin or a
   super-admin). Each of its
   `tasks` adds `has_pull_request` (the board's mark).
 - `GET /workspace/projects/{slug}/tasks/{taskSlug}` and
@@ -309,11 +309,11 @@ The forge's webhook, `POST /git/webhooks/{connection}` (name `git.webhook`),
 is server to server: no session, CSRF or token, a body signed with the
 connection's webhook secret. See `docs/forgejo.md`, section 12.
 
-## Members *(create/edit/delete: office admin of their organization or super-admin)*
+## Members *(create/edit/delete: organizational admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login),
 optional `password` (min 8), `title` and `team_ids`. A super-admin also sends
-`organization_id` (required) and may send `is_office_admin`; an office admin's
+`organization_id` (required) and may send `is_office_admin`; an organizational admin's
 people always join their own organization. Every member gets a login: the
 password you send, or a generated one if you send none. Either way the member is
 emailed their email and password; if that email fails the member is still
@@ -325,8 +325,8 @@ from the forge.` when every removal succeeded, or `Couldn't remove
 {git_username} from the forge; ask a super-admin to suspend them there today.`
 when any failed (the change itself still stands). Nothing is added for someone
 without a forge account. Changing `is_office_admin`, or moving or
-reactivating an office admin, puts the forge organizations of the offices
-concerned in step after the response: active office admins in its Owners
+reactivating an organizational admin, puts the forge organizations of the offices
+concerned in step after the response: active organizational admins in its Owners
 team, nobody else the tracker knows. A forge failure there is only logged;
 the nightly `git:reconcile` does it again.
 

@@ -57,7 +57,7 @@
     const roles = [
         {
             key: 'admin',
-            title: 'Office admin',
+            title: 'Organizational admin',
             steps: [
                 'Add people on the People page. Each one gets a login by email.',
                 'Create projects on the Projects page and choose who manages each one.',
@@ -73,7 +73,7 @@
             steps: [
                 'Open your program page every week, from Programs in the sidebar: how far each project has got, what is overdue and who is working on what.',
                 "Manage each project's team and tasks as its manager would: add people on its People tab, break the work into tasks and keep them moving.",
-                'Ask an office admin to add a project to your program or take one out.',
+                'Ask an organizational admin to add a project to your program or take one out.',
             ],
         },
         {
@@ -101,7 +101,7 @@
 
     // How a ministry's ranks map onto the workspace's roles.
     const ministry = [
-        ['Minister, Secretary, Secretariat', 'Office admin'],
+        ['Minister, Secretary, Secretariat', 'Organizational admin'],
         ['Joint Secretary', 'Program manager'],
         ['Under Secretary', 'Project manager'],
         ['Officer', 'Team member'],
@@ -130,7 +130,7 @@
     const code = [
         [
             'Link a repository',
-            "On the project's Code tab, its manager, its program's manager or an office admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
+            "On the project's Code tab, its manager, its program's manager or an organizational admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
         ],
         [
             'Name a branch',
@@ -146,7 +146,7 @@
         ],
         [
             'Forge access',
-            "Office admins own the office's forge organization: they create its repositories and give people access there. An office admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it.",
+            "Organizational admins own the office's forge organization: they create its repositories and give people access there. An organizational admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it.",
         ],
     ];
 
@@ -260,7 +260,7 @@
                         >
                             <li>
                                 Create organizations and make someone their
-                                office admin.
+                                organizational admin.
                             </li>
                             <li>
                                 Let a project's team take people from other
@@ -318,7 +318,7 @@
                     has a Code tab with its repositories, and each task a Code
                     section with the pull requests, branches and commits that
                     name its code. Both are for the project's team, its
-                    program's manager and the office admins.
+                    program's manager and the organizational admins.
                 </p>
                 <dl class="border-t border-line">
                     {#each code as [term, meaning] (term)}
