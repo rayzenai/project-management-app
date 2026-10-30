@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\SyncRepositoryAccess;
 use App\Models\GitCommit;
 use App\Models\GitConnection;
 use App\Models\GitPullRequest;
@@ -12,6 +13,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
@@ -427,6 +429,10 @@ it("names a program's General project with its program, so two Generals never lo
 });
 
 it('asks the same number of queries however many people there are', function () {
+    // The fixtures queued repository access syncs; on the sync queue they run
+    // after the first request, which would put their queries in the count.
+    Bus::fake([SyncRepositoryAccess::class]);
+
     $count = function (): int {
         $queries = 0;
         DB::listen(function () use (&$queries): void {
