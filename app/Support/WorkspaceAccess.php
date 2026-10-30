@@ -570,6 +570,54 @@ class WorkspaceAccess
         return array_values(array_unique($ids));
     }
 
+    /**
+     * Whose commits the code activity report shows the user. Whole
+     * repositories: every one for a super-admin (`all`); for an active
+     * member, those of the projects of the organization they administer,
+     * of the programs they manage (their own organization's, as
+     * managesProgramOf) and of the projects they manage. And everyone's own
+     * commits wherever they are (`user_id`). CodeActivityQuery applies it.
+     *
+     * @return array{all: bool, organization_ids: list<int>, program_ids: list<int>, project_ids: list<int>, user_id: ?int}
+     */
+    public static function codeReportScope(?Authenticatable $user): array
+    {
+        $scope = ['all' => false, 'organization_ids' => [], 'program_ids' => [], 'project_ids' => [], 'user_id' => null];
+
+        if ($user === null) {
+            return $scope;
+        }
+
+        $scope['user_id'] = (int) $user->getAuthIdentifier();
+
+        if (self::isSuperAdmin($user)) {
+            $scope['all'] = true;
+
+            return $scope;
+        }
+
+        $member = self::memberFor($user);
+
+        // ledTeamIds alone keeps a deactivated manager's teams.
+        if ($member === null || ! $member->is_active) {
+            return $scope;
+        }
+
+        $organizationId = self::officeAdminOrganizationId($user);
+        $ledTeamIds = self::ledTeamIds($user);
+
+        $scope['organization_ids'] = $organizationId === null ? [] : [$organizationId];
+        $scope['program_ids'] = self::managedProgramIds($user);
+        $scope['project_ids'] = $ledTeamIds === [] ? [] : array_values(Project::query()
+            ->whereHas('teams', fn ($teams) => $teams->whereIn('teams.id', $ledTeamIds))
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all());
+
+        return $scope;
+    }
+
     private static function hasGit(Project $project): bool
     {
         $organizationId = (int) $project->organization_id;

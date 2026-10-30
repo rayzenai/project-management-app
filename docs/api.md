@@ -432,6 +432,44 @@ The forge's webhook, `POST /git/webhooks/{connection}` (name `git.webhook`),
 is server to server: no session, CSRF or token, a body signed with the
 connection's webhook secret. See `docs/forgejo.md`, section 12.
 
+## Code activity *(anyone who may use git: `git_enabled` on `/user`; 403 otherwise)*
+
+Who committed what, per person, within what the caller runs. Whole
+repositories: every one for a super-admin; those of the projects of their
+organization for an organizational admin; of the projects in the programs
+they manage for a program manager; of the projects they manage for a
+project manager. Everyone also sees their own commits (and pull requests),
+wherever they are, and nothing else.
+
+Counted: commits that are not merges and are still reachable from a branch
+(`unreachable_at` null: a rebased branch's old commits would count twice),
+by `committed_at`, a day being a whole local day (Asia/Kathmandu). A
+commit's author is the user whose forge username it names.
+
+Query string, on both routes:
+
+- `from`, `to`: dates `YYYY-MM-DD`, both ends included; default the last 30
+  days ending today (`from` defaults to 29 days before `to`). 422 on `to`
+  when it is before `from` (`The end date can't be before the start date.`)
+  or the range has more than 366 days (`Choose a range of at most 366
+  days.`).
+- `project`, `program`: a slug, to narrow to that project's or program's
+  repositories. One outside the caller's whole repositories, or a slug
+  nothing has, is a 403.
+- `members[]`: up to 4 user ids to compare (422 on `members` above 4).
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, options }, filters { from, to, project, program, members } }`. `people`: one row per person, by name (case-insensitive; never ranked by a figure), the unmatched row last: `{ user_id, name, title, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, pull_requests_opened, pull_requests_merged, tasks }` (`name` and `title` are the person's in the People directory; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to). For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, for the filters |
+| GET | `/workspace/reports/code/people/{user}` | `{ data: [{ sha, message, repository, url, committed_at, code_added, code_removed, comment_added, comment_removed, stats_status }] }`: that user's latest 50 counted commits in the range and the caller's scope, newest first; `message` is the first line, `repository` the `full_name`, `url` the commit on the forge, `stats_status` `ok`, `too_large`, `missing` or `null` (not counted yet). Someone outside the caller's scope, or no one, is `{ data: [] }`, never a 403 or 404 |
+
+On the JSON API these are `/api/v1/workspace/reports/code…` (names
+`api.workspace.reports.code` and `api.workspace.reports.code.person`). On
+the web, `/workspace/reports/code` (name `workspace.reports.code`) is the
+Inertia page `Reports/CodeActivity`, whose props are `data`'s fields plus
+`filters`; `/workspace/reports/code/people/{user}` (name
+`workspace.reports.code.person`) answers the same JSON.
+
 ## Members *(create/edit/delete: organizational admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login),
@@ -594,3 +632,5 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - New: `GET|POST /workspace/projects/{slug}/repositories/{repository}/access`,
   `GET …/access/candidates` and `PATCH|DELETE …/access/{grant}` (see
   Repository access).
+- New: `GET /workspace/reports/code` and
+  `GET /workspace/reports/code/people/{user}` (see Code activity).

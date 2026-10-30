@@ -600,6 +600,68 @@ export interface ProgramProgress extends ProgressReport {
     projects: ProgramProjectRow[];
 }
 
+/** One row of the code activity report; `user_id` null for the commits no one is matched to. */
+export interface CodeActivityPerson {
+    user_id: Id | null;
+    name: string;
+    title: string | null;
+    commits: number;
+    active_days: number;
+    repositories: number;
+    files_changed: number;
+    code_added: number;
+    code_removed: number;
+    comment_added: number;
+    comment_removed: number;
+    blank_added: number;
+    blank_removed: number;
+    docs_added: number;
+    docs_removed: number;
+    pull_requests_opened: number;
+    pull_requests_merged: number;
+    tasks: number;
+}
+
+export interface CodeActivityDay {
+    date: string;
+    code_changed: number;
+    commits: number;
+}
+
+/** A compared person's every day of the range. */
+export interface CodeActivitySeries {
+    user_id: Id;
+    days: CodeActivityDay[];
+}
+
+export interface CodeActivityFilters {
+    from: string;
+    to: string;
+    project: string | null;
+    program: string | null;
+    members: Id[];
+}
+
+export interface CodeActivityOptions {
+    /** `label` names the program too: "General (Revenue)". */
+    projects: { slug: string; title: string; label: string }[];
+    programs: { slug: string; name: string }[];
+}
+
+/** One commit in a person's drawer; `stats_status` null while it is being counted. */
+export interface CodeActivityCommit {
+    sha: string;
+    message: string;
+    repository: string;
+    url: string;
+    committed_at: string;
+    code_added: number;
+    code_removed: number;
+    comment_added: number;
+    comment_removed: number;
+    stats_status: 'ok' | 'too_large' | 'missing' | null;
+}
+
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
 export interface QuickAddProject extends ProjectSummary {
     /** Its program's name; tells apart several projects of one title. */

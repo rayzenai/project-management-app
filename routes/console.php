@@ -17,3 +17,5 @@ Schedule::command('git:reconcile')->dailyAt('01:30')->withoutOverlapping();
 
 // Each linked repository's forge collaborators in step with the tracker.
 Schedule::command('git:sync-access')->everyTenMinutes()->withoutOverlapping(15);
+// Count each new commit's code, comment and blank lines from its diff.
+Schedule::command('git:commit-stats')->everyFiveMinutes()->withoutOverlapping();

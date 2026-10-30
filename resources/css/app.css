@@ -42,6 +42,15 @@
     --color-danger-soft: var(--ws-danger-soft);
     --color-success-soft: var(--ws-success-soft);
     --color-selection: var(--ws-selection);
+    /* Chart series (people compared): blue, magenta, purple, teal-blue, in
+       this fixed order. No hue near the status red, amber or green, so no
+       line reads as good or bad. Checked with the dataviz palette validator
+       against the panel surface in both modes: all four pass on adjacent
+       pairs, the first three on all pairs. */
+    --color-series-1: var(--ws-series-1);
+    --color-series-2: var(--ws-series-2);
+    --color-series-3: var(--ws-series-3);
+    --color-series-4: var(--ws-series-4);
 
     /* One radius scale: 6px for panels/buttons/inputs, 4px for chips. */
     --radius-sm: 4px;
@@ -74,6 +83,10 @@
     --ws-danger-soft: rgba(214, 61, 51, 0.09);
     --ws-success-soft: rgba(31, 157, 98, 0.1);
     --ws-selection: rgba(59, 111, 224, 0.07);
+    --ws-series-1: #2a78d6;
+    --ws-series-2: #b55386;
+    --ws-series-3: #812794;
+    --ws-series-4: #2695ac;
     color-scheme: light;
 }
 
@@ -99,8 +112,21 @@
         --ws-danger-soft: rgba(242, 101, 90, 0.13);
         --ws-success-soft: rgba(62, 201, 138, 0.13);
         --ws-selection: rgba(109, 148, 245, 0.08);
+        --ws-series-1: #3987e5;
+        --ws-series-2: #d162a5;
+        --ws-series-3: #8451a7;
+        --ws-series-4: #2695ac;
         color-scheme: dark;
     }
+}
+
+/* applyTheme writes no series colours, so a dark theme chosen on a light OS
+   takes the dark steps here. */
+:root[data-theme='dark'] {
+    --ws-series-1: #3987e5;
+    --ws-series-2: #d162a5;
+    --ws-series-3: #8451a7;
+    --ws-series-4: #2695ac;
 }
 
 @layer base {
