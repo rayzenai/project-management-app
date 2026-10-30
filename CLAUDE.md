@@ -132,7 +132,9 @@ the manager: `canEditTeam` or the project's program manager; its project
 twin `canChooseManagerOf`), `canAppointAsProjectManager` (who may be
 chosen: `canJoinTeam`, and for a program manager the team's organization
 only),
-`canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
+`canManageRosterOf` (project twin `canManageRosterOfProject`, answered
+from the loaded project without a query; keep them in step),
+`canRemoveFromTeam`, `canJoinTeam`,
 `canAssignOutsideTeam` (give a task to someone not on the team, who joins
 it first: whoever passes `canManageRosterOf`, for an active person of the
 project's own organization who passes `canJoinTeam`; list twin
@@ -301,7 +303,7 @@ the organizational admin switch and the program and project manager pickers.
 - **Web** (`routes/web.php`, prefix `workspace`, names `workspace.*`):
   `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`
   (`projects` with `member_ids`, `organization_id` and `can_add_people` =
-  `canManageRosterOf`; `organizationPeople` `{id, name, title}`, the active
+  `canManageRosterOfProject`, no query per project; `organizationPeople` `{id, name, title}`, the active
   people of the viewer's organization for whoever runs a team in it or may
   start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`),
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,

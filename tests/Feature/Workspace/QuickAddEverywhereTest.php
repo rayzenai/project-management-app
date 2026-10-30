@@ -9,6 +9,9 @@ use App\Models\Team;
 use App\Models\User;
 use App\Notifications\AddedToProjectTeam;
 use App\Notifications\TaskAssigned;
+use App\Support\WorkspaceAccess;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Sanctum\Sanctum;
@@ -357,4 +360,63 @@ it('offers the organization on the task page to whoever may add people, apart fr
 
     $this->actingAs($this->officerUser)->getJson("/workspace/tasks/{$task->id}/preview")
         ->assertOk()->assertJsonPath('data.join_candidates', []);
+});
+
+it('builds the task form context without a query per project for a program manager', function () {
+    $this->actingAs($this->jsUser);
+    $count = function (): int {
+        $queries = 0;
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries++;
+        });
+        $this->get('/workspace/guide')->assertOk();
+
+        return $queries;
+    };
+
+    $before = $count();
+
+    // More programs and projects for them to see: each with its own manager,
+    // none led by the program manager.
+    $second = Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->js->id]);
+
+    foreach (range(1, 4) as $i) {
+        $project = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $i % 2 === 0 ? $this->program->id : $second->id]);
+        $project->ensureTeam()->members()->attach(Member::factory()->create(['organization_id' => $this->org->id])->id, ['role' => 'leader']);
+    }
+
+    expect($count())->toBe($before);
+
+    // Still the right answer for each of them.
+    $this->get('/workspace/guide')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('quickAddContext.projects', fn ($projects): bool => collect($projects)->count() === 5
+            && collect($projects)->every(fn (array $p): bool => $p['can_add_people'] === true)));
+});
+
+it('answers canManageRosterOfProject exactly as canManageRosterOf answers for the project team', function () {
+    $otherProgram = Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->colleague->id]);
+    $joint = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->program->id]);
+    $joint->ensureTeam()->update(['is_cross_organization' => true]);
+    $joint->ensureTeam()->members()->attach($this->outsider->id, ['role' => 'leader']);
+    $projects = [
+        $this->project,
+        $joint,
+        Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $otherProgram->id]),
+        Project::factory()->create(['organization_id' => $this->org->id]),
+        // Inconsistent on purpose: another organization's project naming this program.
+        Project::factory()->create(['organization_id' => $this->otherOrg->id, 'program_id' => $this->program->id]),
+    ];
+    $viewers = [
+        User::factory()->create(['email' => 'boss@example.com']), $this->adminUser, $this->jsUser, $this->pmUser,
+        $this->officerUser, $this->colleagueUser, $this->outsider->user, $this->emptyAdminUser,
+    ];
+
+    foreach ($projects as $project) {
+        $team = $project->ensureTeam();
+
+        foreach ($viewers as $viewer) {
+            expect(WorkspaceAccess::canManageRosterOfProject($viewer, $project->fresh()))
+                ->toBe(WorkspaceAccess::canManageRosterOf($viewer, $team));
+        }
+    }
 });

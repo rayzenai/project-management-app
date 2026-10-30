@@ -64,7 +64,7 @@ final class Assignees
     {
         $team = $project->team();
 
-        if ($team === null || ! WorkspaceAccess::canManageRosterOf($user, $team)) {
+        if ($team === null || ! WorkspaceAccess::canManageRosterOfProject($user, $project)) {
             return new Collection;
         }
 

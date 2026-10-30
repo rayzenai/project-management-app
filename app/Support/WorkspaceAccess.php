@@ -202,6 +202,21 @@ class WorkspaceAccess
     }
 
     /**
+     * canManageRosterOf for the project's own team, answered from the project
+     * (its loaded team, program and organization) without a query per call:
+     * the project twin; keep them in step. The program check is
+     * managesProgramOf, which for a project's one team is what
+     * managesProgramOfTeam asks of the database.
+     */
+    public static function canManageRosterOfProject(?Authenticatable $user, Project $project): bool
+    {
+        $team = $project->team();
+
+        return $team !== null
+            && (self::canEditTeam($user, $team) || self::leadsTeam($user, $team) || self::managesProgramOf($user, $project));
+    }
+
+    /**
      * A manager (or the program's manager) may take members off the team but
      * not its manager, who is replaced (canAppointProjectManager), never
      * removed.
@@ -259,7 +274,7 @@ class WorkspaceAccess
             && $member->organization_id !== null
             && (int) $member->organization_id === (int) $project->organization_id
             && self::canJoinTeam($member, $team)
-            && self::canManageRosterOf($user, $team);
+            && self::canManageRosterOfProject($user, $project);
     }
 
     // ---- Members ----

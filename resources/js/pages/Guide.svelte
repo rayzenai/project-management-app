@@ -83,7 +83,7 @@
             key: 'manager',
             title: 'Project manager',
             steps: [
-                "Build your team: on your project's People tab, search for people and add them. Only people on the team can be given its tasks.",
+                "Build your team: on your project's People tab, search for people and add them. Anyone on the team can be given its tasks.",
                 'Break the work into tasks with an owner and a deadline. Press N anywhere to add one.',
                 "From the task form you can give a task to anyone in your organization: if they are not on your project's team yet, they join it.",
                 'When a task cannot start until another is done, drag its card onto that task on the board.',

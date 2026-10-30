@@ -87,8 +87,6 @@ class ShareWorkspaceData
                             ->pluck('id')->map(fn ($id): int => (int) $id)->all();
                     }
 
-                    $team = $p->team();
-
                     return [
                         'id' => $p->id,
                         'slug' => $p->slug,
@@ -100,7 +98,7 @@ class ShareWorkspaceData
                             : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),
                         // Whoever runs its team may also assign the people
                         // of its organization, who join the team.
-                        'can_add_people' => $team !== null && WorkspaceAccess::canManageRosterOf($user, $team),
+                        'can_add_people' => WorkspaceAccess::canManageRosterOfProject($user, $p),
                     ];
                 });
 
