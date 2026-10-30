@@ -2,9 +2,11 @@
 
 namespace App\Queries;
 
+use App\Http\Resources\ProgramResource;
 use App\Http\Resources\ProjectResource;
 use App\Models\Member;
 use App\Models\Organization;
+use App\Models\Program;
 use App\Models\Project;
 use App\Models\Task;
 use App\Support\WorkspaceAccess;
@@ -13,9 +15,10 @@ use Illuminate\Http\Request;
 
 /**
  * Assembles the project list payload shared by the Inertia web index and the
- * JSON API index: each project with its manager, team size and how its work
- * stands (the page groups them by manager), the archived-count badge, and
- * the create-form context.
+ * JSON API index: each project with its manager, program, team size and how
+ * its work stands (the page groups them by program when the viewer sees any,
+ * else by manager), the programs the viewer may open, the archived-count
+ * badge, and the create-form context.
  */
 class ProjectIndexQuery
 {
@@ -71,8 +74,18 @@ class ProjectIndexQuery
             ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'title' => $m->title, 'organization_id' => $m->organization_id])
             ->all();
 
+        // The programs the viewer may open, so the page can group by them.
+        $programs = Program::query()
+            ->visibleTo($user)
+            ->with(['organization:id,name', 'manager:id,name,title'])
+            ->withCount('projects')
+            ->orderBy('name')
+            ->get();
+
         return [
             'projects' => $rows,
+            'programs' => ProgramResource::collection($programs)->resolve(),
+            'canManagePrograms' => WorkspaceAccess::canManagePrograms($user, $officeAdminOf),
             'archivedView' => $archivedView,
             'archivedCount' => Project::query()->visibleTo($user)->archived()->count(),
             'managerCandidates' => $managerCandidates,

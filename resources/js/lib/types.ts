@@ -188,6 +188,8 @@ export interface Project extends ProjectSummary {
     can_change_key?: boolean;
     /** Making it public (everyone in its organization), likewise. */
     can_publish?: boolean;
+    /** The program it is in, if any. */
+    program?: ProgramRef | null;
     /** The project's own team. */
     team?: {
         id: Id;
@@ -509,6 +511,17 @@ export interface ProjectProgress extends ProgressReport {
     };
 }
 
+/** A program as a project or the sidebar names it. */
+export interface ProgramRef {
+    slug: string;
+    name: string;
+}
+
+/** A program a project can be put in (Edit project's choices). */
+export interface ProgramOption extends ProgramRef {
+    id: number;
+}
+
 export interface Program {
     id: number;
     slug: string;
@@ -586,6 +599,9 @@ export interface SharedProps {
     /** The viewer's organization; null for a super-admin. */
     organization?: OrganizationOption | null;
     ledTeamIds?: Id[];
+    /** The programs the user manages, for role checks and the sidebar. */
+    managedProgramIds?: Id[];
+    managedPrograms?: ProgramRef[];
     unreadNotifications?: number;
     themeCatalogue?: ThemeCatalogue;
     features?: Features;

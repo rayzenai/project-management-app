@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Http\Resources\NoteResource;
 use App\Http\Resources\WorkspaceNoteResource;
 use App\Models\Member;
+use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectNote;
 use App\Models\User;
@@ -38,6 +39,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   on in Settings. Screens hide what is off.
  * - `gitEnabled` — whether the user may use git anywhere (GitAccess), so the
  *   Guide shows its Code section only to them.
+ * - `managedProgramIds` / `managedPrograms` — the programs the user manages
+ *   (ids for role checks, `{slug, name}` for the sidebar); empty for most.
  * - `themeCatalogue` — the theme + font catalogue from `config/themes.php`, so
  *   the appearance onboarding/settings render their cards without fetching the
  *   Sanctum-protected `GET /api/v1/themes` endpoint (which 401s in the session
@@ -176,6 +179,17 @@ class ShareWorkspaceData
             : []);
 
         Inertia::share('isOfficeAdmin', fn (): bool => WorkspaceAccess::officeAdminOrganizationId($request->user()) !== null);
+
+        Inertia::share('managedProgramIds', fn (): array => WorkspaceAccess::managedProgramIds($request->user()));
+
+        // The sidebar's Programs group: each program the user manages, by name.
+        Inertia::share('managedPrograms', function () use ($request): array {
+            $ids = WorkspaceAccess::managedProgramIds($request->user());
+
+            return $ids === [] ? [] : Program::query()->whereKey($ids)->orderBy('name')->get(['slug', 'name'])
+                ->map(fn (Program $program): array => ['slug' => $program->slug, 'name' => $program->name])
+                ->all();
+        });
 
         // Whether the user may use git anywhere: the Guide shows its Code section then.
         Inertia::share('gitEnabled', fn (): bool => $request->user() instanceof User && GitAccess::anyFor($request->user()));

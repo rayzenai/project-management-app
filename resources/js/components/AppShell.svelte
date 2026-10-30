@@ -5,6 +5,7 @@
         BookOpen,
         Building2,
         Folder,
+        FolderTree,
         LayoutGrid,
         LogOut,
         Menu,
@@ -61,6 +62,7 @@
         (shared.appearance ?? null) as AppearanceProps | null,
     );
     const projects = $derived(shared.quickAddContext?.projects ?? []);
+    const programs = $derived(shared.managedPrograms ?? []);
     const noteCount = $derived(shared.workspaceNotes?.length ?? 0);
 
     let mobileOpen = $state(false);
@@ -176,6 +178,10 @@
 
     function projectActive(slug: string) {
         return path.startsWith(`/workspace/projects/${slug}`);
+    }
+
+    function programActive(slug: string) {
+        return path.startsWith(`/workspace/programs/${slug}`);
     }
 
     function logout() {
@@ -439,6 +445,43 @@
         </nav>
 
         <div class="my-3 border-t border-line"></div>
+
+        {#if programs.length > 0}
+            <!-- The programs this person manages, above their projects. -->
+            {#if !rail}
+                <div
+                    class="mb-1 flex h-6 items-center gap-2 px-2.5 text-xs font-medium text-fg-faint"
+                >
+                    <span>Programs</span>
+                    <span class="tabular-nums">{programs.length}</span>
+                </div>
+            {/if}
+            <nav class="mb-3 flex flex-col gap-0.5">
+                {#each programs as program (program.slug)}
+                    {@const active = programActive(program.slug)}
+                    <a
+                        href={`/workspace/programs/${program.slug}`}
+                        use:inertia
+                        aria-current={active ? 'page' : undefined}
+                        title={rail ? program.name : undefined}
+                        class={`flex items-center gap-2.5 rounded-md py-2 transition ${
+                            rail ? 'justify-center px-0' : 'px-2.5'
+                        } ${
+                            active
+                                ? 'bg-accent-soft text-accent'
+                                : 'text-fg-muted hover:bg-hover hover:text-fg'
+                        }`}
+                    >
+                        <FolderTree
+                            class={`h-[15px] w-[15px] shrink-0 ${active ? 'text-accent' : 'text-fg-faint'}`}
+                        />
+                        {#if !rail}
+                            <span class="truncate">{program.name}</span>
+                        {/if}
+                    </a>
+                {/each}
+            </nav>
+        {/if}
 
         {#if !rail}
             <div

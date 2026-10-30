@@ -40,9 +40,10 @@ vendor/bin/pest > file 2>&1` and read the file.
 
 - `app/Providers/AppServiceProvider.php` — the `manage-workspace` Gate (from
   `config('project-management.super_admins')`), the strict morph map (`user`,
-  `task`, `task-comment`, `task-dependency`, `project-note`, `project-contact`,
-  `subtask`, `project-assignment`, `team`, `member`, `git-repository`,
-  `git-branch`, `git-commit`, `git-pull-request`), and the observers.
+  `project`, `task`, `task-comment`, `task-dependency`, `project-note`,
+  `project-contact`, `subtask`, `project-assignment`, `team`, `member`,
+  `git-repository`, `git-branch`, `git-commit`, `git-pull-request`), and the
+  observers (`ProgramObserver`, `ProjectObserver`, `TaskObserver`, ...).
 - `routes/web.php` — `/workspace/*` (Inertia, `auth` + `ShareWorkspaceData`),
   guest login routes, `/` redirect. `routes/api.php` — `/api/v1/*` (Sanctum).
   `routes/console.php` — the daily schedule.
@@ -153,7 +154,9 @@ Privilege-escalation protections — do not regress:
   `manager_id`, `is_cross_organization` and `is_public` on a project are
   silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
   `safe()`, which bypasses those overrides.
-- Mentions only notify people who can view the task's project.
+- Mentions only notify people who can view the task's project. The comment
+  box offers `TaskShowQuery`'s `mentionCandidates` (the team plus the
+  program's manager); `team` stays the assignees.
 - A program manager is never a team leader (never added to the team, never
   `leadsTeam`), reaches only projects of programs in their own organization
   (`managedProgramIds` and `managesProgramOf` check both the program's and
@@ -208,7 +211,8 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   polymorphic audit log written only by observers; every row names its
   `project_id`, and `task_id` is null for project-level entries (team
   changes, written by `TeamMembershipObserver` via the `TeamMembership`
-  pivot model). Feeds scope activity by `project_id`. **WorkspaceNote** — personal
+  pivot model; program moves, by `ProjectObserver`). Feeds scope activity
+  by `project_id`. **WorkspaceNote** — personal
   stickies. **ProjectAssignment / ProjectNote / ProjectContact / TaskComment** —
   task children.
 - Dates are `CarbonImmutable` app-wide (`Date::use`); type-hint
@@ -230,19 +234,25 @@ comment service (mentions) and the reminders command. The team ones carry
 manager, from `ProgramObserver`) carries a `program {slug, name}` instead.
 
 The sidebar's **Guide** (`pages/Guide.svelte`, `/workspace/guide`) explains
-the model and each role's routine to users: keep it in step when a feature
-changes how people work.
+to users the model (Organization, Program, Project, Team, Tasks), each role's
+routine (office admin, program manager, project manager, member) and how a
+ministry's titles map onto those roles ("In a ministry"): keep it in step
+when a feature changes how people work. The same mapping shows as hints by
+the office admin switch and the program and project manager pickers.
 
 ## Two delivery surfaces
 
 - **Web** (`routes/web.php`, prefix `workspace`, names `workspace.*`):
   `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`,
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
-  `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`. Add
-  cross-cutting web context there.
+  `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`,
+  `managedProgramIds`, `managedPrograms` (`{slug, name}`, the sidebar's
+  Programs group). Add cross-cutting web context there.
 - **API** (`routes/api.php`, prefix `api/v1`, names `api.*`): `POST login`
   → token; `Api\AuthController::userPayload` is the token-auth twin of
-  `ShareWorkspaceData`. External systems get tokens via `workspace:api-token`.
+  `ShareWorkspaceData` (`is_super_admin`, `is_office_admin`, `led_team_ids`,
+  `managed_program_ids`, `features`, `git_enabled`, ...). External systems
+  get tokens via `workspace:api-token`.
   Add cross-cutting API context to `userPayload`.
 
 ## Git (Forgejo), phase 0

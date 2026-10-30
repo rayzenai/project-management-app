@@ -89,6 +89,9 @@
                                 >
                                 <th class="col-head px-3 font-normal">Done</th>
                                 <th class="col-head px-3 text-right font-normal"
+                                    >Open</th
+                                >
+                                <th class="col-head px-3 text-right font-normal"
                                     >Overdue</th
                                 >
                                 <th class="col-head py-1.5 pl-3 font-normal"
@@ -130,6 +133,11 @@
                                             >
                                         </span>
                                     </td>
+                                    <td
+                                        class="px-3 text-right font-mono text-fg-muted tabular-nums"
+                                        >{project.tasks_count -
+                                            project.done_tasks_count}</td
+                                    >
                                     <td
                                         class={`px-3 text-right font-mono tabular-nums ${project.overdue_tasks_count > 0 ? 'text-danger' : 'text-fg-muted'}`}
                                         >{project.overdue_tasks_count}</td

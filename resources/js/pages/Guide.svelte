@@ -4,6 +4,7 @@
         Building2,
         ChevronRight,
         FolderKanban,
+        FolderTree,
         ListChecks,
         UsersRound,
     } from '@lucide/svelte';
@@ -18,9 +19,11 @@
             ? 'super'
             : shared.isOfficeAdmin
               ? 'admin'
-              : (shared.ledTeamIds ?? []).length > 0
-                ? 'manager'
-                : 'member',
+              : (shared.managedProgramIds ?? []).length > 0
+                ? 'program'
+                : (shared.ledTeamIds ?? []).length > 0
+                  ? 'manager'
+                  : 'member',
     );
 
     const model = [
@@ -28,6 +31,11 @@
             icon: Building2,
             title: 'Organization',
             text: 'Your office: its people and its projects.',
+        },
+        {
+            icon: FolderTree,
+            title: 'Program',
+            text: 'Optional. A group of projects with one program manager.',
         },
         {
             icon: FolderKanban,
@@ -55,7 +63,17 @@
                 'Create projects on the Projects page and choose who manages each one.',
                 "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team.',
-                'Watch everything from the Projects page: projects sit under their manager with how much is done, what is overdue and the next deadline.',
+                'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
+                'Watch everything from the Projects page: projects sit under their program, or under their manager when there are no programs, with how much is done, what is overdue and the next deadline.',
+            ],
+        },
+        {
+            key: 'program',
+            title: 'Program manager',
+            steps: [
+                'Open your program page every week, from Programs in the sidebar: how far each project has got, what is overdue and who is working on what.',
+                "Manage each project's team and tasks as its manager would: add people on its People tab, break the work into tasks and keep them moving.",
+                'Ask an office admin to add a project to your program or take one out.',
             ],
         },
         {
@@ -79,6 +97,14 @@
                 'Want a log of meetings and decisions, or outside contacts, on your tasks? Turn on Task notes or Contacts in Settings.',
             ],
         },
+    ];
+
+    // How a ministry's ranks map onto the workspace's roles.
+    const ministry = [
+        ['Minister, Secretary, Secretariat', 'Office admin'],
+        ['Joint Secretary', 'Program manager'],
+        ['Under Secretary', 'Project manager'],
+        ['Officer', 'Team member'],
     ];
 
     const reading = [
@@ -189,8 +215,9 @@
                     them.
                 </li>
                 <li>
-                    You see the projects whose team you are on. An office admin
-                    sees every project of the office.
+                    You see the projects whose team you are on. A program
+                    manager sees every project in their programs, and an office
+                    admin every project of the office.
                 </li>
             </ul>
         </section>
@@ -241,6 +268,30 @@
                     </div>
                 {/if}
             </div>
+        </section>
+
+        <section>
+            <h2 class="section-title mb-1">In a ministry</h2>
+            <p class="mb-3 text-[13px] text-fg-muted">
+                Titles stay free text on each person, and everything here is
+                optional.
+            </p>
+            <table class="w-full text-[13px]">
+                <thead>
+                    <tr class="border-b border-line text-left">
+                        <th class="col-head py-1.5 pr-4 font-normal">Title</th>
+                        <th class="col-head py-1.5 font-normal">Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#each ministry as [title, roleName] (title)}
+                        <tr class="border-b border-line-soft">
+                            <td class="py-2 pr-4 font-medium">{title}</td>
+                            <td class="py-2 text-fg-muted">{roleName}</td>
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
         </section>
 
         <section>

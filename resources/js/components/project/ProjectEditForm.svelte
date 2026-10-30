@@ -1,14 +1,17 @@
 <script lang="ts">
     import { useForm } from '@inertiajs/svelte';
-    import type { Project } from '../../lib/types';
+    import type { ProgramOption, Project } from '../../lib/types';
 
     let {
         project,
         isSuperAdmin = false,
+        programs = [],
         onclose,
     }: {
         project: Project;
         isSuperAdmin?: boolean;
+        /** Its organization's programs; given only to whoever may move it. */
+        programs?: ProgramOption[];
         onclose: () => void;
     } = $props();
 
@@ -26,6 +29,9 @@
             description_np: project.description_np ?? '',
             is_public: project.is_public ?? false,
             is_cross_organization: project.team?.is_cross_organization ?? false,
+            program_id:
+                programs.find((p) => p.slug === project.program?.slug)?.id ??
+                null,
         };
     }
 
@@ -119,6 +125,31 @@
             <p class="text-xs text-danger">{form.errors.description_np}</p>
         {/if}
     </div>
+
+    {#if programs.length > 0}
+        <div class="flex flex-col gap-1">
+            <label for={`${uid}-program`} class="label"
+                >Program (optional)</label
+            >
+            <select
+                id={`${uid}-program`}
+                class="input"
+                value={form.program_id ?? ''}
+                onchange={(e) =>
+                    (form.program_id = e.currentTarget.value
+                        ? Number(e.currentTarget.value)
+                        : null)}
+            >
+                <option value="">No program</option>
+                {#each programs as program (program.id)}
+                    <option value={program.id}>{program.name}</option>
+                {/each}
+            </select>
+            {#if form.errors.program_id}
+                <p class="text-xs text-danger">{form.errors.program_id}</p>
+            {/if}
+        </div>
+    {/if}
 
     {#if project.can_publish}
         <label class="flex items-center gap-2 text-fg-muted">

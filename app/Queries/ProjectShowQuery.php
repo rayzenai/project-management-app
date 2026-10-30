@@ -6,15 +6,17 @@ use App\Http\Resources\GitRepositoryResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Member;
+use App\Models\Program;
 use App\Models\Project;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Assembles the single-project payload (project, its tasks, its team and,
- * when its organization has git, its code) shared by the Inertia web show
- * page and the JSON API show endpoint.
+ * Assembles the single-project payload (project, its tasks, its team, when
+ * its organization has git its code, and for its administrators the
+ * programs it can move to) shared by the Inertia web show page and the JSON
+ * API show endpoint.
  */
 class ProjectShowQuery
 {
@@ -22,7 +24,7 @@ class ProjectShowQuery
     private const OPEN_PULL_REQUESTS = 10;
 
     /**
-     * @return array{project: array<string, mixed>, tasks: array<int, array<string, mixed>>, team: array<string, mixed>|null, git: array{repositories: list<array<string, mixed>>, can_manage: bool}|null}
+     * @return array{project: array<string, mixed>, tasks: array<int, array<string, mixed>>, team: array<string, mixed>|null, git: array{repositories: list<array<string, mixed>>, can_manage: bool}|null, programs: array<int, array{id: int, slug: string, name: string}>}
      */
     public function data(Project $project): array
     {
@@ -43,6 +45,12 @@ class ProjectShowQuery
             'tasks' => TaskResource::collection($project->tasks)->resolve(),
             'team' => $this->team($project),
             'git' => $canViewCode ? $this->git($project, $viewer) : null,
+            // Edit project's Program choices, for whoever may move it.
+            'programs' => WorkspaceAccess::administers($viewer, $project->organization_id)
+                ? Program::query()->where('organization_id', $project->organization_id)->orderBy('name')->get(['id', 'slug', 'name'])
+                    ->map(fn (Program $program): array => ['id' => $program->id, 'slug' => $program->slug, 'name' => $program->name])
+                    ->all()
+                : [],
         ];
     }
 

@@ -374,15 +374,21 @@
                                 </p>
                             {/if}
                         </div>
-                        <label
-                            class="flex items-center gap-2 self-end pb-2 text-[13px] text-fg"
-                        >
-                            <input
-                                type="checkbox"
-                                bind:checked={memberForm.is_office_admin}
-                            />
-                            Office admin of this organization
-                        </label>
+                        <div class="flex flex-col gap-1 self-end">
+                            <label
+                                class="flex items-center gap-2 text-[13px] text-fg"
+                            >
+                                <input
+                                    type="checkbox"
+                                    bind:checked={memberForm.is_office_admin}
+                                />
+                                Office admin of this organization
+                            </label>
+                            <p class="text-xs text-fg-muted">
+                                In a ministry: the Minister, Secretary and
+                                Secretariat.
+                            </p>
+                        </div>
                     {/if}
                 </div>
                 <p class="text-xs text-fg-muted">
@@ -561,17 +567,25 @@
                                                 </p>
                                             {/if}
                                         </div>
-                                        <label
-                                            class="flex items-center gap-2 self-end pb-2 text-[13px] text-fg"
+                                        <div
+                                            class="flex flex-col gap-1 self-end"
                                         >
-                                            <input
-                                                type="checkbox"
-                                                bind:checked={
-                                                    memberEditForm.is_office_admin
-                                                }
-                                            />
-                                            Office admin of this organization
-                                        </label>
+                                            <label
+                                                class="flex items-center gap-2 text-[13px] text-fg"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    bind:checked={
+                                                        memberEditForm.is_office_admin
+                                                    }
+                                                />
+                                                Office admin of this organization
+                                            </label>
+                                            <p class="text-xs text-fg-muted">
+                                                In a ministry: the Minister,
+                                                Secretary and Secretariat.
+                                            </p>
+                                        </div>
                                     {/if}
                                 </div>
                                 <div

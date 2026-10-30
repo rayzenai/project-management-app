@@ -90,6 +90,7 @@ class AuthController extends Controller
             'is_super_admin' => WorkspaceAccess::isSuperAdmin($user),
             'is_office_admin' => WorkspaceAccess::officeAdminOrganizationId($user) !== null,
             'led_team_ids' => WorkspaceAccess::ledTeamIds($user),
+            'managed_program_ids' => WorkspaceAccess::managedProgramIds($user),
             'features' => $user->features(),
             // The twin of the web's gitEnabled: the user may use git somewhere.
             'git_enabled' => GitAccess::anyFor($user),

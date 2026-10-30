@@ -45,7 +45,7 @@ the same `app/Services/Workspace/*` action service.
 | --- | --- | --- | --- |
 | POST | `/login` | `email`, `password`, `device_name` | `{ token, user }` |
 | POST | `/logout` | — | `{ message }` (revokes the current token) |
-| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, features, git_enabled }`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled` |
+| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, managed_program_ids, features, git_enabled }`; `managed_program_ids` lists the programs the person manages (while active, in their own organization), the web's `managedProgramIds`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled` |
 
 ## Appearance, preferences & themes
 
@@ -89,9 +89,9 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/workspace/projects` | list — visibility-scoped. `?archived=1` for archived |
-| GET | `/workspace/projects` | each project also carries `program { slug, name }` (or `null`), `manager { id, name, title }`, `team { id, is_cross_organization, members_count }`, `percent_complete`, `open_tasks_count`, `overdue_tasks_count`, `next_deadline_at`; plus `managerCandidates` for the create form |
+| GET | `/workspace/projects` | each project also carries `program { slug, name }` (or `null`), `manager { id, name, title }`, `team { id, is_cross_organization, members_count }`, `percent_complete`, `open_tasks_count`, `overdue_tasks_count`, `next_deadline_at`; plus `managerCandidates` for the create form, `programs` (the programs the caller may see, each a program payload with `projects_count`; the web page groups projects by them when there are any) and `canManagePrograms` |
 | POST | `/workspace/projects` | create (office admin or super-admin). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization); optional `key` (see below), otherwise the title suggests a free one. A super-admin sends `organization_id`; otherwise it is the office admin's organization. Optional `program_id` (a program of that organization, else 422 on `program_id`; office admin / super-admin only, ignored for anyone else) |
-| GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller |
+| GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller. `programs: [{ id, slug, name }]` lists its organization's programs for whoever may move it (office admin, super-admin), else `[]` |
 | GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. `project` carries `code`; each task carries `number` and `project { slug, title, code }`. For its manager, its office admin and super-admins (`project.can_view_progress`) |
 | PATCH | `/workspace/projects/{slug}` | update (its manager, office admin or super-admin). `manager_id` (office admin / super-admin; the old manager stays on the team), `is_public` (office admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team), `key` (office admin / super-admin, see below), `program_id` (a program of the project's organization, or `null` to take it out; office admin / super-admin; 422 on `program_id` for another organization's program); dropped silently for anyone else. The team keeps the project's title |
 | PATCH | `/workspace/projects/{slug}/archive` | soft-archive (its manager, its office admin, or a super-admin) |
@@ -115,7 +115,7 @@ Project payloads carry `key`, `code` (the same key, as task codes use it) and
 | --- | --- | --- |
 | POST | `/workspace/projects/{slug}/tasks` | create |
 | POST | `/workspace/projects/{slug}/tasks/reorder` | persist board ordering |
-| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`) |
+| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`). `team` is who can be given the task; `mentionCandidates` is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
 | PATCH | `/workspace/projects/{slug}/tasks/{taskSlug}` | update (status, fields) |
 | DELETE | `/workspace/projects/{slug}/tasks/{taskSlug}` | soft-delete |
 | POST | `/workspace/projects/{slug}/tasks/{taskSlug}/restore` | undo delete |

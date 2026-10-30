@@ -1,12 +1,17 @@
 <script lang="ts">
-    import { router, useForm } from '@inertiajs/svelte';
-    import { Plus } from '@lucide/svelte';
+    import { inertia, router, useForm } from '@inertiajs/svelte';
+    import { FolderTree, Plus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import AssigneePicker from '../../components/AssigneePicker.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
     import { formatDate } from '../../lib/format';
-    import type { OrganizationOption, Project } from '../../lib/types';
+    import type {
+        OrganizationOption,
+        Program,
+        ProgramRef,
+        Project,
+    } from '../../lib/types';
 
     interface ManagerCandidate {
         id: number;
@@ -25,6 +30,8 @@
         isSuperAdmin = false,
         canPublish = false,
         organizations = [],
+        programs = [],
+        canManagePrograms = false,
     }: {
         projects: Project[];
         archivedView?: boolean;
@@ -35,6 +42,9 @@
         isSuperAdmin?: boolean;
         canPublish?: boolean;
         organizations?: OrganizationOption[];
+        /** The programs the viewer may open; the page groups by them. */
+        programs?: Program[];
+        canManagePrograms?: boolean;
     } = $props();
 
     // ?new=1 opens the composer straight away, so the sidebar's + can mean
@@ -53,6 +63,7 @@
             description: '',
             is_public: false,
             manager_id: null as number | null,
+            program_id: null as number | null,
             // With a single organization there is nothing to choose.
             organization_id:
                 organizations.length === 1
@@ -74,6 +85,13 @@
             : managerCandidates,
     );
 
+    // A new project may join a program of the organization it lands in.
+    const formPrograms = $derived(
+        isSuperAdmin
+            ? programs.filter((p) => p.organization.id === form.organization_id)
+            : programs,
+    );
+
     function submit(e: SubmitEvent) {
         e.preventDefault();
         form.transform((data) => ({
@@ -87,6 +105,49 @@
                 creating = false;
             },
         });
+    }
+
+    let creatingProgram = $state(false);
+
+    function seedProgram() {
+        return {
+            name: '',
+            description: '',
+            manager_id: null as number | null,
+            organization_id:
+                organizations.length === 1
+                    ? organizations[0].id
+                    : (null as number | null),
+        };
+    }
+
+    const programForm = useForm(seedProgram());
+    let programManagerIds = $state<number[]>([]);
+
+    // A program's manager is an active person of its organization.
+    const programManagers = $derived(
+        isSuperAdmin
+            ? managerCandidates.filter(
+                  (m) => m.organization_id === programForm.organization_id,
+              )
+            : managerCandidates,
+    );
+
+    function submitProgram(e: SubmitEvent) {
+        e.preventDefault();
+        programForm
+            .transform((data) => ({
+                ...data,
+                manager_id: programManagerIds[0] ?? null,
+            }))
+            .post('/workspace/programs', {
+                preserveScroll: true,
+                onSuccess: () => {
+                    programForm.reset();
+                    programManagerIds = [];
+                    creatingProgram = false;
+                },
+            });
     }
 
     function archive(project: Project) {
@@ -113,11 +174,79 @@
         );
     }
 
+    type Group =
+        | {
+              key: string;
+              kind: 'manager';
+              manager: Project['manager'] | null;
+              projects: Project[];
+          }
+        | {
+              key: string;
+              kind: 'program';
+              program: ProgramRef;
+              /** Null when the viewer may not open the program's page. */
+              details: Program | null;
+              projects: Project[];
+          }
+        | { key: string; kind: 'none'; projects: Project[] };
+
+    // With programs to show, projects sit under their program, programs by
+    // name, then the ones in none. An empty program still shows on the
+    // active tab, so a new one has its place.
+    const byProgram = $derived(programs.length > 0);
+
+    const programGroups = $derived.by((): Group[] => {
+        const list = programs.map((program) => ({
+            key: `p-${program.slug}`,
+            kind: 'program' as const,
+            program: { slug: program.slug, name: program.name },
+            details: program as Program | null,
+            projects: [] as Project[],
+        }));
+        const none: Project[] = [];
+
+        for (const project of projects) {
+            const program = project.program;
+
+            if (!program) {
+                none.push(project);
+                continue;
+            }
+
+            let group = list.find((g) => g.program.slug === program.slug);
+
+            // A program the viewer works in but may not open.
+            if (!group) {
+                group = {
+                    key: `p-${program.slug}`,
+                    kind: 'program',
+                    program,
+                    details: null,
+                    projects: [],
+                };
+                list.push(group);
+            }
+
+            group.projects.push(project);
+        }
+
+        return [
+            ...list
+                .filter((g) => !archivedView || g.projects.length > 0)
+                .sort((a, b) => a.program.name.localeCompare(b.program.name)),
+            ...(none.length > 0
+                ? [{ key: 'none', kind: 'none' as const, projects: none }]
+                : []),
+        ];
+    });
+
     // The portfolio: projects grouped under their manager, managers by name,
     // projects still waiting for one last.
-    const groups = $derived.by(() => {
+    const managerGroups = $derived.by((): Group[] => {
         const byManager: {
             key: string;
+            kind: 'manager';
             manager: Project['manager'];
             projects: Project[];
         }[] = [];
@@ -127,7 +256,12 @@
             let group = byManager.find((g) => g.key === key);
 
             if (!group) {
-                group = { key, manager: project.manager ?? null, projects: [] };
+                group = {
+                    key,
+                    kind: 'manager',
+                    manager: project.manager ?? null,
+                    projects: [],
+                };
                 byManager.push(group);
             }
 
@@ -142,6 +276,8 @@
                   : 1,
         );
     });
+
+    const groups = $derived(byProgram ? programGroups : managerGroups);
 
     function summary(list: Project[]): string {
         const open = list.reduce((n, p) => n + (p.open_tasks_count ?? 0), 0);
@@ -176,23 +312,38 @@
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
             <span class="truncate font-medium">Projects</span>
         </div>
-        {#if canCreate}
+        {#if canCreate || canManagePrograms}
             <div class="flex items-center gap-1.5">
-                {#if creating}
+                {#if creating || creatingProgram}
                     <button
                         type="button"
                         class="btn"
-                        onclick={() => (creating = !creating)}>Cancel</button
+                        onclick={() => {
+                            creating = false;
+                            creatingProgram = false;
+                        }}>Cancel</button
                     >
                 {:else}
-                    <button
-                        type="button"
-                        class="btn-primary"
-                        onclick={() => (creating = !creating)}
-                    >
-                        <Plus class="h-3.5 w-3.5" />
-                        New project
-                    </button>
+                    {#if canManagePrograms}
+                        <button
+                            type="button"
+                            class="btn"
+                            onclick={() => (creatingProgram = true)}
+                        >
+                            <Plus class="h-3.5 w-3.5" />
+                            New program
+                        </button>
+                    {/if}
+                    {#if canCreate}
+                        <button
+                            type="button"
+                            class="btn-primary"
+                            onclick={() => (creating = true)}
+                        >
+                            <Plus class="h-3.5 w-3.5" />
+                            New project
+                        </button>
+                    {/if}
                 {/if}
             </div>
         {/if}
@@ -218,6 +369,121 @@
     </div>
 
     <div class="px-4 py-5 lg:px-8 lg:py-6">
+        {#if creatingProgram}
+            <div class="mb-6 max-w-2xl border-b border-line pb-6">
+                <form onsubmit={submitProgram}>
+                    <h2 class="mb-4 text-[15px] font-semibold text-fg">
+                        New program
+                    </h2>
+                    <div>
+                        <label
+                            for={`${uid}-program-name`}
+                            class="label mb-1 block">Name</label
+                        >
+                        <input
+                            id={`${uid}-program-name`}
+                            type="text"
+                            bind:value={programForm.name}
+                            required
+                            class="input"
+                        />
+                        {#if programForm.errors.name}<p
+                                class="mt-1 text-xs text-danger"
+                            >
+                                {programForm.errors.name}
+                            </p>{/if}
+                    </div>
+                    <div class="mt-3">
+                        <label
+                            for={`${uid}-program-description`}
+                            class="label mb-1 block">Description</label
+                        >
+                        <textarea
+                            id={`${uid}-program-description`}
+                            bind:value={programForm.description}
+                            rows="2"
+                            class="input"
+                        ></textarea>
+                        {#if programForm.errors.description}<p
+                                class="mt-1 text-xs text-danger"
+                            >
+                                {programForm.errors.description}
+                            </p>{/if}
+                    </div>
+                    {#if isSuperAdmin}
+                        <div class="mt-3">
+                            <label
+                                for={`${uid}-program-organization`}
+                                class="label mb-1 block">Organization</label
+                            >
+                            <select
+                                id={`${uid}-program-organization`}
+                                class="input"
+                                required
+                                value={programForm.organization_id ?? ''}
+                                onchange={(e) => {
+                                    programForm.organization_id = e
+                                        .currentTarget.value
+                                        ? Number(e.currentTarget.value)
+                                        : null;
+                                    programManagerIds = [];
+                                }}
+                            >
+                                <option value="" disabled
+                                    >Choose an organization</option
+                                >
+                                {#each organizations as organization (organization.id)}
+                                    <option value={organization.id}
+                                        >{organization.name}</option
+                                    >
+                                {/each}
+                            </select>
+                            {#if programForm.errors.organization_id}<p
+                                    class="mt-1 text-xs text-danger"
+                                >
+                                    {programForm.errors.organization_id}
+                                </p>{/if}
+                        </div>
+                    {/if}
+                    <div class="mt-3">
+                        <span class="label mb-1 block">Program manager</span>
+                        {#if isSuperAdmin && programForm.organization_id === null}
+                            <p class="text-xs text-fg-muted">
+                                Choose an organization first.
+                            </p>
+                        {:else}
+                            <AssigneePicker
+                                team={programManagers}
+                                bind:selectedIds={programManagerIds}
+                                placeholder="Search or choose who manages it"
+                            />
+                        {/if}
+                        <p class="mt-1 text-xs text-fg-muted">
+                            In a ministry, usually a Joint Secretary.
+                        </p>
+                        <p class="mt-1 text-xs text-fg-muted">
+                            They run every project in the program as its manager
+                            would.
+                        </p>
+                        {#if programForm.errors.manager_id}<p
+                                class="mt-1 text-xs text-danger"
+                            >
+                                {programForm.errors.manager_id}
+                            </p>{/if}
+                    </div>
+
+                    <div class="mt-4 flex items-center gap-2">
+                        <div class="flex-1"></div>
+                        <button
+                            type="submit"
+                            disabled={programForm.processing}
+                            class="btn-primary">Create</button
+                        >
+                    </div>
+                </form>
+            </div>
+        {/if}
+
         {#if creating}
             <div class="mb-6 max-w-2xl border-b border-line pb-6">
                 <form onsubmit={submit}>
@@ -278,6 +544,7 @@
                                         ? Number(e.currentTarget.value)
                                         : null;
                                     managerIds = [];
+                                    form.program_id = null;
                                 }}
                             >
                                 <option value="" disabled
@@ -310,6 +577,9 @@
                             />
                         {/if}
                         <p class="mt-1 text-xs text-fg-muted">
+                            In a ministry, usually an Under Secretary.
+                        </p>
+                        <p class="mt-1 text-xs text-fg-muted">
                             The project gets its own team, led by its manager,
                             who then adds the people.
                         </p>
@@ -319,6 +589,36 @@
                                 {form.errors.manager_id}
                             </p>{/if}
                     </div>
+                    {#if formPrograms.length > 0}
+                        <div class="mt-3">
+                            <label
+                                for={`${uid}-program`}
+                                class="label mb-1 block"
+                                >Program (optional)</label
+                            >
+                            <select
+                                id={`${uid}-program`}
+                                class="input"
+                                value={form.program_id ?? ''}
+                                onchange={(e) =>
+                                    (form.program_id = e.currentTarget.value
+                                        ? Number(e.currentTarget.value)
+                                        : null)}
+                            >
+                                <option value="">No program</option>
+                                {#each formPrograms as program (program.id)}
+                                    <option value={program.id}
+                                        >{program.name}</option
+                                    >
+                                {/each}
+                            </select>
+                            {#if form.errors.program_id}<p
+                                    class="mt-1 text-xs text-danger"
+                                >
+                                    {form.errors.program_id}
+                                </p>{/if}
+                        </div>
+                    {/if}
 
                     {#if canPublish}
                         <label
@@ -346,7 +646,7 @@
             </div>
         {/if}
 
-        {#if projects.length === 0}
+        {#if groups.length === 0}
             <p class="text-fg-muted">
                 {#if archivedView}
                     No archived projects.
@@ -375,7 +675,39 @@
                     <div
                         class="group-head flex items-center gap-2.5 border-b border-line bg-surface-alt px-4 py-2 lg:px-8"
                     >
-                        {#if group.manager}
+                        {#if group.kind === 'program'}
+                            <FolderTree
+                                class="h-4 w-4 shrink-0 text-fg-faint"
+                            />
+                            {#if group.details}
+                                <a
+                                    href={`/workspace/programs/${group.program.slug}`}
+                                    use:inertia
+                                    class="truncate font-medium text-fg hover:text-accent"
+                                    >{group.program.name}</a
+                                >
+                                {#if group.details.manager}
+                                    <span
+                                        class="hidden min-w-0 items-center gap-1.5 text-xs text-fg-muted sm:inline-flex"
+                                    >
+                                        <Avatar
+                                            name={group.details.manager.name}
+                                        />
+                                        <span class="truncate"
+                                            >{group.details.manager.name}</span
+                                        >
+                                    </span>
+                                {/if}
+                            {:else}
+                                <span class="truncate font-medium text-fg"
+                                    >{group.program.name}</span
+                                >
+                            {/if}
+                        {:else if group.kind === 'none'}
+                            <span class="font-medium text-fg-muted"
+                                >No program</span
+                            >
+                        {:else if group.manager}
                             <Avatar name={group.manager.name} size="md" />
                             <span class="truncate font-medium text-fg"
                                 >{group.manager.name}</span
@@ -391,10 +723,21 @@
                                 >No manager yet</span
                             >
                         {/if}
-                        <span class="ml-auto shrink-0 text-xs text-fg-muted"
-                            >{summary(group.projects)}</span
-                        >
+                        {#if group.projects.length > 0}
+                            <span class="ml-auto shrink-0 text-xs text-fg-muted"
+                                >{summary(group.projects)}</span
+                            >
+                        {/if}
                     </div>
+                    {#if group.projects.length === 0}
+                        <p
+                            class="border-b border-line-soft px-4 py-2.5 text-xs text-fg-muted lg:px-8"
+                        >
+                            No projects in this program yet.{canCreate
+                                ? ' Choose it when you create or edit a project.'
+                                : ''}
+                        </p>
+                    {/if}
                     {#each group.projects as project (project.id)}
                         <a
                             href={`/workspace/projects/${project.slug}`}
@@ -424,6 +767,19 @@
                                     {/if}
                                     {#if project.is_public}
                                         <span class="chip">public</span>
+                                    {/if}
+                                    {#if byProgram}
+                                        {#if project.manager}
+                                            <span
+                                                class="hidden truncate text-xs text-fg-muted sm:inline"
+                                                >{project.manager.name}</span
+                                            >
+                                        {:else}
+                                            <span
+                                                class="hidden shrink-0 text-xs text-warn sm:inline"
+                                                >No manager yet</span
+                                            >
+                                        {/if}
                                     {/if}
                                     {#if isSuperAdmin && project.organization}
                                         <span

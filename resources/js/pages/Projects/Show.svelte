@@ -20,6 +20,7 @@
     import { quickAdd } from '../../lib/quickAdd.svelte';
     import type {
         Member,
+        ProgramOption,
         Project,
         ProjectGit,
         ProjectTeam,
@@ -32,12 +33,15 @@
         tasks,
         team = null,
         git = null,
+        programs = [],
     }: {
         project: Project;
         tasks: Task[];
         team?: ProjectTeam | null;
         /** The Code tab; null when the organization has no git. */
         git?: ProjectGit | null;
+        /** Edit project's Program choices; empty unless the viewer may move it. */
+        programs?: ProgramOption[];
     } = $props();
 
     let editing = $state(false);
@@ -280,6 +284,7 @@
             <ProjectEditForm
                 {project}
                 isSuperAdmin={shared.isSuperAdmin ?? false}
+                {programs}
                 onclose={() => (editing = false)}
             />
         </div>

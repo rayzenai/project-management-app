@@ -44,6 +44,7 @@
         subtasks,
         comments,
         team,
+        mentionCandidates = [],
         dependencyCandidates = [],
         code = null,
     }: {
@@ -54,6 +55,8 @@
         subtasks: Subtask[];
         comments: Comment[];
         team: Member[];
+        /** Who the comment box offers: the team, plus its program's manager. */
+        mentionCandidates?: Member[];
         dependencyCandidates?: TaskRef[];
         /** The Code section; null when the organization has no git. */
         code?: TaskCode | null;
@@ -763,7 +766,7 @@
                         <span class="section-count">{comments.length}</span>
                     {/if}
                 </h2>
-                <CommentThread {comments} {task} members={team} />
+                <CommentThread {comments} {task} members={mentionCandidates} />
             </section>
         </div>
 
