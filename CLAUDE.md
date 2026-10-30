@@ -156,7 +156,8 @@ Privilege-escalation protections — do not regress:
   `safe()`, which bypasses those overrides.
 - Mentions only notify people who can view the task's project. The comment
   box offers `TaskShowQuery`'s `mentionCandidates` (the team plus the
-  program's manager); `team` stays the assignees.
+  program's manager, `{id, name}` only: no email or login of someone the
+  teammate may not otherwise see); `team` stays the assignees.
 - A program manager is never a team leader (never added to the team, never
   `leadsTeam`), reaches only projects of programs in their own organization
   (`managedProgramIds` and `managesProgramOf` check both the program's and

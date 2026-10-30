@@ -115,7 +115,7 @@ Project payloads carry `key`, `code` (the same key, as task codes use it) and
 | --- | --- | --- |
 | POST | `/workspace/projects/{slug}/tasks` | create |
 | POST | `/workspace/projects/{slug}/tasks/reorder` | persist board ordering |
-| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`). `team` is who can be given the task; `mentionCandidates` is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
+| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`). `team` is who can be given the task; `mentionCandidates` (`[{ id, name }]`) is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
 | PATCH | `/workspace/projects/{slug}/tasks/{taskSlug}` | update (status, fields) |
 | DELETE | `/workspace/projects/{slug}/tasks/{taskSlug}` | soft-delete |
 | POST | `/workspace/projects/{slug}/tasks/{taskSlug}/restore` | undo delete |
@@ -224,7 +224,11 @@ manager { id, name, title } | null, projects_count (index only), can_manage }`.
 `manager` is `null` only after the manager's person was pruned. Anyone who is not
 an office admin of the program's organization or a super-admin gets 403 on
 POST, PATCH and DELETE. The web surface has the same writes at
-`/workspace/programs` (names `workspace.programs.store|update|destroy`).
+`/workspace/programs` (names `workspace.programs.store|update|destroy`); a web
+DELETE lands on the Projects page, since the program's page is gone. The web
+program page also gets `managerCandidates: [{ id, name, title }]` (the
+organization's active people, for its Edit form) outside `progress`, empty
+for anyone who may not manage the program.
 
 ## Project teams *(roster: the project's manager, its office admin or a super-admin; choosing the manager: office admin or super-admin)*
 

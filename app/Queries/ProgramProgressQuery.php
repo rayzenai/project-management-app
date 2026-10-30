@@ -7,7 +7,9 @@ use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\Task;
+use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -94,5 +96,26 @@ class ProgramProgressQuery
                 $projectIds,
             ),
         ];
+    }
+
+    /**
+     * Who the program can be handed to, for its Edit form: the active people
+     * of its organization. Only for whoever may manage it; empty otherwise.
+     *
+     * @return list<array{id: int, name: string, title: string|null}>
+     */
+    public function managerCandidates(Program $program, ?Authenticatable $user): array
+    {
+        if (! WorkspaceAccess::canManagePrograms($user, $program->organization_id)) {
+            return [];
+        }
+
+        return array_values(Member::query()
+            ->active()
+            ->where('organization_id', $program->organization_id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'title'])
+            ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'title' => $m->title])
+            ->all());
     }
 }

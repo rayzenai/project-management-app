@@ -148,6 +148,10 @@ it('offers the program manager for mentions on a program task and notifies them'
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('mentionCandidates', fn ($people) => collect($people)->pluck('name')->sort()->values()->all() === ['Joint Secretary', 'Officer', 'Under Secretary'])
+            // The comment box needs a name to insert, nothing more: no email
+            // or login of someone the teammate may not otherwise see.
+            ->where('mentionCandidates', fn ($people) => collect($people)->firstWhere('id', $this->jsMember->id) === ['id' => $this->jsMember->id, 'name' => 'Joint Secretary']
+                && collect($people)->every(fn (array $person): bool => array_keys($person) === ['id', 'name']))
             // Who can be given the task is unchanged: the program manager is not on its team.
             ->where('team', fn ($people) => ! collect($people)->pluck('id')->contains($this->jsMember->id)));
 

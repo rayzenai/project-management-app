@@ -1,12 +1,34 @@
 <script lang="ts">
-    import { inertia } from '@inertiajs/svelte';
+    import { inertia, router } from '@inertiajs/svelte';
     import AppShell from '../../components/AppShell.svelte';
+    import ProgramForm from '../../components/program/ProgramForm.svelte';
     import ProgressReport from '../../components/ProgressReport.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
     import { formatDate } from '../../lib/format';
-    import type { ProgramProgress } from '../../lib/types';
+    import type { Member, ProgramProgress } from '../../lib/types';
 
-    let { progress }: { progress: ProgramProgress } = $props();
+    let {
+        progress,
+        managerCandidates = [],
+    }: {
+        progress: ProgramProgress;
+        /** Who it can be handed to; empty unless the viewer may manage it. */
+        managerCandidates?: Member[];
+    } = $props();
+
+    let editing = $state(false);
+
+    function destroy() {
+        if (
+            !confirm(
+                `Delete the ${progress.program.name} program? Its projects stay, with no program.`,
+            )
+        ) {
+            return;
+        }
+
+        router.delete(`/workspace/programs/${progress.program.slug}`);
+    }
 
     const updatedAt = $derived(
         new Date(progress.generated_at).toLocaleTimeString([], {
@@ -42,14 +64,36 @@
             <span class="text-fg-faint">/</span>
             <span class="truncate font-medium">{progress.program.name}</span>
         </div>
-        <span class="shrink-0 text-xs text-fg-muted"
-            >Live · updated <span class="font-mono tabular-nums"
-                >{updatedAt}</span
-            ></span
-        >
+        <div class="flex shrink-0 items-center gap-1.5">
+            <span class="text-xs text-fg-muted"
+                >Live · updated <span class="font-mono tabular-nums"
+                    >{updatedAt}</span
+                ></span
+            >
+            {#if progress.program.can_manage && !editing}
+                <button
+                    type="button"
+                    class="btn-ghost"
+                    onclick={() => (editing = true)}>Edit</button
+                >
+                <button type="button" class="btn-danger" onclick={destroy}
+                    >Delete</button
+                >
+            {/if}
+        </div>
     {/snippet}
 
     <div class="mb-8 space-y-6">
+        {#if editing}
+            <div class="border-b border-line pb-6">
+                <ProgramForm
+                    program={progress.program}
+                    {managerCandidates}
+                    onsaved={() => (editing = false)}
+                    oncancel={() => (editing = false)}
+                />
+            </div>
+        {/if}
         <header>
             <h1 class="text-lg font-semibold">{progress.program.name}</h1>
             {#if progress.program.description}

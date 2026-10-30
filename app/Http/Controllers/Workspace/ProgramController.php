@@ -25,7 +25,11 @@ class ProgramController extends Controller
     {
         abort_unless(WorkspaceAccess::canViewProgram($request->user(), $program), 403);
 
-        return Inertia::render('Programs/Show', ['progress' => $query->data($program)]);
+        return Inertia::render('Programs/Show', [
+            'progress' => $query->data($program),
+            // Outside `progress`, so the 15 s poll neither resends nor recounts it.
+            'managerCandidates' => fn (): array => $query->managerCandidates($program, $request->user()),
+        ]);
     }
 
     public function store(StoreProgramRequest $request, CreateProgramService $service): RedirectResponse
@@ -42,6 +46,7 @@ class ProgramController extends Controller
     {
         abort_unless(WorkspaceAccess::canManagePrograms($request->user(), $program->organization_id), 403);
 
-        return $this->redirectWithResult($service->execute($program));
+        // The program's page is gone: land on the Projects page.
+        return $this->redirectWithResult($service->execute($program), 'workspace.projects.index');
     }
 }

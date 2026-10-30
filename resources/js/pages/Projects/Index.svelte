@@ -4,6 +4,7 @@
     import AppShell from '../../components/AppShell.svelte';
     import AssigneePicker from '../../components/AssigneePicker.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import ProgramForm from '../../components/program/ProgramForm.svelte';
     import ProgressRing from '../../components/ProgressRing.svelte';
     import { formatDate } from '../../lib/format';
     import type {
@@ -108,47 +109,6 @@
     }
 
     let creatingProgram = $state(false);
-
-    function seedProgram() {
-        return {
-            name: '',
-            description: '',
-            manager_id: null as number | null,
-            organization_id:
-                organizations.length === 1
-                    ? organizations[0].id
-                    : (null as number | null),
-        };
-    }
-
-    const programForm = useForm(seedProgram());
-    let programManagerIds = $state<number[]>([]);
-
-    // A program's manager is an active person of its organization.
-    const programManagers = $derived(
-        isSuperAdmin
-            ? managerCandidates.filter(
-                  (m) => m.organization_id === programForm.organization_id,
-              )
-            : managerCandidates,
-    );
-
-    function submitProgram(e: SubmitEvent) {
-        e.preventDefault();
-        programForm
-            .transform((data) => ({
-                ...data,
-                manager_id: programManagerIds[0] ?? null,
-            }))
-            .post('/workspace/programs', {
-                preserveScroll: true,
-                onSuccess: () => {
-                    programForm.reset();
-                    programManagerIds = [];
-                    creatingProgram = false;
-                },
-            });
-    }
 
     function archive(project: Project) {
         if (
@@ -371,116 +331,14 @@
     <div class="px-4 py-5 lg:px-8 lg:py-6">
         {#if creatingProgram}
             <div class="mb-6 max-w-2xl border-b border-line pb-6">
-                <form onsubmit={submitProgram}>
-                    <h2 class="mb-4 text-[15px] font-semibold text-fg">
-                        New program
-                    </h2>
-                    <div>
-                        <label
-                            for={`${uid}-program-name`}
-                            class="label mb-1 block">Name</label
-                        >
-                        <input
-                            id={`${uid}-program-name`}
-                            type="text"
-                            bind:value={programForm.name}
-                            required
-                            class="input"
-                        />
-                        {#if programForm.errors.name}<p
-                                class="mt-1 text-xs text-danger"
-                            >
-                                {programForm.errors.name}
-                            </p>{/if}
-                    </div>
-                    <div class="mt-3">
-                        <label
-                            for={`${uid}-program-description`}
-                            class="label mb-1 block">Description</label
-                        >
-                        <textarea
-                            id={`${uid}-program-description`}
-                            bind:value={programForm.description}
-                            rows="2"
-                            class="input"
-                        ></textarea>
-                        {#if programForm.errors.description}<p
-                                class="mt-1 text-xs text-danger"
-                            >
-                                {programForm.errors.description}
-                            </p>{/if}
-                    </div>
-                    {#if isSuperAdmin}
-                        <div class="mt-3">
-                            <label
-                                for={`${uid}-program-organization`}
-                                class="label mb-1 block">Organization</label
-                            >
-                            <select
-                                id={`${uid}-program-organization`}
-                                class="input"
-                                required
-                                value={programForm.organization_id ?? ''}
-                                onchange={(e) => {
-                                    programForm.organization_id = e
-                                        .currentTarget.value
-                                        ? Number(e.currentTarget.value)
-                                        : null;
-                                    programManagerIds = [];
-                                }}
-                            >
-                                <option value="" disabled
-                                    >Choose an organization</option
-                                >
-                                {#each organizations as organization (organization.id)}
-                                    <option value={organization.id}
-                                        >{organization.name}</option
-                                    >
-                                {/each}
-                            </select>
-                            {#if programForm.errors.organization_id}<p
-                                    class="mt-1 text-xs text-danger"
-                                >
-                                    {programForm.errors.organization_id}
-                                </p>{/if}
-                        </div>
-                    {/if}
-                    <div class="mt-3">
-                        <span class="label mb-1 block">Program manager</span>
-                        {#if isSuperAdmin && programForm.organization_id === null}
-                            <p class="text-xs text-fg-muted">
-                                Choose an organization first.
-                            </p>
-                        {:else}
-                            <AssigneePicker
-                                team={programManagers}
-                                bind:selectedIds={programManagerIds}
-                                placeholder="Search or choose who manages it"
-                            />
-                        {/if}
-                        <p class="mt-1 text-xs text-fg-muted">
-                            In a ministry, usually a Joint Secretary.
-                        </p>
-                        <p class="mt-1 text-xs text-fg-muted">
-                            They run every project in the program as its manager
-                            would.
-                        </p>
-                        {#if programForm.errors.manager_id}<p
-                                class="mt-1 text-xs text-danger"
-                            >
-                                {programForm.errors.manager_id}
-                            </p>{/if}
-                    </div>
-
-                    <div class="mt-4 flex items-center gap-2">
-                        <div class="flex-1"></div>
-                        <button
-                            type="submit"
-                            disabled={programForm.processing}
-                            class="btn-primary">Create</button
-                        >
-                    </div>
-                </form>
+                <!-- A program's manager is an active person of its organization,
+                     the same people who may manage a new project. -->
+                <ProgramForm
+                    {managerCandidates}
+                    {isSuperAdmin}
+                    {organizations}
+                    onsaved={() => (creatingProgram = false)}
+                />
             </div>
         {/if}
 

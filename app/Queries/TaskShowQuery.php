@@ -32,7 +32,7 @@ class TaskShowQuery
      *     subtasks: array<int, array<string, mixed>>,
      *     comments: array<int, array<string, mixed>>,
      *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
-     *     mentionCandidates: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
+     *     mentionCandidates: array<int, array{id: int, name: string}>,
      *     dependencyCandidates: array<int, array<string, mixed>>,
      *     code: array<string, mixed>|null
      * }
@@ -42,7 +42,6 @@ class TaskShowQuery
         $task->load(['assignments.member', 'notes.user', 'contacts', 'project', 'dependencies', 'dependents']);
 
         $team = Member::assignableFor($project)->get(['id', 'name', 'email', 'user_id']);
-        $person = fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id];
 
         $mySubtasks = Subtask::query()
             ->where('task_id', $task->id)
@@ -63,12 +62,15 @@ class TaskShowQuery
             'contacts' => ContactResource::collection($task->contacts)->resolve(),
             'subtasks' => SubtaskResource::collection($mySubtasks)->resolve(),
             'comments' => TaskCommentResource::collection($comments)->resolve(),
-            'team' => $team->map($person)->all(),
+            'team' => $team->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])->all(),
             // Who the comment box offers for @mentions: the team, plus the
             // program manager of a program project (who can see it, so a
             // mention notifies them, but is no assignee until they join).
+            // Only what a mention needs: the program manager may be someone
+            // the teammate cannot otherwise see.
             'mentionCandidates' => $team->concat([$this->programManager($project)])->filter()
-                ->unique('id')->sortBy('name')->values()->map($person)->all(),
+                ->unique('id')->sortBy('name')->values()
+                ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name])->all(),
             // What this task could be made to depend on: the rest of its project.
             'dependencyCandidates' => $project->tasks()->whereKeyNot($task->id)->get()
                 ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
