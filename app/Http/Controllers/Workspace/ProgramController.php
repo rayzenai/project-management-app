@@ -6,6 +6,7 @@ use App\Http\Controllers\Workspace\Concerns\RedirectsWithServiceResult;
 use App\Http\Requests\StoreProgramRequest;
 use App\Http\Requests\UpdateProgramRequest;
 use App\Models\Program;
+use App\Queries\ProgramProgressQuery;
 use App\Services\Workspace\CreateProgramService;
 use App\Services\Workspace\DeleteProgramService;
 use App\Services\Workspace\UpdateProgramService;
@@ -13,10 +14,19 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class ProgramController extends Controller
 {
     use RedirectsWithServiceResult;
+
+    public function show(Request $request, Program $program, ProgramProgressQuery $query): Response
+    {
+        abort_unless(WorkspaceAccess::canViewProgram($request->user(), $program), 403);
+
+        return Inertia::render('Programs/Show', ['progress' => $query->data($program)]);
+    }
 
     public function store(StoreProgramRequest $request, CreateProgramService $service): RedirectResponse
     {

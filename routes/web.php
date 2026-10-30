@@ -83,6 +83,7 @@ Route::middleware(['auth', ShareWorkspaceData::class])
         Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
         Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])->name('organizations.update');
         Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])->name('organizations.destroy');
+        Route::get('/programs/{program:slug}', [ProgramController::class, 'show'])->name('programs.show');
         Route::post('/programs', [ProgramController::class, 'store'])->name('programs.store');
         Route::patch('/programs/{program:slug}', [ProgramController::class, 'update'])->name('programs.update');
         Route::delete('/programs/{program:slug}', [ProgramController::class, 'destroy'])->name('programs.destroy');

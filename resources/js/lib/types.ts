@@ -509,6 +509,33 @@ export interface ProjectProgress extends ProgressReport {
     };
 }
 
+export interface Program {
+    id: number;
+    slug: string;
+    name: string;
+    description: string | null;
+    organization: { id: number; name: string };
+    manager: { id: number; name: string; title: string | null } | null;
+    projects_count?: number;
+    can_manage: boolean;
+}
+
+export interface ProgramProjectRow {
+    slug: string;
+    title: string;
+    code: string;
+    manager: { id: number; name: string } | null;
+    tasks_count: number;
+    done_tasks_count: number;
+    overdue_tasks_count: number;
+    next_deadline_at: string | null;
+}
+
+export interface ProgramProgress extends ProgressReport {
+    program: Program;
+    projects: ProgramProjectRow[];
+}
+
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
 export interface QuickAddProject extends ProjectSummary {
     member_ids?: Id[];

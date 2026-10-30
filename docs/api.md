@@ -217,6 +217,7 @@ does. Deleting a program keeps its projects.
 | POST | `/workspace/programs` | `name` (unique in the organization), `description` (optional), `manager_id` (required: an active person of the program's organization; 422 on `manager_id` otherwise). A super-admin sends `organization_id`; for an office admin it is always their own, whatever is posted. 201 with the program; the manager is notified |
 | PATCH | `/workspace/programs/{slug}` | any of `name`, `description`, `manager_id` (same checks; a new manager is notified). The organization never changes |
 | DELETE | `/workspace/programs/{slug}` | the program goes, its projects stay with no program |
+| GET | `/workspace/programs/{slug}/progress` | the program manager's weekly view (its manager, its organization's office admin or a super-admin; else 403): `{ data: { program, projects: [{ slug, title, code, manager { id, name } \| null, tasks_count, done_tasks_count, overdue_tasks_count, next_deadline_at }], members, tasks, truncated, activity, generated_at } }`. `projects` lists only active (not archived) projects, by title; `members`, `tasks` (first 500) and `activity` are the project progress report across all of them, each person once, `role: leader` for anyone who manages one of the projects or the program. The web page is `GET /workspace/programs/{slug}` (Inertia `Programs/Show`, prop `progress`) |
 
 Program payload: `{ id, slug, name, description, organization { id, name },
 manager { id, name, title } | null, projects_count (index only), can_manage }`.
