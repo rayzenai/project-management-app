@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\Git\GitIngest;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
@@ -305,4 +306,13 @@ it('counts failed attempts toward the limit', function () {
     $this->artisan('git:commit-stats', ['--limit' => 2])->expectsOutput('Counted 0 commits. 3 left for the next run.')->assertSuccessful();
 
     Http::assertSentCount(2);
+});
+
+it("runs every five minutes, one at a time, a killed run's lock lapsing after 30 minutes", function () {
+    $event = collect(app(Schedule::class)->events())->first(fn ($e) => str_contains((string) $e->command, 'git:commit-stats'));
+
+    expect($event)->not->toBeNull()
+        ->and($event->expression)->toBe('*/5 * * * *')
+        ->and($event->withoutOverlapping)->toBeTrue()
+        ->and($event->expiresAt)->toBe(30);
 });
