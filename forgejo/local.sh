@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # A Forgejo on this machine that signs people in through this tracker, with
-# the production settings of deploy/forgejo/compose.yml. The differences:
+# the production settings of forgejo/Dockerfile. The differences:
 # SQLite instead of Postgres, plain http on 127.0.0.1, no mail, no two-factor.
 # Guide: docs/forgejo.md, "Try it locally".
 #
-#   deploy/forgejo/local.sh up      install, start and set up (safe to run again)
-#   deploy/forgejo/local.sh status  running or not, and whether the sign-in source exists
-#   deploy/forgejo/local.sh down    stop it
-#   deploy/forgejo/local.sh reset   stop it and delete its data, after you type "reset"
+#   forgejo/local.sh up      install, start and set up (safe to run again)
+#   forgejo/local.sh status  running or not, and whether the sign-in source exists
+#   forgejo/local.sh down    stop it
+#   forgejo/local.sh reset   stop it and delete its data, after you type "reset"
 #
 #   FORGEJO_LOCAL_DIR  the forge's data, an absolute path (default ~/.local/share/sdoc-forgejo)
 #   TRACKER_URL        the tracker it signs people in with (default APP_URL)
@@ -39,9 +39,10 @@ data_dir() {
     printf '%s\n' "$dir"
 }
 
-REPO=$(cd "$(dirname "$0")/../.." && pwd)
+REPO=$(cd "$(dirname "$0")/.." && pwd)
 DIR=$(data_dir "${FORGEJO_LOCAL_DIR-$HOME/.local/share/sdoc-forgejo}")
 # The first line of every app.ini this script writes; reset deletes nothing without it.
+# It names the script's old path because existing app.ini files carry it.
 MARKER="Written once by deploy/forgejo/local.sh"
 FORGE_URL=http://127.0.0.1:3300
 SOURCE=sdoc-tasks
@@ -88,7 +89,7 @@ write_config() {
         cat >"$DIR/app.ini" <<EOF
 ; $MARKER.
 ; [security], [service], [openid], [admin], [repository], [oauth2_client],
-; [webhook] and [migrations] carry the values of deploy/forgejo/compose.yml;
+; [webhook] and [migrations] carry the values of forgejo/Dockerfile;
 ; the rest fits a laptop.
 APP_NAME = SDOC git (local)
 RUN_MODE = prod
@@ -120,7 +121,7 @@ ROOT = $DIR/repositories
 DEFAULT_PRIVATE = private
 
 [security]
-; compose.yml also sets GLOBAL_TWO_FACTOR_REQUIREMENT = all. Left out on
+; The Dockerfile also sets GLOBAL_TWO_FACTOR_REQUIREMENT = all. Left out on
 ; purpose: besides mail and http, the one deliberate difference.
 INSTALL_LOCK = true
 SECRET_KEY = $secret_key
@@ -454,7 +455,7 @@ in through $1.
    - an SDOC member lands on the forge signed in, with the username the
      tracker stored (git_username);
    - someone outside SDOC and on no SDOC project team gets the tracker's 403
-     page, "You don't have access to git. Ask your office admin.", and no
+     page, "You don't have access to git. Ask your organizational admin.", and no
      forge account;
    - a super-admin arrives as a site admin (Site administration in the user
      menu);
@@ -472,7 +473,7 @@ in through $1.
    deactivate the member: the confirmation says "<git_username> was removed
    from the forge.", and they are gone from sdoc's Members on the forge.
 
-5. Code, with an SDOC office admin who has signed in to the forge (step 2).
+5. Code, with an SDOC organizational admin who has signed in to the forge (step 2).
    Run php artisan git:reconcile, which puts them in sdoc's Owners team. As
    them, on the forge: a new repository owned by sdoc, and a pushed commit
    naming a task code, such as "SG-1 first change". In the tracker, the
@@ -482,7 +483,7 @@ in through $1.
    address is a name, not 127.0.0.1 or localhost (docs/forgejo.md,
    section 8 and Try it locally).
 
-deploy/forgejo/local.sh down stops the forge, up starts it again, and reset
+forgejo/local.sh down stops the forge, up starts it again, and reset
 deletes it.
 EOF
 }
@@ -507,18 +508,18 @@ cmd_up() {
 
 cmd_status() {
     if [[ ! -f $DIR/app.ini ]]; then
-        echo "There is no local forge in $DIR. Start one with: deploy/forgejo/local.sh up"
+        echo "There is no local forge in $DIR. Start one with: forgejo/local.sh up"
         return
     fi
     if running; then
         echo "Forgejo is running at $FORGE_URL (git over SSH on 127.0.0.1:2222)."
     else
-        echo "Forgejo is stopped. Start it with: deploy/forgejo/local.sh up"
+        echo "Forgejo is stopped. Start it with: forgejo/local.sh up"
     fi
     if [[ -n $(source_id) ]]; then
         echo "The sign-in source $SOURCE exists, for $(cut -d' ' -f1 "$CLIENT_FILE" 2>/dev/null || echo 'an unknown tracker')."
     else
-        echo "The sign-in source $SOURCE doesn't exist yet. Run: deploy/forgejo/local.sh up"
+        echo "The sign-in source $SOURCE doesn't exist yet. Run: forgejo/local.sh up"
     fi
     echo "Data: $DIR"
 }
@@ -546,7 +547,7 @@ case ${1:-} in
     status) cmd_status ;;
     reset) cmd_reset ;;
     *)
-        echo "Usage: deploy/forgejo/local.sh up|down|status|reset" >&2
+        echo "Usage: forgejo/local.sh up|down|status|reset" >&2
         exit 2
         ;;
 esac

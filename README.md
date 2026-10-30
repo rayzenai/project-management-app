@@ -111,13 +111,14 @@ office has git switched on, active people on the team of such an office's
 project, and super-admins get past `/oauth/authorize`; everyone else gets a
 403.
 
-The forge itself (`git.sdoc.gov.np`: the Dokploy compose kit in
-`deploy/forgejo/`, DNS, bootstrap, the OIDC source, backups and upgrades) is
-in [`docs/forgejo.md`](docs/forgejo.md).
+The forge itself (`git.sdoc.gov.np`: its own Dokploy project `git`, built
+from [`forgejo/`](forgejo), DNS, bootstrap, the OIDC source, backups and
+upgrades) is in [`docs/forgejo.md`](docs/forgejo.md). It deploys on its own:
+pushing the tracker never restarts it.
 
 ### Code from the forge (git phase 1)
 
-Where an office has git on, a project's manager or office admin links forge
+Where an office has git on, a project's manager or organizational admin links forge
 repositories from the project's **Code** tab. Commits, branches and pull
 requests that name a task code (`SG-12`) then show in that task's Code
 section and as a mark on its board card, and `SG-12` on the forge links back
@@ -129,7 +130,7 @@ webhook, the queue worker, the reconcile and its circuit breaker) are in
 [`docs/forgejo.md`](docs/forgejo.md#12-webhook-and-nightly-reconcile), the
 endpoints and payloads in [`docs/api.md`](docs/api.md).
 
-To try the forge against your local tracker, run `deploy/forgejo/local.sh up`
+To try the forge against your local tracker, run `forgejo/local.sh up`
 ([Try it locally](docs/forgejo.md#try-it-locally)).
 
 ## Organizations and roles

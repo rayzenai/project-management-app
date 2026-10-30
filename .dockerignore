@@ -15,3 +15,5 @@ storage/framework/views/*
 tests
 # Production database downloads: dock.sh builds from this working tree
 dumps
+# The forge's own image (Dokploy application git-forgejo)
+forgejo
