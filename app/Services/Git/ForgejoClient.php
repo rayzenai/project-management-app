@@ -278,21 +278,35 @@ class ForgejoClient
     }
 
     /**
-     * The commit's raw unified diff, or null when it is over $maxBytes (by its
-     * Content-Length when the forge sends one, else by the body read).
+     * The commit's raw unified diff, or null when it is over $maxBytes: by its
+     * Content-Length when the forge sends one, else as soon as more than
+     * $maxBytes have been read from the streamed body (never held whole).
      */
     public function commitDiff(string $owner, string $name, string $sha, int $maxBytes): ?string
     {
-        $response = $this->send('get', $this->repoPath($owner, $name).'/git/commits/'.rawurlencode($sha).'.diff');
+        $response = $this->send('get', $this->repoPath($owner, $name).'/git/commits/'.rawurlencode($sha).'.diff', stream: true);
 
         $length = $response->header('Content-Length');
         if ($length !== '' && (int) $length > $maxBytes) {
             return null;
         }
 
-        $body = $response->body();
+        $stream = $response->toPsrResponse()->getBody();
+        $body = '';
 
-        return strlen($body) > $maxBytes ? null : $body;
+        try {
+            while (! $stream->eof()) {
+                $body .= $stream->read(8192);
+
+                if (strlen($body) > $maxBytes) {
+                    return null;
+                }
+            }
+        } finally {
+            $stream->close();
+        }
+
+        return $body;
     }
 
     /**
@@ -376,12 +390,16 @@ class ForgejoClient
      * @param  list<int>  $tolerate
      * @param  array<string, scalar>  $query  sent with GET only
      */
-    private function send(string $method, string $path, ?array $body = null, array $tolerate = [], array $query = [], bool $redirects = true): Response
+    private function send(string $method, string $path, ?array $body = null, array $tolerate = [], array $query = [], bool $redirects = true, bool $stream = false): Response
     {
         $request = $this->request();
 
         if (! $redirects) {
             $request->withoutRedirecting();
+        }
+
+        if ($stream) {
+            $request->withOptions(['stream' => true]);
         }
 
         try {

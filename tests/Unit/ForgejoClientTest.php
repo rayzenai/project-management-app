@@ -442,3 +442,22 @@ it('skips a diff whose Content-Length is over the cap', function () {
 
     expect(forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 10))->toBeNull();
 });
+
+it('reports the status when a diff cannot be read', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123.diff' => Http::response('', 404)]);
+
+    try {
+        forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 10);
+        $this->fail('Expected a ForgejoException.');
+    } catch (ForgejoException $e) {
+        expect($e->status)->toBe(404);
+    }
+});
+
+it('streams a diff and stops past the cap without a Content-Length', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123.diff' => fn () => Http::response(str_repeat('x', 100000), 200)]);
+
+    expect(forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 20000))->toBeNull()
+        ->and(forgeClient()->commitDiff('sdoc', 'egp-api', 'abc123', 100000))->toHaveLength(100000);
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '.diff'));
+});
