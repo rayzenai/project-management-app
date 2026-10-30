@@ -1298,9 +1298,11 @@ had a forge username (see below).
 A commit belongs to a person when the forge names its author by username, and
 that username is the person's stored `git_username`. The forge does that from
 the commit's author email: the primary email of a forge account (which is the
-tracker email) or a verified extra one. A developer who commits with another
-address must add it under SDOC Git → Settings → Emails, verify it, and their
-earlier commits are matched on the next `git:commit-stats` run. Commits whose
+tracker email, set at sign-in) or a verified extra one. So a developer whose
+git signs commits with their tracker email needs nothing else; one whose git
+uses another address sets `git config user.email` to the tracker email in the
+repository (or adds that address under SDOC Git → Settings → Emails and
+verifies it). Commits whose
 author the forge can't name show in the report as "Not matched to anyone", to
 those who see whole repositories.
 

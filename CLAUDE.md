@@ -129,6 +129,11 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
    public projects); manages own subtasks and notes.
 
 Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
+`canSignIn` (signing in and staying signed in: never while the member is
+deactivated; a super-admin and a login with no member yet always may; both
+logins refuse with `EnsureCanSignIn::DEACTIVATED`, and `EnsureCanSignIn`, on
+every authenticated web and API route, signs out a person deactivated while
+signed in: the web session ends, an API token answers 401),
 `officeAdminOrganizationId`, `administers`, `canEditTeam` (whoever
 administers the team's organization), `canAppointProjectManager` (choose
 the manager: `canEditTeam` or the project's program manager; its project
@@ -564,7 +569,8 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   `/api/v1/workspace/reports/code[/people/{user}]`.
 - **UI**: the Code tab's New repository and Access (grants and maintainers),
   the sidebar's Code activity (shown with git). Keep the Guide in step:
-  developers add their git email under SDOC Git, Settings, Emails.
+  developers commit with the email they sign in with (sign-in gives the forge
+  that email; nothing to add on the forge).
 
 ## Semantic theming layer (web UI)
 

@@ -166,7 +166,7 @@
         ],
         [
             'Your git email',
-            'A commit counts for you only when the email git signs it with is on your SDOC Git account. Add it there under Settings, Emails.',
+            'A commit counts for you when git signs it with the email you sign in with. Signing in gives SDOC Git that email, so there is nothing to add. If git on your computer uses another address, run git config user.email with your sign-in email in the repository.',
         ],
         [
             'Forge access',

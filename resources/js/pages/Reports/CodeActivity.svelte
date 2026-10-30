@@ -468,9 +468,8 @@
                     No commits between {rangeLabel}.
                 </p>
                 <p class="mt-1 max-w-md text-[13px] text-fg-muted">
-                    Try a longer range. A commit counts for a person once the
-                    email git signs it with is on their SDOC Git account
-                    (Settings, Emails).
+                    Try a longer range. A commit counts for a person when git
+                    signs it with the email they sign in with.
                 </p>
             </section>
         {:else}
