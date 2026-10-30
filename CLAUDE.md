@@ -128,12 +128,16 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
 Key methods: `isSuperAdmin`, `memberFor` (never creates a member),
 `officeAdminOrganizationId`, `administers`, `canEditTeam` (whoever
 administers the team's organization), `canAppointProjectManager` (choose
-the manager: `canEditTeam` or the project's program manager),
+the manager: `canEditTeam` or the project's program manager; its project
+twin `canChooseManagerOf`), `canAppointAsProjectManager` (who may be
+chosen: `canJoinTeam`, and for a program manager the team's organization
+only),
 `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
 `canViewTeamProgress`, `canViewProjectProgress`,
 `canCreateMember`, `canManageMember`, `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canCreateProjectInProgram`
-(its organization's admins and its manager), `canManageProjectAccess`,
+(its organization's admins and its manager), `createsProjectsOnlyInPrograms`
+(a program manager who administers nothing), `canManageProjectAccess`,
 `canPublishProject`, `canViewProjectCode`, `canManageProjectRepositories`,
 `ledTeamIds`, `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
 `canViewProgram` (twin of `Program::scopeVisibleTo`). Visibility scopes:
@@ -176,7 +180,9 @@ Privilege-escalation protections — do not regress:
   organization is the program's; `key`, `is_public` dropped) and appoints
   managers only through `AppointProjectManagerService`, only on their
   program's projects (`canAppointProjectManager`: the project update's
-  `manager_id`, the team role route), and never removes a manager
+  `manager_id`, the team role route), only people of the project's
+  organization even on a cross-organization team
+  (`canAppointAsProjectManager`), and never removes a manager
   (`canRemoveFromTeam` keeps `canEditTeam`).
 
 Every role decision goes through `WorkspaceAccess`. Never re-implement inline.

@@ -8,7 +8,7 @@
      * A project's team: its manager first, then everyone who can be given
      * its tasks. Its manager (or the office admin) adds and removes people;
      * only the office admin or its program's manager makes someone the
-     * manager (`team.can_choose_manager`).
+     * manager (`team.can_choose_manager`, per person `can_make_manager`).
      */
     let {
         team,
@@ -91,7 +91,7 @@
                             </div>
                         {/if}
                     </div>
-                    {#if team.can_choose_manager && !member.is_manager && member.is_active}
+                    {#if member.can_make_manager}
                         <button
                             type="button"
                             class="btn-ghost shrink-0"

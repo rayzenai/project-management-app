@@ -61,7 +61,12 @@ beforeEach(function () {
 });
 
 it('lets a program manager create a project in their program and choose its manager', function () {
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+
     expect(WorkspaceAccess::canCreateProject($this->js))->toBeTrue()
+        ->and(WorkspaceAccess::createsProjectsOnlyInPrograms($this->js))->toBeTrue()
+        ->and(WorkspaceAccess::createsProjectsOnlyInPrograms($this->adminUser))->toBeFalse()
+        ->and(WorkspaceAccess::createsProjectsOnlyInPrograms($boss))->toBeFalse()
         ->and(WorkspaceAccess::canCreateProjectInProgram($this->js, $this->programP))->toBeTrue()
         ->and(WorkspaceAccess::canCreateProjectInProgram($this->js, $this->programQ))->toBeFalse()
         ->and(WorkspaceAccess::canCreateProjectInProgram($this->js, $this->programX))->toBeFalse()
@@ -251,7 +256,64 @@ it('shows a program manager the make-manager control on their program projects o
     $this->actingAs($this->usUser)->get("/workspace/projects/{$this->projectA->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('team.can_choose_manager', false)
+            ->where('team.members', fn (Collection $members): bool => $members->every(fn (array $m): bool => $m['can_make_manager'] === false))
             ->where('project.can_choose_manager', false));
+
+    // The same answer on payloads without the team: index rows, API writes.
+    $this->actingAs($this->js)->get('/workspace/projects')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('projects', fn (Collection $rows): bool => $rows->firstWhere('id', $this->projectA->id)['can_choose_manager'] === true));
+    $this->actingAs($this->js, 'sanctum')->patchJson("/api/v1/workspace/projects/{$this->projectA->slug}", ['title' => 'Tax Portal'])
+        ->assertOk()->assertJsonPath('data.can_choose_manager', true);
+    $this->actingAs($this->usUser, 'sanctum')->patchJson("/api/v1/workspace/projects/{$this->projectA->slug}", ['title' => 'Tax Portal'])
+        ->assertOk()->assertJsonPath('data.can_choose_manager', false);
+    $this->actingAs($this->adminUser, 'sanctum')->patchJson("/api/v1/workspace/projects/{$this->projectB->slug}/archive")
+        ->assertOk()->assertJsonPath('data.can_choose_manager', true);
+});
+
+it('lets a program manager appoint only people of their organization, even on a cross-organization team', function () {
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+
+    $this->actingAs($boss)->patch("/workspace/projects/{$this->projectA->slug}", ['is_cross_organization' => true])
+        ->assertSessionHasNoErrors();
+    $this->actingAs($boss)->post("/workspace/teams/{$this->teamA->id}/members", ['member_id' => $this->outsider->id])
+        ->assertSessionHasNoErrors();
+
+    $team = $this->teamA->fresh();
+
+    expect($team->is_cross_organization)->toBeTrue()
+        ->and($team->members()->whereKey($this->outsider->id)->exists())->toBeTrue()
+        ->and(WorkspaceAccess::canAppointAsProjectManager($this->js, $team, $this->outsider))->toBeFalse()
+        ->and(WorkspaceAccess::canAppointAsProjectManager($this->js, $team, $this->officer))->toBeTrue()
+        ->and(WorkspaceAccess::canAppointAsProjectManager($this->adminUser, $team, $this->outsider))->toBeTrue();
+
+    // The People tab offers "Make manager" on the outsider to the admin only.
+    $offered = fn (Collection $members, Member $member): bool => $members->firstWhere('id', $member->id)['can_make_manager'];
+
+    $this->actingAs($this->js)->get("/workspace/projects/{$this->projectA->slug}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('team.can_choose_manager', true)
+            ->where('team.members', fn (Collection $members): bool => ! $offered($members, $this->outsider)
+                && $offered($members, $this->officer)
+                && ! $offered($members, $this->us)));
+    $this->actingAs($this->adminUser)->get("/workspace/projects/{$this->projectA->slug}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('team.members', fn (Collection $members): bool => $offered($members, $this->outsider)));
+
+    $this->actingAs($this->js)->patch("/workspace/projects/{$this->projectA->slug}", ['manager_id' => $this->outsider->id])
+        ->assertSessionHasErrors('manager_id');
+    $this->actingAs($this->js)->patch("/workspace/teams/{$this->teamA->id}/members/{$this->outsider->id}", ['role' => 'leader'])
+        ->assertSessionHasErrors('role');
+    $this->actingAs($this->js, 'sanctum')->patchJson("/api/v1/workspace/teams/{$this->teamA->id}/members/{$this->outsider->id}", ['role' => 'leader'])
+        ->assertUnprocessable()->assertJsonValidationErrors('role');
+
+    expect($this->teamA->leaders()->pluck('members.id')->all())->toBe([$this->us->id]);
+
+    // An organizational admin still may.
+    $this->actingAs($this->adminUser)->patch("/workspace/projects/{$this->projectA->slug}", ['manager_id' => $this->outsider->id])
+        ->assertSessionHasNoErrors();
+
+    expect($this->teamA->leaders()->pluck('members.id')->all())->toBe([$this->outsider->id]);
 });
 
 it('still never lets a program manager remove a manager', function () {
@@ -273,6 +335,7 @@ it('takes the new powers away from a deactivated program manager', function () {
     WorkspaceAccess::flush();
 
     expect(WorkspaceAccess::canCreateProject($this->js))->toBeFalse()
+        ->and(WorkspaceAccess::createsProjectsOnlyInPrograms($this->js))->toBeFalse()
         ->and(WorkspaceAccess::canCreateProjectInProgram($this->js, $this->programP))->toBeFalse()
         ->and(WorkspaceAccess::canAppointProjectManager($this->js, $this->teamA))->toBeFalse();
 
@@ -293,6 +356,7 @@ it('takes the new powers away from a deactivated program manager', function () {
 it('changes nothing for a project manager or member', function () {
     foreach ([$this->usUser, $this->officerUser] as $user) {
         expect(WorkspaceAccess::canCreateProject($user))->toBeFalse()
+            ->and(WorkspaceAccess::createsProjectsOnlyInPrograms($user))->toBeFalse()
             ->and(WorkspaceAccess::canCreateProjectInProgram($user, $this->programP))->toBeFalse()
             ->and(WorkspaceAccess::canAppointProjectManager($user, $this->teamA))->toBeFalse();
 

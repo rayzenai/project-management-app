@@ -19,6 +19,9 @@ use Illuminate\Validation\Validator;
  */
 class StoreProjectRequest extends FormRequest
 {
+    /** The posted program, looked up once: false when there is none. */
+    private Program|false|null $postedProgram = null;
+
     public function authorize(): bool
     {
         return WorkspaceAccess::canCreateProject($this->user());
@@ -42,7 +45,7 @@ class StoreProjectRequest extends FormRequest
             ],
             'manager_id' => ['required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
             'program_id' => [
-                Rule::requiredIf(fn (): bool => ! $this->isAdministrator()),
+                Rule::requiredIf(fn (): bool => WorkspaceAccess::createsProjectsOnlyInPrograms($this->user())),
                 'nullable', 'integer', Rule::exists('programs', 'id'),
             ],
         ];
@@ -71,7 +74,7 @@ class StoreProjectRequest extends FormRequest
             }
 
             // A program manager's project lands in one of their programs.
-            if (! $this->isAdministrator()) {
+            if (WorkspaceAccess::createsProjectsOnlyInPrograms($this->user())) {
                 $program = $this->program();
 
                 if ($program === null || ! WorkspaceAccess::canCreateProjectInProgram($this->user(), $program)) {
@@ -82,13 +85,13 @@ class StoreProjectRequest extends FormRequest
             }
 
             // Only for those whose key is kept; anyone else's is dropped.
-            if ($this->filled('key') && $this->isAdministrator()
+            if ($this->filled('key') && WorkspaceAccess::administers($this->user(), $this->organizationId())
                 && ProjectKeys::isTaken((int) $this->organizationId(), (string) $this->input('key'))) {
                 $validator->errors()->add('key', 'That key is already used in this organization.');
             }
 
             if ($this->filled('program_id') && WorkspaceAccess::administers($this->user(), $this->organizationId())
-                && (int) Program::query()->whereKey($this->integer('program_id'))->value('organization_id') !== $this->organizationId()) {
+                && (int) $this->program()?->organization_id !== $this->organizationId()) {
                 $validator->errors()->add('program_id', 'That program belongs to another organization.');
             }
 
@@ -121,18 +124,13 @@ class StoreProjectRequest extends FormRequest
             : null;
     }
 
-    /**
-     * A super-admin or an office admin, who create in any organization they
-     * administer; anyone else allowed here is a program manager.
-     */
-    private function isAdministrator(): bool
-    {
-        return WorkspaceAccess::isSuperAdmin($this->user()) || WorkspaceAccess::officeAdminOrganizationId($this->user()) !== null;
-    }
-
     private function program(): ?Program
     {
-        return $this->filled('program_id') ? Program::query()->find($this->integer('program_id')) : null;
+        if ($this->postedProgram === null) {
+            $this->postedProgram = ($this->filled('program_id') ? Program::query()->find($this->integer('program_id')) : null) ?? false;
+        }
+
+        return $this->postedProgram === false ? null : $this->postedProgram;
     }
 
     public function validated($key = null, $default = null): mixed

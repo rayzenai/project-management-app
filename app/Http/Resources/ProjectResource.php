@@ -36,13 +36,8 @@ class ProjectResource extends JsonResource
             'can_archive' => WorkspaceAccess::canArchiveProject($request->user(), $this->resource),
             'can_manage_access' => WorkspaceAccess::canManageProjectAccess($request->user(), $this->resource),
             'can_view_progress' => WorkspaceAccess::canViewProjectProgress($request->user(), $this->resource),
-            // Making someone its manager: its office admin, a super-admin or its
-            // program's manager (canAppointProjectManager). Read off its team
-            // where the payload carries it, so lists without one add no query;
-            // elsewhere only whoever administers it.
-            'can_choose_manager' => $this->relationLoaded('teams') && ($team = $this->team()) !== null
-                ? WorkspaceAccess::canAppointProjectManager($request->user(), $team)
-                : WorkspaceAccess::administers($request->user(), $this->organization_id),
+            // Making someone its manager: its office admin, a super-admin or its program's manager.
+            'can_choose_manager' => WorkspaceAccess::canChooseManagerOf($request->user(), $this->resource),
             'can_change_key' => WorkspaceAccess::canChangeProjectKey($request->user(), $this->resource),
             'can_publish' => WorkspaceAccess::canPublishProject($request->user(), $this->organization_id),
             'program' => $this->whenLoaded('program', fn (): ?array => $this->program === null ? null : [

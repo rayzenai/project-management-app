@@ -93,7 +93,7 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | POST | `/workspace/projects` | create (organizational admin, super-admin, or a program manager in one of their programs). `manager_id` (required: an active person of the project's organization) becomes the leader of the project's new team; `is_public: bool` (public means everyone in its organization; organizational admin / super-admin); optional `key` (see below), otherwise the title suggests a free one. A super-admin sends `organization_id`; otherwise it is the organizational admin's organization. Optional `program_id` (a program of that organization, else 422 on `program_id`). A program manager who is not an organizational admin must send `program_id`, one of the programs they manage (else 422 `Choose one of your programs.` on `program_id`); the project lands in that program's organization, and their `key`, `is_public` and `is_cross_organization` are dropped silently |
 | GET | `/workspace/projects/{slug}` | show (board + tasks) — **403** if not visible to the caller. `programs: [{ id, slug, name }]` lists its organization's programs for whoever may move it (organizational admin, super-admin), else `[]` |
 | GET | `/workspace/projects/{slug}/progress` | `{ data: { project, members, tasks, activity, generated_at } }`: everyone's workload on it, its tasks for a Gantt, recent activity. `project` carries `code`; each task carries `number` and `project { slug, title, code }`. For its manager, its program's manager, its organizational admin and super-admins (`project.can_view_progress`) |
-| PATCH | `/workspace/projects/{slug}` | update (its manager, its program's manager, organizational admin or super-admin). `manager_id` (organizational admin / super-admin / its program's manager: an active person who can join its team, else 422; the old manager stays on the team), `is_public` (organizational admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team), `key` (organizational admin / super-admin, see below), `program_id` (a program of the project's organization, or `null` to take it out; organizational admin / super-admin; 422 on `program_id` for another organization's program); dropped silently for anyone else. The team keeps the project's title |
+| PATCH | `/workspace/projects/{slug}` | update (its manager, its program's manager, organizational admin or super-admin). `manager_id` (organizational admin / super-admin / its program's manager: an active person who can join its team, and for a program manager one of the project's organization even on a cross-organization team, else 422; the old manager stays on the team), `is_public` (organizational admin / super-admin), `is_cross_organization` (super-admin; refused while outsiders are on the team), `key` (organizational admin / super-admin, see below), `program_id` (a program of the project's organization, or `null` to take it out; organizational admin / super-admin; 422 on `program_id` for another organization's program); dropped silently for anyone else. The team keeps the project's title |
 | PATCH | `/workspace/projects/{slug}/archive` | soft-archive (its manager, its program's manager, its organizational admin, or a super-admin) |
 | PATCH | `/workspace/projects/{slug}/restore` | un-archive |
 
@@ -109,9 +109,7 @@ stays reserved for it, so an old commit never points at another project.
 Project payloads carry `key`, `code` (the same key, as task codes use it) and
 `can_change_key` (whether the caller may change it). `can_choose_manager`
 says whether the caller may make someone its manager (organizational admin,
-super-admin, its program's manager); on payloads without `team` (task page,
-plan tracker, my workspace, create/update/archive/restore responses) it
-leaves out the program's manager.
+super-admin, its program's manager).
 
 ## Tasks
 
@@ -240,7 +238,7 @@ for anyone who may not manage the program.
 ## Project teams *(roster: the project's manager, its program's manager, its organizational admin or a super-admin; choosing the manager: organizational admin, super-admin or its program's manager, who never removes one)*
 
 A team is made with its project and never on its own; `GET /workspace/projects/{slug}`
-returns it as `team { id, is_cross_organization, members: [{ id, name, email, title, organization, is_active, is_manager, can_remove }], can_manage, can_choose_manager }`.
+returns it as `team { id, is_cross_organization, members: [{ id, name, email, title, organization, is_active, is_manager, can_remove, can_make_manager }], can_manage, can_choose_manager }`. `can_make_manager` is whether the caller may make that person its manager: an active non-manager who can join the team, and for a program manager only a person of the team's own organization, even on a cross-organization team.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
@@ -248,7 +246,7 @@ returns it as `team { id, is_cross_organization, members: [{ id, name, email, ti
 | GET | `/workspace/teams/{team}/candidates?q=` | up to 8 people who can join (min 2 characters): its organization, or anyone for a cross-organization team |
 | POST | `/workspace/teams/{team}/members` | `member_id` (an existing person; 422 if they can't join) |
 | DELETE | `/workspace/teams/{team}/members/{member}` | 422 for the manager: make someone else manager first |
-| PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member); `role: member` on the manager is a 422 |
+| PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member; 422 on `role` if they can't join, or for a program manager if they are of another organization); `role: member` on the manager is a 422 |
 
 ## Code repositories *(only in an organization with git on; list: the project's team, its program's manager, its organizational admin or a super-admin; the rest: its manager, its program's manager, its organizational admin or a super-admin)*
 

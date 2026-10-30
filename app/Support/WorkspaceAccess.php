@@ -174,6 +174,18 @@ class WorkspaceAccess
         return self::canEditTeam($user, $team) || self::managesProgramOfTeam($user, $team);
     }
 
+    /**
+     * Whether this person may be made the team's manager by the user (who
+     * passes canAppointProjectManager): anyone who can join it for whoever
+     * may edit the team; for a program manager, only people of the team's
+     * own organization, even on a cross-organization team.
+     */
+    public static function canAppointAsProjectManager(?Authenticatable $user, Team $team, Member $member): bool
+    {
+        return self::canJoinTeam($member, $team)
+            && (self::canEditTeam($user, $team) || (int) $member->organization_id === (int) $team->organization_id);
+    }
+
     public static function leadsTeam(?Authenticatable $user, Team $team): bool
     {
         return in_array($team->getKey(), self::ledTeamIds($user), true);
@@ -316,6 +328,15 @@ class WorkspaceAccess
     }
 
     /**
+     * Whether the user creates projects only in programs they manage: a
+     * program manager who administers no organization.
+     */
+    public static function createsProjectsOnlyInPrograms(?Authenticatable $user): bool
+    {
+        return ! self::isSuperAdmin($user) && self::officeAdminOrganizationId($user) === null && self::managedProgramIds($user) !== [];
+    }
+
+    /**
      * Create a project in this program: whoever administers its
      * organization, or its manager.
      */
@@ -323,6 +344,16 @@ class WorkspaceAccess
     {
         return self::administers($user, $program->organization_id)
             || in_array((int) $program->getKey(), self::managedProgramIds($user), true);
+    }
+
+    /**
+     * Make someone the project's manager: the project twin of
+     * canAppointProjectManager (whose team shares the project's
+     * organization), answered without loading the team; keep them in step.
+     */
+    public static function canChooseManagerOf(?Authenticatable $user, Project $project): bool
+    {
+        return self::administers($user, $project->organization_id) || self::managesProgramOf($user, $project);
     }
 
     public static function canManageProjectAccess(?Authenticatable $user, Project $project): bool

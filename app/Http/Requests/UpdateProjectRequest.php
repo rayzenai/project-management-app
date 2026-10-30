@@ -89,7 +89,7 @@ class UpdateProjectRequest extends FormRequest
             if ($this->has('manager_id') && $this->appointsManager()) {
                 $manager = Member::query()->with('user')->find($this->integer('manager_id'));
 
-                if ($manager === null || ! $manager->is_active || ! WorkspaceAccess::canJoinTeam($manager, $team)) {
+                if ($manager === null || ! $manager->is_active || ! WorkspaceAccess::canAppointAsProjectManager($this->user(), $team, $manager)) {
                     $validator->errors()->add('manager_id', "The manager must be an active person who can join the project's team.");
 
                     return;

@@ -62,9 +62,9 @@ class ProjectIndexQuery
         $isSuperAdmin = WorkspaceAccess::isSuperAdmin($user);
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
         $canCreate = WorkspaceAccess::canCreateProject($user);
-        // Anyone else who may create is a program manager: only in their own
-        // programs, managed by default by themselves.
-        $programRequired = $canCreate && ! $isSuperAdmin && $officeAdminOf === null;
+        // A program manager creates only in their own programs, managed by
+        // default by themselves.
+        $programRequired = WorkspaceAccess::createsProjectsOnlyInPrograms($user);
         $self = $programRequired ? WorkspaceAccess::memberFor($user) : null;
 
         // Who may manage a new project: active people of the organization it

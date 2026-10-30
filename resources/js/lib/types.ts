@@ -65,6 +65,8 @@ export interface ProjectTeamMember {
     is_active: boolean;
     is_manager: boolean;
     can_remove: boolean;
+    /** "Make manager" on them: the viewer may make them its manager. */
+    can_make_manager: boolean;
 }
 
 /** A project's own team on its page, with what the viewer may do there. */

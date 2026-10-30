@@ -92,7 +92,7 @@ class ProjectShowQuery
         $canManage = WorkspaceAccess::canManageRosterOf($user, $team);
 
         $members = $team->members
-            ->map(function (Member $member) use ($canChooseManager, $canManage): array {
+            ->map(function (Member $member) use ($team, $user, $canChooseManager, $canManage): array {
                 /** @var object{role: string} $pivot */
                 $pivot = $member->getRelation('pivot');
                 $isManager = $pivot->role === 'leader';
@@ -107,6 +107,9 @@ class ProjectShowQuery
                     'is_manager' => $isManager,
                     // The manager leaves only once someone else manages.
                     'can_remove' => ! $isManager && ($canChooseManager || $canManage),
+                    // "Make manager": a program manager's choice stays in the team's organization.
+                    'can_make_manager' => $canChooseManager && ! $isManager && $member->is_active
+                        && WorkspaceAccess::canAppointAsProjectManager($user, $team, $member),
                 ];
             })
             ->sortBy(fn (array $m): string => ($m['is_manager'] ? '0' : '1').mb_strtolower($m['name']))
