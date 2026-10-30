@@ -20,13 +20,16 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Links a forge repository to a project. The forge is asked first: the
  * repository must be in the organization's forge organization and linked to
- * no project yet. Then the forge is pointed back here (best effort), the
- * people it already has become grants (best effort, so linking never quietly
- * takes their access away), and the access sync and the backfill are queued.
+ * no project yet. The link and the grants for the people the repository
+ * already has are saved together: when the forge can't say who they are,
+ * nothing is linked, so linking never takes anyone's access away. Then the
+ * forge is pointed back here (best effort), and the access sync and the
+ * backfill are queued.
  */
 class LinkRepositoryService
 {
@@ -65,15 +68,36 @@ class LinkRepositoryService
         }
 
         try {
-            // A savepoint, so a lost race leaves any surrounding transaction usable.
-            $repo = DB::transaction(fn (): GitRepository => $project->repositories()->create([
-                ...array_map(fn (?string $value): string => (string) $value, $attributes),
-                'git_connection_id' => $connection->id,
-                'forge_id' => $forgeId,
-            ]));
+            // A savepoint, so a lost race or a failed import leaves any surrounding transaction usable.
+            $repo = DB::transaction(function () use ($project, $attributes, $connection, $forgeId, $actor): GitRepository {
+                $repo = $project->repositories()->create([
+                    ...array_map(fn (?string $value): string => (string) $value, $attributes),
+                    'git_connection_id' => $connection->id,
+                    'forge_id' => $forgeId,
+                ]);
+                $this->access->importExisting($repo, $actor instanceof User ? $actor : null);
+
+                return $repo;
+            });
         } catch (UniqueConstraintViolationException) {
             // Someone linked it a moment ago.
             return $this->alreadyLinked($this->linkedAs($connection, $forgeId), $actor);
+        } catch (ForgejoException $e) {
+            $context = ['owner' => (string) $attributes['owner'], 'repository' => (string) $attributes['name'], 'status' => $e->status];
+
+            if ($e->status === 0) {
+                $context['url'] = $connection->base_url;
+                $context['cause'] = $e->causeMessage($connection->token);
+            }
+
+            Log::warning("Couldn't import a forge repository's collaborators.", $context);
+
+            return $this->importFailed((string) $attributes['full_name']);
+        } catch (Throwable $e) {
+            // Never report the throwable itself: it can carry a forge request and its token.
+            report(new ForgejoException("Importing a forge repository's collaborators failed unexpectedly: ".class_basename($e).'.'));
+
+            return $this->importFailed((string) $attributes['full_name']);
         }
 
         $message = "Linked {$repo->full_name}.";
@@ -82,31 +106,15 @@ class LinkRepositoryService
             $message .= " The forge link back couldn't be set; the nightly reconcile will retry.";
         }
 
-        $this->importCollaborators($repo, $connection, $actor);
         Background::dispatch(new SyncRepositoryAccess($repo));
         Background::dispatch(new BackfillGitRepository($repo));
 
         return ServiceResult::success($repo, $message);
     }
 
-    /**
-     * A forge failure leaves the link as it is: anyone not imported can be
-     * given access in the tracker.
-     */
-    private function importCollaborators(GitRepository $repo, GitConnection $connection, ?Authenticatable $actor): void
+    private function importFailed(string $fullName): ServiceResult
     {
-        try {
-            $this->access->importExisting($repo, $actor instanceof User ? $actor : null);
-        } catch (ForgejoException $e) {
-            $context = ['owner' => $repo->owner, 'repository' => $repo->name, 'status' => $e->status];
-
-            if ($e->status === 0) {
-                $context['url'] = $connection->base_url;
-                $context['cause'] = $e->causeMessage($connection->token);
-            }
-
-            Log::warning("Couldn't import a forge repository's collaborators.", $context);
-        }
+        return ServiceResult::failure("Couldn't read {$fullName}'s collaborators on the forge, so it wasn't linked. Try again shortly.", 422);
     }
 
     private function linkedAs(GitConnection $connection, int $forgeId): ?GitRepository

@@ -11,20 +11,25 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\User;
+use App\Services\Git\ForgejoException;
+use App\Services\Git\RepositoryAccess;
 use App\Services\Workspace\AppointProjectManagerService;
 use App\Services\Workspace\RemoveTeamMemberService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
+use Mockery\MockInterface;
 
 /*
  * What starts an access sync (SyncRepositoryAccess) of a linked repository:
  * a grant made, changed or removed; the project's team changing; its
- * program's manager changing; the project moving between programs; linking
- * it. Jobs go to a faked worker queue, so Background::dispatch pushes them at
+ * program's manager changing; the project moving between programs; a person
+ * with grants moving to another organization; linking it. Jobs go to a faked worker queue, so Background::dispatch pushes them at
  * once and nothing reaches the forge unless a test fakes it. Forge fixtures
  * follow Forgejo 15's API structs, as ProjectRepositoryTest's do.
  *
@@ -236,6 +241,48 @@ it('leaving the team through the People tab does the same', function () {
         ->and(trigSorted(array_unique(trigSynced())))->toBe(['sdoc/tp-api', 'sdoc/tp-web']);
 });
 
+it('leaving the team is undone with everything it took when a grant can\'t be removed', function () {
+    $this->team->members()->attach($this->asha->id, ['role' => 'member']);
+    trigGrant($this->api, $this->asha);
+    trigGrant($this->web, $this->asha);
+    $activity = ProjectActivity::query()->count();
+    GitRepositoryGrant::deleting(function (GitRepositoryGrant $grant): void {
+        if ($grant->git_repository_id === $this->web->id) {
+            throw new RuntimeException('The grant could not be deleted.');
+        }
+    });
+
+    expect(fn () => app(RemoveTeamMemberService::class)->execute($this->team, $this->asha))
+        ->toThrow(RuntimeException::class, 'The grant could not be deleted.');
+
+    // The removal, the first grant's deletion and their activity are all rolled back.
+    expect($this->team->members()->whereKey($this->asha->id)->exists())->toBeTrue()
+        ->and(GitRepositoryGrant::query()->where('member_id', $this->asha->id)->count())->toBe(2)
+        ->and(ProjectActivity::query()->count())->toBe($activity);
+});
+
+// People
+
+it('moving someone to another organization queues a sync of each repository they hold a grant on', function () {
+    trigGrant($this->api, $this->asha);
+    trigGrant($this->sms, $this->asha);
+    trigGrant($this->web, $this->manager);
+    $elsewhere = Organization::factory()->create();
+    Queue::fake();
+
+    $this->asha->update(['title' => 'Developer']);
+    Queue::assertNotPushed(SyncRepositoryAccess::class);
+
+    $this->asha->update(['organization_id' => $elsewhere->id]);
+    expect(trigSorted(trigSynced()))->toBe(['sdoc/sms', 'sdoc/tp-api']);
+});
+
+it('queues nothing when someone without grants moves', function () {
+    $this->asha->update(['organization_id' => Organization::factory()->create()->id]);
+
+    Queue::assertNotPushed(SyncRepositoryAccess::class);
+});
+
 it('queues nothing for a project without linked repositories', function () {
     $team = $this->other->ensureTeam();
     $this->sms->delete();
@@ -306,7 +353,8 @@ function trigForgeRepository(): array
 
 /**
  * sdoc/portal on the forge; its collaborators are listed by $collaborators
- * and their permission answered by $permission.
+ * and each one's permission answered by $permission (write by default). Any
+ * other call, the link back included, is answered 200.
  */
 function trigFakeLink(Closure $collaborators, ?Closure $permission = null): void
 {
@@ -318,14 +366,39 @@ function trigFakeLink(Closure $collaborators, ?Closure $permission = null): void
     ]);
 }
 
-it('linking imports the forge\'s collaborators and queues a sync', function () {
-    trigFakeLink(function (Request $request) {
+/**
+ * A collaborator list of api.User rows on its first page.
+ *
+ * @param  list<string>  $logins
+ */
+function trigLogins(array $logins): Closure
+{
+    return function (Request $request) use ($logins) {
         parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
 
         return Http::response(($query['page'] ?? '1') === '1'
-            ? [['id' => 1, 'login' => 'asha', 'username' => 'asha'], ['id' => 2, 'login' => 'contractor', 'username' => 'contractor']]
+            ? array_map(fn (string $login): array => ['id' => crc32($login), 'login' => $login, 'username' => $login], $logins)
             : []);
-    });
+    };
+}
+
+/**
+ * The jobs waiting on the (real) database queue: a job dispatched inside a
+ * transaction lands there only once it commits.
+ *
+ * @return list<string>
+ */
+function trigWaitingJobs(): array
+{
+    return DB::table('jobs')->orderBy('id')->pluck('payload')
+        ->map(fn (string $payload): string => (string) json_decode($payload, true)['displayName'])
+        ->all();
+}
+
+it('linking imports the forge\'s collaborators and queues a sync', function () {
+    // Only the backfill is faked: the syncs go to the database queue, after the commit.
+    Queue::fake([BackfillGitRepository::class]);
+    trigFakeLink(trigLogins(['asha', 'contractor']));
 
     $this->actingAs($this->adminUser)
         ->post("/workspace/projects/{$this->project->slug}/repositories", ['full_name' => 'sdoc/portal'])
@@ -335,21 +408,27 @@ it('linking imports the forge\'s collaborators and queues a sync', function () {
     $grant = $repo->grants()->sole();
     expect([$grant->member_id, $grant->permission, $grant->granted_by])->toBe([$this->asha->id, 'write', $this->adminUser->id])
         ->and(array_column(trigGrantActivity($this->project), 'description'))->toBe(['gave Asha write access to sdoc/portal'])
-        ->and(trigSynced())->toContain('sdoc/portal')
-        ->and(array_values(array_unique(trigSynced())))->toBe(['sdoc/portal']);
+        ->and(array_values(array_unique(trigWaitingJobs())))->toBe([SyncRepositoryAccess::class]);
     Queue::assertPushed(BackfillGitRepository::class, fn (BackfillGitRepository $job) => $job->repository->is($repo));
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r->url() === 'https://git.example/api/v1/repos/sdoc/portal');
 });
 
-it('links and still queues a sync when the forge fails on the import, logging why without the token', function (Closure $collaborators, int $status) {
+it('refuses the link when the forge can\'t say who has access, keeping nothing and logging why without the token', function (Closure $collaborators, Closure $permission, int $status) {
+    Queue::fake([BackfillGitRepository::class]);
     Log::spy();
-    trigFakeLink($collaborators);
+    trigPerson($this->organization, 'Bikash');
+    trigFakeLink($collaborators, $permission);
 
     $this->actingAs($this->adminUser)
         ->post("/workspace/projects/{$this->project->slug}/repositories", ['full_name' => 'sdoc/portal'])
-        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => 'Linked sdoc/portal.']);
+        ->assertSessionHasErrors(['__global' => "Couldn't read sdoc/portal's collaborators on the forge, so it wasn't linked. Try again shortly."]);
 
-    expect(GitRepository::query()->where('full_name', 'sdoc/portal')->sole()->grants()->count())->toBe(0)
-        ->and(trigSynced())->toBe(['sdoc/portal']);
+    expect(GitRepository::query()->where('full_name', 'sdoc/portal')->exists())->toBeFalse()
+        ->and(GitRepositoryGrant::query()->count())->toBe(0)
+        ->and(ProjectActivity::query()->where('description', 'like', '%sdoc/portal%')->count())->toBe(0)
+        ->and(trigWaitingJobs())->toBe([]);
+    Queue::assertNotPushed(BackfillGitRepository::class);
+    Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH');
     Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === "Couldn't import a forge repository's collaborators."
         && $context['owner'] === 'sdoc'
         && $context['repository'] === 'portal'
@@ -357,6 +436,31 @@ it('links and still queues a sync when the forge fails on the import, logging wh
         && ($status !== 0 || ($context['url'] === 'https://git.example' && str_contains($context['cause'], '[token]')))
         && ! str_contains((string) json_encode($context), 'never-shown'))->once();
 })->with([
-    'refused' => [fn () => fn () => Http::response(['message' => 'boom'], 500), 500],
-    'down' => [fn () => fn () => throw new ConnectionException('cURL error 7: Failed to connect bot-token-never-shown'), 0],
+    'list refused' => [fn () => fn () => Http::response(['message' => 'boom'], 500), fn () => fn () => Http::response([]), 500],
+    'forge down' => [fn () => fn () => throw new ConnectionException('cURL error 7: Failed to connect bot-token-never-shown'), fn () => fn () => Http::response([]), 0],
+    // Asha's grant is made before Bikash's permission fails: it goes too.
+    'a permission refused midway' => [
+        fn () => trigLogins(['asha', 'bikash']),
+        fn () => fn (Request $r) => str_contains($r->url(), '/bikash/')
+            ? Http::response(['message' => 'boom'], 500)
+            : Http::response(['permission' => 'write', 'role_name' => 'write', 'user' => ['id' => 1, 'login' => 'asha']]),
+        500,
+    ],
 ]);
+
+it('refuses the link on an unexpected failure, reporting it without the token', function () {
+    Exceptions::fake();
+    trigFakeLink(trigLogins([]));
+    $this->mock(RepositoryAccess::class, fn (MockInterface $mock) => $mock->shouldReceive('importExisting')->andThrow(new RuntimeException('boom bot-token-never-shown')));
+
+    $this->actingAs($this->adminUser)
+        ->post("/workspace/projects/{$this->project->slug}/repositories", ['full_name' => 'sdoc/portal'])
+        ->assertSessionHasErrors(['__global' => "Couldn't read sdoc/portal's collaborators on the forge, so it wasn't linked. Try again shortly."]);
+
+    expect(GitRepository::query()->where('full_name', 'sdoc/portal')->exists())->toBeFalse();
+    Exceptions::assertReported(fn (ForgejoException $e) => str_contains($e->getMessage(), 'RuntimeException'));
+    foreach (Exceptions::reported() ?? [] as $e) {
+        expect($e->getMessage())->not->toContain('never-shown');
+    }
+    Queue::assertNothingPushed();
+});

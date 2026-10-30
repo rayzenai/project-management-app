@@ -394,9 +394,10 @@ it('a failed collaborator removal makes the result incomplete', function () {
     expect($member->refresh()->is_active)->toBeFalse();
 });
 
-it('counts a repository the forge no longer has, or a login it has no user for, as removed', function (int $status) {
+it('neither lists nor logs a repository the forge no longer has, or a login it has no user for, and does not fail on it', function (int $status) {
+    Log::spy();
     Http::fake([
-        'git.example.test/api/v1/orgs/*' => Http::response('', 404),
+        'git.example.test/api/v1/orgs/*' => Http::response('', 204),
         'git.example.test/api/v1/repos/*' => Http::response(['message' => 'gone'], $status),
     ]);
     $sdoc = forgeOffice('sdoc');
@@ -405,8 +406,11 @@ it('counts a repository the forge no longer has, or a login it has no user for, 
 
     $result = app(RemoveFromForgeService::class)->execute($user);
 
-    expect($result->data)->toBe(['removed' => ['sdoc', 'sdoc/app'], 'failed' => []])
-        ->and($result->meta)->toBe(['complete' => true]);
+    expect($result->data)->toBe(['removed' => ['sdoc'], 'failed' => []])
+        ->and($result->meta)->toBe(['complete' => true])
+        ->and($result->message)->toBe('ram.k was removed from the forge.');
+    Log::shouldNotHaveReceived('warning', fn (string $message) => $message === "Took someone off a forge repository's collaborators.");
+    Log::shouldNotHaveReceived('warning', fn (string $message) => $message === 'Forge collaborator removal failed.');
 })->with(['repository gone' => 404, 'no such forge user' => 422]);
 
 it('logs collaborator removals like organization removals, without the token', function () {
@@ -449,10 +453,15 @@ it('keeps going and reports without the token when a connection is unusable for 
     DB::table('git_connections')->where('owner', 'sdoc')->update(['token' => 'garbage-not-encrypted']);
     [$user] = forgePerson($sdoc);
 
+    forgeRepository('sdoc', 'web', 502);
+
     $result = app(RemoveFromForgeService::class)->execute($user);
 
-    expect($result->data)->toBe(['removed' => ['opmcm', 'opmcm/portal'], 'failed' => ['sdoc', 'sdoc/app']])
-        ->and($result->meta)->toBe(['complete' => false]);
+    // One report for the connection; its repositories fail without a call.
+    expect($result->data)->toBe(['removed' => ['opmcm', 'opmcm/portal'], 'failed' => ['sdoc', 'sdoc/app', 'sdoc/web']])
+        ->and($result->meta)->toBe(['complete' => false])
+        ->and(Exceptions::reported())->toHaveCount(1);
+    Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'git.example.test'));
     Exceptions::assertReported(ForgejoException::class);
     foreach (Exceptions::reported() ?? [] as $e) {
         for ($c = $e; $c !== null; $c = $c->getPrevious()) {
@@ -470,4 +479,64 @@ it('makes no collaborator call for a member without a forge account', function (
     app(RemoveFromForgeService::class)->execute($user);
 
     Http::assertNothingSent();
+});
+
+it('calls an unreachable forge once: its repositories fail without a call', function () {
+    Log::spy();
+    $calls = 0;
+    Http::fake([
+        'git.example.test/*' => function () use (&$calls) {
+            $calls++;
+
+            throw new ConnectionException('cURL error 28: timed out token-sdoc');
+        },
+        'git.other.test/*' => Http::response('', 204),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeOffice('opmcm', 'git.other.test');
+    forgeRepository('sdoc', 'app', 501);
+    forgeRepository('sdoc', 'web', 502);
+    forgeRepository('opmcm', 'portal', 601);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data)->toBe(['removed' => ['opmcm', 'opmcm/portal'], 'failed' => ['sdoc', 'sdoc/app', 'sdoc/web']])
+        ->and($result->meta)->toBe(['complete' => false])
+        ->and($calls)->toBe(1);
+    Log::shouldNotHaveReceived('warning', fn (string $message) => $message === 'Forge collaborator removal failed.');
+});
+
+it('stops calling a forge once one of its repositories finds it unreachable', function () {
+    Log::spy();
+    Http::fake([
+        'git.example.test/api/v1/orgs/*' => Http::response('', 204),
+        'git.example.test/api/v1/repos/sdoc/app/*' => fn () => throw new ConnectionException('cURL error 28: timed out token-sdoc'),
+        'git.example.test/api/v1/repos/*' => Http::response('', 204),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    forgeRepository('sdoc', 'web', 502);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data)->toBe(['removed' => ['sdoc'], 'failed' => ['sdoc/app', 'sdoc/web']])
+        ->and($result->meta)->toBe(['complete' => false]);
+    Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/repos/sdoc/web/'));
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message) => $message === 'Forge collaborator removal failed.')->once();
+});
+
+it('keeps asking a forge that answers with an error', function () {
+    Http::fake([
+        'git.example.test/api/v1/orgs/*' => Http::response(['message' => 'boom'], 500),
+        'git.example.test/api/v1/repos/*' => Http::response('', 204),
+    ]);
+    $sdoc = forgeOffice('sdoc');
+    forgeRepository('sdoc', 'app', 501);
+    [$user] = forgePerson($sdoc);
+
+    $result = app(RemoveFromForgeService::class)->execute($user);
+
+    expect($result->data)->toBe(['removed' => ['sdoc/app'], 'failed' => ['sdoc']]);
 });

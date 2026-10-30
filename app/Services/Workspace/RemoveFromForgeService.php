@@ -45,6 +45,11 @@ class RemoveFromForgeService
             return ServiceResult::success(['removed' => [], 'failed' => []], self::failureMessage($username), ['complete' => false]);
         }
 
+        // Connections found unreachable (status 0) or unusable: their
+        // remaining repositories count as failed without another call, so
+        // one dead forge costs one timeout and one report, not one each.
+        $down = [];
+
         foreach ($connections as $connection) {
             try {
                 ForgejoClient::for($connection)->removeOrganizationMember($connection->owner, $username);
@@ -60,20 +65,31 @@ class RemoveFromForgeService
                 }
                 Log::warning('Forge member removal failed.', $context);
                 $failed[] = $connection->owner;
+                if ($e->status === 0) {
+                    $down[$connection->id] = true;
+                }
             } catch (Throwable) {
                 // Unexpected, but the deactivation must stand. Never report the
                 // throwable itself: it can carry the request and its token.
                 report(new ForgejoException('Removing a member from the forge failed unexpectedly.'));
                 $failed[] = $connection->owner;
+                $down[$connection->id] = true;
             }
         }
 
         foreach ($connections as $connection) {
             foreach ($repositories->get($connection->id, []) as $repository) {
+                if (isset($down[$connection->id])) {
+                    $failed[] = $repository->full_name;
+
+                    continue;
+                }
+
                 try {
-                    self::removeCollaborator($connection, $repository, $username);
-                    $removed[] = $repository->full_name;
-                    Log::warning("Took someone off a forge repository's collaborators.", ['owner' => $repository->owner, 'repository' => $repository->name, 'login' => $username]);
+                    if (self::removeCollaborator($connection, $repository, $username)) {
+                        $removed[] = $repository->full_name;
+                        Log::warning("Took someone off a forge repository's collaborators.", ['owner' => $repository->owner, 'repository' => $repository->name, 'login' => $username]);
+                    }
                 } catch (ForgejoException $e) {
                     // As for the organizations: where and what status, never the token.
                     $context = ['owner' => $repository->owner, 'repository' => $repository->name, 'status' => $e->status];
@@ -83,9 +99,13 @@ class RemoveFromForgeService
                     }
                     Log::warning('Forge collaborator removal failed.', $context);
                     $failed[] = $repository->full_name;
+                    if ($e->status === 0) {
+                        $down[$connection->id] = true;
+                    }
                 } catch (Throwable) {
                     report(new ForgejoException('Removing a member from the forge failed unexpectedly.'));
                     $failed[] = $repository->full_name;
+                    $down[$connection->id] = true;
                 }
             }
         }
@@ -98,20 +118,25 @@ class RemoveFromForgeService
     }
 
     /**
-     * A repository the forge no longer has (404), or a login it has no user
-     * for (422), leaves no access to take away.
+     * Whether the forge took them off. A repository the forge no longer has
+     * (404), or a login it has no user for (422), had no access to take
+     * away: neither a removal nor a failure.
      *
      * @throws ForgejoException
      */
-    private static function removeCollaborator(GitConnection $connection, GitRepository $repository, string $username): void
+    private static function removeCollaborator(GitConnection $connection, GitRepository $repository, string $username): bool
     {
         try {
             ForgejoClient::for($connection)->removeCollaborator($repository->owner, $repository->name, $username);
         } catch (ForgejoException $e) {
-            if (! in_array($e->status, [404, 422], true)) {
-                throw $e;
+            if (in_array($e->status, [404, 422], true)) {
+                return false;
             }
+
+            throw $e;
         }
+
+        return true;
     }
 
     private static function failureMessage(string $username): string
