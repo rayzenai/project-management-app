@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Models\Program;
 use App\Models\Project;
 use App\Models\Team;
 use App\Support\ProjectKeys;
@@ -41,6 +42,7 @@ class UpdateProjectRequest extends FormRequest
             'is_public' => ['sometimes', 'nullable', 'boolean'],
             'manager_id' => ['sometimes', 'required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
             'is_cross_organization' => ['sometimes', 'boolean'],
+            'program_id' => ['sometimes', 'nullable', 'integer', Rule::exists('programs', 'id')],
         ];
     }
 
@@ -63,6 +65,13 @@ class UpdateProjectRequest extends FormRequest
             if ($this->has('key') && WorkspaceAccess::canChangeProjectKey($this->user(), $project)
                 && ProjectKeys::isTaken($project->organization_id, (string) $this->input('key'), $project->id)) {
                 $validator->errors()->add('key', 'That key is already used in this organization.');
+
+                return;
+            }
+
+            if ($this->filled('program_id')
+                && (int) Program::query()->whereKey($this->integer('program_id'))->value('organization_id') !== (int) $project->organization_id) {
+                $validator->errors()->add('program_id', 'That program belongs to another organization.');
 
                 return;
             }
@@ -126,6 +135,7 @@ class UpdateProjectRequest extends FormRequest
 
         if (! WorkspaceAccess::administers($this->user(), $project->organization_id)) {
             unset($data['manager_id']);
+            unset($data['program_id']);
         }
 
         if (! WorkspaceAccess::isSuperAdmin($this->user())) {

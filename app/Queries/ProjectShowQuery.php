@@ -30,6 +30,7 @@ class ProjectShowQuery
         $canViewCode = WorkspaceAccess::canViewProjectCode($viewer, $project);
 
         $project->load([
+            'program:id,slug,name',
             'teams' => fn ($q) => $q->withCount('members')->with(['leaders', 'members' => fn ($m) => $m->with('organization:id,name')->orderBy('name')]),
             'tasks' => fn ($q) => $q->with(['assignments.member', 'dependencies', 'dependents'])->withCount(['notes', 'contacts'])
                 // The board's pull-request mark, only where code shows at all,

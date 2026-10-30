@@ -40,6 +40,10 @@ class ProjectResource extends JsonResource
             'can_choose_manager' => WorkspaceAccess::administers($request->user(), $this->organization_id),
             'can_change_key' => WorkspaceAccess::canChangeProjectKey($request->user(), $this->resource),
             'can_publish' => WorkspaceAccess::canPublishProject($request->user(), $this->organization_id),
+            'program' => $this->whenLoaded('program', fn (): ?array => $this->program === null ? null : [
+                'slug' => $this->program->slug,
+                'name' => $this->program->name,
+            ]),
             'team' => $this->whenLoaded('teams', fn (): ?array => ($team = $this->team()) === null ? null : [
                 'id' => $team->id,
                 'is_cross_organization' => (bool) $team->is_cross_organization,

@@ -43,7 +43,7 @@ class ProjectController extends Controller
 
         return $this->respondWithResult(
             $result,
-            $result->data instanceof Project ? new ProjectResource($result->data) : null,
+            $result->data instanceof Project ? new ProjectResource($result->data->load('program')) : null,
             $result->success ? 201 : null,
         );
     }
@@ -54,7 +54,7 @@ class ProjectController extends Controller
 
         return $this->respondWithResult(
             $result,
-            $result->data instanceof Project ? new ProjectResource($result->data) : null,
+            $result->data instanceof Project ? new ProjectResource($result->data->load('program')) : null,
         );
     }
 

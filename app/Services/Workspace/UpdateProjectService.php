@@ -32,7 +32,7 @@ class UpdateProjectService
                     return ServiceResult::failure('That key is already used in this organization.', 422);
                 }
 
-                foreach (['title', 'title_np', 'description', 'description_np', 'is_public'] as $key) {
+                foreach (['title', 'title_np', 'description', 'description_np', 'is_public', 'program_id'] as $key) {
                     if (array_key_exists($key, $attributes)) {
                         $project->{$key} = $attributes[$key];
                     }

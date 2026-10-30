@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Member;
+use App\Models\Program;
 use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
@@ -38,6 +39,7 @@ class StoreProjectRequest extends FormRequest
                 'nullable', 'integer', Rule::exists('organizations', 'id'),
             ],
             'manager_id' => ['required', 'integer', Rule::exists('members', 'id')->whereNull('deleted_at')],
+            'program_id' => ['nullable', 'integer', Rule::exists('programs', 'id')],
         ];
     }
 
@@ -57,6 +59,11 @@ class StoreProjectRequest extends FormRequest
 
             if ($this->filled('key') && ProjectKeys::isTaken((int) $this->organizationId(), (string) $this->input('key'))) {
                 $validator->errors()->add('key', 'That key is already used in this organization.');
+            }
+
+            if ($this->filled('program_id')
+                && (int) Program::query()->whereKey($this->integer('program_id'))->value('organization_id') !== $this->organizationId()) {
+                $validator->errors()->add('program_id', 'That program belongs to another organization.');
             }
 
             $manager = Member::query()->find($this->integer('manager_id'));
@@ -89,6 +96,7 @@ class StoreProjectRequest extends FormRequest
         // Choosing the key is the administrators' call; the title suggests one otherwise.
         if (! WorkspaceAccess::administers($this->user(), $this->organizationId())) {
             unset($data['key']);
+            unset($data['program_id']);
         }
 
         return data_get($data, $key, $default);

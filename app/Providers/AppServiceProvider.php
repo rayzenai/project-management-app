@@ -9,6 +9,7 @@ use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\OAuthClient;
 use App\Models\Program;
+use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\ProjectContact;
 use App\Models\ProjectNote;
@@ -26,6 +27,7 @@ use App\Observers\ProgramObserver;
 use App\Observers\ProjectAssignmentObserver;
 use App\Observers\ProjectContactObserver;
 use App\Observers\ProjectNoteObserver;
+use App\Observers\ProjectObserver;
 use App\Observers\SubtaskObserver;
 use App\Observers\TaskCommentObserver;
 use App\Observers\TaskDependencyObserver;
@@ -115,6 +117,7 @@ class AppServiceProvider extends ServiceProvider
         // `createToken()` throws ClassMorphViolationException.
         Relation::enforceMorphMap([
             'user' => User::class,
+            'project' => Project::class,
             'task' => Task::class,
             'task-comment' => TaskComment::class,
             'task-dependency' => TaskDependency::class,
@@ -138,6 +141,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(RequestHandled::class, fn () => WorkspaceAccess::flush());
 
         Program::observe(ProgramObserver::class);
+        Project::observe(ProjectObserver::class);
         Task::observe(TaskObserver::class);
         ProjectNote::observe(ProjectNoteObserver::class);
         ProjectContact::observe(ProjectContactObserver::class);

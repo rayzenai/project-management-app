@@ -38,6 +38,7 @@ class CreateProjectService
                     'description' => $attributes['description'] ?? null,
                     'description_np' => $attributes['description_np'] ?? null,
                     'is_public' => (bool) ($attributes['is_public'] ?? false),
+                    'program_id' => $attributes['program_id'] ?? null,
                 ]);
 
                 $team = $project->ensureTeam();

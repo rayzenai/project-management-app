@@ -30,7 +30,7 @@ class ProjectIndexQuery
 
         $projects = Project::query()
             ->visibleTo($user)
-            ->with(['organization:id,name', 'teams' => fn ($q) => $q->withCount('members')->with('leaders')])
+            ->with(['organization:id,name', 'program:id,slug,name', 'teams' => fn ($q) => $q->withCount('members')->with('leaders')])
             ->when($archivedView, fn ($q) => $q->archived(), fn ($q) => $q->active())
             ->withCount([
                 'tasks',
