@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\GitConnection;
+use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
@@ -500,6 +501,72 @@ class WorkspaceAccess
     public static function canManageProjectRepositories(?Authenticatable $user, Project $project): bool
     {
         return self::hasGit($project) && self::canManageProjectAccess($user, $project);
+    }
+
+    /**
+     * Give people access to a linked repository, change it and take it
+     * away: whoever may link the project's repositories.
+     */
+    public static function canManageRepositoryAccess(?Authenticatable $user, GitRepository $repository): bool
+    {
+        return self::canManageProjectRepositories($user, $repository->project);
+    }
+
+    /**
+     * Whether the user may give this person access to the project's
+     * repositories: only whoever passes canManageProjectRepositories, and
+     * never to someone inactive, a super-admin's own member (no
+     * organization) or a maintainer, whose access follows the role.
+     * Whoever administers the project's organization gives it to its people
+     * and to anyone on the project's team; its manager and its program's
+     * manager only to people on its team (a cross-organization team's
+     * outsiders included). The predicate twin of
+     * RepositoryAccessCandidatesQuery; keep them in step.
+     */
+    public static function canGrantRepositoryAccessTo(?Authenticatable $user, Project $project, Member $member): bool
+    {
+        if (! self::canManageProjectRepositories($user, $project)
+            || ! $member->is_active
+            || $member->organization_id === null
+            || in_array((int) $member->getKey(), self::repositoryMaintainerIds($project), true)) {
+            return false;
+        }
+
+        if (self::administers($user, $project->organization_id) && (int) $member->organization_id === (int) $project->organization_id) {
+            return true;
+        }
+
+        return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
+    }
+
+    /**
+     * The members who maintain the project's repositories (admin on the
+     * forge, their access not editable): its manager and its program's
+     * manager, while active, the latter only as managesProgramOf would count
+     * them (the program and its manager both in the project's
+     * organization).
+     *
+     * @return list<int>
+     */
+    public static function repositoryMaintainerIds(Project $project): array
+    {
+        $ids = [];
+        $manager = $project->manager();
+
+        if ($manager !== null && $manager->is_active) {
+            $ids[] = (int) $manager->getKey();
+        }
+
+        $program = $project->program;
+        $programManager = $program?->manager;
+
+        if ($program !== null && $programManager !== null && $programManager->is_active
+            && (int) $program->organization_id === (int) $project->organization_id
+            && (int) $programManager->organization_id === (int) $project->organization_id) {
+            $ids[] = (int) $programManager->getKey();
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private static function hasGit(Project $project): bool

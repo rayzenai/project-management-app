@@ -6,6 +6,7 @@ use App\Models\GitBranch;
 use App\Models\GitCommit;
 use App\Models\GitPullRequest;
 use App\Models\GitRepository;
+use App\Models\GitRepositoryGrant;
 use App\Models\Member;
 use App\Models\OAuthClient;
 use App\Models\Program;
@@ -131,6 +132,7 @@ class AppServiceProvider extends ServiceProvider
             'git-branch' => GitBranch::class,
             'git-commit' => GitCommit::class,
             'git-pull-request' => GitPullRequest::class,
+            'git-repository-grant' => GitRepositoryGrant::class,
         ]);
 
         // Observers own every side effect of a workspace mutation: the

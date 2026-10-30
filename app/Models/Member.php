@@ -125,6 +125,16 @@ class Member extends Model
     }
 
     /**
+     * Access this member was given to linked repositories.
+     *
+     * @return HasMany<GitRepositoryGrant, $this>
+     */
+    public function repositoryGrants(): HasMany
+    {
+        return $this->hasMany(GitRepositoryGrant::class);
+    }
+
+    /**
      * @return HasMany<ProjectAssignment, $this>
      */
     public function assignments(): HasMany

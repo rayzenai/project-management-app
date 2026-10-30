@@ -25,6 +25,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $default_branch
  * @property CarbonImmutable|null $last_pushed_at
  * @property CarbonImmutable|null $reconciled_at
+ * @property bool $protects_main
+ * @property CarbonImmutable|null $access_synced_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read GitConnection $gitConnection
@@ -56,6 +58,8 @@ class GitRepository extends Model
             'forge_id' => 'integer',
             'last_pushed_at' => 'datetime',
             'reconciled_at' => 'datetime',
+            'protects_main' => 'boolean',
+            'access_synced_at' => 'immutable_datetime',
         ];
     }
 
@@ -97,6 +101,17 @@ class GitRepository extends Model
     public function pullRequests(): HasMany
     {
         return $this->hasMany(GitPullRequest::class);
+    }
+
+    /**
+     * People given access to the repository on the forge, beyond its
+     * maintainers.
+     *
+     * @return HasMany<GitRepositoryGrant, $this>
+     */
+    public function grants(): HasMany
+    {
+        return $this->hasMany(GitRepositoryGrant::class);
     }
 
     /**
