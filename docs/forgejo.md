@@ -380,6 +380,15 @@ still a `FROM` bump:
 
   then restart the forge. The button's label stays "Sign in with
   sdoc-tasks": the source name is also in the callback URL.
+- **Existing accounts keep the theme stored on them**, and Forgejo still
+  serves its own theme files, so after any change to `ui.THEMES` move them
+  onto one that is offered (done on 2026-10-30 for the accounts made before
+  the branding; no restart needed):
+
+  ```sh
+  sudo docker exec "$FJDB" psql -U forgejo -d forgejo \
+    -c "UPDATE \"user\" SET theme = 'sdoc-auto' WHERE theme NOT IN ('sdoc-auto', 'sdoc-light', 'sdoc-dark')"
+  ```
 
 Forgejo's name stays only where admins and developers look (Site
 administration, the API's Swagger page). To try a change, run a stock
