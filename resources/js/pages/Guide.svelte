@@ -149,6 +149,14 @@
             'A merged pull request never marks a task done. Move the card when the work is really finished.',
         ],
         [
+            'Code activity',
+            "Code activity, in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
+        ],
+        [
+            'Your git email',
+            'A commit counts for you only when the email git signs it with is on your SDOC Git account. Add it there under Settings, Emails.',
+        ],
+        [
             'Forge access',
             "Organizational admins own the office's forge organization: they create its repositories and give people access there. An organizational admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it.",
         ],

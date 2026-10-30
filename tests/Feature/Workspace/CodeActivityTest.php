@@ -150,7 +150,7 @@ function codeActivityPullRequest(GitRepository $repo, int $number, ?string $auth
 /** @return array<string, mixed> */
 function codeActivityReport(TestResponse $response): array
 {
-    $response->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('Reports/CodeActivity', false));
+    $response->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('Reports/CodeActivity'));
 
     return $response->viewData('page')['props'];
 }
@@ -399,11 +399,21 @@ it('offers the projects and programs in the scope that have repositories', funct
     $member = codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code'))['options'];
 
     expect($admin)->toEqual([
-        'projects' => [['slug' => 'hr-system', 'title' => 'HR System'], ['slug' => 'tax-portal', 'title' => 'Tax Portal']],
+        'projects' => [['slug' => 'hr-system', 'title' => 'HR System', 'label' => 'HR System'], ['slug' => 'tax-portal', 'title' => 'Tax Portal', 'label' => 'Tax Portal (Revenue)']],
         'programs' => [['slug' => $this->program->slug, 'name' => 'Revenue']],
     ])
-        ->and($manager)->toEqual(['projects' => [['slug' => 'tax-portal', 'title' => 'Tax Portal']], 'programs' => []])
+        ->and($manager)->toEqual(['projects' => [['slug' => 'tax-portal', 'title' => 'Tax Portal', 'label' => 'Tax Portal (Revenue)']], 'programs' => []])
         ->and($member)->toEqual(['projects' => [], 'programs' => []]);
+});
+
+it("names a program's General project with its program, so two Generals never look alike", function () {
+    $general = Project::factory()->create(['organization_id' => $this->sdoc->id, 'program_id' => $this->program->id, 'title' => 'General', 'slug' => 'general-revenue', 'key' => 'GR']);
+    codeActivityRepository(GitConnection::query()->where('organization_id', $this->sdoc->id)->firstOrFail(), $general, 'gr-api', 4);
+
+    $options = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['options'];
+
+    expect(collect($options['projects'])->firstWhere('slug', 'general-revenue'))
+        ->toEqual(['slug' => 'general-revenue', 'title' => 'General', 'label' => 'General (Revenue)']);
 });
 
 it('asks the same number of queries however many people there are', function () {

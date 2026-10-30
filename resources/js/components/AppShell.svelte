@@ -6,6 +6,7 @@
         Building2,
         Folder,
         FolderTree,
+        GitCommitHorizontal,
         LayoutGrid,
         LogOut,
         Menu,
@@ -157,6 +158,15 @@
             icon: Bell,
         },
         { label: 'People', href: '/workspace/team', icon: Users },
+        ...(shared.gitEnabled
+            ? [
+                  {
+                      label: 'Code activity',
+                      href: '/workspace/reports/code',
+                      icon: GitCommitHorizontal,
+                  },
+              ]
+            : []),
         ...(shared.isSuperAdmin
             ? [
                   {
@@ -170,9 +180,12 @@
     ]);
 
     function isActive(href: string) {
+        // A filtered page (/workspace/reports/code?from=...) is still that page.
+        const bare = path.split('?')[0];
+
         return (
-            path === href ||
-            (href !== '/workspace' && path.startsWith(href + '/'))
+            bare === href ||
+            (href !== '/workspace' && bare.startsWith(href + '/'))
         );
     }
 

@@ -42,6 +42,13 @@
     --color-danger-soft: var(--ws-danger-soft);
     --color-success-soft: var(--ws-success-soft);
     --color-selection: var(--ws-selection);
+    /* Chart series (people compared): blue, orange, aqua, violet, in this
+       fixed order; never status colours. Validated with the dataviz
+       palette checks against the panel surface in both modes. */
+    --color-series-1: var(--ws-series-1);
+    --color-series-2: var(--ws-series-2);
+    --color-series-3: var(--ws-series-3);
+    --color-series-4: var(--ws-series-4);
 
     /* One radius scale: 6px for panels/buttons/inputs, 4px for chips. */
     --radius-sm: 4px;
@@ -74,6 +81,10 @@
     --ws-danger-soft: rgba(214, 61, 51, 0.09);
     --ws-success-soft: rgba(31, 157, 98, 0.1);
     --ws-selection: rgba(59, 111, 224, 0.07);
+    --ws-series-1: #2a78d6;
+    --ws-series-2: #eb6834;
+    --ws-series-3: #1baf7a;
+    --ws-series-4: #6250d6;
     color-scheme: light;
 }
 
@@ -99,8 +110,21 @@
         --ws-danger-soft: rgba(242, 101, 90, 0.13);
         --ws-success-soft: rgba(62, 201, 138, 0.13);
         --ws-selection: rgba(109, 148, 245, 0.08);
+        --ws-series-1: #3987e5;
+        --ws-series-2: #d95926;
+        --ws-series-3: #199e70;
+        --ws-series-4: #9085e9;
         color-scheme: dark;
     }
+}
+
+/* applyTheme writes no series colours, so a dark theme chosen on a light OS
+   takes the dark steps here. */
+:root[data-theme='dark'] {
+    --ws-series-1: #3987e5;
+    --ws-series-2: #d95926;
+    --ws-series-3: #199e70;
+    --ws-series-4: #9085e9;
 }
 
 @layer base {

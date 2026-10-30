@@ -111,7 +111,7 @@ it('reports a super-admin every organization and an organizational admin only th
         ->and($admin->json('data.people.0.code_added'))->toBe(15)
         ->and($admin->json('data.range'))->toBe(['from' => '2026-09-29', 'to' => '2026-10-28'])
         ->and($admin->json('data.uncounted'))->toBe(0)
-        ->and($admin->json('data.options.projects'))->toEqual([['slug' => 'hr-system', 'title' => 'HR System'], ['slug' => 'tax-portal', 'title' => 'Tax Portal']])
+        ->and($admin->json('data.options.projects'))->toEqual([['slug' => 'hr-system', 'title' => 'HR System', 'label' => 'HR System'], ['slug' => 'tax-portal', 'title' => 'Tax Portal', 'label' => 'Tax Portal']])
         ->and($admin->json('filters'))->toEqual(['from' => '2026-09-29', 'to' => '2026-10-28', 'project' => null, 'program' => null, 'members' => []]);
 });
 

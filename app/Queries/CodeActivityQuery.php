@@ -41,7 +41,7 @@ class CodeActivityQuery
 
     /**
      * @param  Filters  $filters
-     * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, options: array{projects: list<array{slug: string, title: string}>, programs: list<array{slug: string, name: string}>}}
+     * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, options: array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}}
      */
     public function get(?Authenticatable $user, array $filters): array
     {
@@ -253,18 +253,20 @@ class CodeActivityQuery
 
     /**
      * The projects and programs the viewer may filter by: in their whole
-     * repositories, with a linked repository.
+     * repositories, with a linked repository. A project's `label` names its
+     * program too (Project::label()), since every program has a General.
      *
      * @param  Scope  $scope
-     * @return array{projects: list<array{slug: string, title: string}>, programs: list<array{slug: string, name: string}>}
+     * @return array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}
      */
     private function options(array $scope): array
     {
         $projects = $this->scopedProjects(Project::query()->whereHas('repositories'), $scope)
+            ->with('program:id,name')
             ->orderBy('title')
             ->orderBy('id')
-            ->get(['slug', 'title'])
-            ->map(fn (Project $project): array => ['slug' => $project->slug, 'title' => $project->title]);
+            ->get(['id', 'slug', 'title', 'program_id'])
+            ->map(fn (Project $project): array => ['slug' => $project->slug, 'title' => $project->title, 'label' => $project->label()]);
 
         $programs = $this->scopedPrograms(Program::query(), $scope)
             ->whereHas('projects', fn (Builder $projects) => $projects
