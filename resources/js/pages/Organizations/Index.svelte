@@ -4,7 +4,10 @@
     import AppShell from '../../components/AppShell.svelte';
     import type { Organization } from '../../lib/types';
 
-    let { organizations }: { organizations: Organization[] } = $props();
+    let {
+        organizations,
+        defaultForgeUrl,
+    }: { organizations: Organization[]; defaultForgeUrl: string } = $props();
 
     const uid = $props.id();
     let creating = $state(false);
@@ -18,7 +21,7 @@
     function startGit(organization: Organization) {
         gitId = organization.id;
         gitForm.clearErrors();
-        gitForm.base_url = organization.git?.base_url ?? '';
+        gitForm.base_url = organization.git?.base_url ?? defaultForgeUrl;
         gitForm.owner = organization.git?.owner ?? organization.slug;
         gitForm.token = '';
     }

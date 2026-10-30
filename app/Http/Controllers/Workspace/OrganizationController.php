@@ -27,7 +27,10 @@ class OrganizationController extends Controller
     {
         abort_unless(WorkspaceAccess::canManageOrganizations($request->user()), 403);
 
-        return Inertia::render('Organizations/Index', $query->data());
+        return Inertia::render('Organizations/Index', [
+            ...$query->data(),
+            'defaultForgeUrl' => (string) config('project-management.git.default_forge_url'),
+        ]);
     }
 
     public function store(StoreOrganizationRequest $request): RedirectResponse

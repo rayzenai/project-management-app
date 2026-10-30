@@ -33,6 +33,15 @@ it('lists organizations with their counts and office admins for a super-admin', 
             ->where('organizations.0.office_admins.0.name', 'Chief'));
 });
 
+it('suggests the configured forge address for turning git on', function () {
+    config(['project-management.git.default_forge_url' => 'https://git.example.gov.np']);
+
+    $this->actingAs(organizationsBoss())->get('/workspace/organizations')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Organizations/Index')
+            ->where('defaultForgeUrl', 'https://git.example.gov.np'));
+});
+
 it('creates and renames organizations, refusing duplicate names', function () {
     $this->actingAs(organizationsBoss());
 

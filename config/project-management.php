@@ -91,4 +91,19 @@ return [
         'run_at' => env('PM_REMINDERS_RUN_AT', '08:00'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Git forge
+    |--------------------------------------------------------------------------
+    |
+    | The forge address the Organizations page fills in when a super-admin
+    | turns git on for an organization: SDOC's forge in production. A local
+    | forge (forgejo/local.sh) answers at http://127.0.0.1:3300.
+    |
+    */
+
+    'git' => [
+        'default_forge_url' => env('PM_GIT_FORGE_URL', 'https://git.sdoc.gov.np'),
+    ],
+
 ];

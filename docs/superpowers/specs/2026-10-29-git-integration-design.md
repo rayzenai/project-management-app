@@ -21,7 +21,7 @@ projects can each link one or more repositories.
 | Forge | **Forgejo**, 15.0 LTS (supported to 15 Jul 2027), then 19.0 LTS (Apr 2027) | GPLv3+, non-profit steward, no paid tier; org-wide signed webhooks, OIDC sign-in and pull mirroring are free; ~300 MB idle; chosen by the Dutch government in 2026. Skip 17.0.0 (the project advised against it). |
 | Not GitLab CE | | Webhooks covering a whole group, OIDC group rules and pull mirroring are paid; monthly patching with upgrade stops; 8 GB idle; unauthenticated CVSS 10 RCE in Oct 2026; its tracker link drops the `SG` prefix. |
 | Not Gitea | | Company-held trademark, fixes only on the latest major, three majors in six months, and moving from Gitea 1.23+ to Forgejo later needs manual database surgery. |
-| Where | `git.sdoc.gov.np` on the SDOC VM, own Dokploy Compose project with its own Postgres | Next to the tracker. The public gateway (103.175.192.178) forwards ports 80 and 443 to this VM's Traefik, so the tracker is on the internet, and so is the forge (owner, 2026-10-29), behind two-factor sign-in. |
+| Where | `git.sdoc.gov.np` on the SDOC VM, its own Dokploy project `git` (an application built from `forgejo/` in this repository, deployed on its own, and its own Postgres) | Next to the tracker. The public gateway (103.175.192.178) forwards ports 80 and 443 to this VM's Traefik, so the tracker is on the internet, and so is the forge (owner, 2026-10-29), behind two-factor sign-in. |
 | Git over SSH | Forgejo's built-in SSH server on port **2222**; HTTPS always works | Host sshd keeps port 22. The gateway forwards only 80 and 443, so SSH is reachable inside the SDOC network and over VPN only. |
 | Who is the source of truth | **The tracker** for people, projects, teams and keys. The forge for code. | Forgejo can't confine a token to one organization and never retries webhooks, so the tracker needs its own reconciler anyway. |
 | Sign-in | The tracker is the forge's **OIDC provider** ("Sign in with SDOC Tasks"); forge passwords off | One account; deactivating someone in the tracker shuts the forge door. Must exist before anyone creates a local forge account. |
@@ -127,8 +127,10 @@ Each phase ships on its own and is useful on its own. Risk comes last.
    `groups` (`forge-admins` for super-admins). Forgejo requires `git_orgs` to
    be non-empty, so people with no git-enabled organization or project team
    can't get in.
-4. **Forgejo on the VM.** Dokploy Compose project `git`: Forgejo 15.0.x and its
-   own Postgres 17 (Postgres 18 support is unconfirmed), named volumes only
+4. **Forgejo on the VM.** Dokploy project `git`: Forgejo 15.0.x as an
+   application built from `forgejo/` (a Dockerfile on the pinned image; the
+   owner chose this shape on 2026-10-30, like sdoc's compressor) and its own
+   Postgres 17 (Postgres 18 support is unconfirmed), named volumes only
    (Dokploy backs up named volumes and may clean absolute host paths),
    `git.sdoc.gov.np` through Traefik, SSH on 2222. Settings:
    `REQUIRE_SIGNIN_VIEW=true`, private repos by default,
