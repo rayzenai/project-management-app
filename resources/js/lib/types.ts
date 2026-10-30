@@ -173,6 +173,31 @@ export interface RepositoryCandidate {
     html_url: string | null;
 }
 
+/**
+ * Who reaches a linked repository through the tracker (RepositoryAccessQuery).
+ * `waiting`: never signed in to the forge, so it can't have them yet.
+ */
+export interface RepositoryAccess {
+    /** The project's manager and its program's manager: admin, by role. */
+    maintainers: {
+        id: Id;
+        name: string;
+        title: string | null;
+        role: 'manager' | 'program manager';
+        waiting: boolean;
+    }[];
+    grants: RepositoryGrant[];
+}
+
+/** A person given read or write access (GitRepositoryGrantResource). */
+export interface RepositoryGrant {
+    id: Id;
+    permission: 'read' | 'write';
+    waiting: boolean;
+    member: { id: Id; name: string; title: string | null };
+    granted_at: string | null;
+}
+
 /** A task's Code section (TaskCodeQuery); null when there is no git. */
 export interface TaskCode {
     /** The branch to start for it: tp-12-fix-login. */

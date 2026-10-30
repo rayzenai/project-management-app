@@ -137,6 +137,18 @@
             "On the project's Code tab, its manager, its program's manager or an organizational admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
         ],
         [
+            'New repository',
+            "Link repository, then New repository, makes a private repository on the forge and links it. Its name is the project's key in lowercase (tp) or starts with it and a hyphen (tp-api), in lowercase letters and digits with a single ., _ or - between them. Its main branch is protected: changes reach it through pull requests with one approval, and only the project's manager, its program's manager and the organizational admins push to it directly.",
+        ],
+        [
+            'Repository access',
+            "Access, on a repository's row, shows who can reach it. The project's manager and its program's manager maintain it for as long as they hold the role, and give people on the project's team read access (clone and pull) or write access (push branches and open pull requests). An organizational admin can give it to anyone on the team or in the office. Leaving the project's team, or being deactivated, takes it away. Organizational admins and super-admins reach every repository.",
+        ],
+        [
+            'First sign-in',
+            "Someone given access who hasn't signed in to SDOC Git yet shows so under their name. The forge can't have them until they do, and gets them within ten minutes of their first sign-in.",
+        ],
+        [
             'Name a branch',
             "Start the name with the task's code: tp-12-fix-login. Copy branch name in the task's Code section gives you one.",
         ],
@@ -158,7 +170,7 @@
         ],
         [
             'Forge access',
-            "Organizational admins own the office's forge organization: they create its repositories and give people access there. An organizational admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it.",
+            "Organizational admins own the office's forge organization. An organizational admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it. Give access to a repository here, not on the forge: the tracker keeps the forge in step.",
         ],
     ];
 

@@ -6,25 +6,31 @@
         GitBranch,
         GitPullRequest,
         Link,
+        Plus,
         Unlink,
+        Users,
     } from '@lucide/svelte';
-    import { untrack } from 'svelte';
+    import { tick, untrack } from 'svelte';
+    import { SvelteSet } from 'svelte/reactivity';
     import { writeToClipboard } from '../../lib/clipboard';
     import { formatTimeAgo } from '../../lib/format';
     import { toast } from '../../lib/toast.svelte';
     import type {
         GitRepository,
+        Id,
         Project,
         ProjectGit,
         RepositoryCandidate,
     } from '../../lib/types';
     import Popover from '../Popover.svelte';
     import Spinner from '../Spinner.svelte';
+    import RepositoryAccess from './RepositoryAccess.svelte';
 
     /**
      * A project's Code tab: its linked forge repositories, how to clone each
-     * one and its open pull requests. Whoever runs the project links and
-     * unlinks them; unlinking leaves the repository on the forge.
+     * one and its open pull requests. Whoever runs the project links,
+     * creates (named after the project's key) and unlinks them, and says who
+     * may reach each one; unlinking leaves the repository on the forge.
      */
     let {
         project,
@@ -52,10 +58,29 @@
     let seq = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    // New repository, in the same popover.
+    let creating = $state(false);
+    let newName = $state('');
+    let newDescription = $state('');
+    let createErrors = $state<Record<string, string>>({});
+    let submitting = $state(false);
+    let nameInput = $state<HTMLInputElement | null>(null);
+
+    /** Repositories whose access panel is open. */
+    const accessOpen = new SvelteSet<Id>();
+
     const base = $derived(`/workspace/projects/${project.slug}/repositories`);
     const example = $derived(`${project.code ?? 'TP'}-12`);
     // A full first list may be cut short, so typing asks the forge instead.
     const capped = $derived((candidates?.length ?? 0) >= CANDIDATE_LIMIT);
+    // A new repository's name starts with the key: the key itself while no
+    // linked repository has it, else the key and a hyphen to go on from.
+    const key = $derived((project.key ?? project.code ?? '').toLowerCase());
+    const suggestedName = $derived(
+        git.repositories.some((r) => r.name.toLowerCase() === key)
+            ? `${key}-`
+            : key,
+    );
 
     const matches = $derived.by(() => {
         const q = query.trim().toLowerCase();
@@ -109,6 +134,10 @@
         loadError = linkError = null;
         searching = false;
         query = '';
+        creating = false;
+        newName = suggestedName;
+        newDescription = '';
+        createErrors = {};
 
         try {
             const list = await fetchCandidates('');
@@ -184,6 +213,49 @@
                 onFinish: () => (linking = null),
             },
         );
+    }
+
+    async function startCreating() {
+        creating = true;
+        await tick();
+        nameInput?.focus();
+        nameInput?.setSelectionRange(newName.length, newName.length);
+    }
+
+    function create(event: SubmitEvent) {
+        event.preventDefault();
+        submitting = true;
+        createErrors = {};
+        router.post(
+            `${base}/new`,
+            { name: newName.trim(), description: newDescription.trim() },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => (linkOpen = false),
+                // A field's error goes under it, any other under the form.
+                onError: (errors) => (createErrors = errors),
+                onFinish: () => (submitting = false),
+            },
+        );
+    }
+
+    /**
+     * The popover moves focus with the arrow keys, Home and End; in the
+     * form's text boxes they move the caret instead.
+     */
+    function keepKeys(event: KeyboardEvent) {
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            event.stopPropagation();
+        }
+    }
+
+    function toggleAccess(repository: GitRepository) {
+        if (accessOpen.has(repository.id)) {
+            accessOpen.delete(repository.id);
+        } else {
+            accessOpen.add(repository.id);
+        }
     }
 
     function unlink(repository: GitRepository) {
@@ -276,7 +348,7 @@
                                 type="button"
                                 data-popover-item
                                 class="menu-item"
-                                disabled={linking !== null}
+                                disabled={linking !== null || submitting}
                                 onclick={() => link(candidate)}
                             >
                                 <span class="min-w-0 flex-1 leading-tight">
@@ -316,6 +388,107 @@
                         {/if}
                     {/if}
                 </div>
+                {#if candidates !== null}
+                    <div class="border-t border-line-soft pt-1">
+                        {#if creating || candidates.length === 0}
+                            <form
+                                class="px-1 pt-1.5 pb-1.5"
+                                aria-label="New repository"
+                                onsubmit={create}
+                            >
+                                <p class="mb-2 text-xs font-medium text-fg">
+                                    New repository
+                                </p>
+                                <label for="{uid}-name" class="label mb-1 block"
+                                    >Name</label
+                                >
+                                <input
+                                    id="{uid}-name"
+                                    bind:this={nameInput}
+                                    bind:value={newName}
+                                    onkeydown={keepKeys}
+                                    required
+                                    maxlength="100"
+                                    autocomplete="off"
+                                    autocapitalize="none"
+                                    spellcheck="false"
+                                    aria-invalid={createErrors.name
+                                        ? 'true'
+                                        : undefined}
+                                    aria-describedby="{uid}-name-note"
+                                    class="input font-mono"
+                                />
+                                <p
+                                    id="{uid}-name-note"
+                                    class={`mt-1 text-xs ${createErrors.name ? 'text-danger' : 'text-fg-faint'}`}
+                                >
+                                    {createErrors.name ??
+                                        `Lowercase, starting with ${key}: ${key} or ${key}-api.`}
+                                </p>
+                                <label
+                                    for="{uid}-description"
+                                    class="label mt-2 mb-1 block"
+                                    >Description <span
+                                        class="font-normal text-fg-faint"
+                                        >Optional</span
+                                    ></label
+                                >
+                                <input
+                                    id="{uid}-description"
+                                    bind:value={newDescription}
+                                    onkeydown={keepKeys}
+                                    maxlength="255"
+                                    autocomplete="off"
+                                    class="input"
+                                />
+                                {#if createErrors.description}
+                                    <p class="mt-1 text-xs text-danger">
+                                        {createErrors.description}
+                                    </p>
+                                {/if}
+                                {#if createErrors.__global}
+                                    <p
+                                        role="alert"
+                                        class="mt-2 text-xs text-danger"
+                                    >
+                                        {createErrors.__global}
+                                    </p>
+                                {/if}
+                                <div
+                                    class="mt-2.5 flex items-center justify-end gap-1"
+                                >
+                                    {#if submitting}
+                                        <Spinner size={14} label="Creating" />
+                                    {/if}
+                                    {#if candidates.length > 0}
+                                        <button
+                                            type="button"
+                                            class="btn-ghost"
+                                            onclick={() => (creating = false)}
+                                            >Cancel</button
+                                        >
+                                    {/if}
+                                    <button
+                                        type="submit"
+                                        class="btn-primary"
+                                        disabled={submitting ||
+                                            linking !== null}
+                                        >Create and link</button
+                                    >
+                                </div>
+                            </form>
+                        {:else}
+                            <button
+                                type="button"
+                                data-popover-item
+                                class="menu-item"
+                                disabled={linking !== null}
+                                onclick={startCreating}
+                                ><Plus class="h-3.5 w-3.5" />New repository</button
+                            >
+                        {/if}
+                    </div>
+                {/if}
             </Popover>
         {/if}
     </div>
@@ -349,6 +522,13 @@
                         {#if git.can_manage}
                             <button
                                 type="button"
+                                class="btn-ghost shrink-0 aria-expanded:bg-hover aria-expanded:text-fg"
+                                aria-expanded={accessOpen.has(repository.id)}
+                                onclick={() => toggleAccess(repository)}
+                                ><Users class="h-3.5 w-3.5" />Access</button
+                            >
+                            <button
+                                type="button"
                                 class="btn-ghost shrink-0"
                                 onclick={() => unlink(repository)}
                                 ><Unlink class="h-3.5 w-3.5" />Unlink</button
@@ -370,6 +550,12 @@
                                 : 'No pushes yet'}</span
                         >
                     </div>
+                    {#if git.can_manage && accessOpen.has(repository.id)}
+                        <RepositoryAccess
+                            {repository}
+                            url={`${base}/${repository.id}/access`}
+                        />
+                    {/if}
 
                     <dl
                         class="mt-2 grid grid-cols-[3rem_1fr_auto] items-center gap-x-2"
