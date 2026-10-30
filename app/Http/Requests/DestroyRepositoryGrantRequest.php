@@ -9,7 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Takes a person's access to a linked repository away: whoever may manage
- * its access, whoever gave it and whoever the person is.
+ * the repository's access (WorkspaceAccess::canManageRepositoryAccess).
  */
 class DestroyRepositoryGrantRequest extends FormRequest
 {

@@ -14,7 +14,9 @@ use App\Support\ServiceResult;
  * access they already have. Who may give it to whom is checked by the
  * request (WorkspaceAccess::canGrantRepositoryAccessTo); the activity row
  * and the forge sync follow from the grant's observer
- * ({@see GitRepositoryGrantObserver}).
+ * ({@see GitRepositoryGrantObserver}). The same grant made a moment
+ * earlier by someone else is no failure: updateOrCreate's createOrFirst
+ * catches the unique index's refusal, reads that row back and updates it.
  */
 class GrantRepositoryAccessService
 {

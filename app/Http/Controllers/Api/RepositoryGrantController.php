@@ -10,7 +10,6 @@ use App\Http\Requests\UpdateRepositoryGrantRequest;
 use App\Http\Resources\GitRepositoryGrantResource;
 use App\Models\GitRepository;
 use App\Models\GitRepositoryGrant;
-use App\Models\Member;
 use App\Models\Project;
 use App\Queries\RepositoryAccessCandidatesQuery;
 use App\Queries\RepositoryAccessQuery;
@@ -41,8 +40,7 @@ class RepositoryGrantController extends Controller
 
     public function store(StoreRepositoryGrantRequest $request, Project $project, GitRepository $repository, GrantRepositoryAccessService $service): JsonResponse
     {
-        $member = Member::query()->findOrFail($request->integer('member_id'));
-        $result = $service->execute($repository, $member, (string) $request->validated('permission'), $request->user());
+        $result = $service->execute($repository, $request->grantee(), (string) $request->validated('permission'), $request->user());
 
         return $this->respondWithResult(
             $result,

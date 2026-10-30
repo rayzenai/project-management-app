@@ -10,6 +10,8 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 
@@ -233,15 +235,34 @@ it('refuses a permission other than read or write', function (string $permission
     expect(GitRepositoryGrant::query()->sole()->permission)->toBe('write');
 })->with(['admin', 'owner', '']);
 
-it('refuses someone the tracker doesn\'t have', function () {
+it('refuses someone the tracker doesn\'t have, as it refuses an outsider', function () {
     $gone = Member::factory()->create(['organization_id' => $this->organization->id]);
     $gone->delete();
-
     $this->actingAs($this->adminUser);
-    $this->post($this->base, ['member_id' => 999999, 'permission' => 'read'])->assertSessionHasErrors('member_id');
-    $this->post($this->base, ['member_id' => $gone->id, 'permission' => 'read'])->assertSessionHasErrors('member_id');
+
+    foreach ([999999, $gone->id] as $id) {
+        $this->post($this->base, ['member_id' => $id, 'permission' => 'read'])
+            ->assertSessionHasErrors(['member_id' => "Choose someone from this organization or this project's team."]);
+    }
 
     expect(GitRepositoryGrant::query()->count())->toBe(0);
+});
+
+it('survives the same grant made a moment earlier by someone else', function () {
+    $lookups = 0;
+    DB::listen(function (QueryExecuted $query) use (&$lookups): void {
+        if (str_contains($query->sql, 'from "git_repository_grants" where ("git_repository_id" = ? and "member_id" = ?)') && ++$lookups === 1) {
+            grantWebGrant($this->api, $this->asha, GitRepositoryGrant::WRITE, $this->adminUser);
+        }
+    });
+
+    $this->actingAs($this->managerUser)
+        ->post($this->base, ['member_id' => $this->asha->id, 'permission' => 'read'])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => 'Asha Teammate now has read access to sdoc/tp-api.']);
+
+    expect($lookups)->toBe(2)
+        ->and(GitRepositoryGrant::query()->sole()->only(['member_id', 'permission']))->toEqual(['member_id' => $this->asha->id, 'permission' => 'read']);
 });
 
 // Privilege escalation
@@ -255,17 +276,41 @@ it('refuses a project manager giving access to someone of the organization who i
     Queue::assertNotPushed(SyncRepositoryAccess::class);
 });
 
-it('refuses access to a maintainer, someone inactive or someone of another organization off the team', function () {
+it('refuses access to a maintainer or someone inactive, naming them', function () {
     $inactive = Member::factory()->inactive()->create(['organization_id' => $this->organization->id, 'name' => 'Era Inactive']);
-    $stranger = Member::factory()->create(['organization_id' => Organization::factory()->create()->id, 'name' => 'Dipak Stranger']);
     $this->actingAs($this->adminUser);
 
-    foreach ([$this->manager, $this->programManager, $inactive, $stranger] as $member) {
+    foreach ([$this->manager, $this->programManager, $inactive] as $member) {
         $this->post($this->base, ['member_id' => $member->id, 'permission' => 'read'])
             ->assertSessionHasErrors(['member_id' => "You can't give {$member->name} access to this repository."]);
     }
 
     expect(GitRepositoryGrant::query()->count())->toBe(0);
+});
+
+it('never names someone outside the organization and the project\'s team', function (string $who) {
+    $stranger = Member::factory()->create(['organization_id' => Organization::factory()->create()->id, 'name' => 'Dipak Stranger']);
+    $this->actingAs($who === 'manager' ? $this->managerUser : $this->adminUser);
+
+    $response = $this->post($this->base, ['member_id' => $stranger->id, 'permission' => 'read'])
+        ->assertSessionHasErrors(['member_id' => "Choose someone from this organization or this project's team."]);
+
+    expect(implode(' ', session('errors')->getBag('default')->all()))->not->toContain('Dipak')
+        ->and((string) $response->getContent())->not->toContain('Dipak')
+        ->and(GitRepositoryGrant::query()->count())->toBe(0);
+})->with(['manager', 'organizational admin']);
+
+it('lets an organizational admin give access to an outsider on a cross-organization team', function () {
+    $outsider = Member::factory()->create(['organization_id' => Organization::factory()->create()->id, 'name' => 'Chandra Outsider']);
+    $this->team->update(['is_cross_organization' => true]);
+    $this->team->members()->attach($outsider->id, ['role' => 'member']);
+
+    $this->actingAs($this->adminUser)
+        ->post($this->base, ['member_id' => $outsider->id, 'permission' => 'write'])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('workspace_flash.message', 'Gave Chandra Outsider write access to sdoc/tp-api.');
+
+    expect(GitRepositoryGrant::query()->sole()->member_id)->toBe($outsider->id);
 });
 
 it('refuses a team member and another organization\'s organizational admin on every route', function (string $who) {

@@ -210,10 +210,16 @@ it('refuses a permission other than read or write', function (string $permission
     expect(GitRepositoryGrant::query()->sole()->permission)->toBe('write');
 })->with(['admin', 'owner', '']);
 
-it('refuses someone the tracker doesn\'t have', function () {
+it('refuses someone the tracker doesn\'t have, as it refuses an outsider', function () {
+    $gone = Member::factory()->create(['organization_id' => $this->organization->id]);
+    $gone->delete();
     Sanctum::actingAs($this->adminUser, ['*']);
 
-    $this->postJson($this->base, ['member_id' => 999999, 'permission' => 'read'])->assertUnprocessable()->assertJsonValidationErrors('member_id');
+    foreach ([999999, $gone->id] as $id) {
+        $this->postJson($this->base, ['member_id' => $id, 'permission' => 'read'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['member_id' => "Choose someone from this organization or this project's team."]);
+    }
 
     expect(GitRepositoryGrant::query()->count())->toBe(0);
 });
@@ -229,6 +235,43 @@ it('refuses a project manager giving access to someone of the organization who i
 
     expect(GitRepositoryGrant::query()->count())->toBe(0);
     Queue::assertNotPushed(SyncRepositoryAccess::class);
+});
+
+it('refuses access to a maintainer or someone inactive, naming them', function () {
+    $inactive = Member::factory()->inactive()->create(['organization_id' => $this->organization->id, 'name' => 'Era Inactive']);
+    Sanctum::actingAs($this->adminUser, ['*']);
+
+    foreach ([$this->manager, $this->programManager, $inactive] as $member) {
+        $this->postJson($this->base, ['member_id' => $member->id, 'permission' => 'read'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['member_id' => "You can't give {$member->name} access to this repository."]);
+    }
+
+    expect(GitRepositoryGrant::query()->count())->toBe(0);
+});
+
+it('never names someone outside the organization and the project\'s team', function (string $who) {
+    $stranger = Member::factory()->create(['organization_id' => Organization::factory()->create()->id, 'name' => 'Dipak Stranger']);
+    Sanctum::actingAs($who === 'manager' ? $this->managerUser : $this->adminUser, ['*']);
+
+    $response = $this->postJson($this->base, ['member_id' => $stranger->id, 'permission' => 'read'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['member_id' => "Choose someone from this organization or this project's team."]);
+
+    expect((string) $response->getContent())->not->toContain('Dipak')
+        ->and(GitRepositoryGrant::query()->count())->toBe(0);
+})->with(['manager', 'organizational admin']);
+
+it('lets an organizational admin give access to an outsider on a cross-organization team', function () {
+    $outsider = Member::factory()->create(['organization_id' => Organization::factory()->create()->id, 'name' => 'Chandra Outsider']);
+    $this->team->update(['is_cross_organization' => true]);
+    $this->team->members()->attach($outsider->id, ['role' => 'member']);
+    Sanctum::actingAs($this->adminUser, ['*']);
+
+    $this->postJson($this->base, ['member_id' => $outsider->id, 'permission' => 'write'])
+        ->assertCreated()
+        ->assertJsonPath('message', 'Gave Chandra Outsider write access to sdoc/tp-api.')
+        ->assertJsonPath('data.member.id', $outsider->id);
 });
 
 it('refuses a team member and another organization\'s organizational admin on every route', function (string $who) {
