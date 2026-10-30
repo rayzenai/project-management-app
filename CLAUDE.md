@@ -133,6 +133,11 @@ twin `canChooseManagerOf`), `canAppointAsProjectManager` (who may be
 chosen: `canJoinTeam`, and for a program manager the team's organization
 only),
 `canManageRosterOf`, `canRemoveFromTeam`, `canJoinTeam`,
+`canAssignOutsideTeam` (give a task to someone not on the team, who joins
+it first: whoever passes `canManageRosterOf`, for an active person of the
+project's own organization who passes `canJoinTeam`; list twin
+`Assignees::joinCandidates`), `canStartGeneralProject` (an organizational
+admin whose organization has no active project),
 `canViewTeamProgress`, `canViewProjectProgress`,
 `canCreateMember`, `canManageMember`, `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canCreateProjectInProgram`
@@ -176,7 +181,25 @@ Privilege-escalation protections — do not regress:
 - Mentions only notify people who can view the task's project. The comment
   box offers `TaskShowQuery`'s `mentionCandidates` (the team plus the
   program's manager, `{id, name}` only: no email or login of someone the
-  teammate may not otherwise see); `team` stays the assignees.
+  teammate may not otherwise see); `team` stays the assignees, and
+  `joinCandidates` (people who would join the team) are never mentionable.
+- Who may be assigned has one rule, `App\Support\Assignees::joiners`,
+  shared by quick add (`QuickAddTaskService`) and the assignment route
+  (`StoreAssignmentRequest`, `AssignMemberService`): anyone
+  `Member::scopeAssignableFor` allows, on the same path as always, plus,
+  for whoever runs the team, people passing `canAssignOutsideTeam`, who
+  join the team as members through `AddTeamMemberService` (the People
+  tab's add) before the assignment, in one transaction. So an assignee can
+  always see the task; a member never adds anyone to a team this way; no
+  one of another organization joins this way, not even a
+  cross-organization team's outsiders. The quick-add `@token` and the
+  default-to-self still use `scopeAssignableFor` only.
+- `start_general` on quick add (`QuickAddTaskRequest`, no `project_id`) is
+  refused (422 `Pick a project.` on `project_id`) unless
+  `canStartGeneralProject`; `StartGeneralProjectService` re-checks under a
+  lock on the organization row, makes "General" through
+  `CreateProjectService` with the caller as manager (rolled back if it has
+  none), and `QuickAddDispatcher` files the task in the same transaction.
 - A program manager's program powers never make them a team leader (they
   lead a team only when chosen as its manager, as on create by default),
   reach only projects of programs in their own organization
@@ -228,7 +251,9 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 - **Subtask** — personal (`user_id`). **Member** — a person in one organization
   (none only for a super-admin's own member), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
-  `scopeAssignableFor(Project)` is the single source of truth for assignees.
+  `scopeAssignableFor(Project)` is who is assignable as things stand;
+  `Assignees::joiners` is the whole rule (it adds whom whoever runs the
+  team may bring onto it, see the escalation notes).
 - **Team** — a project's own (`Project::team()`, `ensureTeam()`,
   `manager()`; `Team::project()`), named after it; auto-slugged; belongs to
   its organization; `is_cross_organization`; pivot `member_team` with `role`.
@@ -274,7 +299,11 @@ the organizational admin switch and the program and project manager pickers.
 ## Two delivery surfaces
 
 - **Web** (`routes/web.php`, prefix `workspace`, names `workspace.*`):
-  `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`,
+  `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`
+  (`projects` with `member_ids`, `organization_id` and `can_add_people` =
+  `canManageRosterOf`; `organizationPeople` `{id, name, title}`, the active
+  people of the viewer's organization for whoever runs a team in it or may
+  start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`),
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
   `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`, the sidebar's

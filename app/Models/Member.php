@@ -142,12 +142,13 @@ class Member extends Model
     }
 
     /**
-     * The single source of truth for who can be assigned within a project:
-     * the union of the project's teams' members, or, for a public project
-     * with no teams, every active member of its organization (a private
-     * project with no teams has nobody to assign). Pickers,
-     * request validation, and quick-add `@name` resolution all go through
-     * this scope.
+     * Who can be assigned within a project as things stand: the union of
+     * the project's teams' members, or, for a public project with no teams,
+     * every active member of its organization (a private project with no
+     * teams has nobody to assign). Pickers, request validation, and
+     * quick-add `@name` resolution all go through this scope; for whoever
+     * runs the team, App\Support\Assignees adds the people they may bring
+     * onto it.
      *
      * @param  Builder<Member>  $query
      * @return Builder<Member>

@@ -694,6 +694,7 @@
                                 assignments: preview?.assignments ?? [],
                             }}
                             team={preview?.team ?? []}
+                            others={preview?.join_candidates ?? []}
                             max={4}
                             align="left"
                             onUpdated={revalidate}

@@ -10,6 +10,7 @@ use App\Http\Resources\TaskResource;
 use App\Models\Member;
 use App\Models\ProjectActivity;
 use App\Models\Task;
+use App\Support\Assignees;
 use App\Support\WorkspaceAccess;
 
 /**
@@ -30,6 +31,7 @@ class TaskPreviewQuery
      *     contacts: array<int, array<string, mixed>>,
      *     activity: array<int, array<string, mixed>>,
      *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
+     *     join_candidates: array<int, array{id: int, name: string, title: ?string}>,
      *     comments_count: int,
      *     dependency_candidates: array<int, array<string, mixed>>,
      *     code: array<string, mixed>|null
@@ -71,6 +73,10 @@ class TaskPreviewQuery
             'contacts' => ContactResource::collection($task->contacts)->resolve(),
             'activity' => $activity->all(),
             'team' => $team->all(),
+            // People of the project's organization who join its team when
+            // picked, for whoever runs it (Assignees); empty for anyone else.
+            'join_candidates' => Assignees::joinCandidates($viewer, $task->project)
+                ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'title' => $m->title])->values()->all(),
             'comments_count' => (int) $task->comments_count,
             // What the task could be made to depend on: the rest of its project.
             'dependency_candidates' => $task->project->tasks()->whereKeyNot($task->id)->get()

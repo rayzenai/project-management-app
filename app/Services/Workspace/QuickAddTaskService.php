@@ -2,12 +2,13 @@
 
 namespace App\Services\Workspace;
 
-use App\Models\Member;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\Task;
 use App\Models\TaskDependency;
+use App\Support\Assignees;
 use App\Support\ServiceResult;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -20,9 +21,12 @@ use Throwable;
  */
 class QuickAddTaskService
 {
+    public function __construct(private AddTeamMemberService $addToTeam) {}
+
     /**
      * @param  array<int, int>  $assigneeMemberIds  list of member IDs to assign; the controller defaults to the acting user's member
      * @param  array<int, int>  $dependsOnTaskIds  tasks the new one waits for; any outside the project are ignored
+     * @param  Authenticatable|null  $actor  who adds it: whoever runs the project's team may assign people not yet on it (Assignees)
      */
     public function execute(
         Project $project,
@@ -34,6 +38,7 @@ class QuickAddTaskService
         ?string $status = null,
         ?string $description = null,
         array $dependsOnTaskIds = [],
+        ?Authenticatable $actor = null,
     ): ServiceResult {
         $title = trim($title);
         if ($title === '') {
@@ -47,20 +52,23 @@ class QuickAddTaskService
         $status = in_array($status, $statuses, true) ? $status : 'unclear';
 
         // An empty assignee list is allowed: the task is created unassigned and can
-        // be assigned later. Any members that ARE provided must be on the project.
+        // be assigned later. Any members that ARE provided must be on the project,
+        // or be people the actor may bring onto its team, who join it first.
         $assigneeMemberIds = array_values(array_unique(array_map('intval', $assigneeMemberIds)));
+        $joiners = Assignees::joiners($actor, $project, $assigneeMemberIds);
 
-        if ($assigneeMemberIds !== []) {
-            $inScope = Member::assignableFor($project)->pluck('id')->all();
-            if (array_diff($assigneeMemberIds, $inScope) !== []) {
-                return ServiceResult::failure("That person is not on this project's teams.", 422);
-            }
+        if ($joiners === null) {
+            return ServiceResult::failure("That person is not on this project's teams.", 422);
         }
 
         try {
-            return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $deadline, $priority, $status, $description, $dependsOnTaskIds): ServiceResult {
+            return DB::transaction(function () use ($project, $title, $assigneeMemberIds, $joiners, $deadline, $priority, $status, $description, $dependsOnTaskIds): ServiceResult {
                 // Serializes creates in this project so two of them never read the same last number.
                 Project::query()->whereKey($project->id)->lockForUpdate()->first();
+
+                foreach ($joiners as $member) {
+                    $this->addToTeam->execute($project->ensureTeam(), $member);
+                }
 
                 $itemNumber = Task::nextItemNumber($project->id);
                 $sortOrder = ((int) Task::query()->where('project_id', $project->id)->max('sort_order')) + 100;

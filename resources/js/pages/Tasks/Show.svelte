@@ -44,6 +44,7 @@
         subtasks,
         comments,
         team,
+        joinCandidates = [],
         mentionCandidates = [],
         dependencyCandidates = [],
         code = null,
@@ -55,6 +56,8 @@
         subtasks: Subtask[];
         comments: Comment[];
         team: Member[];
+        /** People of the organization who join the team when picked, for whoever runs it. */
+        joinCandidates?: Member[];
         /** Who the comment box offers: the team, plus its program's manager. */
         mentionCandidates?: Member[];
         dependencyCandidates?: TaskRef[];
@@ -796,7 +799,13 @@
                     Owners
                 </dt>
                 <dd class="flex min-h-[30px] min-w-0 items-center gap-2">
-                    <AssigneeStack {task} {team} max={4} align="left" />
+                    <AssigneeStack
+                        {task}
+                        {team}
+                        others={joinCandidates}
+                        max={4}
+                        align="left"
+                    />
                     {#if ownerNames}
                         <span class="truncate text-xs text-fg-muted"
                             >{ownerNames}</span

@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Member;
 use App\Models\Task;
+use App\Support\Assignees;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -30,8 +30,9 @@ class StoreAssignmentRequest extends FormRequest
     }
 
     /**
-     * The member must be assignable within the task's project — on one of the
-     * project's teams, or any active member when the project has no teams.
+     * The member must be assignable within the task's project (on its team, or
+     * any active member of its organization when a public project has no
+     * team), or someone whoever runs the team may bring onto it (Assignees).
      */
     private function inProjectScope(): Closure
     {
@@ -42,7 +43,7 @@ class StoreAssignmentRequest extends FormRequest
                 return;
             }
 
-            if (! Member::assignableFor($task->project)->whereKey($value)->exists()) {
+            if (Assignees::joiners($this->user(), $task->project, [(int) $value]) === null) {
                 $fail("That person is not on this project's teams.");
             }
         };

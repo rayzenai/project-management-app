@@ -10,6 +10,7 @@ use App\Http\Resources\MemberResource;
 use App\Models\Member;
 use App\Models\Team;
 use App\Queries\TeamCandidatesQuery;
+use App\Services\Workspace\AddTeamMemberService;
 use App\Services\Workspace\RemoveTeamMemberService;
 use App\Services\Workspace\UpdateTeamRoleService;
 use App\Support\WorkspaceAccess;
@@ -31,16 +32,11 @@ class TeamMemberController extends Controller
         return response()->json(['data' => $query->get($team, (string) $request->validated('q'))]);
     }
 
-    public function store(StoreTeamMemberRequest $request, Team $team): JsonResponse
+    public function store(StoreTeamMemberRequest $request, Team $team, AddTeamMemberService $service): JsonResponse
     {
         $member = Member::query()->findOrFail($request->integer('member_id'));
 
-        $team->members()->syncWithoutDetaching([$member->id]);
-
-        return response()->json([
-            'message' => 'Added to '.$team->name.'.',
-            'data' => new MemberResource($member),
-        ], 201);
+        return $this->respondWithResult($service->execute($team, $member), new MemberResource($member), 201);
     }
 
     public function destroy(Request $request, Team $team, Member $member, RemoveTeamMemberService $service): JsonResponse

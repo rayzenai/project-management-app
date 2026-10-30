@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class QuickAddTaskRequest extends FormRequest
 {
@@ -21,7 +23,10 @@ class QuickAddTaskRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
+            // Without one, only an organizational admin whose organization
+            // has no project yet may ask to start "General" for the task.
+            'project_id' => [Rule::requiredIf(fn (): bool => ! $this->startsGeneral()), 'nullable', 'integer', 'exists:projects,id'],
+            'start_general' => ['nullable', 'boolean'],
             'title' => ['required', 'string', 'max:255'],
             'assignee_member_ids' => ['nullable', 'array'],
             'assignee_member_ids.*' => ['integer', 'exists:members,id'],
@@ -36,5 +41,30 @@ class QuickAddTaskRequest extends FormRequest
             // where you were. Ignored by the API surface.
             'redirect_to_project' => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return ['project_id.required' => 'Pick a project.'];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($this->startsGeneral() && ! WorkspaceAccess::canStartGeneralProject($this->user())) {
+                $validator->errors()->add('project_id', 'Pick a project.');
+            }
+        });
+    }
+
+    /**
+     * Whether the task asks for "General" instead of a project.
+     */
+    public function startsGeneral(): bool
+    {
+        return $this->boolean('start_general') && ! $this->filled('project_id');
     }
 }

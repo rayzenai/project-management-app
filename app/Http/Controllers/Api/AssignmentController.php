@@ -30,6 +30,7 @@ class AssignmentController extends Controller
             task: $task,
             memberId: $request->integer('member_id'),
             attributes: $request->safe()->except('member_id'),
+            actor: $request->user(),
         );
 
         return $this->respondWithResult(

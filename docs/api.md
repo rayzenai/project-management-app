@@ -82,7 +82,7 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | GET | `/workspace/my` | the caller's focused tasks, open todos, assigned work |
 | GET | `/workspace/plan-tracker` | the 100-point plan tracker (`config/government.php`) |
 | GET | `/workspace/search?q=` | search across active projects (2 characters at least): `{ projects, tasks, notes, contacts }`. Tasks match on title, short title and Nepali title; a bare number (`12`) also finds tasks by their `number`, and a task code (`SG-12`, any case) finds task 12 of the project whose key is `SG` now or was before (an old key stays an alias). A number above 2147483647 is searched as text only. Each task is `{ id, slug, number, title, short_title, status, status_label, project { slug, title, code } }` |
-| POST | `/workspace/quick-add` | `{ text }` natural-language task capture; optional `depends_on_task_ids: int[]` (tasks of other projects are ignored) |
+| POST | `/workspace/quick-add` | `{ title, project_id }` natural-language task capture (a `#token` in the title beats `project_id`); without `project_id`, 422 `Pick a project.` on `project_id`. `start_general: true` in place of `project_id` starts the organization's first project, "General", managed by the caller, and files the task there in one transaction (both or neither): only an organizational admin whose organization has no active project, else 422 `Pick a project.`. Optional `assignee_member_ids: int[]` (see Assignments: who may be assigned), `depends_on_task_ids: int[]` (tasks of other projects are ignored) |
 
 ## Projects
 
@@ -117,11 +117,11 @@ super-admin, its program's manager).
 | --- | --- | --- |
 | POST | `/workspace/projects/{slug}/tasks` | create |
 | POST | `/workspace/projects/{slug}/tasks/reorder` | persist board ordering |
-| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`). `team` is who can be given the task; `mentionCandidates` (`[{ id, name }]`) is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
+| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`). `team` is who can be given the task; `joinCandidates` (`[{ id, name, title }]`) is who else the caller may give it to, people of the project's organization who join its team when assigned (only for whoever runs the team, else `[]`); `mentionCandidates` (`[{ id, name }]`) is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
 | PATCH | `/workspace/projects/{slug}/tasks/{taskSlug}` | update (status, fields) |
 | DELETE | `/workspace/projects/{slug}/tasks/{taskSlug}` | soft-delete |
 | POST | `/workspace/projects/{slug}/tasks/{taskSlug}/restore` | undo delete |
-| GET | `/workspace/tasks/{task}/preview` | lightweight peek (incl. `comments_count`, and `dependency_candidates`: the project's other tasks) |
+| GET | `/workspace/tasks/{task}/preview` | lightweight peek (incl. `comments_count`, `dependency_candidates`: the project's other tasks, and `join_candidates`: the task hub's `joinCandidates`) |
 
 Task statuses come from `config/project-management.php` (`not_started`,
 `unclear`, `in_progress`, `done`, `failed`); `done` is the only complete status.
@@ -152,6 +152,16 @@ an integer from 1 to 2147483647.
 | PATCH | `/workspace/assignments/{assignment}` |
 | DELETE | `/workspace/assignments/{assignment}` |
 | POST | `/workspace/assignments/{assignment}/restore` |
+
+**Who may be assigned** (here and on quick add): anyone on the project's
+team (or, for a public project without a team, any active person of its
+organization), as always; and, for whoever runs the team (its manager, its
+program's manager, an organizational admin, a super-admin), any active person
+of the project's own organization, who first joins the team as a member (as
+if added on its People tab, so they are told) and is then assigned. People of
+another organization never join this way, even a cross-organization team's.
+Anyone else gets 422 `That person is not on this project's teams.` on
+`member_id`.
 
 ## Comments + @mentions
 
@@ -439,6 +449,16 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Quick add that always works.**
+
+- `POST /workspace/quick-add` without `project_id` answers 422
+  `Pick a project.`; it accepts `start_general: true` instead (see Feeds &
+  overview).
+- Assigning (quick add and `POST /workspace/tasks/{task}/assignments`) may
+  bring a person of the project's organization onto its team first, for
+  whoever runs it (see Assignments).
+- The task hub adds `joinCandidates`, the task preview `join_candidates`.
 
 **Git phase 0 (project keys and task numbers).**
 

@@ -22,7 +22,7 @@ class QuickAddController extends Controller
     {
         $result = $dispatcher->dispatch(
             rawTitle: $request->string('title')->toString(),
-            projectId: $request->integer('project_id'),
+            projectId: $request->filled('project_id') ? $request->integer('project_id') : null,
             explicitAssigneeIds: array_values(array_map('intval', (array) ($request->input('assignee_member_ids') ?: []))),
             priority: $request->input('priority'),
             deadline: $request->date('deadline_at')?->toDateString(),
@@ -30,6 +30,7 @@ class QuickAddController extends Controller
             status: $request->input('status'),
             description: $request->input('description'),
             dependsOnTaskIds: array_values(array_map('intval', (array) ($request->input('depends_on_task_ids') ?: []))),
+            startGeneral: $request->startsGeneral(),
         );
 
         // A task created from anywhere else in the app is invisible until you

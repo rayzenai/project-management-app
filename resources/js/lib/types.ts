@@ -436,6 +436,8 @@ export interface TaskPreview {
     contacts: Contact[];
     activity: ActivityEntry[];
     team: Member[];
+    /** People of the project's organization who join its team when picked; empty unless the viewer runs it. */
+    join_candidates?: Member[];
     comments_count: number;
     /** The rest of the task's project, for the dependency picker. */
     dependency_candidates?: TaskRef[];
@@ -594,12 +596,19 @@ export interface QuickAddProject extends ProjectSummary {
     /** Its program's name; tells apart several projects of one title. */
     program?: string | null;
     member_ids?: Id[];
+    organization_id?: Id;
+    /** The viewer runs its team: they may assign people of its organization, who join it. */
+    can_add_people?: boolean;
 }
 
 export interface QuickAddContext {
     projects: QuickAddProject[];
     team: Member[];
     currentMemberId: Id | null;
+    /** The active people of the viewer's organization, `{ id, name, title }`, for whoever runs a team in it; else empty. */
+    organizationPeople?: Member[];
+    /** The viewer is an organizational admin whose organization has no project yet: offer "General". */
+    startGeneral?: boolean;
 }
 
 export interface Flash {

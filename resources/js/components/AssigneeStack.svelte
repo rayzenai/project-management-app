@@ -8,6 +8,7 @@
     let {
         task,
         team,
+        others = [],
         max = 3,
         size = 'md',
         align = 'right',
@@ -15,6 +16,8 @@
     }: {
         task: Pick<Task, 'id' | 'slug'> & { assignments?: Assignment[] };
         team: Member[];
+        /** People not on the project's team who join it when picked; listed after it. */
+        others?: Member[];
         max?: number;
         size?: 'sm' | 'md';
         align?: 'left' | 'right';
@@ -29,8 +32,9 @@
     const assignedIds = $derived(new Set(assignments.map((a) => a.member_id)));
     const visible = $derived(assignments.slice(0, max));
     const overflow = $derived(assignments.length - max);
+    const otherIds = $derived(new Set(others.map((u) => u.id)));
     const candidates = $derived(
-        team.filter(
+        [...team, ...others].filter(
             (u) =>
                 query.trim() === '' ||
                 u.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -156,6 +160,11 @@
             >
                 <Avatar name={member.name} size="sm" />
                 <span class="min-w-0 flex-1 truncate">{member.name}</span>
+                {#if otherIds.has(member.id)}
+                    <span class="shrink-0 text-xs text-fg-faint"
+                        >Joins the team</span
+                    >
+                {/if}
             </button>
         {:else}
             <p class="px-2 py-1.5 text-xs text-fg-faint">No matches.</p>

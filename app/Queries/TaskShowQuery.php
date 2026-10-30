@@ -12,6 +12,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Subtask;
 use App\Models\Task;
+use App\Support\Assignees;
 use App\Support\WorkspaceAccess;
 
 /**
@@ -32,6 +33,7 @@ class TaskShowQuery
      *     subtasks: array<int, array<string, mixed>>,
      *     comments: array<int, array<string, mixed>>,
      *     team: array<int, array{id: int, name: string, email: ?string, user_id: ?int}>,
+     *     joinCandidates: array<int, array{id: int, name: string, title: ?string}>,
      *     mentionCandidates: array<int, array{id: int, name: string}>,
      *     dependencyCandidates: array<int, array<string, mixed>>,
      *     code: array<string, mixed>|null
@@ -63,6 +65,11 @@ class TaskShowQuery
             'subtasks' => SubtaskResource::collection($mySubtasks)->resolve(),
             'comments' => TaskCommentResource::collection($comments)->resolve(),
             'team' => $team->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])->all(),
+            // Who else the viewer may give the task to: people of the project's
+            // organization who join its team when picked, for whoever runs it.
+            // Not mentionable: until they join they cannot see the task.
+            'joinCandidates' => Assignees::joinCandidates($viewer, $project)
+                ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'title' => $m->title])->values()->all(),
             // Who the comment box offers for @mentions: the team, plus the
             // program manager of a program project (who can see it, so a
             // mention notifies them, but is no assignee until they join).

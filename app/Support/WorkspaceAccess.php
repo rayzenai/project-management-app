@@ -242,6 +242,26 @@ class WorkspaceAccess
         return $member->user !== null && self::isSuperAdmin($member->user);
     }
 
+    /**
+     * Give a task of the project to someone not yet on its team, who joins
+     * it as a member first: whoever manages the team's roster, for an active
+     * person of the project's own organization (never an outsider, even on a
+     * cross-organization team). Everyone already assignable is assigned as
+     * always (Member::scopeAssignableFor). The predicate twin of
+     * App\Support\Assignees::joinCandidates; keep them in step.
+     */
+    public static function canAssignOutsideTeam(?Authenticatable $user, Project $project, Member $member): bool
+    {
+        $team = $project->team();
+
+        return $team !== null
+            && $member->is_active
+            && $member->organization_id !== null
+            && (int) $member->organization_id === (int) $project->organization_id
+            && self::canJoinTeam($member, $team)
+            && self::canManageRosterOf($user, $team);
+    }
+
     // ---- Members ----
 
     public static function canCreateMember(?Authenticatable $user, int|string|null $organizationId): bool
@@ -325,6 +345,19 @@ class WorkspaceAccess
     public static function canCreateProject(?Authenticatable $user): bool
     {
         return self::isSuperAdmin($user) || self::officeAdminOrganizationId($user) !== null || self::managedProgramIds($user) !== [];
+    }
+
+    /**
+     * Start the organization's first project, "General", with a task from
+     * the task form: its organizational admin, while it has no active
+     * project. A super-admin belongs to no organization and never does.
+     */
+    public static function canStartGeneralProject(?Authenticatable $user): bool
+    {
+        $organizationId = self::officeAdminOrganizationId($user);
+
+        return $organizationId !== null
+            && ! Project::query()->where('organization_id', $organizationId)->active()->exists();
     }
 
     /**

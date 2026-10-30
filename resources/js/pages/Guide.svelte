@@ -62,6 +62,7 @@
                 'Add people on the People page. Each one gets a login by email.',
                 "Set a person's roles when you add or edit them there: the programs and projects they manage, and the project teams they are on. Choosing someone as a manager hands that program or project over to them; a project's old manager stays on its team.",
                 'Create projects on the Projects page and choose who manages each one.',
+                "Give a task to anyone in your organization from the task form (press N): if they are not on the project's team, they join it. With no project yet, choose General there and it is made for you to manage.",
                 "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team.',
                 'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
@@ -84,6 +85,7 @@
             steps: [
                 "Build your team: on your project's People tab, search for people and add them. Only people on the team can be given its tasks.",
                 'Break the work into tasks with an owner and a deadline. Press N anywhere to add one.',
+                "From the task form you can give a task to anyone in your organization: if they are not on your project's team yet, they join it.",
                 'When a task cannot start until another is done, drag its card onto that task on the board.',
                 "Open Progress every week: everyone's workload, a timeline of every task and what is running late.",
             ],

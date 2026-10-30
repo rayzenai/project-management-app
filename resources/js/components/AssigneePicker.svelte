@@ -5,12 +5,15 @@
 
     let {
         team,
+        others = [],
         selectedIds = $bindable([]),
         placeholder = 'Assign...',
         max = 1,
         flow = false,
     }: {
         team: Member[];
+        /** People not on the team who join it when picked; listed after it. */
+        others?: Member[];
         selectedIds: number[];
         placeholder?: string;
         max?: number;
@@ -66,10 +69,12 @@
             document.removeEventListener('pointerdown', onPointerDown, true);
     });
 
+    const everyone = $derived([...team, ...others]);
+    const otherIds = $derived(new Set(others.map((u) => u.id)));
     const filtered = $derived(
         query.trim() === ''
-            ? team
-            : team.filter(
+            ? everyone
+            : everyone.filter(
                   (u) =>
                       u.name.toLowerCase().includes(query.toLowerCase()) ||
                       (u.email ?? '')
@@ -77,7 +82,9 @@
                           .includes(query.toLowerCase()),
               ),
     );
-    const selected = $derived(team.filter((u) => selectedIds.includes(u.id)));
+    const selected = $derived(
+        everyone.filter((u) => selectedIds.includes(u.id)),
+    );
 
     function toggle(memberId: number) {
         if (selectedIds.includes(memberId)) {
@@ -185,7 +192,11 @@
                                 >
                                 <span
                                     class="block truncate text-xs text-fg-muted"
-                                    >{user.email}</span
+                                    >{otherIds.has(user.id)
+                                        ? [user.title, 'Joins the team']
+                                              .filter(Boolean)
+                                              .join(' · ')
+                                        : user.email}</span
                                 >
                             </span>
                             {#if sel}

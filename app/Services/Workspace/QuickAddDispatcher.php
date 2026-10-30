@@ -8,6 +8,8 @@ use App\Support\QuickAddParser;
 use App\Support\ServiceResult;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Turns a single line of natural language into a task, shared by the web and API
@@ -17,16 +19,22 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * picker fields win over parsed values, resolved tokens are stripped from the title,
  * and unresolvable tokens stay in it so nothing typed is silently lost. `@name`
  * resolves against the project's assignable members, so the project is resolved first.
+ * With no project at all, an organizational admin whose organization has none yet
+ * may start one, "General", and the task is filed there (both or neither).
  *
  * @phpstan-import-type Token from QuickAddParser
  */
 final readonly class QuickAddDispatcher
 {
-    public function __construct(private QuickAddTaskService $service) {}
+    public function __construct(
+        private QuickAddTaskService $service,
+        private StartGeneralProjectService $general,
+    ) {}
 
     /**
      * @param  list<int>  $explicitAssigneeIds  Picker-selected members; win over parsed @tokens.
      * @param  list<int>  $dependsOnTaskIds  Tasks the new one waits for (same project only).
+     * @param  bool  $startGeneral  With no project chosen: start the organization's "General" for the task.
      */
     public function dispatch(
         string $rawTitle,
@@ -38,6 +46,7 @@ final readonly class QuickAddDispatcher
         ?string $status = null,
         ?string $description = null,
         array $dependsOnTaskIds = [],
+        bool $startGeneral = false,
     ): ServiceResult {
         $tokens = QuickAddParser::parse($rawTitle);
         $consumed = [];
@@ -47,8 +56,14 @@ final readonly class QuickAddDispatcher
         $project = $this->resolveProject($tokens, $consumed, $user)
             ?? ($projectId === null ? null : Project::query()->active()->find($projectId));
 
+        if ($project === null && $projectId === null && $startGeneral) {
+            return $this->inGeneral($user, fn (Project $general): ServiceResult => $this->dispatch(
+                $rawTitle, $general->id, $explicitAssigneeIds, $priority, $deadline, $user, $status, $description, $dependsOnTaskIds,
+            ));
+        }
+
         if ($project === null) {
-            return ServiceResult::failure('Pick a project to add this task to.', 422);
+            return ServiceResult::failure('Pick a project.', 422);
         }
 
         if (! WorkspaceAccess::canViewProject($user, $project)) {
@@ -91,7 +106,36 @@ final readonly class QuickAddDispatcher
             status: $status,
             description: $description,
             dependsOnTaskIds: $dependsOnTaskIds,
+            actor: $user,
         );
+    }
+
+    /**
+     * Starts "General" and files the task there in one transaction: when the
+     * task is refused, General goes too.
+     *
+     * @param  callable(Project): ServiceResult  $file
+     */
+    private function inGeneral(Authenticatable $user, callable $file): ServiceResult
+    {
+        DB::beginTransaction();
+
+        try {
+            $started = $this->general->execute($user);
+            $result = $started->success && $started->data instanceof Project ? $file($started->data) : $started;
+        } catch (Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
+
+        if ($result->success) {
+            DB::commit();
+        } else {
+            DB::rollBack();
+        }
+
+        return $result;
     }
 
     /**

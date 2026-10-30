@@ -70,32 +70,57 @@ class ShareWorkspaceData
 
             /** @var array<int, list<int>> $organizationMemberIds */
             $organizationMemberIds = [];
+            $user = $request->user();
+            $organizationId = WorkspaceAccess::memberFor($user)?->organization_id;
+            $startGeneral = WorkspaceAccess::canStartGeneralProject($user);
+
+            $projects = Project::query()->visibleTo($user)->active()->orderBy('title')
+                ->with(['program:id,name', 'teams.members' => fn ($q) => $q->where('is_active', true)])
+                ->get(['id', 'slug', 'title', 'organization_id', 'program_id'])
+                ->map(function (Project $p) use (&$organizationMemberIds, $user): array {
+                    // Members assignable within this project: its teams' active members,
+                    // or its organization's when a public project has no teams. Mirrors
+                    // Member::scopeAssignableFor so the picker only offers valid assignees.
+                    if ($p->teams->isEmpty()) {
+                        $organizationMemberIds[$p->organization_id] ??= Member::query()->active()
+                            ->where('organization_id', $p->organization_id)
+                            ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+                    }
+
+                    $team = $p->team();
+
+                    return [
+                        'id' => $p->id,
+                        'slug' => $p->slug,
+                        'title' => $p->title,
+                        'organization_id' => $p->organization_id,
+                        'program' => $p->program?->name,
+                        'member_ids' => $p->teams->isEmpty()
+                            ? $organizationMemberIds[$p->organization_id]
+                            : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),
+                        // Whoever runs its team may also assign the people
+                        // of its organization, who join the team.
+                        'can_add_people' => $team !== null && WorkspaceAccess::canManageRosterOf($user, $team),
+                    ];
+                });
+
+            // Everyone the picker may offer beyond a project's team: the active
+            // people of the viewer's organization, for whoever runs a team in
+            // it (or starts its General). The server checks each pick
+            // (Assignees); people of another organization never join this way.
+            $addsPeople = $organizationId !== null && ($startGeneral || $projects->contains(
+                fn (array $p): bool => $p['can_add_people'] && (int) $p['organization_id'] === (int) $organizationId,
+            ));
 
             return [
-                'projects' => Project::query()->visibleTo($request->user())->active()->orderBy('title')
-                    ->with(['program:id,name', 'teams.members' => fn ($q) => $q->where('is_active', true)])
-                    ->get(['id', 'slug', 'title', 'organization_id', 'program_id'])
-                    ->map(function (Project $p) use (&$organizationMemberIds): array {
-                        // Members assignable within this project: its teams' active members,
-                        // or its organization's when a public project has no teams. Mirrors
-                        // Member::scopeAssignableFor so the picker only offers valid assignees.
-                        if ($p->teams->isEmpty()) {
-                            $organizationMemberIds[$p->organization_id] ??= Member::query()->active()
-                                ->where('organization_id', $p->organization_id)
-                                ->pluck('id')->map(fn ($id): int => (int) $id)->all();
-                        }
-
-                        return [
-                            'id' => $p->id,
-                            'slug' => $p->slug,
-                            'title' => $p->title,
-                            'program' => $p->program?->name,
-                            'member_ids' => $p->teams->isEmpty()
-                                ? $organizationMemberIds[$p->organization_id]
-                                : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),
-                        ];
-                    })
-                    ->all(),
+                'projects' => $projects->all(),
+                'organizationPeople' => $addsPeople
+                    ? Member::query()->active()->where('organization_id', $organizationId)->orderBy('name')
+                        ->get(['id', 'name', 'title'])
+                        ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'title' => $m->title])
+                        ->all()
+                    : [],
+                'startGeneral' => $startGeneral,
                 'team' => Member::query()->visibleTo($request->user())->active()->orderBy('name')
                     ->get(['id', 'name', 'email', 'user_id'])
                     ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])
