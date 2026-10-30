@@ -15,7 +15,9 @@ php artisan db:seed --class=SdocProjectsSeeder       # fresh databases only; nev
 php artisan passport:keys                            # local OIDC signing keys
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback
 php artisan git:reconcile --connection=1              # nightly forge repair, scoped by office connection
-deploy/forgejo/local.sh up                            # local forge against this tracker
+php artisan git:sync-access --connection=1            # sync linked repositories' collaborators
+php artisan git:commit-stats --limit=300              # bounded commit-line counting
+forgejo/local.sh up                                   # local forge against this tracker
 ./deploy.sh                                          # SDOC web + scheduler (VPN required)
 ```
 
@@ -76,10 +78,18 @@ Write once: FormRequest (authorize + validate) → action Service (ServiceResult
 are manual because the panel is private: push `main`, then run `./deploy.sh`
 over the SDOC VPN. The script waits for build, rollout and `/up` health.
 
-Forge deployment is separate: `deploy/forgejo/compose.yml` and
-`docs/forgejo.md` cover bootstrap, OIDC, backups and upgrades. Production OIDC
+Forge deployment is separate: Dokploy project `git` has `git-forgejo` built
+from `forgejo/Dockerfile` (context `forgejo/`) and a `git-postgres` database.
+`forgejo/.env.example`, `forgejo/start.sh` and `docs/forgejo.md` cover environment,
+bootstrap, SDOC branding, OIDC, backups and upgrades. `deploy.sh` does not deploy
+the forge; deploy it manually when its image changes. Production OIDC
 signing uses `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY`; rerunning
 `git:oidc-client` keeps the client id but rotates its secret.
 Git jobs use `App\Support\Background` (after the response with sync, queued with
-a worker). `docs/forgejo.md` section 12 describes adding `tasks-queue` and
-switching all services to Redis; `deploy.sh` still deploys only web/scheduler.
+a worker); sync-queue jobs dispatched in a transaction wait for commit, and
+rollback drops them. Access-sync jobs also use `afterCommit`, read repositories
+afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
+`tasks-queue` and switching all services to Redis; `deploy.sh` still deploys
+only web/scheduler.
+Section 13 covers the ten-minute access sync and five-minute commit stats;
+their overlap locks expire after 15 and 30 minutes respectively.

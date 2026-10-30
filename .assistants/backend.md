@@ -62,9 +62,9 @@ queries and authorized note/contact endpoints remain available.
    and chooses/replaces their managers, from the project's organization even
    on a cross-organization team. Never removes a manager, creates programs,
    publishes/rekeys/moves projects or edits people.
-4. **Project manager** — the one `member_team.role = 'leader'` on a project's
-   own team. Edits/archives that project, manages its roster and sees its
-   progress; never edits people, chooses managers or creates projects.
+4. **Project manager** — an active member with `member_team.role = 'leader'`
+   on a project's own team. Edits/archives that project, manages its roster and
+   sees its progress; never edits people, chooses managers or creates projects.
 5. **Member** — sees their teams, teammates and projects plus public
    projects in their organization; manages own subtasks and notes.
 
@@ -80,13 +80,18 @@ per project; keep in step), `canRemoveFromTeam`, `canJoinTeam`,
 `canCreateProject`, `canCreateProjectInProgram`, `createsProjectsOnlyInPrograms`,
 `canManageProjectAccess`, `canPublishProject`,
 `canChangeProjectKey` (organizational admin/super-admin), `canManageGit` (super-admin),
-`canViewProjectCode`, `canManageProjectRepositories`, `ledTeamIds`,
+`canViewProjectCode`, `canManageProjectRepositories`, `canManageRepositoryAccess`,
+`canGrantRepositoryAccessTo` (query twin: `RepositoryAccessCandidatesQuery`),
+`repositoryMaintainerIds`, `codeReportScope` (applied by `CodeActivityQuery`),
+`ledTeamIds`,
 `managedProgramIds`, `managesProgramOf`, `canManagePrograms`, `canViewProgram`.
 `Project::scopeVisibleTo` and `Program::scopeVisibleTo` are query twins of their
 view predicates; `Team` and `Member` also expose `visibleTo`. Project/team/member
 scopes reach program projects through `Project::inPrograms`, checking both the
 program's and project's organization. Per-user `WeakMap` memos flush on
 both `RouteMatched` and `RequestHandled`.
+`ledTeamIds` is empty for inactive members: deactivated project managers keep
+their pivot row but lose manager powers.
 
 Do-not-regress protections: ordinary teams, projects and people never cross
 organizations; every roster add goes through `canJoinTeam`; project teams must
@@ -246,9 +251,9 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   and dashboard feeds also include team changes. Never filter the
   feed on `->public()` (observers write `is_public = false`).
   `ProjectObserver` also records program moves; Git observers record repository
-  links and PR activity. Forge-originated entries have no actor; PR activity
-  belongs only to tasks of the repository's own project. Git activity also
-  requires code access, including in dashboard, task and activity feeds.
+  links, repository grants and PR activity. Forge-originated entries have no
+  actor; PR activity belongs only to tasks of the repository's own project.
+  Git activity also requires code access, including in dashboard, task and activity feeds.
   **WorkspaceNote** — personal stickies.
   **ProjectAssignment/Note/Contact, TaskComment** — task children.
 
@@ -271,7 +276,7 @@ under the `team` filter/count on both surfaces. `ProgramObserver` sends
 
 ## Scheduled / console commands
 
-Daily schedule in `routes/console.php`. Commands: `workspace:api-token`,
+Schedule in `routes/console.php`. Commands: `workspace:api-token`,
 `workspace:prune-trashed` (trash TTL from config) and
 `workspace:send-deadline-reminders`; both maintenance commands support
 `--pretend`. Weekly digest mail, command and subscriber model/table are retired.
@@ -279,6 +284,9 @@ Daily schedule in `routes/console.php`. Commands: `workspace:api-token`,
 the sole Forgejo client; reruns keep its id and rotate its secret.
 `git:reconcile [--connection=] [--allow-removals]` runs daily at 01:30 without
 overlapping; see the phase 1 map below for repair and removal safeguards.
+`git:sync-access [--connection=]` runs every ten minutes with a 15-minute
+overlap lock; `git:commit-stats [--limit=300]` every five minutes with a
+30-minute lock. See phase 2 below.
 
 `SdocProjectsSeeder` seeds SDOC and eight private projects with their own teams,
 initially without managers; not called by `DatabaseSeeder`. Per `CLAUDE.md`, use
@@ -314,10 +322,16 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   reserved names/endings and shared user/organization namespace, and never renames
   it after an email change. Login uses `Inertia::location` for OIDC redirects.
 - Member controllers call `RemoveFromForgeService` after deactivation/deletion:
-  remove the stored username from every connection using each office's token.
-  Forge failures do not block the member change; the response asks for manual
-  suspension. Tokens/secrets must never reach resources, old input, errors or logs.
-- Runbook/deploy kit: `docs/forgejo.md`, `deploy/forgejo/`; broader design and
+  remove the stored username from every connected organization, then from
+  collaborators of every repository each organization owns, linked or not,
+  using each connection's token. Lists collaborators first, compares logins
+  ignoring case and reports/logs only real repository removals. Unreachable
+  forges short-circuit that connection. Failures never block the member change;
+  `meta.complete` is false, `failed` names organizations/repositories (`owner/*`
+  when listing failed), and the message asks for manual suspension.
+  Tokens/secrets must never reach resources, old input, errors or logs.
+- Runbook/deploy kit: `docs/forgejo.md`, `forgejo/` (separate Dokploy application,
+  SDOC Git branding in `custom/`, Homebrew local runner); broader design and
   later phases: `docs/superpowers/specs/2026-10-29-git-integration-design.md`.
 
 ## Git / Forgejo (phase 1: code)
@@ -326,7 +340,7 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   `GitBranch`, `GitCommit` (retained with `unreachable_at`), `GitPullRequest`
   (`open|merged|closed`, `forge_updated_at` rejects older snapshots). `TaskGitLink`
   is a morph pivot with repository cascade. The strict morph map includes
-  `git-repository`, `git-branch`, `git-commit`, `git-pull-request`.
+  `git-repository`, `git-repository-grant`, `git-branch`, `git-commit`, `git-pull-request`.
 - Paired `ProjectRepositoryController`s, shared link/search/unlink requests and
   `LinkRepositoryService`/`UnlinkRepositoryService` manage links; candidates come
   from `RepositoryCandidatesQuery`. `canViewProjectCode` requires git and team
@@ -344,7 +358,8 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   raw-body HMAC-SHA256, 2 MB cap, UUID deduplication via `GitWebhookDelivery`.
   `ProcessGitDelivery` applies each delivery once; unprocessed redeliveries retry.
   `BackfillGitRepository` uses `RepositorySync::catchUp`. `Support/Background`
-  dispatches after the response on the sync queue, or to a configured worker.
+  dispatches after the response on the sync queue (only after any surrounding
+  transaction commits; rollback drops the job), or to a configured worker.
 - `ReconcileGit` repairs hook settings/secret, reconciles repository snapshots,
   marks unreachable commits, prunes branches, unlinks gone repositories, syncs
   forge membership and prunes deliveries after 14 days. `RepositorySync::unlinkGone`
@@ -356,7 +371,84 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   `--allow-removals` lifts both volume limits for one run, never the ownership check.
   Changes log at warning. `SyncForgeOwners` runs on organizational-admin flag changes.
 - Repointing a connection unlinks its repositories; disabling git and unlinking
-  hand the forge its own issue tracker back. `GoToTaskController` handles
+  hand the forge its own issue tracker back. Forge collaborators stay as they
+  are; unlink feedback says access persists until changed there or linked again.
+  Offboarding still removes deactivated people from unlinked repositories.
+  `GoToTaskController` handles
   `/workspace/go/{org}/{index}` (including aliases); inaccessible tasks return
   404 and sign-in uses a full page visit. Setup/worker runbook: `docs/forgejo.md`
   section 12; plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`.
+
+## Git / Forgejo (phase 2: access and reports)
+
+- `GitRepositoryGrant` stores unique repository/member `read|write` access and
+  `granted_by`. `scopeEffective` / `isEffective` require an active, undeleted
+  member in the project's organization or on its team; other grants stay stored
+  but give nothing. `GitRepository` adds `protects_main` and `access_synced_at`.
+- Paired `RepositoryGrantController`s serve scoped
+  `projects/{project:slug}/repositories/{repository}/access` (list/add),
+  `/access/candidates`, and `/access/{grant}` (PATCH/DELETE), using shared
+  Show/Store/Update/Destroy requests, Grant/Revoke services and
+  `GitRepositoryGrantResource`. `RepositoryAccessQuery` lists maintainers and
+  grants by name, without emails, with `waiting` (no forge username) and grant
+  `effective`; the list asks the effective scope once. Candidate search returns
+  at most 20 `{id, name, title}` matches, excluding maintainers/existing grants.
+- `canManageRepositoryAccess` follows `canManageProjectRepositories`.
+  `canGrantRepositoryAccessTo` permits organizational admins/super-admins to
+  grant active organization people or teammates; project/program managers only
+  teammates. Never grant maintainers, deleted/inactive people or an
+  organization-less member. Unknown/foreign off-team IDs get the same generic
+  422 without naming outsiders. Managers may remove an admin's off-team grant
+  but cannot change its permission. `repositoryMaintainerIds` supplies the
+  active project manager and active program manager (same organization as
+  both program and project), deduplicated; their forge access is `admin`.
+- `CreateRepositoryRequest` + `CreateRepositoryService` serve paired
+  `POST .../repositories/new`: private, empty repository, default `main`, name
+  equal to the lowercased project key or prefixed by `key-`, forge-safe, at
+  most 100 characters. `MAIN_RULE` limits pushes to maintainers/Owners and
+  requires one approval. Protection failure still links with a warning;
+  link failure says the forge repository was created. `LinkRepositoryService`
+  imports existing collaborators via `RepositoryAccess::importExisting` in the
+  link transaction, regardless of caller: eligible active organization people
+  and teammates, excluding maintainers; `admin|owner|write` becomes `write`.
+  Failed import rolls back the link. Pre-phase-2 links had no access import.
+- `Services/Git/RepositoryAccess::sync` removes unwanted tracker-known
+  collaborators first (a failed removal stops grants), PUTs maintainers and
+  effective grants at the higher permission, then PATCHes protected main's
+  allow-list. A PUT 422 waits for first forge sign-in; other refusals allow the
+  remaining PUTs then fail, while unreachable fails immediately. Rule 404 clears
+  `protects_main`. Bots, `forge-admin` and unknown logins are untouched. Only
+  successful sync updates `access_synced_at`; changes/failures log at warning.
+- `SyncRepositoryAccess` has no unique lock, uses `afterCommit`, reloads the
+  repository, skips unlinked rows and logs/catches forge failures. Triggered
+  through `Background` by grant changes, team joins/role changes/leaves,
+  program/project manager scope changes, member organization moves and linking.
+  Leaving a team deletes its repository grants individually in the same
+  transaction. `GitRepositoryGrantObserver` also writes code-gated activity.
+  `git:sync-access` retries every ten minutes (non-zero if any repository fails,
+  unreachable skips the connection's remaining calls); nightly reconcile adds
+  a per-repository access step.
+- `GitCommit` stores matched `user_id` (case-insensitive forge username),
+  `is_merge`, forge totals, files changed, code/comment/blank/docs added/removed,
+  generated lines and `stats_status` / `stats_computed_at`.
+  `Services/Git/CommitStats::compute` marks merges without a diff, classifies
+  streamed diffs up to 5 MB through `Support/Git/DiffStats`, and records
+  `ok|merge|too_large|missing`. `CommentSyntax` provides heuristic per-file
+  comment rules; state is separate per hunk side. `GeneratedFiles` excludes
+  dependencies, lockfiles and build output from code counts. `ComputeCommitStats`
+  attempts oldest pending commits first, failed attempts counting toward the
+  limit, and fills older unmatched `user_id`s. Status 0/401/403/429 stops that
+  connection; other failures skip a commit, five consecutive 5xx stop it.
+- `CodeActivityQuery` applies `WorkspaceAccess::codeReportScope`: whole
+  repositories of the organizations/programs/projects the viewer runs, plus
+  their own commits anywhere. Non-merge, reachable commits count by local
+  `committed_at`; PRs opened/merged, linked tasks, line totals and active days
+  accompany them. People default to name order, unmatched authors to one final
+  row only for whole-repository viewers. Daily series include zero days.
+  Shared `CodeActivityRequest` requires `GitAccess`, defaults to 30 days,
+  caps at 366 days and four compared user IDs; unknown/out-of-scope project or
+  program filters are 403. Paired controllers serve web `/workspace/reports/code`
+  (`Reports/CodeActivity`) and API `/api/v1/workspace/reports/code`, with
+  `/people/{user}` returning the latest 50 scoped commits; unknown/out-of-scope
+  people return an empty list. Runbook: `docs/forgejo.md` section 13; spec/plan:
+  `docs/superpowers/{specs,plans}/2026-10-30-git-phase-2-access-and-reports*.md`.

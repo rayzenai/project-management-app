@@ -14,16 +14,20 @@ personal inbox + workspace activity feed, `?tab=activity`),
 `Projects/Progress` (workload, Gantt, activity; polls every 15s while visible),
 `Programs/Show` (project summary, workload, Gantt and activity across active
 projects; polls `progress` every 15s while visible, with admin edit/delete and
-New project for admins and its manager).
+New project for admins and its manager), `Reports/CodeActivity` (scoped code
+activity, comparison and per-person commits).
 Pages wrap themselves in `AppShell` and supply the 44px top bar through its
 `bar` snippet (breadcrumb left, actions right); `flush` drops content padding
 for full-bleed registers/boards. The sidebar collapses to an icon rail (`[`
 shortcut, persisted in localStorage); Organizations appears only for
 super-admins. `managedPrograms` supplies the sidebar's Programs group.
-`Guide` (`/workspace/guide`, sidebar link for all signed-in users) explains
-the organization/program/project/team model, role routines, ministry title
+`gitEnabled` also shows the sidebar's Code activity link; filtered report URLs
+keep it active. `Guide` (`/workspace/guide`, sidebar link for all signed-in
+users) explains the organization/program/project/team model, role routines, ministry title
 mapping, dependencies, overdue work and shortcuts. Its Code section appears
-when shared `gitEnabled` is true. Keep it aligned with changes to how people work.
+when shared `gitEnabled` is true, covering repository creation/access and
+matching commits via SDOC Git Settings, Emails. Keep it aligned with changes
+to how people work.
 
 ## Key components (`resources/js/components`)
 
@@ -92,6 +96,8 @@ Command-palette search, dependencies and Gantt labels use the permanent task
 number. Plan `item_number` stays editable; task details show it separately only
 when it differs from `number`. `Organizations/Index` connects/updates Git using
 forge address, owner and a write-only bot token, and can turn the connection off.
+Its suggested forge address comes from `project-management.git.default_forge_url`
+(`PM_GIT_FORGE_URL`, default `https://git.sdoc.gov.np`).
 `BoardView` uses pointer drag/drop: dropping onto a card adds a dependency;
 `lib/dependencies.ts` keeps waiting tasks below prerequisites and draws dotted
 links, including cross-column links.
@@ -100,11 +106,25 @@ the chart supports persisted zoom/grouping, dependency arrows and task
 selection into read-only `team/TaskReportDrawer`. `lib/schedule.ts` plans
 finish-to-start dates after prerequisites without changing stored dates.
 Code: `project/CodeView` lists linked repositories, searches candidates and
-links/unlinks when `git.can_manage`. `TaskCodePanel` in Peek/full task page
-offers a copyable branch name and linked PRs, branches and commits. Board cards
+links/unlinks when `git.can_manage`. Its Link repository popover also offers
+New repository (lowercase project-key name, optional description), with focus
+handling and inline errors. Each repository's Access toggle opens
+`project/RepositoryAccess`: read-only manager/program-manager maintainers,
+read/write grants, debounced eligible-person search, permission changes and
+removal. Missing forge usernames show waiting; ineffective grants show no access
+now. Mutations reload flash and the access list, lock controls while saving
+and restore refused selections. `TaskCodePanel` in Peek/full task page offers
+a copyable branch name and linked PRs, branches and commits. Board cards
 show `has_pull_request`. Code data is access-gated by the backend; public-project
 visibility alone does not expose the Code tab. `lib/types.ts` holds Program,
-Git repository/PR/task-code and shared program/git context shapes.
+Git repository/grant/access, code-activity report, PR/task-code and shared
+program/git context shapes.
+Reports: `Reports/CodeActivity` filters by date, project or program, defaults
+to name order with sortable columns and compares up to four people. It shows
+uncounted work, a side-by-side comparison and `reports/DailyCodeChart` (code
+lines changed per day with daily commit counts in its tooltip).
+`reports/PersonCommitsDrawer` fetches scoped recent commits for a selected
+person, preserving the report's range/filters.
 Comments: the full task page passes `mentionCandidates` (`{id, name}` only,
 team plus program manager) to `CommentThread`; `team` stays the existing
 assignee list. Full task `joinCandidates` and Peek `join_candidates` feed
@@ -150,9 +170,21 @@ classes every screen is built from (`.btn`, `.btn-primary`, `.btn-ghost`,
 one shared column template so header and rows align, optional columns from
 xl/2xl). `resources/js/lib/applyTheme.ts` (`applyAppearance`) is the single
 source of mode.
+Charts use semantic `series-1` through `series-4` tokens (`--ws-series-*`),
+blue/magenta/purple/teal-blue in fixed order with light/dark values in app.css;
+these identify people without implying task status.
 
 Hard rules (see conventions.md): semantic utilities only; no raw palette
 colors or `dark:` variants (sticky-note colors in `lib/noteColors.ts` are the
 one exception); no inverted black/white buttons; no colored status pills/dots;
 no `rounded-xl`/`shadow-*` outside `.popover`; Lucide icons only; no
 em-dashes; no mono-uppercase eyebrow labels.
+
+## Separate forge UI
+
+`forgejo/custom/` brands SDOC Git through Forgejo's templates, themes, fonts
+and logos: Public Sans + Noto Sans Devanagari, `sdoc-auto|light|dark` themes,
+signed-out home with the tracker OIDC button, Tasks navbar link and SDOC footer.
+`forgejo/start.sh` replaces the custom public/templates files from the image
+on every start. Existing forge accounts keep their stored theme; the runbook's
+Branding section covers moving old accounts onto an offered SDOC theme.

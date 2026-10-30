@@ -15,7 +15,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `TeamRosterApiTest`, `MemberRolesApiTest`, `NotificationApiTest`, `RestoreApiTest`).
 - `tests/Feature/` root — cross-cutting (WorkspaceAccessTest, theme tokens,
   user preferences, api-token command, seeders).
-- `tests/Unit/` — parsers (MentionParser, TaskReferences) and ForgejoClient HTTP tests.
+- `tests/Unit/` — parsers (MentionParser, TaskReferences), DiffStats classification
+  and ForgejoClient HTTP tests.
 - `ProjectProgressTest` covers both surfaces, access gates and legacy web
   redirects; `TaskDependencyTest` covers web/API links, cycle/scope validation,
   audit logging, quick-add and graph props. `OneTeamPerProjectMigrationTest`
@@ -39,7 +40,9 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - `GitConnectionTest` covers web/API super-admin gates, forge ownership checks,
   connection failures, URL validation/normalization, office uniqueness and secret
   redaction. `ForgeOffboardingTest` covers deactivation/deletion across all
-  connections, partial failures, token masking and completion feedback.
+  connections, every forge repository (linked or not), case-insensitive actual
+  collaborator removals, unreachable short-circuiting, partial failures, token
+  masking, warning logs and completion feedback.
 - `OidcProviderTest` covers discovery/JWKS, code-to-token claims, access/tenant
   gates (including cross-organization teams), scope filtering, redirect/consent
   handling, SPA login redirect, sessionless throttled token route, persistent
@@ -84,6 +87,30 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   removal breakers, owner/member sync, logging and delivery retention.
   `GoToTaskTest` covers forge links, tenant isolation, aliases, inaccessible-task
   404s and guest sign-in. `Unit/ForgejoClientTest` covers pagination and forge APIs.
+- Access: `RepositoryAccessRulesTest` covers grant/effective-scope predicate
+  twins, inactive managers, maintainers, tenant boundaries and candidate limits.
+  `RepositoryAccessSyncTest` covers removal-before-grant ordering, bots/unknown
+  logins, waiting/refused users, main allow-lists, import, job freshness,
+  ten-minute schedule/lock expiry and reconcile. `RepositoryAccessTriggersTest`
+  covers observer activity/jobs, code-gated feeds, atomic team leave/grant
+  removal, program/member moves, link import rollback and after-response sync.
+  `BackgroundTest` checks transaction and nested-savepoint rollbacks drop jobs.
+- `RepositoryGrantTest` + `Api/RepositoryGrantTest` cover list/candidates and
+  grant CRUD, read/write validation, scoped bindings, concurrent grants,
+  waiting/effective payloads, off-team permission-change refusals and outsider
+  privacy. `CreateRepositoryTest` + its API twin cover key-prefixed name rules,
+  private creation/main protection/linking, warnings/partial failures and gates.
+- `CommitStatsTest` covers totals/classification, merge/large/missing handling,
+  username attribution/backfill, attempt limits, per-connection failures and
+  five-minute schedule/lock expiry. `Unit/DiffStatsTest` covers comment syntax,
+  independent hunk-side state, generated/docs/binary files, quoted paths and
+  linear scans of long lines. `Unit/ForgejoClientTest` also covers repository
+  creation, collaborators, protection and bounded streamed diffs.
+- `CodeActivityTest` + `Api/CodeActivityTest` cover report role/tenant scopes,
+  name order/unmatched authors, own commits, ranges/filters, merge/unreachable
+  exclusions, PR/task counts, zero-filled comparisons, private person drill-down
+  and bounded query counts. The query-count test fakes `SyncRepositoryAccess`
+  so after-response access-sync queries cannot affect its measurements.
 
 ## Running
 
@@ -95,6 +122,8 @@ php artisan test --compact --filter=ProjectProgress  # one test/group
 
 Output is JSON-rewritten by `laravel/pao`; empty JSON means a PHP fatal —
 rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&1`.
+`phpunit.xml` uses in-memory SQLite, array cache/session/mail and sync queue,
+with a 512 MB memory limit.
 
 ## Expectations
 
