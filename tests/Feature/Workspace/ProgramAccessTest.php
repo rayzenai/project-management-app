@@ -314,6 +314,17 @@ it('never lets a program reach past its manager organization', function () {
         ->and(Project::query()->visibleTo($this->js)->pluck('id')->all())->not->toContain($this->projectA->id);
 });
 
+it('names every program a manager must hand over before moving organization', function () {
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+    Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->jsMember->id, 'name' => 'Customs']);
+
+    $this->actingAs($boss)
+        ->patch("/workspace/members/{$this->jsMember->id}", ['organization_id' => $this->otherOrg->id])
+        ->assertSessionHasErrors(['organization_id' => 'Choose another manager for the Customs, Revenue programs first.']);
+
+    expect($this->jsMember->fresh()->organization_id)->toBe($this->org->id);
+});
+
 it('lets a person who manages no program move organization as before', function () {
     $boss = User::factory()->create(['email' => 'boss@example.com']);
     $loose = Member::factory()->create(['organization_id' => $this->org->id]);

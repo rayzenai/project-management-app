@@ -51,7 +51,7 @@ class StoreProgramRequest extends FormRequest
                 $validator->errors()->add('manager_id', "The program manager must be an active person of the program's organization.");
             }
 
-            if (Program::query()->where('organization_id', $organizationId)->where('name', $this->input('name'))->exists()) {
+            if (Program::query()->where('organization_id', $organizationId)->whereRaw('LOWER(name) = LOWER(?)', [(string) $this->input('name')])->exists()) {
                 $validator->errors()->add('name', 'That name is already used in this organization.');
             }
         });

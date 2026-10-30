@@ -127,3 +127,22 @@ it('ignores program_id from anyone who does not administer the organization', fu
         ->assertSessionHasNoErrors();
     expect($project->fresh()->program_id)->toBe($mine->id)->and($project->fresh()->title)->toBe('B');
 });
+
+it('drops another organization program from the project manager instead of refusing it', function () {
+    $foreign = Program::factory()->create(['organization_id' => Organization::factory()->create()->id]);
+    $mine = Program::factory()->create(['organization_id' => $this->org]);
+    $project = Project::factory()->create(['organization_id' => $this->org, 'program_id' => $mine->id]);
+
+    $leaderUser = User::factory()->create();
+    $project->ensureTeam()->members()->attach(
+        Member::factory()->linkedTo($leaderUser)->create(['organization_id' => $this->org])->id,
+        ['role' => 'leader'],
+    );
+
+    $this->actingAs($leaderUser)->patch("/workspace/projects/{$project->slug}", ['title' => 'Kept', 'program_id' => $foreign->id])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($project->fresh()->program_id)->toBe($mine->id)
+        ->and($project->fresh()->title)->toBe('Kept');
+});

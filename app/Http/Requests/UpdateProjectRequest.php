@@ -69,7 +69,8 @@ class UpdateProjectRequest extends FormRequest
                 return;
             }
 
-            if ($this->filled('program_id')
+            // Only for those whose program_id is kept; anyone else's is dropped.
+            if ($this->filled('program_id') && WorkspaceAccess::administers($this->user(), $project->organization_id)
                 && (int) Program::query()->whereKey($this->integer('program_id'))->value('organization_id') !== (int) $project->organization_id) {
                 $validator->errors()->add('program_id', 'That program belongs to another organization.');
 

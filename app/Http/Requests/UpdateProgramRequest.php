@@ -54,7 +54,7 @@ class UpdateProgramRequest extends FormRequest
 
             if ($this->has('name') && Program::query()
                 ->where('organization_id', $program->organization_id)
-                ->where('name', $this->input('name'))
+                ->whereRaw('LOWER(name) = LOWER(?)', [(string) $this->input('name')])
                 ->whereKeyNot($program->getKey())
                 ->exists()) {
                 $validator->errors()->add('name', 'That name is already used in this organization.');

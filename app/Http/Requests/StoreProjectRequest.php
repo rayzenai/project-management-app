@@ -61,7 +61,7 @@ class StoreProjectRequest extends FormRequest
                 $validator->errors()->add('key', 'That key is already used in this organization.');
             }
 
-            if ($this->filled('program_id')
+            if ($this->filled('program_id') && WorkspaceAccess::administers($this->user(), $this->organizationId())
                 && (int) Program::query()->whereKey($this->integer('program_id'))->value('organization_id') !== $this->organizationId()) {
                 $validator->errors()->add('program_id', 'That program belongs to another organization.');
             }

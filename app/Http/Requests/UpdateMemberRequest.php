@@ -7,6 +7,7 @@ use App\Models\Program;
 use App\Models\Team;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -119,7 +120,7 @@ class UpdateMemberRequest extends FormRequest
                 ->pluck('name');
 
             if ($programs->isNotEmpty()) {
-                $validator->errors()->add('organization_id', 'Choose another manager for the '.$programs->implode(', ').' program first.');
+                $validator->errors()->add('organization_id', 'Choose another manager for the '.$programs->implode(', ').' '.Str::plural('program', $programs->count()).' first.');
             }
         });
     }

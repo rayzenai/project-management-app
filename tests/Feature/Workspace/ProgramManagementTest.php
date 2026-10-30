@@ -167,3 +167,24 @@ it('does not let an office admin touch another organization program', function (
     $this->actingAs($this->adminUser)->patch(route('workspace.programs.update', $program), ['name' => 'Mine'])->assertForbidden();
     $this->actingAs($this->adminUser)->delete(route('workspace.programs.destroy', $program))->assertForbidden();
 });
+
+it('refuses a program name that differs only in case', function () {
+    $revenue = Program::factory()->create(['organization_id' => $this->org->id, 'name' => 'Revenue', 'manager_id' => $this->manager->id]);
+    $customs = Program::factory()->create(['organization_id' => $this->org->id, 'name' => 'Customs', 'manager_id' => $this->manager->id]);
+
+    $this->actingAs($this->adminUser)
+        ->post(route('workspace.programs.store'), ['name' => 'revenue', 'manager_id' => $this->manager->id])
+        ->assertSessionHasErrors(['name' => 'That name is already used in this organization.']);
+
+    $this->actingAs($this->adminUser)
+        ->patch(route('workspace.programs.update', $customs), ['name' => 'REVENUE'])
+        ->assertSessionHasErrors(['name' => 'That name is already used in this organization.']);
+
+    $this->actingAs($this->adminUser)
+        ->patch(route('workspace.programs.update', $revenue), ['name' => 'revenue'])
+        ->assertSessionHasNoErrors();
+
+    expect(Program::query()->count())->toBe(2)
+        ->and($customs->fresh()->name)->toBe('Customs')
+        ->and($revenue->fresh()->name)->toBe('revenue');
+});
