@@ -4,7 +4,9 @@ The runbook for SDOC's git forge: a Forgejo 15 LTS instance that people sign
 in to with their tracker account, whose repositories projects link so that
 commits, branches and pull requests show on their tasks. Design and reasons:
 [`docs/superpowers/specs/2026-10-29-git-integration-design.md`](superpowers/specs/2026-10-29-git-integration-design.md)
-(Phase 0 and Phase 1). The deploy kit is [`forgejo/`](../forgejo): a
+(Phase 0 and Phase 1) and
+[`docs/superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md`](superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md)
+(Phase 2: [section 13](#13-repositories-access-and-code-activity)). The deploy kit is [`forgejo/`](../forgejo): a
 Dockerfile on the pinned Forgejo image, its start script and `.env.example`,
 plus `local.sh` for a laptop. The forge deploys on its own, never with the
 tracker.
@@ -35,7 +37,7 @@ command does it: [Try it locally](#try-it-locally).
 | Web | `https://git.sdoc.gov.np` through Traefik (Let's Encrypt), container port 3000, never published |
 | Git over SSH | Forgejo's built-in SSH server on host port **2222** (the host's sshd keeps 22). The gateway forwards only 80 and 443, so 2222 is reachable only at `10.5.23.138`: from the VPN, whose resolver returns that address, and from office machines only if their resolver returns it too. HTTPS works wherever the web does |
 | Sign-in | Only "Sign in with sdoc-tasks", the tracker as OpenID Connect provider, then the forge's own second factor, which every person must enrol ([section 2](#2-public-behind-two-factor-sign-in)). No password sign-in anywhere: no password form and no password over HTTP basic auth. Access tokens and SSH keys work. No sign-up form, no OpenID 2.0, no anonymous browsing |
-| Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, the side that calls the forge's API with the `sdoc-bot` token, and the receiver of the forge's webhook (`/git/webhooks/{id}`, [section 12](#12-webhook-and-nightly-reconcile)) |
+| Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, the side that calls the forge's API with the `sdoc-bot` token, and the receiver of the forge's webhook (`/git/webhooks/{id}`, [section 12](#12-webhook-and-nightly-reconcile)). `tasks-scheduler` also runs `git:reconcile` nightly, `git:sync-access` every ten minutes and `git:commit-stats` every five ([section 13](#13-repositories-access-and-code-activity)) |
 
 ## 1. DNS at NITC
 
@@ -447,8 +449,9 @@ person's first sign-in lands on the link page.
    Owners team and its members); `write:repository` lets it read the
    repositories, branches, commits and pull requests a project links, and set
    each linked repository's external tracker, the forge's link back to the
-   task. It is still not a site-admin token. If phase 2 needs a wider one, it
-   is replaced the same way as below.
+   task. Phase 2 uses the same scopes (it creates repositories, sets their
+   collaborators and branch rule, and reads commits and diffs with
+   `write:repository`). It is still not a site-admin token.
 
    **Replacing the token** (an install whose token predates phase 1, made
    with `read:user,write:organization` only: the Code tab still lists the
@@ -680,6 +683,27 @@ Phase 1, once git is on (`SG-1` stands for any task code of the project):
   exactly one `PATCH` to the hook (the stored secret, written back every
   night).
 
+Phase 2, once the Phase 1 checks pass (see [section 13](#13-repositories-access-and-code-activity)):
+
+- **New repository.** As the project's manager (or an organizational admin),
+  Code tab → Link repository → New repository `sg-api`: "Created and linked
+  sdoc/sg-api." On the forge it is private and empty, with a `main` rule
+  (Settings → Branches): push restricted to a list, one approval required.
+- **Access.** Within a minute the repository's Settings → Collaborators lists
+  the project's manager (and its program's manager) as Administrator and the
+  `main` rule's push list names them. Give a teammate `write` in the Code tab's
+  Access: they appear as a collaborator with Write; they can push a branch,
+  but a push straight to `main` is refused. Remove the grant: they are gone from
+  Collaborators. A person who has never signed in to the forge shows as
+  waiting, and `php artisan git:sync-access` prints `1 waiting`.
+- **Leaving.** Take a granted teammate off the project's team: their
+  collaborator entry goes at once. Deactivate a test account that has a forge
+  account: it is gone from the forge organization and from every repository.
+- **Code activity.** After a few pushes, `php artisan git:commit-stats`
+  prints `Counted {n} commits.`, and the sidebar's Code activity lists the
+  pusher with lines counted. A commit made with an email the forge doesn't know
+  shows under "Not matched to anyone".
+
 ## 9. Offboarding
 
 When an organizational admin deactivates or deletes someone with a forge account, the
@@ -706,6 +730,11 @@ prohibited from signing in"), git over HTTPS (the "Account is suspended" page)
 and SSH ("Forgejo: Your account is disabled."). There is no `forgejo admin`
 command for it in 15, so it is done here, by a super-admin, who has a second
 factor. Untick it if the person comes back.
+
+Deactivating or deleting someone also takes them off the collaborators of every
+linked repository, at once and with the bot's token
+([section 13](#13-repositories-access-and-code-activity)); the message says so,
+or asks for a manual suspend when the forge could not be reached.
 
 Taking someone off a cross-organization project team, or moving them to
 another office, while they stay active does not touch the forge at once: the
@@ -950,14 +979,18 @@ steps):
    their branch deleted) are marked "Unreachable" on their tasks, never
    deleted, and lose the mark if they come back. Branches gone from the
    forge leave their tasks.
-3. **Owners.** Every active organizational admin of the office who has a forge
+3. **Its access**, right after its own step (not for one found gone): the
+   collaborators and `main`'s push allow-list are written as the tracker
+   wants them ([section 13](#13-repositories-access-and-code-activity)). It
+   shows as `{full_name} access` in a failure.
+4. **Owners.** Every active organizational admin of the office who has a forge
    account is put in the forge organization's Owners team; anyone else the
    tracker knows is taken out. `forge-admin`, every `{owner}-bot` and forge
    accounts the tracker doesn't know are never touched, here or below.
-4. **Members.** Anyone the tracker no longer lets into the forge
+5. **Members.** Anyone the tracker no longer lets into the forge
    organization (deactivated, moved to another office, taken off a
    cross-organization project team) is removed from it.
-5. Deliveries older than 14 days are deleted.
+6. Deliveries older than 14 days are deleted.
 
 It prints one line per connection, such as `sdoc at
 https://git.sdoc.gov.np: reconciled 3 repositories.`, adding `, unlinked 1`,
@@ -1024,6 +1057,251 @@ When it trips:
    It never lifts the check that the bot owns the organization. Suspend
    anyone who must also lose their tokens and SSH keys
    ([section 9](#9-offboarding)).
+
+## 13. Repositories, access and code activity
+
+Phase 2 adds three things to a connected forge: a project's manager makes a
+repository from the tracker, the tracker decides who may pull and push it, and
+a report counts what each person committed. Design and reasons:
+[`docs/superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md`](superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md).
+It needs nothing new on the forge or in the environment: the bot's token
+already carries `write:organization` and `write:repository`, and the tracker's
+scheduler and queue worker ([Queue worker](#queue-worker)) run the new jobs.
+The HTTP surface is in [`docs/api.md`](api.md) (Code repositories, repository
+access, Code activity).
+
+### Making a repository
+
+On a project's Code tab, **Link repository → New repository** (whoever may
+link: the project's manager, its program's manager, an organizational admin of
+its office, a super-admin). The name is the project's key in lowercase
+(`sg`) or that followed by `-` and more (`sg-api`); lowercase letters and
+digits with a single `.`, `_` or `-` between them; at most 100 characters; not
+ending in `.git`, `.wiki`, `.rss` or `.atom`. The description is optional, at
+most 255 characters.
+
+The tracker, with the bot's token:
+
+1. Creates it in the forge organization: private, empty (`auto_init` off),
+   `main` as the default branch. A name that exists answers "A repository
+   named {name} already exists in {owner}. Link it instead."
+2. Protects `main`: changes reach it through a pull request with one
+   approval (stale approvals dismissed, a rejecting review blocks the merge),
+   and only the forge organization's Owners and the repository's maintainers
+   (below) may push to it directly.
+3. Links it to the project like any other ([Phase 1's linking](#8-check)), which queues
+   the access sync that puts the maintainers on the rule's push allow-list.
+
+If the forge refuses the rule, the repository is still created and linked and
+the message says "Created and linked sdoc/sg-api, but main couldn't be
+protected: protect it on the forge." If linking fails after the forge made it,
+the message says the repository exists ("Created sdoc/sg-api on the forge, but
+couldn't link it: …") and it can be linked from the list. Only repositories
+the tracker created are marked as protecting `main`; a repository that was
+linked keeps whatever rules its owners set and the sync never touches them.
+
+### Who has access
+
+The forge's collaborators of every linked repository follow the tracker, never
+the other way:
+
+- **Maintainers**, `admin`: the project's manager and its program's manager,
+  while active. Their access follows the role and is not edited.
+- **Grants**, `read` or `write`: given on the project's Code tab (Access) by
+  whoever may link repositories, to an active person of the project's
+  organization, or on the project's team. A manager or a program manager gives
+  it only to people on the team; an organizational admin also to anyone in the
+  office. Never to a maintainer, someone deactivated, or a super-admin's own
+  member. Someone wanted twice gets the higher permission.
+- **Owners and site admins** of the forge reach every repository without being
+  collaborators: the forge organization's Owners team is every active
+  organizational admin of the office ([section 12](#12-webhook-and-nightly-reconcile)).
+
+A grant counts only while the person is active and in the project's
+organization or on its team; otherwise it stays stored and gives nothing.
+Linking an existing repository reads its current collaborators first and makes
+each one the tracker could grant (as above, not a maintainer) a grant (`admin`
+and `write` on the forge become `write`, `read` stays `read`), in one
+transaction with the link, so linking never takes anyone's access away. If the
+forge can't answer that, nothing is linked: "Couldn't read sdoc/sg-api's
+collaborators on the forge, so it wasn't linked. Try again shortly."
+
+People leaving change the forge at once:
+
+- Leaving the project's team deletes that person's grants on its repositories
+  in the same transaction as the removal, whoever made them.
+- Moving to another office queues a sync of every repository they hold a grant
+  on (their grants stop counting there).
+- Deactivating or deleting someone removes them from every connected forge
+  organization and takes them off the collaborators of every linked
+  repository, with each connection's own bot token. A forge that is down never
+  blocks the change: the message asks for a manual suspend
+  ([section 9](#9-offboarding)), and the rest of that forge is not retried
+  call by call. Only real removals are logged.
+- A deactivated project manager loses the manager's powers in the tracker too,
+  and the sync takes them off as a maintainer.
+
+### The access sync
+
+A sync writes one repository's wanted collaborators to the forge. It is queued
+(`SyncRepositoryAccess`, three tries, a minute apart, after the database
+transaction that caused it commits) when a grant is made, changed or removed,
+a repository is linked, someone joins or leaves the project's team or becomes
+or stops being its manager, the project changes program, a program gets a new
+manager, or a person moves office. Two things run it regardless: the
+`git:sync-access` command every ten minutes from `tasks-scheduler`, which picks
+up people whose first forge sign-in came after their grant, and the nightly
+reconcile's `access` step per repository.
+
+In this order, so nobody gains access while a removal is stuck:
+
+1. **Removals.** Every collaborator the tracker knows (a user with a stored
+   forge username) who is no longer wanted is taken off. A failure here stops
+   the run.
+2. **Grants.** Each wanted login is set (PUT) at its permission, which also
+   restates the permission of those already there. A 422 ("user does not
+   exist") means the person has not signed in to the forge yet: they are
+   *waiting*, and the next run gives them access. Any other refusal for one
+   login (a disabled account answers 500, a blocked one 403) holds up nobody
+   else; the run finishes the others and the allow-list, then fails with the
+   first refusal. An unreachable forge fails the run at once.
+3. **`main`'s push allow-list**, for a repository the tracker protects: the
+   maintainers now collaborators, plus the Owners team. This comes last
+   because Forgejo silently drops allow-listed users who are not collaborators
+   with write at the moment of the update. A rule deleted on the forge (404)
+   was somebody's decision: the tracker stops protecting that repository and
+   logs "The forge repository's main rule is gone; the tracker no longer
+   protects it."
+
+Never touched, in any step: `{owner}-bot`, `forge-admin`, and logins the
+tracker has no user for. The forge's organization-level access is
+[section 12](#12-webhook-and-nightly-reconcile)'s job.
+
+```sh
+php artisan git:sync-access                   # every linked repository
+php artisan git:sync-access --connection=1    # one connection
+```
+
+One line per repository, such as `sdoc/sg-api: 4 with access, 1 waiting.`, or
+`sdoc/sg-api: failed (forge answered 500).`. The command exits non-zero when
+any failed; one failing never holds up the next, and an unreachable forge
+fails that connection's other repositories without waiting for it again.
+
+Production's log (`LOG_LEVEL=warning`) records each new collaborator ("Gave
+someone access to a forge repository."), each removal ("Took someone off a
+forge repository's collaborators.") and each failed sync ("Couldn't sync a
+forge repository's access.", with the status and, for an unreachable forge, its
+address and the cause with the token masked). Nobody's permission is logged
+when nothing changed. The forge shows the same in a repository's Settings →
+Collaborators; do not edit them there, the next sync puts them back (it takes
+off only people the tracker knows).
+
+What the forge does, as checked on a real instance and relied on above:
+
+- An admin collaborator cannot push to a protected `main` unless they are on
+  the push allow-list; write collaborators are refused ("Not allowed to push to
+  protected branch main") and push branches and open pull requests. That is
+  why maintainers are listed on the rule.
+- Allow-listed users who are not collaborators with write are dropped at update
+  time, and a user is dropped from the list when they stop being a collaborator.
+- Adding a collaborator who already is one answers 204 and sets the
+  permission; removing one who isn't answers 204.
+
+### Counting commits: `git:commit-stats`
+
+Every commit the tracker ingests starts without line counts. The command counts
+them, oldest first, at most 300 per run (`--limit=300`), every five minutes
+from `tasks-scheduler`:
+
+```sh
+php artisan git:commit-stats               # up to 300
+php artisan git:commit-stats --limit=50
+```
+
+It prints `Counted 120 commits.`, adding ` 480 left for the next run.` when
+the limit stopped it. For each commit it asks the forge for the commit (the
+forge's own added and removed totals and its parents) and, for an ordinary
+commit, its diff, which it classifies per file into code, comment, blank, docs
+(`.md`, `.markdown`, `.rst`, `.txt`, `.adoc`) and generated lines (lock files,
+`vendor/`, `node_modules/`, `dist/`, `build/`, minified files, source maps,
+binaries; counted only as generated). Comment detection is a heuristic like
+`cloc`, by file type. Outcomes, kept on the commit as `stats_status`:
+
+| Status | Meaning |
+| --- | --- |
+| `ok` | Counted. |
+| `merge` | More than one parent. Marked, not counted, and left out of the report. |
+| `too_large` | A diff over 5 MB (5242880 bytes) is not read; only the forge's totals are kept. |
+| `missing` | The forge no longer has the commit (404). |
+
+Failures never stall the queue behind them. Every attempt counts toward
+`--limit`. A forge answer of 0 (unreachable), 401, 403 or 429 stops that
+connection for the rest of the run; any other 4xx, or a 5xx, skips only that
+commit until the next run, and five 5xx in a row stop the connection. Other
+connections go on. Each failure is logged at warning ("Counting a commit
+failed.", the repository, commit id and status, never the token). A 403 here
+is the same under-scoped token as in [Replacing the token](#7-bootstrap); the
+fix is the same.
+
+After a big backfill the backlog drains at 3,600 commits an hour; the report
+shows how many of its commits are still uncounted. To drain faster run it by hand
+in `tasks-web`'s terminal, or with a higher `--limit`.
+
+The same command also fills `user_id` on commits ingested before their author
+had a forge username (see below).
+
+### Matching commits to people
+
+A commit belongs to a person when the forge names its author by username, and
+that username is the person's stored `git_username`. The forge does that from
+the commit's author email: the primary email of a forge account (which is the
+tracker email) or a verified extra one. A developer who commits with another
+address must add it under SDOC Git → Settings → Emails, verify it, and their
+earlier commits are matched on the next `git:commit-stats` run. Commits whose
+author the forge can't name show in the report as "Not matched to anyone", to
+those who see whole repositories.
+
+### Code activity
+
+**Code activity** in the sidebar (shown to anyone git admits), at
+`/workspace/reports/code`: per person, their commits, active days,
+repositories, files, code, comment, blank and docs lines added and removed,
+pull requests opened and merged, and tasks their commits are linked to, over a
+range (the last 30 days unless given, at most 366), optionally for one project
+or program, and with up to four people compared side by side. Only
+non-merge, still-reachable commits count, by their commit date in the tracker's
+timezone (a Nepal day).
+
+People are listed by name and the columns can be sorted by the viewer; the page
+never ranks anyone. It is for seeing where work is going, not for scoring it:
+line counts reward verbosity and generated code, and `docs` and `generated`
+lines are kept out of the code figures for that reason.
+
+Who sees what: a super-admin, every connected organization; an organizational
+admin, their organization's repositories; a program manager, those of their
+programs' projects; a project manager, those of the projects they manage (a
+deactivated one sees none); and everyone, their own commits wherever they are.
+A project or program filter outside what the viewer sees is a 403.
+
+### What the reconcile does now
+
+[Section 12](#12-webhook-and-nightly-reconcile)'s reconcile also runs the
+access sync for each repository, right after that repository's own step (not
+for one it found gone). It is the nightly backstop for anything the queue
+missed. A sync failure shows in its output as `{full_name} access: …` and
+fails the run's exit code like any other step.
+
+### When something is off
+
+| Symptom | Likely cause |
+| --- | --- |
+| Someone is listed as waiting for days | They never signed in to the forge, so it has no user for their login. The sync gives them access on its next run after they do. |
+| A person has the grant but cannot push `main` | Only maintainers and Owners push `main`; a `write` grant pushes branches and opens pull requests. |
+| `git:sync-access` prints `failed (forge answered 403)` | The bot lost ownership of the forge organization or its token is under-scoped (`write:repository`). |
+| Someone added by hand on the forge disappears | The sync took them off: add them as a grant in the tracker instead. |
+| A removed collaborator is still on the forge | The removal failed; the log has "Couldn't sync a forge repository's access." with the status. The next run retries. |
+| The report keeps showing uncounted commits | The forge was down or refused; look for "Counting a commit failed." and run `git:commit-stats` by hand. |
+| A person's commits are "Not matched to anyone" | Their commit email isn't on their forge account (above). |
 
 ## Try it locally
 
