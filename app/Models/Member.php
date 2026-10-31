@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\OrgChart;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Database\Factories\MemberFactory;
@@ -32,6 +33,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property array<int, string>|null $coordinator_categories
  * @property string|null $coordinator_role
  * @property bool $is_active
+ * @property int|null $designation_id
+ * @property int|null $reports_to_id the person they report to (their higher authority)
+ * @property bool $attendance_exempt
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -53,6 +57,9 @@ class Member extends Model
         'coordinator_categories',
         'coordinator_role',
         'is_active',
+        'designation_id',
+        'reports_to_id',
+        'attendance_exempt',
     ];
 
     /**
@@ -64,6 +71,7 @@ class Member extends Model
             'coordinator_categories' => 'array',
             'is_active' => 'boolean',
             'is_office_admin' => 'boolean',
+            'attendance_exempt' => 'boolean',
         ];
     }
 
@@ -93,6 +101,35 @@ class Member extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * @return BelongsTo<Designation, $this>
+     */
+    public function designation(): BelongsTo
+    {
+        return $this->belongsTo(Designation::class);
+    }
+
+    /**
+     * The person this member reports to. Everyone above and below goes
+     * through {@see OrgChart}.
+     *
+     * @return BelongsTo<Member, $this>
+     */
+    public function reportsTo(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reports_to_id');
+    }
+
+    /**
+     * The people who report to this member directly.
+     *
+     * @return HasMany<Member, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(self::class, 'reports_to_id');
     }
 
     /**

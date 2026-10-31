@@ -120,6 +120,15 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
             Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
+            // Structure: designations, reporting lines, the organogram.
+            // (structure routes end)
+
+            // Attendance: the clock, the register, leave and kaaj, settings.
+            // (attendance routes end)
+
+            // Work reports: today's work, a person's work, a team's work.
+            // (work routes end)
+
             // Tasks + task-children: gated centrally by EnsureProjectVisible
             // (binding has resolved the parameter to a model instance, so the
             // middleware walks it back to its project and 403s non-viewers).

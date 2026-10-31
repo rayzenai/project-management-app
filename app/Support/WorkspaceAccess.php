@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use App\Models\AttendanceSetting;
 use App\Models\GitConnection;
 use App\Models\GitRepository;
+use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
@@ -30,6 +32,11 @@ use Illuminate\Support\Facades\Gate;
  *   roster of the teams they lead and sees their progress.
  * - Member: sees their teams' projects and teammates; manages own subtasks.
  *
+ * Inside an organization, reporting lines (`members.reports_to_id`, see
+ * OrgChart) decide who sees whose attendance and work: the person,
+ * everyone above them, its admins and super-admins. They give no power
+ * over projects.
+ *
  * Organizations are the tenant boundary. The only crossing is a team a
  * super-admin marked cross-organization: anyone may join it, and its members
  * see its projects (which stay in the team's home organization).
@@ -55,12 +62,17 @@ class WorkspaceAccess
     /** @var array<int, bool> organization id => whether it has a git connection */
     private static array $gitMemo = [];
 
+    /** @var array<int, bool> organization id => whether its attendance is on */
+    private static array $attendanceMemo = [];
+
     public static function flush(): void
     {
         self::$ledTeamIdsMemo = null;
         self::$managedProgramIdsMemo = null;
         self::$memberMemo = null;
         self::$gitMemo = [];
+        self::$attendanceMemo = [];
+        OrgChart::flush();
     }
 
     public static function isSuperAdmin(?Authenticatable $user): bool
@@ -745,5 +757,179 @@ class WorkspaceAccess
             : array_values($member->ledTeams()->pluck('teams.id')->map(fn ($id): int => (int) $id)->all());
 
         return self::$ledTeamIdsMemo[$user] = $ids;
+    }
+
+    // ---- Structure ----
+
+    /**
+     * Change an organization's designations and reporting lines: whoever
+     * administers it, nobody else, since the lines decide who sees whose
+     * attendance, location and work.
+     */
+    public static function canManageStructure(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return $organizationId !== null && self::administers($user, $organizationId);
+    }
+
+    /**
+     * See an organization's organogram (names, designations and lines,
+     * never emails): super-admins and its active members.
+     */
+    public static function canViewOrganogram(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        if ($organizationId === null) {
+            return false;
+        }
+
+        if (self::isSuperAdmin($user)) {
+            return true;
+        }
+
+        $member = self::memberFor($user);
+
+        return $member !== null && $member->is_active && (int) $member->organization_id === (int) $organizationId;
+    }
+
+    /**
+     * Whether the user stands over the member: a super-admin, an admin of
+     * the member's organization, or an active member of the same
+     * organization the member reports to, directly or through others.
+     * Never over themselves.
+     */
+    public static function oversees(?Authenticatable $user, Member $member): bool
+    {
+        $self = self::memberFor($user);
+
+        if ($self !== null && $self->is($member)) {
+            return false;
+        }
+
+        if (self::administers($user, $member->organization_id)) {
+            return true;
+        }
+
+        return $self !== null
+            && $self->is_active
+            && $self->organization_id !== null
+            && (int) $self->organization_id === (int) $member->organization_id
+            && in_array((int) $self->getKey(), OrgChart::ancestorIds($member), true);
+    }
+
+    /**
+     * See a person's attendance and work: themselves, or whoever
+     * `oversees` them.
+     */
+    public static function canViewPersonOf(?Authenticatable $user, Member $member): bool
+    {
+        $self = self::memberFor($user);
+
+        return ($self !== null && $self->is($member)) || self::oversees($user, $member);
+    }
+
+    /**
+     * The people of an organization whose attendance and work the user
+     * sees in lists: null for all of them (its admins and super-admins),
+     * otherwise the people below the user there, possibly none. The twin of
+     * `oversees` for queries; keep them in step.
+     *
+     * @return list<int>|null
+     */
+    public static function overseenMemberIds(?Authenticatable $user, int|string $organizationId): ?array
+    {
+        if (self::administers($user, $organizationId)) {
+            return null;
+        }
+
+        $self = self::memberFor($user);
+
+        if ($self === null || ! $self->is_active || (int) $self->organization_id !== (int) $organizationId) {
+            return [];
+        }
+
+        $below = OrgChart::descendantIds($self);
+
+        if ($below === []) {
+            return [];
+        }
+
+        return array_values(array_map('intval', Member::query()
+            ->whereIn('id', $below)
+            ->where('organization_id', $organizationId)
+            ->pluck('id')
+            ->all()));
+    }
+
+    /**
+     * See the work reports of an organization's people (today's work, a
+     * team's week): its admins, super-admins, and anyone with people below
+     * them there (who see only those people).
+     */
+    public static function canViewTeamWork(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return $organizationId !== null
+            && (self::administers($user, $organizationId) || self::overseenMemberIds($user, $organizationId) !== []);
+    }
+
+    // ---- Attendance ----
+
+    public static function attendanceEnabled(int|string|null $organizationId): bool
+    {
+        if ($organizationId === null) {
+            return false;
+        }
+
+        return self::$attendanceMemo[(int) $organizationId] ??= AttendanceSetting::query()
+            ->where('organization_id', $organizationId)
+            ->where('enabled', true)
+            ->exists();
+    }
+
+    /** Turn an organization's attendance on or off: super-admins only. */
+    public static function canEnableAttendance(?Authenticatable $user): bool
+    {
+        return self::isSuperAdmin($user);
+    }
+
+    /**
+     * Change an organization's hours, office places, office networks and
+     * holidays: whoever administers it.
+     */
+    public static function canManageAttendance(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return $organizationId !== null && self::administers($user, $organizationId);
+    }
+
+    /**
+     * Clock in and out, and ask for leave or kaaj: an active member of an
+     * organization whose attendance is on.
+     */
+    public static function canPunch(?Authenticatable $user): bool
+    {
+        $member = self::memberFor($user);
+
+        return $member !== null && $member->is_active && self::attendanceEnabled($member->organization_id);
+    }
+
+    /**
+     * Open an organization's attendance register: attendance on, and the
+     * user administers it or has people below them there (who see only
+     * those people).
+     */
+    public static function canViewAttendanceRegister(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return $organizationId !== null
+            && self::attendanceEnabled($organizationId)
+            && (self::administers($user, $organizationId) || self::overseenMemberIds($user, $organizationId) !== []);
+    }
+
+    /**
+     * Approve or reject someone's leave or kaaj, or record it for them:
+     * whoever `oversees` them (never the person themselves).
+     */
+    public static function canDecideLeave(?Authenticatable $user, LeaveRequest $leave): bool
+    {
+        $member = $leave->member;
+
+        return $member !== null && self::oversees($user, $member);
     }
 }

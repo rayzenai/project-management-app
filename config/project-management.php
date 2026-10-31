@@ -13,14 +13,16 @@ return [
     | percentages, the My Workspace triage, the one-click complete checkbox).
     | `is_closed` marks the statuses where work has stopped, finished or not:
     | a closed task is never overdue, never on anyone's to-do list and never
-    | reminded about. Edit here to change the workflow.
+    | reminded about. `is_started` marks the statuses that mean work began
+    | (the work reports count a task as started when it enters one). Edit
+    | here to change the workflow.
     |
     */
 
     'statuses' => [
         'not_started' => ['label' => 'Not Started', 'color' => '#9AA2B3', 'is_complete' => false, 'is_closed' => false],
         'unclear' => ['label' => 'Unclear', 'color' => '#9AA2B3', 'is_complete' => false, 'is_closed' => false],
-        'in_progress' => ['label' => 'In Progress', 'color' => '#E5A33A', 'is_complete' => false, 'is_closed' => false],
+        'in_progress' => ['label' => 'In Progress', 'color' => '#E5A33A', 'is_complete' => false, 'is_closed' => false, 'is_started' => true],
         'done' => ['label' => 'Done', 'color' => '#3EC98A', 'is_complete' => true, 'is_closed' => true],
         'failed' => ['label' => 'Failed', 'color' => '#F2655A', 'is_complete' => false, 'is_closed' => true],
     ],

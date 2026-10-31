@@ -313,6 +313,22 @@ class Task extends Model
     }
 
     /**
+     * Statuses that mean work on the task began (`is_started`): the work
+     * reports count a task as started the day it enters one.
+     *
+     * @return list<string>
+     */
+    public static function startedStatuses(): array
+    {
+        $statuses = collect((array) config('project-management.statuses'))
+            ->filter(fn (array $meta): bool => (bool) ($meta['is_started'] ?? false))
+            ->keys()
+            ->map(fn (int|string $status): string => (string) $status);
+
+        return array_values($statuses->all());
+    }
+
+    /**
      * Tasks still being worked on: not finished, not failed.
      *
      * @param  Builder<Task>  $query

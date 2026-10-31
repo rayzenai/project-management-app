@@ -136,6 +136,15 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
         Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
+        // Structure: designations, reporting lines, the organogram.
+        // (structure routes end)
+
+        // Attendance: the clock, the register, leave and kaaj, settings.
+        // (attendance routes end)
+
+        // Work reports: today's work, a person's work, a team's work.
+        // (work routes end)
+
         // Every route that acts on a task or a task-child is gated centrally by
         // EnsureProjectVisible: route-model binding has already resolved the
         // bound parameter to a model instance, so the middleware walks it back

@@ -90,6 +90,46 @@ class Organization extends Model
         return $this->hasOne(GitConnection::class);
     }
 
+    /**
+     * @return HasMany<Designation, $this>
+     */
+    public function designations(): HasMany
+    {
+        return $this->hasMany(Designation::class);
+    }
+
+    /**
+     * @return HasOne<AttendanceSetting, $this>
+     */
+    public function attendanceSetting(): HasOne
+    {
+        return $this->hasOne(AttendanceSetting::class);
+    }
+
+    /**
+     * @return HasMany<AttendancePlace, $this>
+     */
+    public function attendancePlaces(): HasMany
+    {
+        return $this->hasMany(AttendancePlace::class);
+    }
+
+    /**
+     * @return HasMany<AttendanceNetwork, $this>
+     */
+    public function attendanceNetworks(): HasMany
+    {
+        return $this->hasMany(AttendanceNetwork::class);
+    }
+
+    /**
+     * @return HasMany<Holiday, $this>
+     */
+    public function holidays(): HasMany
+    {
+        return $this->hasMany(Holiday::class);
+    }
+
     protected static function newFactory(): OrganizationFactory
     {
         return OrganizationFactory::new();
