@@ -69,11 +69,19 @@
         />
     {/snippet}
 
-    <div class="max-w-3xl space-y-10">
-        <AttendanceSwitch {organization} {base} {settings} {canEnable} />
-        <HoursForm {base} {settings} />
-        <PlacesPanel {base} {places} />
-        <NetworksPanel {base} {networks} {yourAddress} />
-        <HolidaysPanel {base} {holidays} />
+    <!-- When people work on the left, where and the exceptions on the
+         right, side by side once the screen has room for both. -->
+    <div
+        class="grid max-w-4xl items-start gap-10 2xl:max-w-7xl 2xl:grid-cols-2"
+    >
+        <div class="min-w-0 space-y-10">
+            <AttendanceSwitch {organization} {base} {settings} {canEnable} />
+            <HoursForm {base} {settings} />
+        </div>
+        <div class="min-w-0 space-y-10">
+            <PlacesPanel {base} {places} />
+            <NetworksPanel {base} {networks} {yourAddress} />
+            <HolidaysPanel {base} {holidays} />
+        </div>
     </div>
 </AppShell>
