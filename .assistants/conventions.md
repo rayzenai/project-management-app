@@ -17,6 +17,7 @@ php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback
 php artisan git:reconcile --connection=1              # nightly forge repair, scoped by office connection
 php artisan git:sync-access --connection=1            # sync linked repositories' collaborators
 php artisan git:commit-stats --limit=300              # bounded commit-line counting
+php artisan git:commit-checks --limit=200             # recent commit test results
 forgejo/local.sh up                                   # local forge against this tracker
 ./deploy.sh                                          # SDOC web + scheduler (VPN required)
 ```
@@ -40,7 +41,8 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
   overridden `validated()`, not `safe()`.
 - Person-form role sets are complete wanted sets; omitted fields stay unchanged.
   Apply through `UpdateMemberRolesService`, with request checks in
-  `Concerns/ChecksMemberRoles`. Manager roles are handed over, never cleared.
+  `Concerns/ChecksMemberRoles`. Programs are handed over; taking away a managed project requires
+  `canRemoveManager` and leaves it manager-less (the person stays on the team).
 - Assignment scope goes through `Assignees` (existing assignees plus permitted
   same-organization joiners); keep its candidate list and access predicate in step.
 - User-facing role copy says Organizational admin; identifiers remain
@@ -91,8 +93,21 @@ rollback drops them. Access-sync jobs also use `afterCommit`, read repositories
 afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
 `tasks-queue` and switching all services to Redis; `deploy.sh` still deploys
 only web/scheduler.
+Section 14 covers four bounded Forgejo runners, protected main and checks.
+`git:commit-checks` runs every two minutes with a ten-minute overlap lock.
 Section 13 covers the ten-minute access sync and five-minute commit stats;
 their overlap locks expire after 15 and 30 minutes respectively.
 The scheduler appends every scheduled command's output to `/proc/1/fd/2` when
 it is writable; with `LOG_CHANNEL=stderr`, command output and logs therefore
 reach the scheduler container log in production without changing other hosts.
+
+## Structure, attendance and work
+
+All reads for these domains belong in `app/Queries/{Structure,Attendance,Work}`;
+all structure/attendance writes in `app/Services/{Structure,Attendance}`. Reuse
+`PeopleInViewQuery`, `OrganizationChoicesQuery`, `ReportOptionsQuery`, `PersonRef`
+and request concerns `ReadsReportScope`, `OpensOrganization`, `ReadsDay`,
+`ReadsDayRange` before adding another rule/query. Designations replace titles.
+Frontend day/time, distance/plural, filter visits and scope pickers have shared
+helpers in `lib/{dates,format,reportVisit.svelte}.ts` and `components/filters/`.
+Every new page belongs in `lib/navigation.ts`; keep the Guide aligned with workflows.

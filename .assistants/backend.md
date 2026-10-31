@@ -22,14 +22,15 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
-  `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`. Cross-cutting
+  `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`,
+  `office` (`OfficeLinks` capabilities/count), `clock` (`MyAttendanceQuery`). Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens;
   every authenticated route uses `auth:sanctum` + `EnsureCanSignIn`.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and organizational-admin
-  context plus `features: {task_notes, contacts}`, `managed_program_ids` and
-  `git_enabled`. Cross-cutting API context
+  context plus `features: {task_notes, contacts}`, `managed_program_ids`,
+  `git_enabled` and `office` (`OfficeLinks`). Cross-cutting API context
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
@@ -67,7 +68,7 @@ queries and authorized note/contact endpoints remain available.
 `app/Support/WorkspaceAccess.php` is the single source of truth. Tiers:
 
 1. **Super-admin** — `manage-workspace` Gate (emails in `PM_SUPER_ADMINS` /
-   `config('project-management.super_admins')`). Belongs to no organization;
+   `config('project-management.super_admins')`). May belong to an organization through their own member;
    manages organizations and everything inside them. Only this tier can mark a
    team cross-organization or make a person an organizational admin.
 2. **Organizational admin** — active member with `is_office_admin`. Full control
@@ -122,8 +123,9 @@ team's cross-organization flag. Organizational admins may set their people's
 program, project-manager and team roles through the person form (see below).
 Project `manager_id`, `is_public` and
 `is_cross_organization` are capability-filtered by `validated()`. Appoint through
-`AppointProjectManagerService`: the previous manager stays as a member; the
-current manager cannot be removed or demoted, only replaced. `project_team`
+`AppointProjectManagerService`: the previous manager stays as a member; only whoever passes
+`canRemoveManager` (= `canEditTeam`) may remove/demote the current manager.
+A project may have no manager; program/project managers can only replace one. `project_team`
 is unique on each column; a partial unique index allows one leader per team.
 `NotifiesMentions::mentionableIds` filters stored mentions to eligible people;
 mention notifications only reach project viewers. `TaskShowQuery` offers
@@ -147,8 +149,10 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   sets; omitted fields stay unchanged. Changes require administration of each
   affected organization and must fit the person's organization after any move.
   `UpdateMemberRolesService` hands over programs and appoints projects through
-  `AppointProjectManagerService`; never clears a manager, removes them from
-  their team or blindly syncs memberships. Inactive people cannot gain manager
+  `AppointProjectManagerService`; taking away a managed project requires
+  `canRemoveManager` and leaves it manager-less with the person still on its
+  team. It never clears a program manager, removes someone from a team they
+  still manage or blindly syncs memberships. Inactive people cannot gain manager
   roles. Both member controllers roll the whole save back on a refused role.
   `MemberResource::ROLE_RELATIONS` loads all four role-id lists (including
   `led_team_ids`); `TeamIndexQuery` supplies `canSetRoles` and `roleOptions`
@@ -161,7 +165,7 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   the same service powers the People tab, preserving membership notifications
   and activity. No foreign newcomer, even on cross-organization teams.
   `Assignees::joinCandidates` is the list twin; task show uses `joinCandidates`,
-  preview uses `join_candidates`, each `{id, name, title}` only.
+  preview uses `join_candidates`, each `{id, name, designation}` only.
 - `QuickAddTaskRequest.start_general` with no `project_id` is allowed only for
   an organizational admin whose organization has no active project; otherwise
   422 `Pick a project.` on `project_id`. `StartGeneralProjectService` locks the
@@ -170,7 +174,7 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   one transaction; failure leaves neither. Parsed `@tokens` and default-to-self
   still resolve only through `scopeAssignableFor`.
 - `ShareWorkspaceData.quickAddContext` adds project `organization_id`, program
-  name, `member_ids`, `can_add_people`; `organizationPeople` (`{id, name, title}`)
+  name, `member_ids`, `can_add_people`; `organizationPeople` (`{id, name, designation}`)
   is the viewer's active organization people only when they run a team there or
   may start General. `startGeneral` signals that option; `team` and
   `currentMemberId` remain. Roster capability uses the loaded-project twin to
@@ -303,7 +307,8 @@ the sole Forgejo client; reruns keep its id and rotate its secret.
 overlapping; see the phase 1 map below for repair and removal safeguards.
 `git:sync-access [--connection=]` runs every ten minutes with a 15-minute
 overlap lock; `git:commit-stats [--limit=300]` every five minutes with a
-30-minute lock. When `/proc/1/fd/2` is writable, the schedule appends every
+30-minute lock. `git:commit-checks [--limit=200]` runs every two minutes with
+a ten-minute lock (see checks below). When `/proc/1/fd/2` is writable, the schedule appends every
 event's output there so command output and `LOG_CHANNEL=stderr` logs reach the
 scheduler container log. See phase 2 below.
 
@@ -411,7 +416,7 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   `GitRepositoryGrantResource`. `RepositoryAccessQuery` lists maintainers and
   grants by name, without emails, with `waiting` (no forge username) and grant
   `effective`; the list asks the effective scope once. Candidate search returns
-  at most 20 `{id, name, title}` matches, excluding maintainers/existing grants.
+  at most 20 `{id, name, designation}` matches, excluding maintainers/existing grants.
 - `canManageRepositoryAccess` follows `canManageProjectRepositories`.
   `canGrantRepositoryAccessTo` permits organizational admins/super-admins to
   grant active organization people or teammates; project/program managers only
@@ -422,10 +427,11 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   active project manager and active program manager (same organization as
   both program and project), deduplicated; their forge access is `admin`.
 - `CreateRepositoryRequest` + `CreateRepositoryService` serve paired
-  `POST .../repositories/new`: private, empty repository, default `main`, name
+  `POST .../repositories/new`: private repository with a README, default `main`, name
   equal to the lowercased project key or prefixed by `key-`, forge-safe, at
-  most 100 characters. `MAIN_RULE` limits pushes to maintainers/Owners and
-  requires one approval. Protection failure still links with a warning;
+  most 100 characters. `MainBranch::RULE` blocks pushes (including admins),
+  requires one approval and every check to pass (see checks below). Protection
+  failure still links with a warning;
   link failure says the forge repository was created. `LinkRepositoryService`
   imports existing collaborators via `RepositoryAccess::importExisting` in the
   link transaction, regardless of caller: eligible active organization people
@@ -433,10 +439,11 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   Failed import rolls back the link. Pre-phase-2 links had no access import.
 - `Services/Git/RepositoryAccess::sync` removes unwanted tracker-known
   collaborators first (a failed removal stops grants), PUTs maintainers and
-  effective grants at the higher permission, then PATCHes protected main's
-  allow-list. A PUT 422 waits for first forge sign-in; other refusals allow the
-  remaining PUTs then fail, while unreachable fails immediately. Rule 404 clears
-  `protects_main`. Bots, `forge-admin` and unknown logins are untouched. Only
+  effective grants at the higher permission, then calls `MainBranch::ensure`
+  on the default branch every run. A PUT 422 waits for first forge sign-in;
+  other refusals allow remaining PUTs then fail; unreachable fails immediately.
+  A refused rule sets `protects_main` false and fails the run after remaining
+  work. Bots, `forge-admin` and unknown logins are untouched. Only
   successful sync updates `access_synced_at`; changes/failures log at warning.
 - `SyncRepositoryAccess` has no unique lock, uses `afterCommit`, reloads the
   repository, skips unlinked rows and logs/catches forge failures. Triggered
@@ -473,3 +480,106 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   `/people/{user}` returning the latest 50 scoped commits; unknown/out-of-scope
   people return an empty list. Runbook: `docs/forgejo.md` section 13; spec/plan:
   `docs/superpowers/{specs,plans}/2026-10-30-git-phase-2-access-and-reports*.md`.
+
+## Structure, attendance, work and maintenance
+
+These reads live only in `app/Queries/{Structure,Attendance,Work,Maintenance}`;
+structure/attendance writes live in `app/Services/{Structure,Attendance}` and
+return `ServiceResult`. Both controller surfaces reuse them; never put a query
+in these controllers, requests, resources or pages.
+
+- Shared reads: `Structure/PeopleInViewQuery` lists permitted people (optional
+  `under`, `attending: true`), `OrganizationChoicesQuery` chooses/defaults offices
+  (own office first, otherwise first offered by name for a super-admin;
+  `withAttendance` limits choices),
+  `ReportOptionsQuery` supplies report filters, `PersonRef::of` emits
+  `{id, name, designation}` from a loaded relation, never querying.
+- Shared requests: `Concerns/ReadsReportScope` authorizes organization/`under`
+  (unknown/malformed/forbidden `under` all 403), `OpensOrganization` opens a
+  single office, `ReadsDay` reads `date`, `ReadsDayRange` reads `from`/`to` with
+  overridable default/range cap (also reused by `CodeActivityRequest`).
+- Structure: `Designation` belongs to an organization, `rank` sorts senior first;
+  `members.designation_id` replaces free-text `title` (migration preserves old
+  titles as designations). `reports_to_id` is one higher authority in the same
+  organization. `SetReportsToService` locks the organization and refuses self,
+  inactive/foreign bosses and loops (`Support/OrgChart::wouldLoop`).
+  `SetDesignationService` accepts an organization's own designation.
+  `Concerns/SetsMemberStructure` filters the person form's `designation_id`,
+  `reports_to_id`, `attendance_exempt` through `canManageStructure`; omitted
+  values stay unchanged. Refused reporting changes roll back the person save.
+- `MoveReportsUpService` (MemberObserver) moves reports up on deletion or an
+  organization move; deactivation keeps lines. `OrgChart` memoizes recursive
+  ancestor/descendant CTEs; `WorkspaceAccess::flush` clears them per request and
+  `Tests/TestCase` per test. Lines give attendance/work visibility, no project
+  powers. `oversees` means an admin of the person's organization or an active
+  same-organization ancestor, never oneself; `overseenMemberIds` is its list
+  twin. `canViewPersonOf` adds self. `canViewOrganogram` admits active office
+  people; `OrganogramQuery` never exposes emails. Structure writes need
+  `canManageStructure` (= `administers`).
+- Attendance is off until a super-admin enables it (`EnableAttendanceService`,
+  `canEnableAttendance`); organization admins configure hours, workdays,
+  seasons, grace, office places/networks and holidays (`canManageAttendance`).
+  Models: `AttendanceSetting`, `AttendancePlace`, `AttendanceNetwork`, `Holiday`,
+  `AttendancePunch`, `LeaveRequest`. `Member::scopeAttending` excludes exemptions;
+  settings `enabled` and organizations `withAttendanceOn` share the enabled rule.
+- `Support/Attendance/AttendanceCalendar` is the workday/hours/lateness rule.
+  `PunchService` locks the member and records server-time punches in
+  `AttendancePunch::nextKinds` order: in, lunch start, lunch end, out. Never
+  edit/delete punches. Source is web/app/device. `PunchPlace::judge` records
+  office network, near office, outside or unknown; location accuracy can extend
+  the radius only to twice its size. Outside/unknown need a note. Location is
+  captured only at a punch. Networks disallow ranges wider than IPv4 /8 or
+  IPv6 /16; trusted proxy addresses rely on Traefik replacing forwarded input.
+- `MyAttendanceQuery` is the shared `clock` payload (not `attendance`, used by
+  work pages). `AttendanceRegisterQuery` shows a day; `AttendanceSummaryQuery`
+  counts only from attendance enablement/person creation through today. Expected
+  attending people on workdays exclude approved leave/kaaj unless they clock in.
+  `LeaveQuery` reads requests; Request/Decide/Record/CancelLeave services write
+  them. Kaaj is duty, not absence. `canPunch` gates personal requests;
+  `canDecideLeave` / `canRecordLeaveFor` require `oversees`, never self-approval.
+- `Work/WorkActivityQuery` shares tasks started/closed by activity actor
+  (`Task::startedStatuses`/`closedStatuses`), reachable non-merge commits by
+  `user_id` and PRs by author `git_username`. Hidden projects/repositories are
+  counted but never named. `WorkDayQuery`, `PersonWorkQuery`, `TeamWorkQuery`
+  compose it with `WorkAttendanceQuery` (null when attendance is off). Lists use
+  `PeopleInViewQuery` and name order. Routes: web `/workspace/work`,
+  `/workspace/people/{member}/work`, `/workspace/work/team`; API equivalents
+  include organization paths for list reports (see `routes/api.php`, `docs/api.md`).
+- `Support/OfficeLinks` supplies sidebar/API office capabilities and cached
+  maintenance count; each page authorizes again. `MaintenanceQuery` needs
+  `canViewMaintenance` (= `administers`), checks manager-less/empty/quiet active
+  projects, unassigned/inactive-only tasks, unmanaged programs, disconnected
+  people/missing designations/logins/inactive bosses, missing attendance places
+  and networks, and failing/unprotected/untested default branches. New checks
+  belong in its lists, `countOf`, and the Maintenance page's report type.
+  `QUIET_DAYS = 30`, `COUNT_TTL_SECONDS = 300`; full reads refresh the count.
+
+## Forgejo runners, protected main and checks
+
+- `forgejo/runner/` contains four organization runners in Dokploy's `git-runners`
+  compose app, one job each; all four share one dind limited to 4 vCPUs, 10 GB
+  memory and 30 GB file-backed ext4 Docker storage, with no actions cache. `forgejo/Dockerfile` enables Actions
+  with GitHub as the default action source. Runbook: `docs/forgejo.md` section 14.
+- `Services/Git/MainBranch::RULE` describes every branch protection field:
+  no pushes including repository admins, one approval and all status checks
+  (`*`) passed; no tests means no merge. Forge site admins can bypass it.
+  `ensure` reads first, writes only on drift, creates a missing rule (rereads a
+  concurrent-create refusal) and skips a branch that does not yet exist.
+  Create and every repository access sync use this one rule.
+- `Support/Git/Checks` maps commit statuses to `passed|failed|running|none`, only
+  success passes; pending runs, error/failure/warning fail. `shape` returns null
+  until checked. Relative run paths become absolute; URLs survive only on the
+  forge's own host. `Services/Git/CommitChecks::refresh` stores checks on the
+  commit and same-repository PR heads; `GitIngest::pullRequest` copies them on
+  head changes. `catchUpPullRequests` repairs missed open-PR copies.
+- Workflow success/failure webhooks trigger refresh. `git:commit-checks
+  [--limit=200]` runs every two minutes (`withoutOverlapping(10)`), asks reachable
+  commits learned in the last two days with unknown/running checks, and retries
+  `none` for ten minutes only for commits made within a day. Minimum interval
+  90s; 0/401/403/429 stop a connection. `ReconcileGit` replaces hooks missing
+  events or with recent bad signatures (new hook/secret then delete old), since
+  Forgejo's hook edit does not write the secret/workflow events.
+- `MainChecksQuery` reads default-branch checks in one query;
+  `GitRepositoryResource` exposes `main_checks` and `protects_main`, task/PR/code
+  report payloads expose checks, code activity counts passed/failed checks, and
+  Maintenance lists failing/unprotected/untested repositories.

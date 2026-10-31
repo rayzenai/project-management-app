@@ -18,11 +18,14 @@ New project for admins and its manager), `Reports/CodeActivity` (scoped code
 activity, comparison and per-person commits).
 Pages wrap themselves in `AppShell` and supply the 44px top bar through its
 `bar` snippet (breadcrumb left, actions right); `flush` drops content padding
-for full-bleed registers/boards. The sidebar collapses to an icon rail (`[`
-shortcut, persisted in localStorage); Organizations appears only for
-super-admins. `managedPrograms` supplies the sidebar's Programs group.
-`gitEnabled` also shows the sidebar's Code activity link; filtered report URLs
-keep it active. `Guide` (`/workspace/guide`, sidebar link for all signed-in
+for full-bleed registers/boards. Navigation is a rail of Work, Office, Reports
+and Admin areas plus the selected area's panel (`components/shell/{NavRail,
+NavPanel,Logo}`). `lib/navigation.ts` maps pages to areas and capability-filtered
+links; register every new page there. `AppShell` follows the current page's area;
+`[` hides the panel (persisted), picking an area while hidden floats it over the
+content. `managedPrograms`, `gitEnabled` and `office` supply contextual links.
+Organizations remains super-admin-only.
+`Guide` (`/workspace/guide`, sidebar link for all signed-in
 users) explains the organization/program/project/team model, role routines, ministry title
 mapping, dependencies, overdue work and shortcuts. Its Code section appears
 when shared `gitEnabled` is true, covering repository creation/access and
@@ -64,8 +67,10 @@ Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
 Teams: `project/ProjectTeamPanel` manages the project's roster in its People
 tab; `team/RosterSearch` performs debounced server-side eligible-person search.
 `Team/Index` offers `team/MemberRoleFields` to whoever may manage people:
-Program manager of, Project manager of, Member of. Held manager roles stay
-checked/locked until handed over; new choices name the current manager.
+Program manager of, Project manager of, Member of. Program manager roles stay
+locked until handed over; organizational admins may untick a managed project,
+leaving it manager-less while keeping the person on its team. New choices name
+the current manager.
 `lib/memberRoles.ts` filters options by organization, preserves held roles
 outside those lists and sends only changed complete sets. Directory rows show
 roles followed by other memberships; `lib/projectLabel.ts` includes the
@@ -190,3 +195,35 @@ signed-out home with the tracker OIDC button, Tasks navbar link and SDOC footer.
 `forgejo/start.sh` replaces the custom public/templates files from the image
 on every start. Existing forge accounts keep their stored theme; the runbook's
 Branding section covers moving old accounts onto an offered SDOC theme.
+
+## Office and work pages
+
+- `Organogram/Index` (`/workspace/organogram`) uses
+  `organogram/{OrganogramOutline,OrgChart,DesignationsPanel}` for outline/chart,
+  drag-to-reassign reporting and admin designation management. People use
+  designations instead of free-text titles; `Team/Index` edits designation,
+  higher authority and attendance exemption as well as roles.
+- `attendance/ClockButton` in the shell reads shared `clock`, gets location only
+  on a punch, and prompts for a note for outside/unknown punches. `clock` must
+  remain distinct from the work pages' `attendance` payload.
+- `Attendance/Register` (`/workspace/attendance`) filters a day and team;
+  `Attendance/Leave` handles leave and kaaj requests/decisions/direct recording.
+  `Attendance/Settings` uses `attendance/settings/{AttendanceSwitch,HoursForm,
+  PlacesPanel,NetworksPanel,HolidaysPanel}`: hours on the left, office and
+  holidays on the right. Enablement is super-admin-only; office admins configure.
+- `Work/{Day,Person,Team}` shows today's activity, a person's range and team
+  totals, including attendance while enabled. Person links use
+  `/workspace/people/{member}/work`; lists use `/workspace/work` and `/work/team`.
+  `Maintenance/Index` is the organization's admin repair list with links to the
+  affected people, projects and settings; `office.maintenance_count` badges it.
+- Shared frontend shapes: `lib/{structure,attendance,attendanceRegister,work,
+  maintenance}.ts`; shared `PersonRef` / `ReportOptions` in `lib/types.ts`.
+  `lib/dates.ts` reads days and clocks in office time regardless of the browser;
+  `lib/format.ts` owns `formatDistance` and `plural`.
+  `ReportVisit` in `lib/reportVisit.svelte.ts` handles filter visits/loading/errors;
+  `filters/{OrganizationSelect,ScopeSelects,DayPicker}` and `work/RangePicker`
+  share filter UI. Reuse these instead of adding page-local copies.
+- `ChecksMark` shows commit/PR/default-branch test results in Code, task code
+  and code activity. Repository rows show `main_checks` and protection;
+  Maintenance lists failing/unprotected/untested main branches. The Guide
+  covers organogram, attendance, work and protected-main/testing workflows.

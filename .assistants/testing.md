@@ -95,7 +95,7 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - Access: `RepositoryAccessRulesTest` covers grant/effective-scope predicate
   twins, inactive managers, maintainers, tenant boundaries and candidate limits.
   `RepositoryAccessSyncTest` covers removal-before-grant ordering, bots/unknown
-  logins, waiting/refused users, main allow-lists, import, job freshness,
+  logins, waiting/refused users, main-rule drift repair and creation, import, job freshness,
   ten-minute schedule/lock expiry and reconcile. `RepositoryAccessTriggersTest`
   covers observer activity/jobs, code-gated feeds, atomic team leave/grant
   removal, program/member moves, link import rollback and after-response sync.
@@ -116,6 +116,35 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   exclusions, PR/task counts, zero-filled comparisons, private person drill-down
   and bounded query counts. The query-count test fakes `SyncRepositoryAccess`
   so after-response access-sync queries cannot affect its measurements.
+
+- Structure: `Structure/{Foundation,ReportingLines,ReportsTo,Designation,
+  MemberDesignation,Organogram,PersonFormStructure,OfficeLinks}Test` cover CTE
+  walks/loops, scope twins, role/tenant gates, move/deletion behavior, designation
+  CRUD/pickers, filtered person fields, whole-save rollback and shared office
+  links. `TitlesToDesignationsMigrationTest` covers title conversion;
+  `Api/Structure/StructureApiTest` exercises the parallel surface.
+- Attendance: `Attendance/{Settings,Punch,PunchPlace,PunchFactory}Test` cover
+  enablement/configuration, ordered immutable punches, server time, place/radius/
+  network rules, required notes and tenant boundaries. `RegisterTest`,
+  `SummaryTest`, `LeaveTest` cover expected/present/late totals, enablement/join
+  date bounds, exemptions, leave/kaaj decisions, no self-approval and scope.
+  API twins live in `Api/Attendance/{Settings,Punch,Register,Leave}ApiTest`.
+- Work: `Work/WorkFixture.php` shares fixtures;
+  `Work/{WorkReports,WorkAttendance}Test` cover actor attribution, deduplication,
+  hidden-name privacy, reachable/non-merge code, PR attribution, range/scope/
+  oversight gates, bounded queries and attendance integration.
+  `Api/Work/WorkApiTest` verifies API parity. `Tests/TestCase` flushes
+  `WorkspaceAccess`/OrgChart memos between tests (SQLite reuses IDs).
+- `MaintenanceTest` checks each repair list, admin/tenant scope, no-manager
+  projects, designation/organogram issues and count caching. `MemberRolesTest`
+  and its API twin also cover permitted project-manager removal with membership
+  retained and forbidden program-manager removal.
+- `CommitChecksTest` covers status normalization and safe relative/absolute run
+  URLs, webhook/command refresh, PR head copying/catch-up, default-branch checks,
+  retry/connection limits and schedule. `GitWebhookTest`/`GitReconcileTest`
+  additionally cover workflow events, bad-signature hook replacement and secret
+  rotation; access-sync tests cover full main-rule enforcement without redundant
+  writes. `CreateRepositoryTest` checks README creation before protection.
 
 ## Running
 
