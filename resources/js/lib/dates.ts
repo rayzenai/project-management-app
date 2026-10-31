@@ -99,3 +99,13 @@ export function weekRanges(today: Date = new Date()): {
         last_week: { from: isoDay(lastMonday), to: isoDay(lastSunday) },
     };
 }
+
+/** "Mon, 2 Nov 2026". */
+export function fullDay(iso: string): string {
+    return localDay(iso.slice(0, 10)).toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    });
+}
