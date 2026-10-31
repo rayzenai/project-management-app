@@ -544,6 +544,180 @@ progress payload gives each task `depends_on: int[]`.
 | POST | `/workspace/tasks/{task}/dependencies` | `depends_on_task_id`; 422 for itself, another project, a duplicate or a loop; answers with the task |
 | DELETE | `/workspace/tasks/{task}/dependencies/{dependsOn}` | 404 if it was not a dependency |
 
+## Structure *(organogram: super-admins and the organization's active people; designations and reporting lines: its organizational admins and super-admins)*
+
+An organization holds its people with a **designation** from its own list
+and **one person each reports to** (their higher authority). The lines
+decide who sees whose attendance and work, so only whoever administers the
+organization changes them (`WorkspaceAccess::canManageStructure`); everyone
+active in it sees the organogram (`canViewOrganogram`): names, designations
+and lines, never emails.
+
+**Organogram.** `GET /workspace/organizations/{organization}/organogram`
+returns `{ data: { organization, designations, people, can_manage } }`
+(`OrganogramQuery`; 403 for anyone outside the organization, 404 for no such
+organization):
+
+- `organization`: `{ id, name }`.
+- `designations`: most senior first (`rank`, then name), each
+  `{ id, organization_id, name, rank, people_count }`; `people_count` counts
+  active people who hold it.
+- `people`: the organization's active people, by designation rank (people
+  without one last), then name, each `{ id, name, designation_id,
+  designation, reports_to_id, is_office_admin, direct_reports_count }`.
+  `designation` is its name or null. `reports_to_id` is null when they report
+  to no one, or to someone who is not an active person of the organization
+  (a deactivated higher authority keeps the line, but the person shows at the
+  top). `direct_reports_count` counts the active people whose
+  `reports_to_id` is them.
+- `can_manage`: whether the caller may change designations and lines.
+
+The web page is `GET /workspace/organogram` (`workspace.organogram`, Inertia
+`Organogram/Index` with `organogram` and `organizations`): the caller's own
+organization; a super-admin picks one with `?organization={id}`
+(`organizations` lists them; with none picked, `organogram` is null). Anyone
+else's `?organization=` is ignored.
+
+**Designations.** `rank` is 0 to 32767, smaller more senior (default 100 on
+create). `name` is required, at most 120 characters, and unique in the
+organization whatever its case (422 on `name`: `There is already a
+designation called {name}.`). Deleting one leaves its people with no
+designation.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/workspace/organizations/{organization}/designations` | `name`, `rank?` | 201, the designation `{ id, organization_id, name, rank }`; message `Added {name}.` |
+| PATCH | `/workspace/designations/{designation}` | `name?`, `rank?` (empty keeps it) | the designation; message `Saved {name}.` |
+| DELETE | `/workspace/designations/{designation}` | — | `{ message }`: `Removed {name}. The people who held it have no designation now.` |
+
+**Reports to.** `PUT /workspace/members/{member}/reports-to` with
+`reports_to_id` (a member id, or `null` for no one; the field must be sent)
+returns the member (`MemberResource`, with `designation` and
+`reports_to_id`) and `{name} now reports to {boss}.` or `{name} reports to
+no one now.`. 403 unless the caller administers the person's organization.
+422 on `reports_to_id` when the higher authority is:
+
+- not a current person of the same organization: `Choose someone in the same
+  organization.`
+- the person: `{name} can't report to themselves.`
+- deactivated: `{boss} is deactivated. Choose someone active.`
+- already below the person: `{boss} already reports to {name}, so {first
+  name} can't report to {boss's first name}.` (e.g. `Sita Sharma already
+  reports to Anil Gurung, so Anil can't report to Sita.`)
+
+Changes run one at a time per organization (the organization row is locked)
+and write nothing to project activity.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/workspace/organizations/{organization}/organogram` | — | `{ data: organogram }` |
+| PUT | `/workspace/members/{member}/reports-to` | `reports_to_id` (int or null) | the member |
+
+**Person form.** `POST /workspace/members` and `PATCH
+/workspace/members/{member}` also take `designation_id` (one of the person's
+organization's designations, after any move in the same request; null
+clears) and `reports_to_id` (a current person of that organization; null
+clears). Left out, each stays as it is. They are applied only for a caller
+who may change the organization's structure and silently dropped for anyone
+else. `reports_to_id` goes through the same checks as the route above, and a
+refusal undoes the whole save (422 on `reports_to_id`). Member payloads
+(`POST`, `PATCH`, restore, the People page's `members`) add `designation`
+(`{ id, name }` or null) and `reports_to_id`. The People page (`GET
+/workspace/team`) adds `canSetStructure` and `designationOptions`
+(`[{ id, organization_id, name }]`, most senior first, for the organizations
+the caller administers; empty otherwise).
+
+**When people leave.** Deleting a person, or moving them to another
+organization, moves the people who reported to them up to that person's own
+higher authority (or to no one). Someone moved to another organization also
+loses their own higher authority, and a designation of the organization they
+left. Deactivating someone keeps every line.
+
+The web twins of the writes (same paths under `/workspace`, names
+`workspace.designations.store|update|destroy` and
+`workspace.members.reports-to`) redirect back with a `workspace_flash`, and
+errors on the field.
+
+## Work reports *(a person: themselves and everyone above them; lists: an organization's admins, super-admins, and anyone with people below them, who see only those people)*
+
+What people got done: the tasks they finished and started, their commits and
+the pull requests they merged, for a day or a range of days. One read,
+`App\Queries\Work\WorkActivityQuery`, serves all three reports; the people
+in a list come from `App\Queries\Structure\PeopleInViewQuery` (everyone in
+the organization for its admins and super-admins, otherwise the people below
+the caller; active people only, by name).
+
+How things count:
+
+- **Finished / started**: a task counts for whoever changed its status (the
+  activity log's actor), on the day they did it. Finished = it entered a
+  closed status (`done` or `failed`, and the item says which); started = it
+  entered a status flagged `is_started` (`in_progress`). A task counts once
+  per list in a range, as its latest change. Trashed tasks count nowhere.
+- **Commits**: those matched to the person's login (`git_commits.user_id`),
+  not merges, still reachable, by `committed_at`. Lines are the classified
+  code and comment lines (see Code activity).
+- **Pull requests merged**: `merged_at` in the range, author = the person's
+  `git_username`, in any case.
+- **Overdue** (a person's week and a team's week): tasks assigned to the
+  person that are overdue now (not closed, past their deadline), in projects
+  not archived. It does not depend on the range.
+- **Counted, never named**: tasks of projects the caller can't open, and
+  commits and pull requests in repositories whose code the caller can't see,
+  are counted (`hidden_*`) but never named.
+- People are always listed by name, never ranked by a figure.
+- Days are local days (`Asia/Kathmandu`).
+- `attendance` is the person's attendance (a day: `{ state, in_at, late,
+  place }`; a range: `{ days_expected, days_present, days_late,
+  minutes_worked, no_clock_out_days, outside_punches, leave_days, kaaj_days,
+  usual_in }`), or `null` while the organization's attendance is off.
+
+Filters:
+
+- `date` (`YYYY-MM-DD`, today unless given) for a day; `from` and `to`
+  (`YYYY-MM-DD`) for a range, this week (Monday to today) unless given, at
+  most 92 days, `to` not before `from` (422 on `to`).
+- `under`: a member id; narrows a list to that person and everyone below
+  them. They must be in the organization and the caller must be allowed to
+  see them (themselves or someone below them, or anyone there for its
+  admins); otherwise, or when no such person exists, 403.
+
+Shapes used below:
+
+- task item: `{ id, code, title, project, project_slug, slug, status, at }`
+  (`code` `KEY-12`; `project` the project's label, "General (Revenue)";
+  `status` the status entered; `at` when, ISO-8601). Newest first.
+- overdue item: `{ id, code, title, project, project_slug, slug, status,
+  deadline_at }`, soonest deadline first.
+- code: `{ count, code_added, code_removed, comment_added, comment_removed,
+  repositories: [{ name, count }], hidden_commits }` (`count` and the lines
+  include `hidden_commits`; `repositories` only those the caller may see,
+  most commits first).
+- pull request: `{ title, number, repository, url, merged_at }`, newest
+  first.
+- member: `{ id, name, designation }`.
+- options: `{ organizations: [{ id, name }], teams: [{ id, name }] }`:
+  `organizations` lists every organization for a super-admin (empty for
+  anyone else); `teams` the people in the caller's view whom someone else in
+  view reports to, for `under`.
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/workspace/organizations/{organization}/work/day?date=&under=` | `{ data: { date, organization_id, under, summary, people, options }, filters { organization, date, under } }`. `summary`: `{ people, tasks_closed, tasks_started, commits, committers, pull_requests_merged, nothing_recorded }` (hidden ones included; `committers` the people with a commit; `nothing_recorded` the people with no task finished or started, no commit and no pull request merged). `people`: one row per person, by name: `{ member, attendance, closed: [task item], hidden_closed, started: [task item], hidden_started, commits: code, pull_requests_merged: [pull request], hidden_pull_requests, nothing_recorded }`. `under`: `{ id, name }` or `null`. Allowed to the organization's admins, super-admins and anyone with people below them there (403 otherwise; an unknown organization 404) |
+| GET | `/workspace/organizations/{organization}/work/team?from=&to=&under=` | `{ data: { range { from, to }, organization_id, under, people, options }, filters { organization, from, to, under } }`. `people`: one row per person, by name: `{ member, attendance, tasks_closed, tasks_started, overdue, commits, code_added, code_removed, pull_requests_merged }` (counts, hidden ones included). Same access as the day |
+| GET | `/workspace/members/{member}/work?from=&to=` | `{ data: { member { id, name, designation, organization_id, reports_to { id, name } \| null }, range { from, to }, attendance, tasks { closed: [task item], started: [task item], overdue: [overdue item], counts { closed, started, overdue, hidden_closed, hidden_started, hidden_overdue } }, code, pull_requests_merged: [pull request], hidden_pull_requests }, filters { from, to } }` (`counts` include the hidden ones). For the person themselves, everyone above them in the organization, its admins and super-admins; 403 for anyone else (a peer, someone below, another organization). A deactivated caller's token answers 401 on all three |
+
+On the JSON API these are `/api/v1/workspace/…` (names
+`api.workspace.organizations.work.day`, `api.workspace.organizations.work.team`
+and `api.workspace.members.work`). On the web, `/workspace/work` (name
+`workspace.work`, page `Work/Day`), `/workspace/work/team` (name
+`workspace.work.team`, page `Work/Team`) and `/workspace/people/{member}/work`
+(name `workspace.people.work`, page `Work/Person`) take the same filters plus
+`?organization=<id>` on the first two (the caller's own organization unless
+given; a super-admin with none opens the first by name; an organization that
+does not exist is a 422 on `organization`). Each page's props are `data`'s
+fields plus `filters`.
+
 ## Integrating another system
 
 Any system that can send HTTPS requests can drive the workspace through the JSON
@@ -602,6 +776,19 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Structure, attendance and work reports.**
+
+- New: `GET /workspace/organizations/{organization}/organogram`,
+  `POST /workspace/organizations/{organization}/designations`,
+  `PATCH|DELETE /workspace/designations/{designation}`,
+  `PUT /workspace/members/{member}/reports-to`; the web page
+  `GET /workspace/organogram`.
+- Members: `designation_id` and `reports_to_id` on create and edit; member
+  payloads add `designation` and `reports_to_id`.
+- New: the work reports, `GET /workspace/organizations/{organization}/work/day`,
+  `GET /workspace/organizations/{organization}/work/team` and
+  `GET /workspace/members/{member}/work` (see Work reports).
 
 **Quick add that always works.**
 
