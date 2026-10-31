@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateMemberRequest;
 use App\Jobs\SyncForgeOwners;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Structure\SetReportsToService;
 use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
@@ -30,11 +31,11 @@ use RuntimeException;
  */
 class MemberController extends Controller
 {
-    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles): RedirectResponse
+    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles, SetReportsToService $reportsTo): RedirectResponse
     {
         $password = $request->validated('password') ?: Str::password(14, symbols: false);
 
-        $user = DB::transaction(function () use ($request, $password, $roles): User {
+        $user = DB::transaction(function () use ($request, $password, $roles, $reportsTo): User {
             $user = User::create([
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
@@ -48,10 +49,15 @@ class MemberController extends Controller
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
                 'title' => $request->validated('title'),
+                ...$request->designation(),
             ]);
 
             if ($request->roles() !== []) {
                 $this->ensureSaved($roles->execute($member, $request->roles()));
+            }
+
+            if ($request->setsReportsTo()) {
+                $this->ensureSaved($reportsTo->execute($member, $request->reportsToId()));
             }
 
             return $user;
@@ -67,7 +73,7 @@ class MemberController extends Controller
         ]);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles): RedirectResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles, SetReportsToService $reportsTo): RedirectResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return back()->withErrors(['email' => 'An email is required to create a login.']);
@@ -76,13 +82,20 @@ class MemberController extends Controller
         $deactivated = false;
         $ownersChanged = [];
 
-        DB::transaction(function () use ($request, $member, $roles, &$deactivated, &$ownersChanged): void {
-            $member->update($request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password']));
+        DB::transaction(function () use ($request, $member, $roles, $reportsTo, &$deactivated, &$ownersChanged): void {
+            $member->update([
+                ...$request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password', 'designation_id', 'reports_to_id']),
+                ...$request->designation(),
+            ]);
             $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
             $ownersChanged = SyncForgeOwners::organizationsChangedBy($member);
 
             if ($request->roles() !== []) {
                 $this->ensureSaved($roles->execute($member, $request->roles()));
+            }
+
+            if ($request->setsReportsTo()) {
+                $this->ensureSaved($reportsTo->execute($member, $request->reportsToId()));
             }
 
             $user = $member->user;

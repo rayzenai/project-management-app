@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ChecksMemberRoles;
+use App\Http\Requests\Concerns\SetsMemberStructure;
 use App\Models\Member;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
@@ -19,6 +20,7 @@ use Illuminate\Validation\Validator;
 class StoreMemberRequest extends FormRequest
 {
     use ChecksMemberRoles;
+    use SetsMemberStructure;
 
     public function authorize(): bool
     {
@@ -47,6 +49,7 @@ class StoreMemberRequest extends FormRequest
             'is_office_admin' => ['nullable', 'boolean'],
             ...$this->roleRules(),
             'team_ids' => ['nullable', 'array'],
+            ...$this->structureRules(),
         ];
     }
 
@@ -78,6 +81,11 @@ class StoreMemberRequest extends FormRequest
         }
 
         return WorkspaceAccess::officeAdminOrganizationId($this->user());
+    }
+
+    protected function structureOrganizationId(): ?int
+    {
+        return $this->organizationId();
     }
 
     public function validated($key = null, $default = null): mixed

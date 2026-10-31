@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ChecksMemberRoles;
+use App\Http\Requests\Concerns\SetsMemberStructure;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Team;
@@ -16,6 +17,7 @@ use Illuminate\Validation\Validator;
 class UpdateMemberRequest extends FormRequest
 {
     use ChecksMemberRoles;
+    use SetsMemberStructure;
 
     public function authorize(): bool
     {
@@ -57,7 +59,22 @@ class UpdateMemberRequest extends FormRequest
             'organization_id' => ['sometimes', 'required', 'integer', Rule::exists('organizations', 'id')],
             'is_office_admin' => ['sometimes', 'boolean'],
             ...$this->roleRules(),
+            ...$this->structureRules(),
         ];
+    }
+
+    /**
+     * The person's organization after the save (a super-admin may move them).
+     */
+    protected function structureOrganizationId(): ?int
+    {
+        if ($this->has('organization_id')) {
+            return $this->integer('organization_id') ?: null;
+        }
+
+        $member = $this->route('member');
+
+        return $member instanceof Member && $member->organization_id !== null ? (int) $member->organization_id : null;
     }
 
     /**

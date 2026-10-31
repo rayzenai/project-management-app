@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Http\Resources\MemberResource;
 use App\Http\Resources\TeamResource;
+use App\Models\Designation;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Program;
@@ -44,7 +45,7 @@ class TeamIndexQuery
         $members = Member::query()
             ->visibleTo($user)
             ->when($organizationFilter, fn ($q) => $q->where('organization_id', $organizationFilter))
-            ->with([...MemberResource::ROLE_RELATIONS, 'user', 'organization:id,name'])
+            ->with([...MemberResource::ROLE_RELATIONS, ...MemberResource::STRUCTURE_RELATIONS, 'user', 'organization:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -82,6 +83,7 @@ class TeamIndexQuery
 
         $officeAdminOf = WorkspaceAccess::officeAdminOrganizationId($user);
         $canSetRoles = WorkspaceAccess::canSetRolesIn($user, $officeAdminOf);
+        $canSetStructure = $isSuperAdmin || WorkspaceAccess::canManageStructure($user, $officeAdminOf);
 
         return [
             'teams' => $teamRows,
@@ -98,7 +100,33 @@ class TeamIndexQuery
             // them, from the organizations they administer.
             'canSetRoles' => $canSetRoles,
             'roleOptions' => $canSetRoles ? $this->roleOptions($isSuperAdmin ? null : $officeAdminOf) : ['programs' => [], 'projects' => []],
+            // The person form's designation and "reports to" fields: whoever
+            // may change the organization's structure. "Reports to" offers
+            // the organization's active people from `members`.
+            'canSetStructure' => $canSetStructure,
+            'designationOptions' => $canSetStructure ? $this->designationOptions($isSuperAdmin ? null : $officeAdminOf) : [],
         ];
+    }
+
+    /**
+     * The designations a person can be given, for one organization (null:
+     * all of them), most senior first.
+     *
+     * @return list<array{id: int, organization_id: int, name: string}>
+     */
+    private function designationOptions(?int $organizationId): array
+    {
+        return array_values(Designation::query()
+            ->when($organizationId !== null, fn ($q) => $q->where('organization_id', $organizationId))
+            ->orderBy('rank')
+            ->orderBy('name')
+            ->get(['id', 'organization_id', 'name'])
+            ->map(fn (Designation $designation): array => [
+                'id' => $designation->id,
+                'organization_id' => $designation->organization_id,
+                'name' => $designation->name,
+            ])
+            ->all());
     }
 
     /**
