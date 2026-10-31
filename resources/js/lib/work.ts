@@ -331,7 +331,8 @@ export function attendanceDayLabel(day: WorkAttendanceDay): {
 
         return {
             text: parts.join(', '),
-            warn: day.late || day.place === 'outside' || day.place === 'unknown',
+            warn:
+                day.late || day.place === 'outside' || day.place === 'unknown',
         };
     }
 
