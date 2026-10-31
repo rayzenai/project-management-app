@@ -25,6 +25,11 @@ class MemberResource extends JsonResource
     public const ROLE_RELATIONS = ['teams:id', 'teams.projects:id', 'managedPrograms:id,manager_id'];
 
     /**
+     * What to load for `designation`.
+     */
+    public const STRUCTURE_RELATIONS = ['designation:id,name'];
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -47,6 +52,8 @@ class MemberResource extends JsonResource
                 fn () => $this->loadedLedTeams()->flatMap(fn (Team $t) => $t->projects->map(fn (Project $p): int => $p->id))->values()->all(),
             ),
             'managed_program_ids' => $this->whenLoaded('managedPrograms', fn () => $this->managedPrograms->map(fn (Program $p): int => $p->id)->all()),
+            'designation' => $this->whenLoaded('designation', fn (): ?array => $this->designation === null ? null : ['id' => $this->designation->id, 'name' => $this->designation->name]),
+            'reports_to_id' => $this->reports_to_id,
         ];
     }
 

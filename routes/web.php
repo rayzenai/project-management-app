@@ -5,6 +5,7 @@ use App\Http\Controllers\Workspace\AssignmentController;
 use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
+use App\Http\Controllers\Workspace\DesignationController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\HomeController;
 use App\Http\Controllers\Workspace\MemberController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\Workspace\NoteController;
 use App\Http\Controllers\Workspace\NotificationController;
 use App\Http\Controllers\Workspace\OrganizationController;
 use App\Http\Controllers\Workspace\OrganizationGitController;
+use App\Http\Controllers\Workspace\OrganogramController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProgramController;
@@ -20,6 +22,7 @@ use App\Http\Controllers\Workspace\ProjectController;
 use App\Http\Controllers\Workspace\ProjectProgressController;
 use App\Http\Controllers\Workspace\ProjectRepositoryController;
 use App\Http\Controllers\Workspace\QuickAddController;
+use App\Http\Controllers\Workspace\ReportsToController;
 use App\Http\Controllers\Workspace\RepositoryGrantController;
 use App\Http\Controllers\Workspace\SubtaskController;
 use App\Http\Controllers\Workspace\TaskCommentController;
@@ -138,6 +141,11 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
         // Structure: designations, reporting lines, the organogram.
+        Route::get('/organogram', [OrganogramController::class, 'index'])->name('organogram');
+        Route::post('/organizations/{organization}/designations', [DesignationController::class, 'store'])->name('designations.store');
+        Route::patch('/designations/{designation}', [DesignationController::class, 'update'])->name('designations.update');
+        Route::delete('/designations/{designation}', [DesignationController::class, 'destroy'])->name('designations.destroy');
+        Route::put('/members/{member}/reports-to', [ReportsToController::class, 'update'])->name('members.reports-to');
         // (structure routes end)
 
         // Attendance: the clock, the register, leave and kaaj, settings.

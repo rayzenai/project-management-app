@@ -9,6 +9,7 @@ use App\Http\Resources\MemberResource;
 use App\Jobs\SyncForgeOwners;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Structure\SetReportsToService;
 use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
@@ -37,11 +38,11 @@ class MemberController extends Controller
 {
     use RespondsWithServiceResult;
 
-    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles): JsonResponse
+    public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles, SetReportsToService $reportsTo): JsonResponse
     {
         $password = $request->validated('password') ?: Str::password(14, symbols: false);
 
-        $member = DB::transaction(function () use ($request, $password, $roles): Member {
+        $member = DB::transaction(function () use ($request, $password, $roles, $reportsTo): Member {
             $user = User::create([
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
@@ -55,10 +56,15 @@ class MemberController extends Controller
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
                 'title' => $request->validated('title'),
+                ...$request->designation(),
             ]);
 
             if ($request->roles() !== []) {
                 $this->ensureSaved($roles->execute($member, $request->roles()));
+            }
+
+            if ($request->setsReportsTo()) {
+                $this->ensureSaved($reportsTo->execute($member, $request->reportsToId()));
             }
 
             return $member;
@@ -72,11 +78,11 @@ class MemberController extends Controller
             'message' => $sent->success
                 ? "Member added. {$sent->message}"
                 : 'Member added, but the email failed.',
-            'data' => new MemberResource($member->load(MemberResource::ROLE_RELATIONS)),
+            'data' => new MemberResource($member->load([...MemberResource::ROLE_RELATIONS, ...MemberResource::STRUCTURE_RELATIONS])),
         ], 201);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles): JsonResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles, SetReportsToService $reportsTo): JsonResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return response()->json([
@@ -88,13 +94,20 @@ class MemberController extends Controller
         $deactivated = false;
         $ownersChanged = [];
 
-        DB::transaction(function () use ($request, $member, $roles, &$deactivated, &$ownersChanged): void {
-            $member->update($request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password']));
+        DB::transaction(function () use ($request, $member, $roles, $reportsTo, &$deactivated, &$ownersChanged): void {
+            $member->update([
+                ...$request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password', 'designation_id', 'reports_to_id']),
+                ...$request->designation(),
+            ]);
             $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
             $ownersChanged = SyncForgeOwners::organizationsChangedBy($member);
 
             if ($request->roles() !== []) {
                 $this->ensureSaved($roles->execute($member, $request->roles()));
+            }
+
+            if ($request->setsReportsTo()) {
+                $this->ensureSaved($reportsTo->execute($member, $request->reportsToId()));
             }
 
             $user = $member->user;
@@ -132,7 +145,7 @@ class MemberController extends Controller
             'message' => $deactivated
                 ? trim($message.' '.$forge->execute($member->user)->message)
                 : $message,
-            'data' => new MemberResource($member->fresh()->load(MemberResource::ROLE_RELATIONS)),
+            'data' => new MemberResource($member->fresh()->load([...MemberResource::ROLE_RELATIONS, ...MemberResource::STRUCTURE_RELATIONS])),
         ]);
     }
 
@@ -158,7 +171,7 @@ class MemberController extends Controller
 
         return $this->respondWithResult(
             $result,
-            $result->data instanceof Member ? new MemberResource($result->data->load(MemberResource::ROLE_RELATIONS)) : null,
+            $result->data instanceof Member ? new MemberResource($result->data->load([...MemberResource::ROLE_RELATIONS, ...MemberResource::STRUCTURE_RELATIONS])) : null,
         );
     }
 
