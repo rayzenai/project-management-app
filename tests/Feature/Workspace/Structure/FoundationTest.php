@@ -6,6 +6,7 @@ use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\User;
+use App\Queries\Structure\PeopleInViewQuery;
 use App\Support\Attendance\AttendanceCalendar;
 use App\Support\OrgChart;
 use App\Support\WorkspaceAccess;
@@ -136,4 +137,16 @@ it('knows working days, holidays and winter hours', function () {
         ->and($calendar->day(CarbonImmutable::parse('2026-11-09'))->holiday)->toBe('Tihar')
         ->and($calendar->day(CarbonImmutable::parse('2026-11-09'))->expectsWork())->toBeFalse()
         ->and($calendar->days(CarbonImmutable::parse('2026-11-02'), CarbonImmutable::parse('2026-11-08')))->toHaveCount(7);
+});
+
+it('lists the people a viewer may see, or one person and everyone below them', function () {
+    $query = new PeopleInViewQuery;
+    $admin = ($this->person)(['is_office_admin' => true]);
+    $gone = ($this->person)(['reports_to_id' => $this->director->id, 'is_active' => false]);
+
+    expect($query->run($this->director->user, $this->org->id)->modelKeys())->toEqualCanonicalizing([$this->engineer->id, $this->intern->id])
+        ->and($query->run($this->intern->user, $this->org->id)->modelKeys())->toBe([])
+        ->and($query->run($admin->user, $this->org->id)->modelKeys())->toEqualCanonicalizing([$this->ed->id, $this->director->id, $this->engineer->id, $this->intern->id, $this->peer->id, $admin->id])
+        ->and($query->run($admin->user, $this->org->id, $this->engineer)->modelKeys())->toEqualCanonicalizing([$this->engineer->id, $this->intern->id])
+        ->and($query->run($this->director->user, $this->org->id)->modelKeys())->not->toContain($gone->id);
 });
