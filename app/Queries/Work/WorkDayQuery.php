@@ -12,15 +12,17 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * view finished, started, committed and merged that day, listed by name.
  * The people come from PeopleInViewQuery (the organization for its admins,
  * otherwise the people below the viewer; with `$under`, that person and
- * everyone below them). `attendance` is null here; the controller fills it
- * when the organization's attendance is on.
+ * everyone below them). `attendance` is the day's state from the register,
+ * or null while the organization's attendance is off (or for someone
+ * exempt).
  *
  * @phpstan-import-type WorkTask from WorkActivityQuery
  * @phpstan-import-type Code from WorkActivityQuery
  * @phpstan-import-type PullRequest from WorkActivityQuery
  * @phpstan-import-type Options from WorkFiltersQuery
+ * @phpstan-import-type DayAttendance from WorkAttendanceQuery
  *
- * @phpstan-type DayRow array{member: array{id: int, name: string, designation: ?string}, attendance: null, closed: list<WorkTask>, hidden_closed: int, started: list<WorkTask>, hidden_started: int, commits: Code, pull_requests_merged: list<PullRequest>, hidden_pull_requests: int, nothing_recorded: bool}
+ * @phpstan-type DayRow array{member: array{id: int, name: string, designation: ?string}, attendance: DayAttendance|null, closed: list<WorkTask>, hidden_closed: int, started: list<WorkTask>, hidden_started: int, commits: Code, pull_requests_merged: list<PullRequest>, hidden_pull_requests: int, nothing_recorded: bool}
  * @phpstan-type DaySummary array{people: int, tasks_closed: int, tasks_started: int, commits: int, committers: int, pull_requests_merged: int, nothing_recorded: int}
  * @phpstan-type Day array{date: string, organization_id: int, under: array{id: int, name: string}|null, summary: DaySummary, people: list<DayRow>, options: Options}
  */
@@ -30,6 +32,7 @@ final class WorkDayQuery
         private readonly PeopleInViewQuery $people,
         private readonly WorkActivityQuery $activity,
         private readonly WorkFiltersQuery $filters,
+        private readonly WorkAttendanceQuery $attendance,
     ) {}
 
     /**
@@ -40,6 +43,7 @@ final class WorkDayQuery
         $inView = $this->people->run($viewer, $organizationId);
         $people = $under === null ? $inView : $this->people->run($viewer, $organizationId, $under);
         $activity = $this->activity->forMembers($viewer, $people, $date, $date);
+        $attendance = $this->attendance->day($viewer, $organizationId, $date, $under);
 
         $rows = [];
         $summary = ['people' => $people->count(), 'tasks_closed' => 0, 'tasks_started' => 0, 'commits' => 0, 'committers' => 0, 'pull_requests_merged' => 0, 'nothing_recorded' => 0];
@@ -60,7 +64,7 @@ final class WorkDayQuery
 
             $rows[] = [
                 'member' => WorkPerson::of($member),
-                'attendance' => null,
+                'attendance' => $attendance[(int) $member->getKey()] ?? null,
                 'closed' => $work['tasks_closed'],
                 'hidden_closed' => $work['hidden_closed'],
                 'started' => $work['tasks_started'],

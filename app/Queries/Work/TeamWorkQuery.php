@@ -11,12 +11,14 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * A team's work over a range: one row of figures per person in the
  * viewer's view (with `$under`, that person and everyone below them),
  * listed by name and never sorted by a figure here. `overdue` is what is
- * overdue now. `attendance` is null here; the controller fills it when the
- * organization's attendance is on.
+ * overdue now. `attendance` is each person's attendance totals over the
+ * range, or null while the organization's attendance is off (or for
+ * someone exempt).
  *
  * @phpstan-import-type Options from WorkFiltersQuery
+ * @phpstan-import-type Totals from \App\Queries\Attendance\AttendanceSummaryQuery
  *
- * @phpstan-type TeamRow array{member: array{id: int, name: string, designation: ?string}, attendance: null, tasks_closed: int, tasks_started: int, overdue: int, commits: int, code_added: int, code_removed: int, pull_requests_merged: int}
+ * @phpstan-type TeamRow array{member: array{id: int, name: string, designation: ?string}, attendance: Totals|null, tasks_closed: int, tasks_started: int, overdue: int, commits: int, code_added: int, code_removed: int, pull_requests_merged: int}
  * @phpstan-type Team array{range: array{from: string, to: string}, organization_id: int, under: array{id: int, name: string}|null, people: list<TeamRow>, options: Options}
  */
 final class TeamWorkQuery
@@ -25,6 +27,7 @@ final class TeamWorkQuery
         private readonly PeopleInViewQuery $people,
         private readonly WorkActivityQuery $activity,
         private readonly WorkFiltersQuery $filters,
+        private readonly WorkAttendanceQuery $attendance,
     ) {}
 
     /**
@@ -35,6 +38,7 @@ final class TeamWorkQuery
         $inView = $this->people->run($viewer, $organizationId);
         $people = $under === null ? $inView : $this->people->run($viewer, $organizationId, $under);
         $activity = $this->activity->forMembers($viewer, $people, $from, $to, withOverdue: true);
+        $attendance = $this->attendance->range($organizationId, array_values(array_map(intval(...), $people->modelKeys())), $from, $to);
 
         $rows = [];
 
@@ -43,7 +47,7 @@ final class TeamWorkQuery
 
             $rows[] = [
                 'member' => WorkPerson::of($member),
-                'attendance' => null,
+                'attendance' => $attendance[(int) $member->getKey()] ?? null,
                 'tasks_closed' => count($work['tasks_closed']) + $work['hidden_closed'],
                 'tasks_started' => count($work['tasks_started']) + $work['hidden_started'],
                 'overdue' => count($work['overdue'] ?? []) + ($work['hidden_overdue'] ?? 0),

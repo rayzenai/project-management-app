@@ -75,7 +75,7 @@ export interface WorkOptions {
  * the organization's attendance is off.
  */
 export interface WorkAttendanceDay {
-    /** The person's state that day, as the register names it (leave, kaaj, ...). */
+    /** The register's state: in, at_lunch, out, not_in, on_leave, on_kaaj or off. */
     state: string;
     /** Clock-in time, ISO-8601, or null when not in. */
     in_at: string | null;
@@ -325,18 +325,26 @@ export function attendanceDayLabel(day: WorkAttendanceDay): {
             parts.push('outside office');
         }
 
+        if (day.place === 'unknown') {
+            parts.push('no location');
+        }
+
         return {
             text: parts.join(', '),
-            warn: day.late || day.place === 'outside',
+            warn: day.late || day.place === 'outside' || day.place === 'unknown',
         };
     }
 
-    if (day.state === 'leave') {
+    if (day.state === 'on_leave') {
         return { text: 'On leave', warn: false };
     }
 
-    if (day.state === 'kaaj') {
+    if (day.state === 'on_kaaj') {
         return { text: 'On kaaj', warn: false };
+    }
+
+    if (day.state === 'off') {
+        return { text: 'Day off', warn: false };
     }
 
     return { text: 'Not in', warn: false };

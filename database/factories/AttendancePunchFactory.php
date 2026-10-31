@@ -22,11 +22,10 @@ class AttendancePunchFactory extends Factory
         return [
             'member_id' => fn (): int => Member::factory()->create()->id,
             'organization_id' => fn (array $attributes): int => (int) Member::query()->whereKey($attributes['member_id'])->value('organization_id'),
-            'work_date' => fn (array $attributes): string => isset($attributes['punched_at'])
-                ? now()->parse($attributes['punched_at'])->toDateString()
-                : now()->toDateString(),
             'kind' => AttendancePunch::IN,
             'punched_at' => fn (): string => now()->setTime(9, 50)->toDateTimeString(),
+            // After punched_at, so it reads the resolved time.
+            'work_date' => fn (array $attributes): string => now()->parse($attributes['punched_at'])->toDateString(),
             'source' => AttendancePunch::SOURCE_WEB,
             'ip' => '10.5.20.15',
             'place' => AttendancePunch::PLACE_OFFICE_NETWORK,
