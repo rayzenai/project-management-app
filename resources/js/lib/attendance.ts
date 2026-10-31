@@ -1,8 +1,9 @@
 import { clockTime } from './dates';
 import { formatDistance } from './format';
+
 /**
- * Attendance: the clock (MyAttendanceQuery, shared as the `attendance`
- * prop) and an organization's settings (AttendanceSettingsQuery).
+ * Attendance: the clock (MyAttendanceQuery, shared as the `clock` prop) and
+ * an organization's settings (AttendanceSettingsQuery).
  */
 
 export type PunchKind = 'in' | 'lunch_start' | 'lunch_end' | 'out';

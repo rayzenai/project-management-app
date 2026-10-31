@@ -11,7 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controller;
 
 /**
- * The top bar's clock button. The page's `attendance` prop (shared) carries
+ * The top bar's clock button. The page's `clock` prop (shared) carries
  * the day afterwards.
  */
 class AttendancePunchController extends Controller

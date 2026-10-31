@@ -15,7 +15,7 @@ use Illuminate\Routing\Controller;
 
 /**
  * JSON sibling of Workspace\Attendance\AttendancePunchController, plus
- * the day the web shares as its `attendance` prop. Punches from here are
+ * the day the web shares as its `clock` prop. Punches from here are
  * the app's.
  */
 class AttendancePunchController extends Controller

@@ -641,8 +641,7 @@ errors on the field.
 ## Attendance: the clock
 
 For an active person of an organization whose attendance is on
-(`attendance_enabled` in `GET /user`, the web's `attendance` prop being
-set); anyone else gets 403 (a deactivated person 401, as on every route).
+(`attendance_enabled` in `GET /user`, the web's `clock` prop being set); anyone else gets 403 (a deactivated person 401, as on every route).
 A day is one sequence: `in`, then optionally `lunch_start` and `lunch_end`
 once, then `out`; each kind at most once a day. The time is always the
 server's (Asia/Kathmandu), never the client's. Each punch keeps the address
@@ -713,7 +712,8 @@ person of an organization whose attendance is on).
 One day of an organization: who should be in, who is, who came late, who
 is on leave or kaaj. The people are those the caller sees
 (`PeopleInViewQuery`: everyone for its admins and super-admins, else the
-people below the caller), active only, attendance-exempt people left out.
+people below the caller), active only, people exempt from attendance left
+out.
 `under` narrows to one person and everyone below them.
 
 - `date` (`Y-m-d`, default today; 422 otherwise).
@@ -733,13 +733,13 @@ work.
 
 | Method | Path | Returns |
 | --- | --- | --- |
-| GET | `/workspace/organizations/{organization}/attendance` | `{ data: { date, schedule, summary, people, teams }, filters { date, under, organization } }`. `schedule`: `{ date, is_workday, holiday, expects_work, start, end, late_after }` (HH:MM, seasonal hours applied). `summary`: `{ staff, on_leave, on_kaaj, expected, present, late, not_in, outside_office, percentage }`: `staff` the people listed, `expected` staff minus those on leave or kaaj (0 on a day that expects no work), `present` those who clocked in, `not_in` those expected and not in, `outside_office` clock-ins outside the office or from an unknown place, `percentage` present of expected, rounded (`null` when nobody is expected). `people`, by name: `{ member { id, name, designation }, state, in_at, lunch_start_at, lunch_end_at, out_at, late, place, distance_m, note, leave }`, times ISO-8601 or `null`; `place`, `distance_m` and `note` are the clock-in's (`office_network`, `near_office`, `outside`, `unknown`); `leave` `{ kind, place, starts_on, ends_on }` or `null`. `teams`: the people in view with someone in view reporting to them, `{ id, name, designation }`, for an `under` filter |
+| GET | `/workspace/organizations/{organization}/attendance` | `{ data: { date, schedule, under, summary, people, options }, filters { date, under, organization } }`. `under`: `{ id, name }` of the person narrowed to, or null; `options`: the list reports' options (see Work reports), organizations with attendance on only. `schedule`: `{ date, is_workday, holiday, expects_work, start, end, late_after }` (HH:MM, seasonal hours applied). `summary`: `{ staff, on_leave, on_kaaj, expected, present, late, not_in, outside_office, percentage }`: `staff` the people listed, `expected` staff minus those on leave or kaaj (0 on a day that expects no work), `present` those who clocked in, `not_in` those expected and not in, `outside_office` clock-ins outside the office or from an unknown place, `percentage` present of expected, rounded (`null` when nobody is expected). `people`, by name: `{ member { id, name, designation }, state, in_at, lunch_start_at, lunch_end_at, out_at, late, place, distance_m, note, leave }`, times ISO-8601 or `null`; `place`, `distance_m` and `note` are the clock-in's (`office_network`, `near_office`, `outside`, `unknown`); `leave` `{ kind, place, starts_on, ends_on }` or `null`. `teams`: the people in view with someone in view reporting to them, `{ id, name, designation }`, for an `under` filter |
 | GET | `/workspace/organizations/{organization}/attendance/summary` | `{ data: [{ member { id, name, designation }, days_expected, days_present, days_late, minutes_worked, no_clock_out_days, outside_punches, leave_days, kaaj_days, usual_in }], filters { from, to, under, organization } }`, one row per person as above. `from`, `to` (`Y-m-d`; default the last 7 days ending today; at most 92 days, 422 on `to` otherwise) |
 
 The totals count days up to today only, and working days only while the
 organization has attendance on (from the day it was turned on):
-`days_expected` working days the person isn't exempt, less those under
-approved leave or kaaj without a clock-in; `days_present` and `days_late`
+`days_expected` working days, less those under approved leave or kaaj
+without a clock-in (people exempt from attendance have no totals); `days_present` and `days_late`
 working days with a clock-in (after `late_after`); `leave_days` and
 `kaaj_days` working days under approved leave or kaaj without a clock-in;
 `minutes_worked` every day with a clock-in, clock-in to clock-out less lunch
@@ -855,10 +855,11 @@ Shapes used below:
 - pull request: `{ title, number, repository, url, merged_at }`, newest
   first.
 - member: `{ id, name, designation }`.
-- options: `{ organizations: [{ id, name }], teams: [{ id, name }] }`:
-  `organizations` lists every organization for a super-admin (empty for
-  anyone else); `teams` the people in the caller's view whom someone else in
-  view reports to, for `under`.
+- options: `{ organizations: [{ id, name }], teams: [{ id, name,
+  designation }] }`: `organizations` lists every organization for a
+  super-admin (empty for anyone else); `teams` the people in the caller's
+  view whom someone else in view reports to, for `under`. The attendance
+  register answers the same shape.
 
 | Method | Path | Returns |
 | --- | --- | --- |
@@ -938,6 +939,9 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 
 **Structure, attendance and work reports.**
 
+- The attendance register's `teams` became `options { organizations, teams }`
+  (the work reports' shape) and it names the person narrowed to as `under`;
+  people exempt from attendance get no totals from the summary.
 - New: `GET /workspace/organizations/{organization}/organogram`,
   `POST /workspace/organizations/{organization}/designations`,
   `PATCH|DELETE /workspace/designations/{designation}`,

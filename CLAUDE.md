@@ -582,7 +582,29 @@ The owner's rule for these parts: every read is one query class under
 `app/Services/{Structure,Attendance}/`; the web and API controllers only
 call them, so a new client (the Flutter app, a fingerprint machine) needs
 no new query. Never write a query in a controller, request, resource or
-page for these parts.
+page for these parts, and never write a rule twice: each one below has a
+single home, so reuse it.
+
+Shared building blocks (reach for these before writing anything new):
+
+- `app/Queries/Structure/`: `PeopleInViewQuery` (whose rows a viewer's
+  list shows; `attending:` for attendance; `find` for a report's `under`),
+  `OrganizationChoicesQuery` (which organization a page opens on and which
+  a super-admin may switch between; `withAttendance:` for attendance
+  pages), `ReportOptionsQuery` (a list report's `options`: organizations
+  and teams), `PersonRef` (how every report names a person).
+- `app/Http/Requests/Concerns/`: `ReadsReportScope` (organization and
+  `under` for a list report; the report supplies `maySeeOrganization`),
+  `ReadsDay` (`?date=`), `ReadsDayRange` (`?from=`/`?to=`, overridable
+  `defaultFrom` and `maxRangeDays`; the code activity report uses it too).
+- Model scopes: `Member::scopeAttending` (who attendance expects),
+  `AttendanceSetting::scopeEnabled`, `Organization::scopeWithAttendanceOn`.
+- Frontend: `resources/js/lib/dates.ts` (days and clock times read as the
+  office's, whatever the browser's timezone), `lib/format.ts`
+  (`formatDistance`, `plural`), `ReportOptions` and `PersonRef` in
+  `lib/types.ts`, `components/filters/` (`OrganizationSelect`,
+  `ScopeSelects`), `components/organogram/` (`OrganogramOutline`,
+  `OrgChart`, `DesignationsPanel`) and `components/attendance/settings/`.
 
 - **Structure**: `designations` (per organization; `rank` orders them,
   smaller is more senior), `members.designation_id`,
@@ -603,7 +625,8 @@ page for these parts.
   `canViewPersonOf` (oneself or `oversees`), `canViewTeamWork`. Every list of
   people a report shows comes from `PeopleInViewQuery`. The organogram
   (`OrganogramQuery`, `/workspace/organogram`) is for the organization's
-  active people (`canViewOrganogram`), never with emails.
+  active people (`canViewOrganogram`), never with emails; a super-admin
+  opens on the first organization by name, like every such page.
 - **Attendance**: off until a super-admin turns it on per organization
   (`EnableAttendanceService`, `canEnableAttendance`); its admins set
   workdays, hours, seasons (winter hours), grace, office places, office
@@ -622,10 +645,12 @@ page for these parts.
   (`canPunch`), decided by whoever `oversees` them (`canDecideLeave`), or
   recorded by them directly (`canRecordLeaveFor`); kaaj is duty, never
   absence. Reads: `MyAttendanceQuery` (the top bar's `ClockButton`, shared
-  as `clock`, never `attendance`, which the work pages use for their own), `AttendanceRegisterQuery` (a day: expected = listed
-  non-exempt people on a day that expects work, minus approved leave and
-  kaaj unless they clocked in), `AttendanceSummaryQuery` (per person over a
-  range, from the day attendance was turned on), `LeaveQuery`,
+  as `clock`, never `attendance`, which the work pages use for their own),
+  `AttendanceRegisterQuery` (a day: expected = listed attending people on
+  a day that expects work, minus approved leave and kaaj unless they
+  clocked in), `AttendanceSummaryQuery` (per attending person over a range,
+  from the later of the day attendance was turned on and the day they were
+  added), `LeaveQuery`,
   `AttendanceSettingsQuery`. The proxy (Traefik) replaces any client-sent
   `X-Forwarded-For`, so with `trustProxies('*')` the recorded address is
   the one the proxy saw; keep it so, and check from a phone on mobile data

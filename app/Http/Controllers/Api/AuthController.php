@@ -111,7 +111,7 @@ class AuthController extends Controller
             'features' => $user->features(),
             // The twin of the web's gitEnabled: the user may use git somewhere.
             'git_enabled' => GitAccess::anyFor($user),
-            // The twin of the web's attendance prop being set: the user may clock in.
+            // The twin of the web's clock prop being set: the user may clock in.
             'attendance_enabled' => WorkspaceAccess::canPunch($user),
             // The twin of the web's office prop: the office pages the user may open.
             'office' => OfficeLinks::for($user),
