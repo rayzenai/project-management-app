@@ -153,3 +153,53 @@ it('stops a deactivated person\'s existing token from working', function () {
         ->assertUnauthorized()
         ->assertJsonPath('message', EnsureCanSignIn::DEACTIVATED);
 });
+
+it('stops token logins after five wrong passwords for that email from one address', function () {
+    $user = User::factory()->create(['password' => bcrypt('secret-pass-1')]);
+    $login = fn (string $password) => $this->postJson('/api/v1/login', [
+        'email' => $user->email,
+        'password' => $password,
+        'device_name' => 'pest',
+    ]);
+
+    foreach (range(1, 5) as $attempt) {
+        $login('wrong-password')->assertUnprocessable();
+    }
+
+    $login('secret-pass-1')
+        ->assertTooManyRequests()
+        ->assertJsonValidationErrors(['email' => 'Too many login attempts.']);
+
+    expect(PersonalAccessToken::count())->toBe(0);
+});
+
+it('counts wrong passwords on the web login toward the token login', function () {
+    $user = User::factory()->create(['password' => bcrypt('secret-pass-1')]);
+
+    foreach (range(1, 5) as $attempt) {
+        $this->post('/workspace/login', ['email' => $user->email, 'password' => 'wrong-password']);
+    }
+
+    $this->postJson('/api/v1/login', [
+        'email' => $user->email,
+        'password' => 'secret-pass-1',
+        'device_name' => 'pest',
+    ])->assertTooManyRequests();
+});
+
+it('starts the count again after a right password', function () {
+    $user = User::factory()->create(['password' => bcrypt('secret-pass-1')]);
+    $login = fn (string $password) => $this->postJson('/api/v1/login', [
+        'email' => $user->email,
+        'password' => $password,
+        'device_name' => 'pest',
+    ]);
+
+    foreach (range(1, 2) as $round) {
+        foreach (range(1, 4) as $attempt) {
+            $login('wrong-password')->assertUnprocessable();
+        }
+
+        $login('secret-pass-1')->assertOk();
+    }
+});

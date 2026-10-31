@@ -6,11 +6,13 @@ use App\Http\Middleware\EnsureCanSignIn;
 use App\Models\Member;
 use App\Models\User;
 use App\Support\Git\GitAccess;
+use App\Support\LoginThrottle;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -32,11 +34,16 @@ class AuthController extends Controller
             'device_name' => ['required', 'string', 'max:255'],
         ]);
 
+        $throttleKey = LoginThrottle::key($validated['email'], $request->ip());
+        LoginThrottle::ensureNotLimited($throttleKey, 429);
+
         $userModel = User::class;
 
         $user = $userModel::query()->where('email', $validated['email'])->first();
 
         if ($user === null || ! Hash::check($validated['password'], $user->password)) {
+            RateLimiter::hit($throttleKey);
+
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);
@@ -47,6 +54,8 @@ class AuthController extends Controller
                 'email' => [EnsureCanSignIn::DEACTIVATED],
             ]);
         }
+
+        RateLimiter::clear($throttleKey);
 
         $token = $user->createToken($validated['device_name'])->plainTextToken;
 
