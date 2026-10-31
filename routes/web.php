@@ -2,6 +2,11 @@
 
 use App\Http\Controllers\GitWebhookController;
 use App\Http\Controllers\Workspace\AssignmentController;
+use App\Http\Controllers\Workspace\Attendance\AttendanceNetworkController;
+use App\Http\Controllers\Workspace\Attendance\AttendancePlaceController;
+use App\Http\Controllers\Workspace\Attendance\AttendancePunchController;
+use App\Http\Controllers\Workspace\Attendance\AttendanceSettingsController;
+use App\Http\Controllers\Workspace\Attendance\HolidayController;
 use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
@@ -140,6 +145,19 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         // (structure routes end)
 
         // Attendance: the clock, the register, leave and kaaj, settings.
+        Route::post('/attendance/punches', [AttendancePunchController::class, 'store'])->name('attendance.punches.store');
+        Route::get('/attendance/settings', [AttendanceSettingsController::class, 'show'])->name('attendance.settings');
+        Route::put('/organizations/{organization}/attendance', [AttendanceSettingsController::class, 'enable'])->name('organizations.attendance.enable');
+        Route::put('/organizations/{organization}/attendance/settings', [AttendanceSettingsController::class, 'update'])->name('organizations.attendance.settings.update');
+        Route::post('/organizations/{organization}/attendance/places', [AttendancePlaceController::class, 'store'])->name('organizations.attendance.places.store');
+        Route::patch('/organizations/{organization}/attendance/places/{place}', [AttendancePlaceController::class, 'update'])->name('organizations.attendance.places.update');
+        Route::delete('/organizations/{organization}/attendance/places/{place}', [AttendancePlaceController::class, 'destroy'])->name('organizations.attendance.places.destroy');
+        Route::post('/organizations/{organization}/attendance/networks', [AttendanceNetworkController::class, 'store'])->name('organizations.attendance.networks.store');
+        Route::patch('/organizations/{organization}/attendance/networks/{network}', [AttendanceNetworkController::class, 'update'])->name('organizations.attendance.networks.update');
+        Route::delete('/organizations/{organization}/attendance/networks/{network}', [AttendanceNetworkController::class, 'destroy'])->name('organizations.attendance.networks.destroy');
+        Route::post('/organizations/{organization}/attendance/holidays', [HolidayController::class, 'store'])->name('organizations.attendance.holidays.store');
+        Route::patch('/organizations/{organization}/attendance/holidays/{holiday}', [HolidayController::class, 'update'])->name('organizations.attendance.holidays.update');
+        Route::delete('/organizations/{organization}/attendance/holidays/{holiday}', [HolidayController::class, 'destroy'])->name('organizations.attendance.holidays.destroy');
         // (attendance: clock and settings routes end)
 
         // (attendance: register, leave and kaaj routes end)

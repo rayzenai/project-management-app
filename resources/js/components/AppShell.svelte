@@ -28,6 +28,7 @@
     import { toast } from '../lib/toast.svelte';
     import type { SharedProps } from '../lib/types';
     import AppearanceConfig from './AppearanceConfig.svelte';
+    import ClockButton from './attendance/ClockButton.svelte';
     import Avatar from './Avatar.svelte';
     import CommandPalette from './CommandPalette.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
@@ -633,6 +634,7 @@
                 {:else}
                     <div class="flex-1 truncate font-medium">{title}</div>
                 {/if}
+                <ClockButton />
                 <ThemeToggle />
             </div>
 

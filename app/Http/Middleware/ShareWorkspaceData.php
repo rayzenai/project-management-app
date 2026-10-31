@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\ProjectNote;
 use App\Models\User;
 use App\Models\WorkspaceNote;
+use App\Queries\Attendance\MyAttendanceQuery;
 use App\Services\ResolveThemeTokens;
 use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
@@ -39,6 +40,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   on in Settings. Screens hide what is off.
  * - `gitEnabled` — whether the user may use git anywhere (GitAccess), so the
  *   Guide shows its Code section only to them.
+ * - `attendance` — the user's day for the top bar's clock button
+ *   (MyAttendanceQuery); null when they can't punch.
  * - `managedProgramIds` / `managedPrograms` — the programs the user manages
  *   (ids for role checks, `{slug, name}` for the sidebar); empty for most.
  * - `themeCatalogue` — the theme + font catalogue from `config/themes.php`, so
@@ -217,6 +220,9 @@ class ShareWorkspaceData
 
         // Whether the user may use git anywhere: the Guide shows its Code section then.
         Inertia::share('gitEnabled', fn (): bool => $request->user() instanceof User && GitAccess::anyFor($request->user()));
+
+        // The top bar's clock: today's punches and the next step, or null.
+        Inertia::share('attendance', fn (): ?array => app(MyAttendanceQuery::class)->get($request->user()));
 
         Inertia::share('organization', function () use ($request): ?array {
             $organization = WorkspaceAccess::memberFor($request->user())?->organization;
