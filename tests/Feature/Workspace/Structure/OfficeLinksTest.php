@@ -27,6 +27,7 @@ it('offers someone with nobody below them the organogram and their own week', fu
         'team_work' => false,
         'my_work_member_id' => $this->engineer->id,
         'maintenance' => false,
+        'maintenance_count' => 0,
     ]);
 });
 
@@ -44,7 +45,7 @@ it('gives a deactivated person no office links', function () {
     WorkspaceAccess::flush();
 
     expect(OfficeLinks::for($this->director->user))->toMatchArray([
-        'organogram' => false, 'attendance' => false, 'leave' => false, 'team_work' => false, 'my_work_member_id' => null, 'maintenance' => false,
+        'organogram' => false, 'attendance' => false, 'leave' => false, 'team_work' => false, 'my_work_member_id' => null, 'maintenance' => false, 'maintenance_count' => 0,
     ]);
 });
 

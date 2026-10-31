@@ -467,7 +467,7 @@ Query string, on both routes:
 
 | Method | Path | Returns |
 | --- | --- | --- |
-| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, options }, filters { from, to, project, program, members } }`. `people`: one row per person, by name (case-insensitive; never ranked by a figure), the unmatched row last: `{ user_id, name, title, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, pull_requests_opened, pull_requests_merged, tasks }` (`name` and `title` are the person's in the People directory; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to). For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, for the filters |
+| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, repositories, options }, filters { from, to, project, program, members } }`. `people`: one row per person, by name (case-insensitive; never ranked by a figure), the unmatched row last: `{ user_id, name, designation, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, pull_requests_opened, pull_requests_merged, tasks }` (`name` and `designation` are the person's in the People directory; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to). For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `repositories`: how many linked repositories' code the caller may see (0: nothing linked yet, so no commit can count). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, for the filters |
 | GET | `/workspace/reports/code/people/{user}` | `{ data: [{ sha, message, repository, url, committed_at, code_added, code_removed, comment_added, comment_removed, stats_status }] }`: that user's latest 50 counted commits in the range and the caller's scope, newest first; `message` is the first line, `repository` the `full_name`, `url` the commit on the forge, `stats_status` `ok`, `too_large`, `missing` or `null` (not counted yet). Someone outside the caller's scope, or no one, is `{ data: [] }`, never a 403 or 404 |
 
 On the JSON API these are `/api/v1/workspace/reports/code…` (names
@@ -1001,7 +1001,12 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
   a managed project out of `managed_project_ids` leaves it manager-less. The
   project page's `team` adds `can_remove_manager`.
 - New: `GET /workspace/organizations/{organization}/maintenance` (see
-  Maintenance); `/user`'s `office` adds `maintenance`.
+  Maintenance); `/user`'s `office` adds `maintenance` and
+  `maintenance_count` (how many rows the maintenance page lists for the
+  organization it opens on: each project, program and person once, and
+  attendance; cached up to five minutes, refreshed when the page or the
+  endpoint is read; 0 when it is not offered).
+- The code activity report adds `repositories`.
 
 **Designations replace titles.**
 

@@ -213,6 +213,15 @@ it('shows an organizational admin only their organization, with the commits no o
         ]);
 });
 
+it('counts the linked repositories whose code the viewer may see, so an empty report can say none are linked', function () {
+    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['repositories'])->toBe(2)
+        ->and(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code'))['repositories'])->toBe(1);
+
+    GitRepository::query()->delete();
+
+    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['repositories'])->toBe(0);
+});
+
 it('shows an organizational admin of another organization nobody of this one', function () {
     $people = codeActivityPeople(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code')));
 
@@ -447,6 +456,8 @@ it('asks the same number of queries however many people there are', function () 
         return $queries;
     };
 
+    // The first request also fills the sidebar's cached maintenance count.
+    $count();
     $before = $count();
 
     foreach (['dipa', 'eka', 'gita'] as $i => $name) {

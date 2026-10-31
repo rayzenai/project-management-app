@@ -167,16 +167,21 @@
             team_work: false,
             my_work_member_id: null,
             maintenance: false,
+            maintenance_count: 0,
         },
     );
 
-    const nav = $derived([
+    /** `count`, when above zero, shows as a badge (a dot on the rail). */
+    const nav = $derived<
+        { label: string; href: string; icon: typeof Bell; count?: number }[]
+    >([
         { label: 'Home', href: '/workspace', icon: LayoutGrid },
         { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
         {
             label: 'Notifications',
             href: '/workspace/notifications',
             icon: Bell,
+            count: unreadNotifications,
         },
         { label: 'People', href: '/workspace/team', icon: Users },
         ...(office.organogram
@@ -253,6 +258,7 @@
                       label: 'Maintenance',
                       href: '/workspace/maintenance',
                       icon: Stethoscope,
+                      count: office.maintenance_count,
                   },
               ]
             : []),
@@ -539,9 +545,10 @@
                     {#if !rail}
                         <span class="truncate">{item.label}</span>
                     {/if}
-                    {#if item.href === '/workspace/notifications' && unreadNotifications > 0}
+                    {#if (item.count ?? 0) > 0}
+                        {@const count = item.count ?? 0}
                         {#if rail}
-                            <!-- No room for a count on the rail; a dot still says "unread". -->
+                            <!-- No room for a count on the rail; a dot still says there is one. -->
                             <span
                                 class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-accent"
                                 aria-hidden="true"
@@ -549,9 +556,7 @@
                         {:else}
                             <span
                                 class="ml-auto rounded-full bg-accent px-1.5 text-[11px] leading-4 font-medium text-white tabular-nums"
-                                >{unreadNotifications > 99
-                                    ? '99+'
-                                    : unreadNotifications}</span
+                                >{count > 99 ? '99+' : count}</span
                             >
                         {/if}
                     {/if}

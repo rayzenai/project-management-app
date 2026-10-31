@@ -28,12 +28,15 @@
         people,
         series,
         uncounted,
+        repositories,
         options,
         filters,
     }: {
         people: CodeActivityPerson[];
         series: CodeActivitySeries[];
         uncounted: number;
+        /** Linked repositories whose code the viewer may see. */
+        repositories: number;
         options: CodeActivityOptions;
         filters: CodeActivityFilters;
     } = $props();
@@ -459,13 +462,22 @@
                 class="panel flex flex-col items-center px-6 py-12 text-center"
             >
                 <GitCommitHorizontal class="h-5 w-5 text-fg-faint" />
-                <p class="mt-3 font-medium">
-                    No commits between {rangeLabel}.
-                </p>
-                <p class="mt-1 max-w-md text-[13px] text-fg-muted">
-                    Try a longer range. A commit counts for a person when git
-                    signs it with the email they sign in with.
-                </p>
+                {#if repositories === 0}
+                    <p class="mt-3 font-medium">No repositories linked yet.</p>
+                    <p class="mt-1 max-w-md text-[13px] text-fg-muted">
+                        Only commits in a repository linked to a project count
+                        here. Create one, or link one from the forge, on the
+                        project's Code tab.
+                    </p>
+                {:else}
+                    <p class="mt-3 font-medium">
+                        No commits between {rangeLabel}.
+                    </p>
+                    <p class="mt-1 max-w-md text-[13px] text-fg-muted">
+                        Try a longer range. A commit counts for a person when
+                        git signs it with the email they sign in with.
+                    </p>
+                {/if}
             </section>
         {:else}
             <section class="transition-opacity" class:opacity-60={loading}>

@@ -537,6 +537,8 @@ it('loads the People page roles without a query per person', function () {
         return $queries;
     };
 
+    // The first request also fills the sidebar's cached maintenance count.
+    $count();
     $before = $count();
 
     foreach (range(1, 4) as $i) {

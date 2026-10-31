@@ -15,6 +15,7 @@ use App\Queries\Structure\PersonRef;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * What needs looking at in an organization, for whoever administers it
@@ -33,11 +34,16 @@ use Illuminate\Database\Eloquent\Collection;
  * - attendance switched on with no office network or office place to judge
  *   punches by.
  *
- * A constant number of queries, however big the organization.
+ * A constant number of queries, however big the organization. The
+ * sidebar's count (count()) is cached for COUNT_TTL_SECONDS per
+ * organization, and every full read refreshes it.
  */
 final class MaintenanceQuery
 {
     public const QUIET_DAYS = 30;
+
+    /** How long the sidebar's count may lag behind a fix. */
+    public const COUNT_TTL_SECONDS = 300;
 
     /**
      * @return array{
@@ -74,7 +80,7 @@ final class MaintenanceQuery
             ->orderBy('name')
             ->get();
 
-        return [
+        $report = [
             'organization' => ['id' => (int) $organization->id, 'name' => $organization->name],
             'quiet_days' => self::QUIET_DAYS,
             ...$this->projectChecks($projects),
@@ -82,6 +88,42 @@ final class MaintenanceQuery
             ...$this->peopleChecks($people),
             'attendance_without_office' => $this->attendanceWithoutOffice($organizationId),
         ];
+
+        Cache::put(self::countKey($organizationId), self::countOf($report), self::COUNT_TTL_SECONDS);
+
+        return $report;
+    }
+
+    /**
+     * How many rows the page shows: each project, program and person with
+     * something to look at once, and attendance. Cached (see the class).
+     */
+    public function count(int $organizationId): int
+    {
+        $cached = Cache::get(self::countKey($organizationId));
+
+        return is_int($cached) ? $cached : self::countOf($this->get($organizationId));
+    }
+
+    private static function countKey(int $organizationId): string
+    {
+        return "maintenance-count:{$organizationId}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $report  a get() result
+     */
+    private static function countOf(array $report): int
+    {
+        $rows = fn (array $checks, string $key): int => collect($checks)
+            ->flatMap(fn (string $check): array => array_column($report[$check], $key))
+            ->unique()
+            ->count();
+
+        return $rows(['projects_without_manager', 'projects_without_people', 'unassigned_tasks', 'tasks_with_inactive_people', 'quiet_projects'], 'slug')
+            + count($report['programs_without_manager'])
+            + $rows(['people_off_projects', 'people_without_designation', 'people_reporting_to_inactive', 'people_outside_organogram', 'people_without_login'], 'id')
+            + ($report['attendance_without_office'] ? 1 : 0);
     }
 
     /**

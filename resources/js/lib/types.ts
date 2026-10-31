@@ -792,4 +792,6 @@ export interface OfficeLinks {
     /** The user's own member, for "My week"; null outside an organization. */
     my_work_member_id: number | null;
     maintenance: boolean;
+    /** What the maintenance page lists (cached a few minutes); 0 without it. */
+    maintenance_count: number;
 }

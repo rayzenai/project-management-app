@@ -41,7 +41,10 @@ class CodeActivityQuery
 
     /**
      * @param  Filters  $filters
-     * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, options: array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}}
+     *                            `repositories` counts the linked repositories whose code the viewer
+     *                            may see, so an empty report can tell "nothing linked" from "no
+     *                            commits".
+     * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, repositories: int, options: array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}}
      */
     public function get(?Authenticatable $user, array $filters): array
     {
@@ -52,6 +55,7 @@ class CodeActivityQuery
             'people' => $this->people($scope, $filters),
             'series' => $this->series($scope, $filters),
             'uncounted' => $this->commits($scope, $filters)->whereNull('git_commits.stats_computed_at')->count(),
+            'repositories' => GitRepository::query()->whereIn('project_id', Project::query()->codeVisibleTo($user)->select('projects.id'))->count(),
             'options' => $this->options($scope),
         ];
     }

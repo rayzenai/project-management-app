@@ -689,8 +689,11 @@ Shared building blocks (reach for these before writing anything new):
   hold, projects quiet for `QUIET_DAYS`, programs with no active manager,
   active people on no project, with no designation, reporting to someone
   deactivated, outside the organogram or with no login, and attendance on
-  with no office network or place. A new check is one more list there and
-  one more entry in the page's `checks`.
+  with no office network or place. A new check is one more list there, in
+  `countOf`, and in the page's `report`. The sidebar's count
+  (`OfficeLinks`' `maintenance_count`, `MaintenanceQuery::count`) is cached
+  `COUNT_TTL_SECONDS` per organization and every full read refreshes it, so
+  other pages run the checks at most once per TTL per organization.
 
 ## Semantic theming layer (web UI)
 

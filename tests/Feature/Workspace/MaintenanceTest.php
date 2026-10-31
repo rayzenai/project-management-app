@@ -175,7 +175,27 @@ it('answers the API for the organization in the path, to its administrators only
         ->assertForbidden();
 });
 
-it('offers the sidebar link to administrators only', function () {
-    $this->actingAs($this->admin->user, 'sanctum')->getJson('/api/v1/user')->assertJsonPath('office.maintenance', true);
-    $this->actingAs($this->manager->user, 'sanctum')->getJson('/api/v1/user')->assertJsonPath('office.maintenance', false);
+it('offers the sidebar link, with the number of rows, to administrators only', function () {
+    // Empty, Orphaned and Quiet; Revenue; Lal, Uma, Sita and Nabin; attendance.
+    $this->actingAs($this->admin->user, 'sanctum')->getJson('/api/v1/user')
+        ->assertJsonPath('office.maintenance', true)
+        ->assertJsonPath('office.maintenance_count', 9);
+    $this->actingAs($this->manager->user, 'sanctum')->getJson('/api/v1/user')
+        ->assertJsonPath('office.maintenance', false)
+        ->assertJsonPath('office.maintenance_count', 0);
+});
+
+it('keeps the count cached until the page is opened again', function () {
+    $query = app(MaintenanceQuery::class);
+
+    expect($query->count($this->org->id))->toBe(9);
+
+    AttendanceNetwork::factory()->create(['organization_id' => $this->org->id]);
+    $this->untitled->update(['designation_id' => $this->ed->designation_id]);
+
+    expect($query->count($this->org->id))->toBe(9);
+
+    $this->actingAs($this->admin->user)->get('/workspace/maintenance')->assertOk();
+
+    expect($query->count($this->org->id))->toBe(7);
 });
