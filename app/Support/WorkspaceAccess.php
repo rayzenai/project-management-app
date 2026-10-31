@@ -884,6 +884,12 @@ class WorkspaceAccess
             ->exists();
     }
 
+    /** Whether any organization has attendance on (a super-admin's menu). */
+    public static function attendanceEnabledAnywhere(): bool
+    {
+        return AttendanceSetting::query()->where('enabled', true)->exists();
+    }
+
     /** Turn an organization's attendance on or off: super-admins only. */
     public static function canEnableAttendance(?Authenticatable $user): bool
     {

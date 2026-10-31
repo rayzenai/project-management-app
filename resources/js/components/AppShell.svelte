@@ -3,18 +3,25 @@
     import {
         Bell,
         BookOpen,
+        CalendarDays,
+        CalendarRange,
+        Clock,
         Building2,
         Folder,
         FolderTree,
         GitCommitHorizontal,
         LayoutGrid,
+        ListChecks,
         LogOut,
         Menu,
+        Network,
         PanelLeft,
         Plus,
         Search,
         Settings,
+        SlidersHorizontal,
         StickyNote,
+        Table2,
         UserRound,
         Users,
         X,
@@ -150,6 +157,17 @@
         mobileOpen = false;
     });
 
+    const office = $derived(
+        shared.office ?? {
+            organogram: false,
+            attendance: false,
+            attendance_settings: false,
+            leave: false,
+            team_work: false,
+            my_work_member_id: null,
+        },
+    );
+
     const nav = $derived([
         { label: 'Home', href: '/workspace', icon: LayoutGrid },
         { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
@@ -159,12 +177,71 @@
             icon: Bell,
         },
         { label: 'People', href: '/workspace/team', icon: Users },
+        ...(office.organogram
+            ? [
+                  {
+                      label: 'Organogram',
+                      href: '/workspace/organogram',
+                      icon: Network,
+                  },
+              ]
+            : []),
+        ...(office.attendance
+            ? [
+                  {
+                      label: 'Attendance',
+                      href: '/workspace/attendance',
+                      icon: Clock,
+                  },
+              ]
+            : []),
+        ...(office.leave
+            ? [
+                  {
+                      label: 'Leave and kaaj',
+                      href: '/workspace/leave',
+                      icon: CalendarDays,
+                  },
+              ]
+            : []),
+        ...(office.team_work
+            ? [
+                  {
+                      label: "Today's work",
+                      href: '/workspace/work',
+                      icon: ListChecks,
+                  },
+                  {
+                      label: "Team's work",
+                      href: '/workspace/work/team',
+                      icon: Table2,
+                  },
+              ]
+            : []),
+        ...(office.my_work_member_id
+            ? [
+                  {
+                      label: 'My week',
+                      href: `/workspace/people/${office.my_work_member_id}/work`,
+                      icon: CalendarRange,
+                  },
+              ]
+            : []),
         ...(shared.gitEnabled
             ? [
                   {
                       label: 'Code activity',
                       href: '/workspace/reports/code',
                       icon: GitCommitHorizontal,
+                  },
+              ]
+            : []),
+        ...(office.attendance_settings
+            ? [
+                  {
+                      label: 'Attendance settings',
+                      href: '/workspace/attendance/settings',
+                      icon: SlidersHorizontal,
                   },
               ]
             : []),
@@ -180,7 +257,7 @@
         { label: 'Guide', href: '/workspace/guide', icon: BookOpen },
     ]);
 
-    function isActive(href: string) {
+    function matches(href: string) {
         // A filtered page (/workspace/reports/code?from=...) is still that page.
         const bare = path.split('?')[0];
 
@@ -188,6 +265,19 @@
             bare === href ||
             (href !== '/workspace' && bare.startsWith(href + '/'))
         );
+    }
+
+    // The longest matching link wins, so Team's work (/workspace/work/team)
+    // doesn't also light up Today's work (/workspace/work).
+    const activeHref = $derived(
+        nav
+            .map((item) => item.href)
+            .filter(matches)
+            .sort((a, b) => b.length - a.length)[0] ?? null,
+    );
+
+    function isActive(href: string) {
+        return href === activeHref;
     }
 
     function projectActive(slug: string) {

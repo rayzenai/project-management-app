@@ -13,6 +13,7 @@ use App\Models\WorkspaceNote;
 use App\Queries\Attendance\MyAttendanceQuery;
 use App\Services\ResolveThemeTokens;
 use App\Support\Git\GitAccess;
+use App\Support\OfficeLinks;
 use App\Support\WorkspaceAccess;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,6 +43,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   Guide shows its Code section only to them.
  * - `attendance` — the user's day for the top bar's clock button
  *   (MyAttendanceQuery); null when they can't punch.
+ * - `office` — which office pages (organogram, attendance, leave and kaaj,
+ *   work reports) the sidebar offers (OfficeLinks).
  * - `managedProgramIds` / `managedPrograms` — the programs the user manages
  *   (ids for role checks, `{slug, name}` for the sidebar); empty for most.
  * - `themeCatalogue` — the theme + font catalogue from `config/themes.php`, so
@@ -223,6 +226,9 @@ class ShareWorkspaceData
 
         // The top bar's clock: today's punches and the next step, or null.
         Inertia::share('attendance', fn (): ?array => app(MyAttendanceQuery::class)->get($request->user()));
+
+        // The office pages the sidebar offers.
+        Inertia::share('office', fn (): array => OfficeLinks::for($request->user()));
 
         Inertia::share('organization', function () use ($request): ?array {
             $organization = WorkspaceAccess::memberFor($request->user())?->organization;

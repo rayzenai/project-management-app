@@ -756,5 +756,18 @@ export interface SharedProps {
     features?: Features;
     /** The user may use git somewhere (GitAccess): the Guide's Code section. */
     gitEnabled?: boolean;
+    /** The office pages the user may open (OfficeLinks). */
+    office?: OfficeLinks;
     [key: string]: unknown;
+}
+
+/** Which office pages the user may open: the sidebar's links (OfficeLinks). */
+export interface OfficeLinks {
+    organogram: boolean;
+    attendance: boolean;
+    attendance_settings: boolean;
+    leave: boolean;
+    team_work: boolean;
+    /** The user's own member, for "My week"; null outside an organization. */
+    my_work_member_id: number | null;
 }

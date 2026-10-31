@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\User;
 use App\Support\Git\GitAccess;
 use App\Support\LoginThrottle;
+use App\Support\OfficeLinks;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -112,6 +113,8 @@ class AuthController extends Controller
             'git_enabled' => GitAccess::anyFor($user),
             // The twin of the web's attendance prop being set: the user may clock in.
             'attendance_enabled' => WorkspaceAccess::canPunch($user),
+            // The twin of the web's office prop: the office pages the user may open.
+            'office' => OfficeLinks::for($user),
         ];
     }
 }
