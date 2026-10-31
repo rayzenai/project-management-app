@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { page, router, useForm } from '@inertiajs/svelte';
-    import { Copy, RefreshCw } from '@lucide/svelte';
+    import { inertia, page, router, useForm } from '@inertiajs/svelte';
+    import { Copy, Network, RefreshCw } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import MemberRoleFields from '../../components/team/MemberRoleFields.svelte';
@@ -11,6 +11,15 @@
         rolesToSend,
     } from '../../lib/memberRoles';
     import { projectLabel } from '../../lib/projectLabel';
+    import {
+        bossCandidates,
+        designationsFor,
+        structureToSend,
+    } from '../../lib/structure';
+    import type {
+        DesignationOption,
+        StructuredMember,
+    } from '../../lib/structure';
     import { toast } from '../../lib/toast.svelte';
     import type {
         Id,
@@ -29,9 +38,11 @@
         canCreateMember = false,
         canSetRoles = false,
         roleOptions = { programs: [], projects: [] },
+        canSetStructure = false,
+        designationOptions = [],
     }: {
         teams: Team[];
-        members: Member[];
+        members: StructuredMember[];
         organizations?: OrganizationOption[];
         organizationFilter?: number | null;
         officeAdminOrganization?: OrganizationOption | null;
@@ -39,6 +50,9 @@
         /** The viewer may set people's roles (the person form's role fields). */
         canSetRoles?: boolean;
         roleOptions?: RoleOptions;
+        /** The viewer may set designations and "reports to". */
+        canSetStructure?: boolean;
+        designationOptions?: DesignationOption[];
     } = $props();
 
     const isSuperAdmin = $derived<boolean>(
@@ -96,6 +110,8 @@
         organization_id: null as number | null,
         is_office_admin: false,
         ...heldRoles(null),
+        designation_id: null as Id | null,
+        reports_to_id: null as Id | null,
     });
 
     function openMemberForm() {
@@ -132,6 +148,8 @@
         organization_id: null as number | null,
         is_office_admin: false,
         ...heldRoles(null),
+        designation_id: null as Id | null,
+        reports_to_id: null as Id | null,
     });
 
     /** The organization a new person joins: chosen by a super-admin. */
@@ -180,6 +198,7 @@
                           null,
                       )
                     : {}),
+                ...(canSetStructure ? structureToSend(data, null) : {}),
             }))
             .post('/workspace/members', {
                 preserveScroll: true,
@@ -192,7 +211,7 @@
             });
     }
 
-    function startEditMember(member: Member) {
+    function startEditMember(member: StructuredMember) {
         editingMemberId = member.id;
         memberEditForm.clearErrors();
         memberEditForm.name = member.name;
@@ -202,9 +221,11 @@
         memberEditForm.organization_id = member.organization_id ?? null;
         memberEditForm.is_office_admin = member.is_office_admin ?? false;
         Object.assign(memberEditForm, heldRoles(member));
+        memberEditForm.designation_id = member.designation?.id ?? null;
+        memberEditForm.reports_to_id = member.reports_to_id ?? null;
     }
 
-    function saveMember(member: Member) {
+    function saveMember(member: StructuredMember) {
         memberEditForm
             .transform((data) => {
                 const base = {
@@ -233,6 +254,9 @@
                               ),
                               member,
                           )
+                        : {}),
+                    ...(canSetStructure && member.organization_id
+                        ? structureToSend(data, member)
                         : {}),
                 };
             })
@@ -332,6 +356,59 @@
     </select>
 {/snippet}
 
+{#snippet structureFields(
+    id: string,
+    form: { designation_id: Id | null; reports_to_id: Id | null },
+    organizationId: Id | null,
+    person: StructuredMember | null,
+    errors: Partial<Record<string, string>>,
+)}
+    <div class="flex flex-col gap-1">
+        <label class="label" for={`${id}-designation`}>Designation</label>
+        <select
+            id={`${id}-designation`}
+            class="input"
+            value={form.designation_id ?? ''}
+            onchange={(e) =>
+                (form.designation_id = e.currentTarget.value
+                    ? Number(e.currentTarget.value)
+                    : null)}
+        >
+            <option value="">None</option>
+            {#each designationsFor(designationOptions, organizationId) as designation (designation.id)}
+                <option value={designation.id}>{designation.name}</option>
+            {/each}
+        </select>
+        {#if errors.designation_id}
+            <p class="text-xs text-danger">{errors.designation_id}</p>
+        {/if}
+    </div>
+    <div class="flex flex-col gap-1">
+        <label class="label" for={`${id}-reports-to`}>Reports to</label>
+        <select
+            id={`${id}-reports-to`}
+            class="input"
+            value={form.reports_to_id ?? ''}
+            onchange={(e) =>
+                (form.reports_to_id = e.currentTarget.value
+                    ? Number(e.currentTarget.value)
+                    : null)}
+        >
+            <option value="">No one</option>
+            {#each bossCandidates(members, organizationId, person) as boss (boss.id)}
+                <option value={boss.id}
+                    >{boss.name}{boss.designation
+                        ? `, ${boss.designation.name}`
+                        : ''}</option
+                >
+            {/each}
+        </select>
+        {#if errors.reports_to_id}
+            <p class="text-xs text-danger">{errors.reports_to_id}</p>
+        {/if}
+    </div>
+{/snippet}
+
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
@@ -343,6 +420,15 @@
             {/if}
         </div>
         <div class="flex items-center gap-1.5">
+            <a
+                href="/workspace/organogram"
+                use:inertia
+                class="btn-ghost"
+                title="Organogram"
+                ><Network class="h-3.5 w-3.5" /><span class="hidden sm:inline"
+                    >Organogram</span
+                ></a
+            >
             {#if isSuperAdmin && organizations.length > 0}
                 <select
                     class="input h-7 w-auto max-w-56 py-0"
@@ -479,6 +565,15 @@
                                 Secretariat.
                             </p>
                         </div>
+                    {/if}
+                    {#if canSetStructure && newMemberOrganizationId !== null}
+                        {@render structureFields(
+                            'member',
+                            memberForm,
+                            newMemberOrganizationId,
+                            null,
+                            memberForm.errors,
+                        )}
                     {/if}
                 </div>
                 {#if canSetRoles && newMemberOrganizationId !== null}
@@ -689,6 +784,15 @@
                                             </p>
                                         </div>
                                     {/if}
+                                    {#if canSetStructure && member.organization_id}
+                                        {@render structureFields(
+                                            `member-${member.id}`,
+                                            memberEditForm,
+                                            editOrganizationId(member),
+                                            member,
+                                            memberEditForm.errors,
+                                        )}
+                                    {/if}
                                 </div>
                                 {#if canSetRoles && member.organization_id}
                                     <MemberRoleFields
@@ -742,6 +846,10 @@
                                 <div
                                     class="flex flex-wrap gap-x-3 text-xs text-fg-muted"
                                 >
+                                    {#if member.designation}<span
+                                            class="truncate"
+                                            >{member.designation.name}</span
+                                        >{/if}
                                     {#if member.title}<span class="truncate"
                                             >{member.title}</span
                                         >{/if}
