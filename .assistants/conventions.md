@@ -93,3 +93,6 @@ afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
 only web/scheduler.
 Section 13 covers the ten-minute access sync and five-minute commit stats;
 their overlap locks expire after 15 and 30 minutes respectively.
+The scheduler appends every scheduled command's output to `/proc/1/fd/2` when
+it is writable; with `LOG_CHANNEL=stderr`, command output and logs therefore
+reach the scheduler container log in production without changing other hosts.
