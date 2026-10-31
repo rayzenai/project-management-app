@@ -19,3 +19,13 @@ Schedule::command('git:reconcile')->dailyAt('01:30')->withoutOverlapping();
 Schedule::command('git:sync-access')->everyTenMinutes()->withoutOverlapping(15);
 // Count each new commit's code, comment and blank lines from its diff.
 Schedule::command('git:commit-stats')->everyFiveMinutes()->withoutOverlapping(30);
+
+// Each command runs in a process of its own whose output, and with
+// LOG_CHANNEL=stderr its log, would be thrown away. In a container whose
+// first process is the scheduler (production's), that process's stderr is
+// the container's log; anywhere else nothing changes.
+if (is_writable('/proc/1/fd/2')) {
+    foreach (Schedule::events() as $event) {
+        $event->appendOutputTo('/proc/1/fd/2');
+    }
+}
