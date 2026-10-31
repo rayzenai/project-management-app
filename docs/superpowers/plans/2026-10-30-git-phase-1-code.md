@@ -263,7 +263,7 @@
 - [ ] **Step 3: Implement the queries, then the Svelte pieces.**
 - [ ] **Step 4: Run** `composer test` and `npm run lint && npm run format && npm run types:check && npm run build`. Expect PASS.
 - [ ] **Step 5: Look at it in a browser.**
-  - Seed a connection, a linked repository with a pull request, branches and commits in a throwaway database (`tasks_preview`, never `pmopm`).
+  - Seed a connection, a linked repository with a pull request, branches and commits in a throwaway database (`tasks_preview`, never `projects`).
   - Serve it with `php -S`, `PHP_CLI_SERVER_WORKERS=4` and the database variables exported.
   - Screenshot the Code tab, the Peek section and a board card with the mark, in light and dark.
   - Fix anything that breaks the theme rules, then drop the database.
@@ -328,7 +328,7 @@
 - [ ] **Step 2: `local.sh`.**
   - New bot tokens get the three scopes. An existing token file whose forge row lacks `write:repository` is replaced.
   - Webhooks from the forge to the local tracker must work. The local tracker's host resolves to loopback, which `ALLOWED_HOST_LIST = loopback` admits. Verify this rather than assuming it.
-- [ ] **Step 3: Prove it end to end on the real local forge**, using the throwaway tracker pattern from Phase 0 (`tasks_preview` with `php -S`, `PHP_CLI_SERVER_WORKERS=4`, `TRACKER_URL=http://127.0.0.1:8123` and `DB_DATABASE` exported; a scratch `FORGEJO_LOCAL_DIR`; never `pmopm` or `~/.local/share/sdoc-forgejo`). Run a queue worker against `tasks_preview` (`php artisan queue:work --queue=default` with the same environment) or set `QUEUE_CONNECTION=sync` for the served tracker; say which. Show each of these:
+- [ ] **Step 3: Prove it end to end on the real local forge**, using the throwaway tracker pattern from Phase 0 (`tasks_preview` with `php -S`, `PHP_CLI_SERVER_WORKERS=4`, `TRACKER_URL=http://127.0.0.1:8123` and `DB_DATABASE` exported; a scratch `FORGEJO_LOCAL_DIR`; never `projects` or `~/.local/share/sdoc-forgejo`). Run a queue worker against `tasks_preview` (`php artisan queue:work --queue=default` with the same environment) or set `QUEUE_CONNECTION=sync` for the served tracker; say which. Show each of these:
   1. Turning git on creates the webhook on the forge.
   2. An office admin creates a repository on the forge, then links it from the Code tab; the backfill pulls in an existing commit that mentions `TP-1`.
   3. A push of `TP-1 second change` appears in the task's Code section within seconds.

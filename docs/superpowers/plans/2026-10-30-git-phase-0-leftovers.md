@@ -134,7 +134,7 @@
        - SSH, and a push with a token.
   - **`down`:** stops the forge. **`status`:** whether it is running, the URL, and whether the source exists. **`reset`:** down, then deletes the data directory after a typed confirmation, and reminds the user to turn git off for SDOC in the tracker.
   - **Never print** a token or secret.
-- [ ] **Step 2: Check TLS trust.** When `TRACKER_URL` is https (the owner's is `https://pmopm.test`, served through a local proxy on 443), confirm that a Go program using the system roots accepts its certificate. Run a 10-line `go run` with Go from `~/.local/share/mise/installs/go/1.27.0`. Document the result, and the fallback (`TRACKER_URL=http://127.0.0.1:8000` with `php artisan serve`) if it doesn't.
+- [ ] **Step 2: Check TLS trust.** When `TRACKER_URL` is https (the owner's is `https://projects.test`, served through a local proxy on 443), confirm that a Go program using the system roots accepts its certificate. Run a 10-line `go run` with Go from `~/.local/share/mise/installs/go/1.27.0`. Document the result, and the fallback (`TRACKER_URL=http://127.0.0.1:8000` with `php artisan serve`) if it doesn't.
 - [ ] **Step 3: Prove it.**
   - Serve the tracker on a throwaway Postgres database `tasks_preview` at `http://127.0.0.1:8123`. Use `php -S` with the variables exported, not `artisan serve`, which strips them. Seed `WorkspaceDemoSeeder` and `SdocProjectsSeeder`, and add one SDOC member with a login.
   - Run `TRACKER_URL=http://127.0.0.1:8123 deploy/forgejo/local.sh up` twice; the second run must be clean.

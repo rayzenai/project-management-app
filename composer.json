@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "rayzenai/project-management-app",
     "type": "project",
-    "description": "PMOPM — project & task tracking workspace (Laravel + Inertia + Svelte) with a JSON API for companion clients and external systems.",
+    "description": "Project & task tracking workspace (Laravel + Inertia + Svelte) with a JSON API for companion clients and external systems.",
     "keywords": [
         "laravel",
         "inertia",

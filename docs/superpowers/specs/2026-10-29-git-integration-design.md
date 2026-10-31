@@ -115,7 +115,7 @@ Each phase ships on its own and is useful on its own. Risk comes last.
 1. **Keys and numbers** (section above), shipped to everyone first.
 2. **Queue worker.** Production runs `QUEUE_CONNECTION=sync`. Add a
    `tasks-queue` Dokploy service (`queue:work` on Redis, `AUTORUN_ENABLED=false`,
-   healthcheck off), as the old PMOPM instance had. Webhooks and forge calls
+   healthcheck off). Webhooks and forge calls
    need it.
 3. **Tracker as OIDC provider.** Laravel Passport 13 plus
    `jeremy379/laravel-openid-connect` (supports Laravel 13; switch its userinfo

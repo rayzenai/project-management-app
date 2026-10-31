@@ -57,7 +57,7 @@
 
 - [ ] **Step 1: Failing tests:** `it('gives SDOC projects their agreed keys and keeps the old ones as aliases')` (SDOC with "eGP v2" key `EV` and "Hello Sarkar" key `HS`: after `up()`, `EGP` with alias `EV`, `HS` untouched); `it('leaves a hand-chosen key alone')` ("eGP v2" with key `PROC`); `it('skips a project whose agreed key is taken')`; `it('does nothing without SDOC')`. Run the migration by `(require base_path('database/migrations/2026_10_31_140000_give_sdoc_projects_their_agreed_keys.php'))->up()`.
 - [ ] **Step 2:** See them fail; implement; see them pass; full suite; PHPStan.
-- [ ] **Step 3: Check on the local clone** (the dev DB `pmopm` is a copy of production): `php artisan migrate`, then confirm SDOC keys are SG, EGP, GIWMS, SUTRA, GIOMS, HS, NAGARIK, OSOP with aliases EV, GV, S, G, NA, OSOW, and that MoLCFAGA and OPMCM projects are unchanged. Put the before/after in the report.
+- [ ] **Step 3: Check on the local clone** (the dev DB `projects` is a copy of production): `php artisan migrate`, then confirm SDOC keys are SG, EGP, GIWMS, SUTRA, GIOMS, HS, NAGARIK, OSOP with aliases EV, GV, S, G, NA, OSOW, and that MoLCFAGA and OPMCM projects are unchanged. Put the before/after in the report.
 - [ ] **Step 4:** Commit.
 
 ### Task 3: Program managers create projects and appoint managers (security critical)

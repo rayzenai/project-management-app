@@ -13,7 +13,7 @@ use Database\Seeders\WorkspaceDemoSeeder;
  * failure this guards.
  */
 it('leaves no seeded login with an empty personal workspace', function () {
-    config(['project-management.super_admins' => ['pmopm@example.com', 'namru.mail@gmail.com']]);
+    config(['project-management.super_admins' => ['admin@example.com', 'namru.mail@gmail.com']]);
 
     $this->seed(WorkspaceDemoSeeder::class);
 

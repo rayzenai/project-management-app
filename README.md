@@ -1,7 +1,6 @@
-# PMOPM
+# Projects
 
-Project & task tracking workspace for PMOPM (Office of the Prime Minister and
-Council of Ministers) — projects → tasks → subtasks, assignments, notes,
+Project & task tracking workspace — projects → tasks → subtasks, assignments, notes,
 contacts, teams, members, activity log, notifications, and the 100-point plan
 tracker — with a JSON API for the companion mobile client and for any other
 system that needs to read or manage tasks.
@@ -30,8 +29,8 @@ the retired `rayzenai/project-management` Composer package.
 ## Quick start
 
 ```bash
-git clone git@github.com:rayzenai/project-management-app.git pmopm
-cd pmopm
+git clone git@github.com:rayzenai/project-management-app.git projects
+cd projects
 composer setup
 ```
 
@@ -44,7 +43,7 @@ Manual equivalent:
 composer install
 cp .env.example .env
 php artisan key:generate
-createdb pmopm            # then set DB_* / REDIS_* in .env
+createdb projects         # then set DB_* / REDIS_* in .env
 php artisan migrate
 php artisan db:seed       # creates the PM_SUPER_ADMINS logins
 php artisan db:seed --class=SdocProjectsSeeder   # SDOC and its projects (safe to rerun)
@@ -204,12 +203,10 @@ Run that exact image locally against your own Postgres and Redis:
 ./dock.sh down
 ```
 
-The original PMOPM instance ran as three Dokploy applications off this one image
-on a separate server (`202.45.146.44`): `pmopm-api` (image default, runs
-migrations via AUTORUN), `pmopm-scheduler` and `pmopm-queue`. Its GitHub push
-webhooks still exist. Workers need `AUTORUN_ENABLED=false` (so they don't race
-the web app's migrations) and a disabled Swarm healthcheck (they don't run
-nginx). See `~/rayzen/DOKPLOY.md` §4 for the full playbook.
+Worker services (scheduler, queue) run this same image with
+`AUTORUN_ENABLED=false` (so they don't race the web app's migrations) and a
+disabled Swarm healthcheck (they don't run nginx). See `~/rayzen/DOKPLOY.md` §4
+for the full playbook.
 
 ### Production: SDOC instance (`https://tasks.sdoc.gov.np`)
 

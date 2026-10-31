@@ -148,7 +148,7 @@ class WorkspaceDemoSeeder extends Seeder
             [
                 'handle' => 'admin',
                 'name' => 'Workspace Admin',
-                'email' => (string) (config('project-management.super_admins')[0] ?? 'pmopm@example.com'),
+                'email' => (string) (config('project-management.super_admins')[0] ?? 'admin@example.com'),
                 'designation' => 'Chief Secretary',
                 'login' => true,
             ],
@@ -165,7 +165,7 @@ class WorkspaceDemoSeeder extends Seeder
             [
                 'handle' => 'asha',
                 'name' => 'Asha Gurung',
-                'email' => 'asha@pmopm.test',
+                'email' => 'asha@projects.test',
                 'designation' => 'Delivery Unit Chief',
                 'login' => true,
                 'office_admin' => true,
@@ -175,7 +175,7 @@ class WorkspaceDemoSeeder extends Seeder
             [
                 'handle' => 'bikash',
                 'name' => 'Bikash Thapa',
-                'email' => 'bikash@pmopm.test',
+                'email' => 'bikash@projects.test',
                 'designation' => 'Reform Desk Lead',
                 'login' => true,
                 'categories' => ['admin_reform', 'anti_corruption'],
@@ -184,28 +184,28 @@ class WorkspaceDemoSeeder extends Seeder
             [
                 'handle' => 'chhaya',
                 'name' => 'Chhaya Rai',
-                'email' => 'chhaya@pmopm.test',
+                'email' => 'chhaya@projects.test',
                 'designation' => 'Programme Officer',
                 'login' => true,
             ],
             [
                 'handle' => 'deepak',
                 'name' => 'Deepak Shrestha',
-                'email' => 'deepak@pmopm.test',
+                'email' => 'deepak@projects.test',
                 'designation' => 'Field Operations Lead',
                 'login' => true,
             ],
             [
                 'handle' => 'eliza',
                 'name' => 'Eliza Magar',
-                'email' => 'eliza@pmopm.test',
+                'email' => 'eliza@projects.test',
                 'designation' => 'Data Analyst',
                 'login' => true,
             ],
             [
                 'handle' => 'nirmala',
                 'name' => 'Nirmala Bhandari',
-                'email' => 'nirmala@pmopm.test',
+                'email' => 'nirmala@projects.test',
                 'designation' => 'District Liaison',
                 'login' => false,
                 'organization' => 'partner',
@@ -213,7 +213,7 @@ class WorkspaceDemoSeeder extends Seeder
             [
                 'handle' => 'sujan',
                 'name' => 'Sujan Karki',
-                'email' => 'sujan@pmopm.test',
+                'email' => 'sujan@projects.test',
                 'designation' => 'Records Officer (on leave)',
                 'login' => false,
                 'active' => false,

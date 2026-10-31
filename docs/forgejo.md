@@ -169,8 +169,7 @@ timeout never waits on it, but it holds an FPM worker until it is done, and a
 failed run is not retried (the worker retries a job three times, a minute
 apart). Either way, a failed delivery is processed again when someone
 replays it on the forge ([section 12](#12-webhook-and-nightly-reconcile)),
-or the nightly reconcile fills in what it carried. Add the worker, as the old
-PMOPM instance had:
+or the nightly reconcile fills in what it carried. Add the worker:
 
 1. Dokploy, project `tasks`: a new application `tasks-queue` from the same
    repository, branch and Dockerfile as `tasks-web`, with `tasks-web`'s
@@ -1569,9 +1568,8 @@ the new secret.
 - `APP_URL` in `.env` is the address you actually browse the tracker at, and
   one the forge can reach. The sign-in source, the forge's link back and the
   webhook URL (`{APP_URL}/git/webhooks/{id}`) are all built from it, so an
-  `APP_URL` of `https://pmopm.test` while you browse `https://projects.test`
-  (where `pmopm.test` answers 502) breaks all three. Set it to the browsed
-  address and run `php artisan config:clear`; then `up` moves the sign-in
+  `APP_URL` other than the address you browse breaks all three. Set it to the
+  browsed address and run `php artisan config:clear`; then `up` moves the sign-in
   source, and, if git is already on, `php artisan git:reconcile` moves the
   webhook and the link backs.
 - That address is a name, not `127.0.0.1` or `localhost`: Forgejo refuses an
@@ -1649,7 +1647,7 @@ data directory whose `app.ini` this script wrote.
 
 ### An https tracker
 
-The forge, a Go program, must trust the tracker's certificate. `https://pmopm.test`
+The forge, a Go program, must trust the tracker's certificate. `https://projects.test`
 (served through AssistantHub with its own development CA) passed: a Go
 program using the system roots got the proxy's answer, not a certificate
 error. If yours fails, the sign-in stops after the tracker with an `x509`

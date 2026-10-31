@@ -1,6 +1,6 @@
-# PMOPM HTTP API
+# Projects HTTP API
 
-PMOPM exposes the workspace through **two HTTP surfaces that share the same
+The app exposes the workspace through **two HTTP surfaces that share the same
 services, FormRequest authorization, and JsonResources** — only the response
 envelope differs:
 
@@ -983,7 +983,7 @@ so they can also be audited and deleted there.
 ### 2. Call the API
 
 ```bash
-BASE=https://pmopm.example.com/api/v1
+BASE=https://projects.example.com/api/v1
 TOKEN=...
 
 # who am I / which teams do I lead

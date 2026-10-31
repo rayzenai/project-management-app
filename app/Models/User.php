@@ -32,7 +32,7 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
-     * Get this user's PMOPM appearance and notification preferences.
+     * Get this user's appearance and notification preferences.
      *
      * @return HasOne<UserPreference, $this>
      */

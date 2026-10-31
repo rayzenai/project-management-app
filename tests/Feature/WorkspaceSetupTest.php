@@ -51,7 +51,7 @@ class WorkspaceSetupTest extends TestCase
         $this->postJson(route('api.login'), [
             'email' => $user->email,
             'password' => 'secret-password',
-            'device_name' => 'PMOPM test',
+            'device_name' => 'Workspace test',
         ])
             ->assertOk()
             ->assertJsonStructure(['token', 'user' => ['id', 'name', 'email']]);

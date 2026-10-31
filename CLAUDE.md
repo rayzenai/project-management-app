@@ -1,4 +1,4 @@
-# CLAUDE.md — PMOPM
+# CLAUDE.md — Projects
 
 Guidance for Claude Code working in this repo. `~/rayzen/CLAUDE.md` (PHP 8.5,
 Pint, Pest, CI, jsonb, Redis rules) still applies; this file is the app-specific

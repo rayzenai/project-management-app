@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# dock.sh — run PMOPM in Docker, exactly as Dokploy ships it.
+# dock.sh — run the app in Docker, exactly as Dokploy ships it.
 #
 # Builds ./Dockerfile (the real deployment image: nginx + php-fpm 8.5 on 8080,
 # Vite assets baked in, AUTORUN doing migrate/storage:link/config cache on boot)
@@ -29,8 +29,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 API_DIR="$ROOT_DIR"
-IMAGE="pmopm:local"
-CONTAINER="pmopm-web"
+IMAGE="projects:local"
+CONTAINER="projects-web"
 DOCKER_ENV="$API_DIR/.env.docker"
 SOURCE_ENV="$API_DIR/.env"
 PORT="${PORT:-8101}"
