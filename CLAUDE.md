@@ -602,9 +602,11 @@ Shared building blocks (reach for these before writing anything new):
 - Frontend: `resources/js/lib/dates.ts` (days and clock times read as the
   office's, whatever the browser's timezone), `lib/format.ts`
   (`formatDistance`, `plural`), `ReportOptions` and `PersonRef` in
-  `lib/types.ts`, `components/filters/` (`OrganizationSelect`,
-  `ScopeSelects`), `components/organogram/` (`OrganogramOutline`,
-  `OrgChart`, `DesignationsPanel`) and `components/attendance/settings/`.
+  `lib/types.ts`, `lib/reportVisit.svelte.ts` (a report page's filter
+  visit, with its loading and error), `components/filters/`
+  (`OrganizationSelect`, `ScopeSelects`, `DayPicker`),
+  `components/organogram/` (`OrganogramOutline`, `OrgChart`,
+  `DesignationsPanel`) and `components/attendance/settings/`.
 
 - **Structure**: `designations` (per organization; `rank` orders them,
   smaller is more senior), `members.designation_id`,
