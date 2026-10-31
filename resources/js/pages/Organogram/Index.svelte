@@ -111,26 +111,50 @@
 
     let dragging = $state<OrgNode | null>(null);
     let dropTarget = $state<number | 'top' | null>(null);
+    // Bumped by every start and end, so a start that ended before its
+    // frame came round never marks anyone as dragged.
+    let dragTicket = 0;
 
     function startDrag(event: DragEvent, node: OrgNode) {
-        dragging = node;
-        event.dataTransfer?.setData('text/plain', String(node.person.id));
-
         if (event.dataTransfer) {
+            event.dataTransfer.setData('text/plain', String(node.person.id));
             event.dataTransfer.effectAllowed = 'move';
-            const row = (event.currentTarget as HTMLElement).closest(
-                '[data-row]',
-            );
 
-            if (row) {
-                event.dataTransfer.setDragImage(row, 16, 16);
+            // The person's name as the picture, not the whole row: a
+            // full-width drag image is what Chrome on macOS chokes on.
+            const name = (event.currentTarget as HTMLElement)
+                .closest('[data-row]')
+                ?.querySelector('[data-drag-image]');
+
+            if (name instanceof HTMLElement) {
+                event.dataTransfer.setDragImage(name, 12, 12);
             }
         }
+
+        // Change nothing on the page until the drag is under way: Chrome on
+        // macOS drops a drag whose page changes while it starts, and never
+        // says so (no dragend), which left the outline stuck mid-drag.
+        const ticket = ++dragTicket;
+
+        requestAnimationFrame(() => {
+            if (ticket === dragTicket) {
+                dragging = node;
+            }
+        });
     }
 
     function endDrag() {
+        dragTicket++;
         dragging = null;
         dropTarget = null;
+    }
+
+    // A live drag gets no pointer events, so one arriving while a person is
+    // marked as dragged means the browser ended the drag without telling us.
+    function settleDrag() {
+        if (dragging) {
+            endDrag();
+        }
     }
 
     /** A row takes the drop unless it is the person or already their boss. */
@@ -252,6 +276,11 @@
     }
 </script>
 
+<svelte:window
+    onpointermove={settleDrag}
+    onkeydown={(e) => e.key === 'Escape' && settleDrag()}
+/>
+
 <svelte:head>
     <title
         >Organogram{organogram ? ` · ${organogram.organization.name}` : ''} · Workspace</title
@@ -270,6 +299,7 @@
         tabindex="-1"
         class={`row min-h-11 gap-2 py-1.5 ${dropTarget === person.id ? 'bg-accent-soft' : ''} ${dragging?.person.id === person.id ? 'opacity-50' : ''}`}
         style={`--depth:${depth}`}
+        ondragenter={(e) => dragOver(e, person.id)}
         ondragover={(e) => dragOver(e, person.id)}
         ondragleave={(e) => dragLeave(e, person.id)}
         ondrop={(e) => drop(e, person.id)}
@@ -311,7 +341,9 @@
             <div
                 class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-2"
             >
-                <span class="truncate font-medium text-fg">{person.name}</span>
+                <span data-drag-image class="truncate font-medium text-fg"
+                    >{person.name}</span
+                >
                 {#if person.designation}
                     <span class="truncate text-xs text-fg-muted"
                         >{person.designation}</span
@@ -567,6 +599,7 @@
                         role="region"
                         aria-label="No one above"
                         class={`mx-5 mt-3 rounded-md border border-dashed px-3 py-2 text-xs lg:mx-6 ${dropTarget === 'top' ? 'border-accent bg-accent-soft text-accent' : 'border-line text-fg-muted'}`}
+                        ondragenter={(e) => dragOver(e, 'top')}
                         ondragover={(e) => dragOver(e, 'top')}
                         ondragleave={(e) => dragLeave(e, 'top')}
                         ondrop={(e) => drop(e, 'top')}
