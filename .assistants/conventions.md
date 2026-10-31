@@ -47,7 +47,9 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
   same-organization joiners); keep its candidate list and access predicate in step.
 - User-facing role copy says Organizational admin; identifiers remain
   `is_office_admin` / `officeAdminOrganizationId`.
-- Audit trail written only by observers via `ProjectActivityRecorder`.
+- Audit trail is written only by observers via `ProjectActivityRecorder`; its
+  user-facing words come from `ActivityText` (status labels via
+  `Task::labelForStatus`, office dates and `none`), never stored keys/timestamps.
 - New polymorphic subjects must be added to the morph map in
   `AppServiceProvider` (strict morph map: `user`, `task`, `task-comment`, ...).
 - Slugs in routes, never numeric ids, for projects/tasks.
@@ -94,6 +96,9 @@ afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
 `tasks-queue` and switching all services to Redis; `deploy.sh` still deploys
 only web/scheduler.
 Section 14 covers four bounded Forgejo runners, protected main and checks.
+Runner jobs, forge data and forge Postgres live on separate logical volumes
+(`runner-jobs`, `forge-data`, `forge-db`) so a runaway job cannot fill the
+tracker's database disk.
 `git:commit-checks` runs every two minutes with a ten-minute overlap lock.
 Section 13 covers the ten-minute access sync and five-minute commit stats;
 their overlap locks expire after 15 and 30 minutes respectively.
@@ -111,3 +116,5 @@ and request concerns `ReadsReportScope`, `OpensOrganization`, `ReadsDay`,
 Frontend day/time, distance/plural, filter visits and scope pickers have shared
 helpers in `lib/{dates,format,reportVisit.svelte}.ts` and `components/filters/`.
 Every new page belongs in `lib/navigation.ts`; keep the Guide aligned with workflows.
+`WorkspaceOrganization` is a super-admin's one persisted organization switch:
+web list queries receive it, office-page picks update it, and the API has no switch.

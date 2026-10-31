@@ -18,12 +18,14 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
 ## Two delivery surfaces
 
 - **Web**: `routes/web.php`, prefix `workspace`, names `workspace.*`, `auth` +
-  `EnsureCanSignIn` + `ShareWorkspaceData` middleware. Shared Inertia props: `statuses`,
+  `EnsureCanSignIn` + `RemembersOrganizationChoice` + `ShareWorkspaceData`
+  middleware. Shared Inertia props: `statuses`,
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`,
-  `office` (`OfficeLinks` capabilities/count), `clock` (`MyAttendanceQuery`). Cross-cutting
+  `office` (`OfficeLinks` capabilities/count), `clock` (`MyAttendanceQuery`),
+  `organizationSwitch` (`OrganizationChoicesQuery::switcher`). Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens;
   every authenticated route uses `auth:sanctum` + `EnsureCanSignIn`.
@@ -34,6 +36,21 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
+
+## Super-admin organization switch
+
+`Support\WorkspaceOrganization` reads/writes `users.workspace_organization_id`
+(`null` = all) for super-admins only. The sidebar's
+`PUT /workspace/organization` and `RemembersOrganizationChoice` on a page's
+`?organization=` pick share it; `OrganizationChoicesQuery::defaultId` uses the
+choice when a page offers that organization. People supports explicit `all`.
+
+Web Home, Projects, My Workspace, the activity feed and Code activity pass the
+choice into their queries. `Project::inOrganization` is the common project
+scope; Code activity narrows a super-admin's all-organizations report to the
+chosen organization. Search, quick add, My week and single project/program
+pages stay organization-wide. API controllers pass no choice because the app
+has no workspace switch.
 
 ## Authentication
 
@@ -207,6 +224,8 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   program ("General (Revenue)"), mirrored by `lib/projectLabel.ts`.
   `ProjectResource.can_publish` exposes the organizational-admin/super-admin
   publication capability.
+  `scopeInOrganization` is the optional web-list narrowing used by the
+  super-admin organization switch; null keeps every visible organization.
   Stored `key` (1 to 10 uppercase ASCII letters) is also its `code`;
   `ProjectKeys` suggests a unique key from the title (fallback `P`). Current keys
   and `ProjectKeyAlias` entries reserve keys within the organization. Renaming
@@ -275,6 +294,10 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   links, repository grants and PR activity. Forge-originated entries have no
   actor; PR activity belongs only to tasks of the repository's own project.
   Git activity also requires code access, including in dashboard, task and activity feeds.
+  `Support\ActivityText` gives observer descriptions their public words:
+  configured status labels (`Task::labelForStatus`), office dates, labelled
+  priorities/note types and `none`, never stored keys, timestamps or plan
+  numbers. The `2026_10_31_190000` migration rewords reconstructable old rows.
   **WorkspaceNote** — personal stickies.
   **ProjectAssignment/Note/Contact, TaskComment** — task children.
 
@@ -408,7 +431,10 @@ The one-time timestamp migration converts existing UTC wall-clock values.
 - `GitRepositoryGrant` stores unique repository/member `read|write` access and
   `granted_by`. `scopeEffective` / `isEffective` require an active, undeleted
   member in the project's organization or on its team; other grants stay stored
-  but give nothing. `GitRepository` adds `protects_main` and `access_synced_at`.
+  but give nothing. `GitRepository` adds `protects_main`, `access_synced_at` and
+  non-fillable `protected_branch`: the forge's default when linked (`main` when
+  absent, always `main` for a tracker-created repository). `default_branch`
+  keeps following the forge; unlinking and linking again records a new fixed branch.
 - Paired `RepositoryGrantController`s serve scoped
   `projects/{project:slug}/repositories/{repository}/access` (list/add),
   `/access/candidates`, and `/access/{grant}` (PATCH/DELETE), using shared
@@ -440,7 +466,7 @@ The one-time timestamp migration converts existing UTC wall-clock values.
 - `Services/Git/RepositoryAccess::sync` removes unwanted tracker-known
   collaborators first (a failed removal stops grants), PUTs maintainers and
   effective grants at the higher permission, then calls `MainBranch::ensure`
-  on the default branch every run. A PUT 422 waits for first forge sign-in;
+  on `protected_branch` every run. A PUT 422 waits for first forge sign-in;
   other refusals allow remaining PUTs then fail; unreachable fails immediately.
   A refused rule sets `protects_main` false and fails the run after remaining
   work. Bots, `forge-admin` and unknown logins are untouched. Only
@@ -480,6 +506,9 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   `/people/{user}` returning the latest 50 scoped commits; unknown/out-of-scope
   people return an empty list. Runbook: `docs/forgejo.md` section 13; spec/plan:
   `docs/superpowers/{specs,plans}/2026-10-30-git-phase-2-access-and-reports*.md`.
+- `GuideController` renders `GuideQuery`: the forges `GitAccess` admits (the
+  reader's own organization first) and their stored forge username, never a
+  token. The Guide turns these into its copyable code workflow walkthrough.
 
 ## Structure, attendance, work and maintenance
 
@@ -490,7 +519,7 @@ in these controllers, requests, resources or pages.
 
 - Shared reads: `Structure/PeopleInViewQuery` lists permitted people (optional
   `under`, `attending: true`), `OrganizationChoicesQuery` chooses/defaults offices
-  (own office first, otherwise first offered by name for a super-admin;
+  (the offered workspace choice first, then own office, then the first by name;
   `withAttendance` limits choices),
   `ReportOptionsQuery` supplies report filters, `PersonRef::of` emits
   `{id, name, designation}` from a loaded relation, never querying.
@@ -550,7 +579,8 @@ in these controllers, requests, resources or pages.
   `canViewMaintenance` (= `administers`), checks manager-less/empty/quiet active
   projects, unassigned/inactive-only tasks, unmanaged programs, disconnected
   people/missing designations/logins/inactive bosses, missing attendance places
-  and networks, and failing/unprotected/untested default branches. New checks
+  and networks, and failing/unprotected/untested protected branches plus
+  repositories whose forge default moved away from that branch. New checks
   belong in its lists, `countOf`, and the Maintenance page's report type.
   `QUIET_DAYS = 30`, `COUNT_TTL_SECONDS = 300`; full reads refresh the count.
 
@@ -558,9 +588,13 @@ in these controllers, requests, resources or pages.
 
 - `forgejo/runner/` contains four organization runners in Dokploy's `git-runners`
   compose app, one job each; all four share one dind limited to 4 vCPUs, 10 GB
-  memory and 30 GB file-backed ext4 Docker storage, with no actions cache. `forgejo/Dockerfile` enables Actions
+  memory and 30 GB file-backed ext4 Docker storage, with no actions cache.
+  Dind, forge data and forge Postgres are mounted on separate logical volumes
+  (`runner-jobs`, `forge-data`, `forge-db`), isolating the tracker database disk
+  from job images, artifacts and logs. `forgejo/Dockerfile` enables Actions
   with GitHub as the default action source. Runbook: `docs/forgejo.md` section 14.
-- `Services/Git/MainBranch::RULE` describes every branch protection field:
+- `Services/Git/MainBranch::RULE` describes every branch protection field on
+  each repository's fixed `protected_branch` (never its later forge default):
   no pushes including repository admins, one approval and all status checks
   (`*`) passed; no tests means no merge. Forge site admins can bypass it.
   `ensure` reads first, writes only on drift, creates a missing rule (rereads a
@@ -579,7 +613,8 @@ in these controllers, requests, resources or pages.
   90s; 0/401/403/429 stop a connection. `ReconcileGit` replaces hooks missing
   events or with recent bad signatures (new hook/secret then delete old), since
   Forgejo's hook edit does not write the secret/workflow events.
-- `MainChecksQuery` reads default-branch checks in one query;
-  `GitRepositoryResource` exposes `main_checks` and `protects_main`, task/PR/code
+- `MainChecksQuery` reads protected-branch checks in one query;
+  `GitRepositoryResource` exposes `protected_branch`, `default_branch`,
+  `main_checks` and `protects_main`, task/PR/code
   report payloads expose checks, code activity counts passed/failed checks, and
-  Maintenance lists failing/unprotected/untested repositories.
+  Maintenance lists failing/unprotected/untested repositories and default-branch drift.

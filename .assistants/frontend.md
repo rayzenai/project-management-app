@@ -25,13 +25,18 @@ links; register every new page there. `AppShell` follows the current page's area
 `[` hides the panel (persisted), picking an area while hidden floats it over the
 content. `managedPrograms`, `gitEnabled` and `office` supply contextual links.
 Organizations remains super-admin-only.
+When `organizationSwitch` is shared, `NavPanel` offers All organizations or one
+organization; `AppShell` narrows the sidebar's projects but leaves quick add's
+project list whole. Home, Projects, My Workspace, activity and Code activity
+follow the choice; Home names it. Search and single project/program pages do not.
 `Guide` (`/workspace/guide`, sidebar link for all signed-in
 users) explains the organization/program/project/team model, role routines, ministry title
 mapping, dependencies, overdue work and shortcuts. Its Code section appears
-when shared `gitEnabled` is true, covering repository creation/access and
-matching commits by configuring git to use the tracker's sign-in email (the
-forge receives that email automatically at sign-in). Keep it aligned with
-changes to how people work.
+when shared `gitEnabled` is true. `GuideQuery` supplies the reader's accessible
+forges (own organization first) and forge username; `CommandBlock` makes its
+setup/clone/branch/workflow examples copyable. It walks from first forge sign-in
+through repository creation/import, every change, runners, secrets, checks and
+the protected-branch merge rule. Keep it aligned with changes to how people work.
 
 ## Key components (`resources/js/components`)
 
@@ -71,6 +76,9 @@ Program manager of, Project manager of, Member of. Program manager roles stay
 locked until handed over; organizational admins may untick a managed project,
 leaving it manager-less while keeping the person on its team. New choices name
 the current manager.
+`team/DesignationSelect` lets structure managers create an organization's
+designation (name + rank through the organogram endpoint) and select it without
+leaving the person form; the designations panel labels its holder count as people.
 `lib/memberRoles.ts` filters options by organization, preserves held roles
 outside those lists and sends only changed complete sets. Directory rows show
 roles followed by other memberships; `lib/projectLabel.ts` includes the
@@ -125,6 +133,9 @@ show `has_pull_request`. Code data is access-gated by the backend; public-projec
 visibility alone does not expose the Code tab. `lib/types.ts` holds Program,
 Git repository/grant/access, code-activity report, PR/task-code and shared
 program/git context shapes.
+Repository rows show the fixed `protected_branch` and warn when the forge's
+`default_branch` moved away from it, because work merged into the new default
+skips the tracker's rule.
 Reports: `Reports/CodeActivity` filters by date, project or program, defaults
 to name order with sortable columns and compares up to four people. It shows
 uncounted work, a side-by-side comparison and `reports/DailyCodeChart` (code
@@ -223,7 +234,8 @@ Branding section covers moving old accounts onto an offered SDOC theme.
   `ReportVisit` in `lib/reportVisit.svelte.ts` handles filter visits/loading/errors;
   `filters/{OrganizationSelect,ScopeSelects,DayPicker}` and `work/RangePicker`
   share filter UI. Reuse these instead of adding page-local copies.
-- `ChecksMark` shows commit/PR/default-branch test results in Code, task code
+- `ChecksMark` shows commit/PR/protected-branch test results in Code, task code
   and code activity. Repository rows show `main_checks` and protection;
-  Maintenance lists failing/unprotected/untested main branches. The Guide
+  Maintenance lists failing/unprotected/untested protected branches and forge
+  defaults moved away from them. The Guide
   covers organogram, attendance, work and protected-main/testing workflows.

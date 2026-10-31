@@ -27,7 +27,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `DeadlineReminderTest` also excludes failed (closed) work. `TeamActivityTest`
   covers roster/manager audit entries, team notifications, actor suppression,
   project-feed visibility on web/API and the publication capability.
-  `GuidePageTest` checks signed-in access and guest redirects;
+  `GuidePageTest` checks signed-in access, guest redirects and the reader's
+  accessible forge list/username without leaking tokens;
   `SdocProjectsSeederTest` checks project/team creation, safe reruns and
   isolation from another organization's same-named project, plus agreed-key
   updates with aliases and preservation of admin-chosen keys.
@@ -80,6 +81,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   shared context, bounded query counts and the roster predicate twins.
   `AssignmentMemberTest` also checks blank roles do not add empty parentheses
   to assignment activity descriptions.
+  `ActivityWordingTest` covers status/priority/note labels, office-formatted
+  dates, task lifecycle wording and migration of reconstructable old rows.
 - Code: `ProjectRepositoryTest` + `Api/ProjectRepositoryTest` cover link/search/
   unlink gates, ownership, concurrency, secret redaction and backfill.
   `ProjectCodeViewTest` covers project/task payloads, PR flags and repository
@@ -136,15 +139,23 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `Api/Work/WorkApiTest` verifies API parity. `Tests/TestCase` flushes
   `WorkspaceAccess`/OrgChart memos between tests (SQLite reuses IDs).
 - `MaintenanceTest` checks each repair list, admin/tenant scope, no-manager
-  projects, designation/organogram issues and count caching. `MemberRolesTest`
+  projects, designation/organogram issues, code-check/protection/default-drift
+  issues and count caching. `MemberRolesTest`
   and its API twin also cover permitted project-manager removal with membership
   retained and forbidden program-manager removal.
 - `CommitChecksTest` covers status normalization and safe relative/absolute run
-  URLs, webhook/command refresh, PR head copying/catch-up, default-branch checks,
+  URLs, webhook/command refresh, PR head copying/catch-up, protected-branch checks,
   retry/connection limits and schedule. `GitWebhookTest`/`GitReconcileTest`
   additionally cover workflow events, bad-signature hook replacement and secret
   rotation; access-sync tests cover full main-rule enforcement without redundant
   writes. `CreateRepositoryTest` checks README creation before protection.
+- `OrganizationSwitchTest` covers super-admin-only persistence, sidebar/shared
+  state, page-pick synchronization, deleted organizations, People/office-page
+  defaults, web list narrowing (Home, Projects, My Workspace, activity) and API
+  independence. `CodeActivityTest` covers its switched-organization report scope.
+- Repository link/create/access-sync tests cover fixing `protected_branch` at
+  link time, forcing tracker-created repositories to `main`, keeping the rule
+  there after forge default drift and exposing both branches in resources/UI.
 
 ## Running
 

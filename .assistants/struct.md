@@ -12,7 +12,8 @@ app/
     Controllers/Api/       # /api/v1 controllers (Sanctum) + Concerns/RespondsWithServiceResult
     Controllers/Workspace/ # /workspace Inertia controllers + Concerns/RedirectsWithServiceResult
     Middleware/            # ShareWorkspaceData, EnsureProjectVisible, HandleInertiaRequests,
-                           # EnsureCanSignIn (deactivation gate), EnsureCanUseGit (OIDC git gate)
+                           # EnsureCanSignIn (deactivation gate), EnsureCanUseGit (OIDC git gate),
+                           # RemembersOrganizationChoice (super-admin workspace switch)
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
                            # Concerns/ChecksMemberRoles validates person-form role sets
     Resources/             # JsonResources ($wrap = null)
@@ -30,7 +31,7 @@ app/
                            # Concerns/BuildsWorkspaceNotification
   Observers/               # activity writers + ProgramObserver (manager notification)
   Providers/AppServiceProvider.php  # manage-workspace Gate, morph map, observer registry
-  Queries/                 # heavy reads (ProjectShow, OrganizationIndex,
+  Queries/                 # heavy reads (ProjectShow, OrganizationIndex, Guide,
                            # TeamIndex/Candidates, ProjectProgress/ProgramProgress + ProgressReport,
                            # RepositoryCandidates, RepositoryAccess/Candidates, TaskCode, CodeActivity, ...)
   Queries/Structure/       # PeopleInView, OrganizationChoices, ReportOptions, PersonRef, Organogram
@@ -49,7 +50,8 @@ app/
   Support/                 # WorkspaceAccess (ALL role decisions), ServiceResult,
                            # Assignees (existing assignees + eligible team joiners),
                            # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background,
-                           # LoginThrottle (shared web/API credential limit), OrgChart, OfficeLinks
+                           # LoginThrottle (shared web/API credential limit), OrgChart, OfficeLinks,
+                           # WorkspaceOrganization (super-admin switch), ActivityText (audit wording)
   Support/Attendance/      # AttendanceCalendar, DaySchedule, PunchPlace
   Support/Git/             # GitAccess, GitUsernames, TaskReferences, DiffStats, CommentSyntax,
                            # GeneratedFiles, Checks, Oidc/{IdentityEntity,IdentityRepository}
@@ -76,7 +78,8 @@ database/
                            # Git code/link/delivery tables, programs + projects.program_id,
                            # 2026_10_31_140000 SDOC agreed-key migration (frozen map + aliases),
                            # repository grants/access-sync fields + commit author/line-count fields,
-                           # designations/reporting lines, attendance/leave, title retirement, Git checks
+                           # designations/reporting lines, attendance/leave, title retirement, Git checks,
+                           # audit rewording, fixed protected branches, users' workspace organization
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (fresh databases only per CLAUDE.md; never production)
 resources/
@@ -87,9 +90,9 @@ resources/
                            # Organogram/Index, Attendance/{Register,Leave,Settings},
                            # Work/{Day,Person,Team}, Maintenance/Index
   js/components/           # shared UI (AppShell, ThemeToggle, AppearanceConfig,
-                           # StatusGlyph, QuickAdd*, AutosaveStatus, ...)
+                           # StatusGlyph, QuickAdd*, AutosaveStatus, CommandBlock, ...)
                            # plus project/ views + ProjectTeamPanel, ProgressReport,
-                           # team/{RosterSearch,MemberRoleFields,GanttChart,TaskReportDrawer},
+                           # team/{RosterSearch,MemberRoleFields,DesignationSelect,GanttChart,TaskReportDrawer},
                            # task dependency UI, program/ProgramForm,
                            # project/{ProjectCreateForm,CodeView,RepositoryAccess}, TaskCodePanel,
                            # reports/{DailyCodeChart,PersonCommitsDrawer}, ChecksMark,
