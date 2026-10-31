@@ -12,7 +12,7 @@ app/
     Controllers/Api/       # /api/v1 controllers (Sanctum) + Concerns/RespondsWithServiceResult
     Controllers/Workspace/ # /workspace Inertia controllers + Concerns/RedirectsWithServiceResult
     Middleware/            # ShareWorkspaceData, EnsureProjectVisible, HandleInertiaRequests,
-                           # EnsureCanUseGit (OIDC sign-in gate)
+                           # EnsureCanSignIn (deactivation gate), EnsureCanUseGit (OIDC git gate)
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
                            # Concerns/ChecksMemberRoles validates person-form role sets
     Resources/             # JsonResources ($wrap = null)
@@ -41,14 +41,18 @@ app/
                            # RepositoryAccess + RepositoryAccessFailed, CommitStats
   Support/                 # WorkspaceAccess (ALL role decisions), ServiceResult,
                            # Assignees (existing assignees + eligible team joiners),
-                           # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background
+                           # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background,
+                           # LoginThrottle (shared web/API credential limit)
   Support/Git/             # GitAccess, GitUsernames, TaskReferences, DiffStats, CommentSyntax,
                            # GeneratedFiles, Oidc/{IdentityEntity,IdentityRepository}
 routes/
-  web.php                  # /workspace/* Inertia routes (names workspace.*), guest login
+  web.php                  # /workspace/* Inertia routes (names workspace.*), guest login;
+                           # authenticated routes enforce EnsureCanSignIn
                            # /oauth/authorize + /oauth/token (forge sign-in), /git/webhooks/{connection}
-  api.php                  # /api/v1/* Sanctum routes (names api.*)
-  console.php              # daily maintenance + ten-minute access sync / five-minute commit stats
+  api.php                  # /api/v1/* Sanctum routes (names api.*); authenticated routes
+                           # enforce EnsureCanSignIn
+  console.php              # daily maintenance + ten-minute access sync / five-minute commit stats;
+                           # forwards scheduled output to the container log when available
 config/
   project-management.php   # status workflow, super-admins, trash TTL, reminders, suggested forge URL
   government.php           # plan-tracker metadata (categories, deadline types, oath date)

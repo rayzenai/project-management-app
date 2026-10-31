@@ -18,13 +18,14 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
 ## Two delivery surfaces
 
 - **Web**: `routes/web.php`, prefix `workspace`, names `workspace.*`, `auth` +
-  `ShareWorkspaceData` middleware. Shared Inertia props: `statuses`,
+  `EnsureCanSignIn` + `ShareWorkspaceData` middleware. Shared Inertia props: `statuses`,
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`. Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
-- **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens.
+- **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens;
+  every authenticated route uses `auth:sanctum` + `EnsureCanSignIn`.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and organizational-admin
   context plus `features: {task_notes, contacts}`, `managed_program_ids` and
@@ -32,6 +33,22 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
+
+## Authentication
+
+`WorkspaceAccess::canSignIn` is the one rule for signing in and remaining
+signed in: a linked member must be active, while a configured super-admin or a
+login with no member may still sign in. Web and API credential exchanges refuse
+a deactivated person after validating the right password, without creating a
+session/token. `EnsureCanSignIn` then covers every authenticated workspace/API
+route and `/oauth/authorize`: it invalidates a deactivated web session with an
+Inertia full-page visit to login, or answers an API token with 401. Both use the
+same stable deactivation message.
+
+`Support\LoginThrottle` gives web and API login one shared key per normalized
+email and IP address. Five wrong passwords across either surface exhaust the
+minute-long limit; a successful login clears it. Web returns the normal
+validation error flow, while API throttling uses 429.
 
 ## Optional task features
 
@@ -68,7 +85,7 @@ queries and authorized note/contact endpoints remain available.
 5. **Member** — sees their teams, teammates and projects plus public
    projects in their organization; manages own subtasks and notes.
 
-Key methods: `isSuperAdmin`, `memberFor` (read-only),
+Key methods: `isSuperAdmin`, `memberFor` (read-only), `canSignIn`,
 `officeAdminOrganizationId`, `administers`, `canEditTeam` (organization admins),
 `canAppointProjectManager` / project twin `canChooseManagerOf`,
 `canAppointAsProjectManager` (eligible replacement),
@@ -286,7 +303,9 @@ the sole Forgejo client; reruns keep its id and rotate its secret.
 overlapping; see the phase 1 map below for repair and removal safeguards.
 `git:sync-access [--connection=]` runs every ten minutes with a 15-minute
 overlap lock; `git:commit-stats [--limit=300]` every five minutes with a
-30-minute lock. See phase 2 below.
+30-minute lock. When `/proc/1/fd/2` is writable, the schedule appends every
+event's output there so command output and `LOG_CHANNEL=stderr` logs reach the
+scheduler container log. See phase 2 below.
 
 `SdocProjectsSeeder` seeds SDOC and eight private projects with their own teams,
 initially without managers; not called by `DatabaseSeeder`. Per `CLAUDE.md`, use
@@ -309,7 +328,7 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   `OrganizationResource.git` exposes only base URL, owner and URL to super-admins.
 - OIDC: Passport + `jeremy379/laravel-openid-connect` (replaces Passport's provider;
   Passport auto-discovery/routes disabled). `routes/web.php` registers authenticated
-  `/oauth/authorize` behind `EnsureCanUseGit` and sessionless, throttled
+  `/oauth/authorize` behind `EnsureCanSignIn` then `EnsureCanUseGit`, and sessionless, throttled
   `/oauth/token`; `config/openid.php` enables discovery/JWKS, disables userinfo,
   fixes issuer to `APP_URL`. `OAuthClient` skips consent. Access/refresh lifetimes:
   one hour/one day. `User` retains Sanctum's `HasApiTokens`.
@@ -437,7 +456,9 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   comment rules; state is separate per hunk side. `GeneratedFiles` excludes
   dependencies, lockfiles and build output from code counts. `ComputeCommitStats`
   attempts oldest pending commits first, failed attempts counting toward the
-  limit, and fills older unmatched `user_id`s. Status 0/401/403/429 stops that
+  limit, and fills older unmatched `user_id`s. Forge sign-in sets the account's
+  primary email to the tracker login email, so developers normally match commits
+  by configuring git to use that same email. Status 0/401/403/429 stops that
   connection; other failures skip a commit, five consecutive 5xx stop it.
 - `CodeActivityQuery` applies `WorkspaceAccess::codeReportScope`: whole
   repositories of the organizations/programs/projects the viewer runs, plus

@@ -45,9 +45,14 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   masking, warning logs and completion feedback.
 - `OidcProviderTest` covers discovery/JWKS, code-to-token claims, access/tenant
   gates (including cross-organization teams), scope filtering, redirect/consent
-  handling, SPA login redirect, sessionless throttled token route, persistent
+  handling, SPA login redirect, deactivated-session sign-out before the git gate,
+  sessionless throttled token route, persistent
   Forgejo-safe usernames, purge schedule and client command, with temporary
   signing keys generated in the test.
+- `LoginTest` + `Api/AuthApiTest` cover the shared five-attempt email/IP throttle
+  across both credential surfaces, reset after a successful login, deactivated
+  login refusal, the super-admin exception, and termination of existing web
+  sessions/API tokens after deactivation.
 - `OptionalFeaturesTest` covers default-off notes/contacts, web/API preference
   updates, preservation of other settings, boolean validation, shared task-note
   feed gating and API user feature context. `TaskNotesInWorkspaceFeedTest`

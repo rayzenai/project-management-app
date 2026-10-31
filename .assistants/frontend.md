@@ -26,8 +26,9 @@ keep it active. `Guide` (`/workspace/guide`, sidebar link for all signed-in
 users) explains the organization/program/project/team model, role routines, ministry title
 mapping, dependencies, overdue work and shortcuts. Its Code section appears
 when shared `gitEnabled` is true, covering repository creation/access and
-matching commits via SDOC Git Settings, Emails. Keep it aligned with changes
-to how people work.
+matching commits by configuring git to use the tracker's sign-in email (the
+forge receives that email automatically at sign-in). Keep it aligned with
+changes to how people work.
 
 ## Key components (`resources/js/components`)
 
@@ -122,7 +123,8 @@ program/git context shapes.
 Reports: `Reports/CodeActivity` filters by date, project or program, defaults
 to name order with sortable columns and compares up to four people. It shows
 uncounted work, a side-by-side comparison and `reports/DailyCodeChart` (code
-lines changed per day with daily commit counts in its tooltip).
+lines changed per day with daily commit counts in its tooltip). The empty state
+also directs people to commit with the email they use to sign in.
 `reports/PersonCommitsDrawer` fetches scoped recent commits for a selected
 person, preserving the report's range/filters.
 Comments: the full task page passes `mentionCandidates` (`{id, name}` only,
