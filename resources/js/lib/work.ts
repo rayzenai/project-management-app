@@ -1,3 +1,4 @@
+import type { AttendanceTotals } from './attendanceRegister';
 import { clockTime } from './dates';
 import type { DayRange } from './dates';
 import type { Id, PersonRef, ReportOptions } from './types';
@@ -71,23 +72,6 @@ export interface WorkAttendanceDay {
     place: string | null;
 }
 
-/**
- * One person's attendance over a range, from AttendanceSummaryQuery. Null
- * when the organization's attendance is off.
- */
-export interface WorkAttendanceSummary {
-    days_expected: number;
-    days_present: number;
-    days_late: number;
-    minutes_worked: number;
-    no_clock_out_days: number;
-    outside_punches: number;
-    leave_days: number;
-    kaaj_days: number;
-    /** Their usual arrival, HH:MM, or null. */
-    usual_in: string | null;
-}
-
 // ---- Today's work ----
 
 export interface WorkDayRow {
@@ -134,7 +118,7 @@ export interface WorkDayProps {
 
 export interface WorkTeamRow {
     member: PersonRef;
-    attendance: WorkAttendanceSummary | null;
+    attendance: AttendanceTotals | null;
     tasks_closed: number;
     tasks_started: number;
     /** Overdue now, whatever the range. */
@@ -169,7 +153,7 @@ export interface WorkPersonProps {
         reports_to: { id: Id; name: string } | null;
     };
     range: WorkRangeFilters;
-    attendance: WorkAttendanceSummary | null;
+    attendance: AttendanceTotals | null;
     tasks: {
         closed: WorkTask[];
         started: WorkTask[];

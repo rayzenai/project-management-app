@@ -60,7 +60,7 @@ it('returns the day\'s register to a director, for the people below them', funct
         ->and($response->json('data.people.0.member.name'))->toBe('Anil')
         ->and($response->json('data.people.0.state'))->toBe('in')
         ->and($response->json('data.people.1.leave.place'))->toBe('Pokhara')
-        ->and($response->json('filters'))->toBe(['date' => '2026-11-02', 'under' => null, 'organization' => $this->sdoc->id]);
+        ->and($response->json('filters'))->toBe(['date' => '2026-11-02', 'organization' => $this->sdoc->id, 'under' => null]);
 });
 
 it('takes a date and someone to narrow to', function () {
@@ -111,7 +111,7 @@ it('totals attendance over a range for the people in view', function () {
             'usual_in' => '10:05',
         ])
         ->and($rows['Bikash'])->toMatchArray(['days_expected' => 3, 'kaaj_days' => 3, 'days_present' => 0]) // kaaj Thu, Fri, Mon
-        ->and($response->json('filters'))->toBe(['from' => '2026-10-26', 'to' => '2026-11-02', 'under' => null, 'organization' => $this->sdoc->id]);
+        ->and($response->json('filters'))->toBe(['from' => '2026-10-26', 'to' => '2026-11-02', 'organization' => $this->sdoc->id, 'under' => null]);
 });
 
 it('defaults the totals to the last seven days and refuses more than 92', function () {

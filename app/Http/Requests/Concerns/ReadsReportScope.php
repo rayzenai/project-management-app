@@ -39,7 +39,7 @@ trait ReadsReportScope
         return false;
     }
 
-    protected function authorizeScope(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
+    public function authorize(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
     {
         $user = $this->user();
         $organizationId = $user === null ? null : $this->requestedOrganizationId($organizations, $user);
@@ -77,6 +77,16 @@ trait ReadsReportScope
     public function organizationId(): int
     {
         return (int) $this->scopeOrganizationId;
+    }
+
+    /**
+     * The scope as applied, for the report's `appliedFilters()`.
+     *
+     * @return array{organization: int, under: int|null}
+     */
+    protected function scopeFilters(): array
+    {
+        return ['organization' => $this->organizationId(), 'under' => $this->scopeUnder?->id];
     }
 
     public function under(): ?Member

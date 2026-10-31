@@ -1,10 +1,8 @@
 <script lang="ts">
-    import { inertia, page, router } from '@inertiajs/svelte';
+    import { inertia, page } from '@inertiajs/svelte';
     import {
         Briefcase,
         CalendarDays,
-        ChevronLeft,
-        ChevronRight,
         CircleCheck,
         CircleDashed,
         Clock,
@@ -18,23 +16,19 @@
     import { SvelteSet } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import DayPicker from '../../components/filters/DayPicker.svelte';
     import ScopeSelects from '../../components/filters/ScopeSelects.svelte';
     import Spinner from '../../components/Spinner.svelte';
+    import type { DaySchedule } from '../../lib/attendance';
     import type {
-        DaySchedule,
         RegisterFilters,
         RegisterRow,
         RegisterState,
         RegisterSummary,
     } from '../../lib/attendanceRegister';
-    import {
-        clockTime,
-        dayRange,
-        isoDay,
-        longDay,
-        shiftDay,
-    } from '../../lib/dates';
+    import { clockTime, dayRange, isoDay, longDay } from '../../lib/dates';
     import { formatDistance } from '../../lib/format';
+    import { ReportVisit } from '../../lib/reportVisit.svelte';
     import type { Id, ReportOptions, SharedProps } from '../../lib/types';
 
     /**
@@ -71,36 +65,20 @@
     const isToday = $derived(filters.date === today);
 
     // ---- Filters: every change is a visit with the query string ----
-    let loading = $state(false);
-    let error = $state<string | null>(null);
+    const report = new ReportVisit();
 
     function visit(change: Partial<RegisterFilters>) {
         const next = { ...filters, ...change };
 
-        router.get(
+        report.go(
             '/workspace/attendance',
             {
                 date: next.date,
-                ...(next.under ? { under: next.under } : {}),
-                ...(options.organizations.length > 0
-                    ? { organization: next.organization }
-                    : {}),
+                under: next.under,
+                organization: next.organization,
             },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                onStart: () => (loading = true),
-                onSuccess: () => (error = null),
-                onError: (errors) => (error = Object.values(errors)[0] ?? null),
-                onFinish: () => (loading = false),
-            },
+            options.organizations,
         );
-    }
-
-    function setDate(value: string) {
-        if (value !== '' && value !== filters.date) {
-            visit({ date: value });
-        }
     }
 
     // ---- Groups ----
@@ -224,40 +202,10 @@
         <!-- Filters -->
         <div>
             <div class="flex flex-wrap items-center gap-2">
-                <div class="flex items-center gap-1">
-                    <button
-                        type="button"
-                        class="btn-icon"
-                        aria-label="Day before"
-                        onclick={() =>
-                            visit({ date: shiftDay(filters.date, -1) })}
-                    >
-                        <ChevronLeft class="h-4 w-4" />
-                    </button>
-                    <input
-                        type="date"
-                        class="input h-7 w-auto py-0"
-                        aria-label="Day"
-                        value={filters.date}
-                        onchange={(e) => setDate(e.currentTarget.value)}
-                    />
-                    <button
-                        type="button"
-                        class="btn-icon"
-                        aria-label="Day after"
-                        onclick={() =>
-                            visit({ date: shiftDay(filters.date, 1) })}
-                    >
-                        <ChevronRight class="h-4 w-4" />
-                    </button>
-                </div>
-                {#if !isToday}
-                    <button
-                        type="button"
-                        class="btn-ghost"
-                        onclick={() => visit({ date: today })}>Today</button
-                    >
-                {/if}
+                <DayPicker
+                    date={filters.date}
+                    onchange={(value) => visit({ date: value })}
+                />
                 <ScopeSelects
                     {options}
                     organization={filters.organization}
@@ -265,17 +213,19 @@
                     label="Whose attendance"
                     onchange={(change) => visit(change)}
                 />
-                {#if loading}
+                {#if report.loading}
                     <Spinner size={14} />
                 {/if}
             </div>
-            {#if error}
-                <p role="alert" class="mt-1.5 text-xs text-danger">{error}</p>
+            {#if report.error}
+                <p role="alert" class="mt-1.5 text-xs text-danger">
+                    {report.error}
+                </p>
             {/if}
         </div>
 
         <!-- The number first -->
-        <section class="transition-opacity" class:opacity-60={loading}>
+        <section class="transition-opacity" class:opacity-60={report.loading}>
             <div class="flex flex-wrap items-end justify-between gap-4">
                 <div class="min-w-0">
                     <p class="text-xs text-fg-muted">{longDay(filters.date)}</p>
@@ -385,7 +335,7 @@
         {:else}
             <section
                 class="panel overflow-hidden transition-opacity"
-                class:opacity-60={loading}
+                class:opacity-60={report.loading}
             >
                 {#each groups as group, i (group.key)}
                     {@const open = expanded.has(group.key)}

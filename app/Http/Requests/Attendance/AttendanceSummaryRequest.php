@@ -4,8 +4,6 @@ namespace App\Http\Requests\Attendance;
 
 use App\Http\Requests\Concerns\ReadsDayRange;
 use App\Http\Requests\Concerns\ReadsReportScope;
-use App\Queries\Structure\OrganizationChoicesQuery;
-use App\Queries\Structure\PeopleInViewQuery;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -21,11 +19,6 @@ class AttendanceSummaryRequest extends FormRequest
     use ReadsDayRange;
     use ReadsReportScope;
 
-    public function authorize(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
-    {
-        return $this->authorizeScope($organizations, $people);
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -37,18 +30,13 @@ class AttendanceSummaryRequest extends FormRequest
     /**
      * The filters as applied, for the page to show and send back.
      *
-     * @return array{from: string, to: string, under: int|null, organization: int}
+     * @return array{organization: int, under: int|null, from: string, to: string}
      */
     public function appliedFilters(): array
     {
         [$from, $to] = $this->range();
 
-        return [
-            'from' => $from->toDateString(),
-            'to' => $to->toDateString(),
-            'under' => $this->under()?->id,
-            'organization' => $this->organizationId(),
-        ];
+        return ['from' => $from->toDateString(), 'to' => $to->toDateString(), ...$this->scopeFilters()];
     }
 
     protected function maySeeOrganization(Authenticatable $user, int $organizationId): bool

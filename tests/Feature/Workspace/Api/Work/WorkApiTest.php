@@ -29,7 +29,7 @@ it("answers today's work for an organization", function () {
 
     $response = $this->getJson("/api/v1/workspace/organizations/{$this->w->sdoc->id}/work/day")->assertOk();
 
-    expect($response->json('filters'))->toBe(['organization' => $this->w->sdoc->id, 'date' => '2026-10-28', 'under' => null])
+    expect($response->json('filters'))->toBe(['date' => '2026-10-28', 'organization' => $this->w->sdoc->id, 'under' => null])
         ->and($response->json('data.summary'))->toBe([
             'people' => 2,
             'tasks_closed' => 2,
@@ -65,7 +65,7 @@ it("answers a team's week, narrowed to someone's team", function () {
             'pull_requests_merged' => 1,
         ])
         ->and($response->json('data.under'))->toBe(['id' => $director->id, 'name' => 'Dipak Director'])
-        ->and($response->json('filters'))->toBe(['organization' => $this->w->sdoc->id, 'from' => '2026-10-26', 'to' => '2026-10-28', 'under' => $director->id]);
+        ->and($response->json('filters'))->toBe(['from' => '2026-10-26', 'to' => '2026-10-28', 'organization' => $this->w->sdoc->id, 'under' => $director->id]);
 });
 
 it("answers a person's week to them and to whoever is above them", function () {

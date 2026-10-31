@@ -38,7 +38,7 @@ final class TeamWorkQuery
     public function run(Authenticatable $viewer, int $organizationId, CarbonImmutable $from, CarbonImmutable $to, ?Member $under = null): array
     {
         $inView = $this->people->run($viewer, $organizationId);
-        $people = $under === null ? $inView : $this->people->run($viewer, $organizationId, $under);
+        $people = $this->people->run($viewer, $organizationId, $under);
         $activity = $this->activity->forMembers($viewer, $people, $from, $to, withOverdue: true);
         $attendance = $this->attendance->range($organizationId, array_values(array_map(intval(...), $people->modelKeys())), $from, $to);
 

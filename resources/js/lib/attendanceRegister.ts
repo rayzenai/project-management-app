@@ -16,16 +16,6 @@ export type LeaveKind = 'leave' | 'kaaj';
 
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
-export interface DaySchedule {
-    date: string;
-    is_workday: boolean;
-    holiday: string | null;
-    expects_work: boolean;
-    start: string;
-    end: string;
-    late_after: string;
-}
-
 export interface RegisterSummary {
     staff: number;
     on_leave: number;
@@ -63,8 +53,8 @@ export interface RegisterFilters {
     organization: number;
 }
 
-export interface AttendanceSummaryRow {
-    member: PersonRef;
+/** A person's attendance over a range (AttendanceSummaryQuery). */
+export interface AttendanceTotals {
     days_expected: number;
     days_present: number;
     days_late: number;
@@ -73,7 +63,12 @@ export interface AttendanceSummaryRow {
     outside_punches: number;
     leave_days: number;
     kaaj_days: number;
+    /** Their usual arrival, HH:MM, or null. */
     usual_in: string | null;
+}
+
+export interface AttendanceSummaryRow extends AttendanceTotals {
+    member: PersonRef;
 }
 
 export interface LeaveItem {

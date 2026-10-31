@@ -199,7 +199,7 @@ it('sums the day and names who did nothing recorded', function () {
         'nothing_recorded' => 0,
     ])
         ->and($page['date'])->toBe('2026-10-28')
-        ->and($page['filters'])->toBe(['organization' => $this->w->sdoc->id, 'date' => '2026-10-28', 'under' => null]);
+        ->and($page['filters'])->toBe(['date' => '2026-10-28', 'organization' => $this->w->sdoc->id, 'under' => null]);
 
     $other = workPage($this->actingAs($this->w->director)->get('/workspace/work?date=2026-10-20'), 'Work/Day');
 
@@ -369,7 +369,7 @@ it("lists a team's week by name, one row of figures each", function () {
         ])
         ->and($rows['Anil Gurung']['overdue'])->toBe(1)
         ->and($page['range'])->toBe(['from' => '2026-10-26', 'to' => '2026-10-28'])
-        ->and($page['filters'])->toBe(['organization' => $this->w->sdoc->id, 'from' => '2026-10-26', 'to' => '2026-10-28', 'under' => null]);
+        ->and($page['filters'])->toBe(['from' => '2026-10-26', 'to' => '2026-10-28', 'organization' => $this->w->sdoc->id, 'under' => null]);
 });
 
 // ---- Scale ----

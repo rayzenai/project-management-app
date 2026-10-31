@@ -8,6 +8,7 @@
     import RangePicker from '../../components/work/RangePicker.svelte';
     import { dayRange, hoursLabel } from '../../lib/dates';
     import { plural } from '../../lib/format';
+    import { ReportVisit } from '../../lib/reportVisit.svelte';
     import type { Id } from '../../lib/types';
     import { personWorkHref } from '../../lib/work';
     import type {
@@ -24,30 +25,20 @@
     let { organization_id, under, people, options, filters }: WorkTeamProps =
         $props();
 
-    let loading = $state(false);
-    let error = $state<string | null>(null);
+    const report = new ReportVisit();
 
     function visit(change: Partial<WorkTeamFilters>) {
         const next = { ...filters, ...change };
 
-        router.get(
+        report.go(
             '/workspace/work/team',
             {
                 from: next.from,
                 to: next.to,
-                ...(options.organizations.length > 0
-                    ? { organization: next.organization }
-                    : {}),
-                ...(next.under !== null ? { under: next.under } : {}),
+                organization: next.organization,
+                under: next.under,
             },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                onStart: () => (loading = true),
-                onSuccess: () => (error = null),
-                onError: (errors) => (error = Object.values(errors)[0] ?? null),
-                onFinish: () => (loading = false),
-            },
+            options.organizations,
         );
     }
 
@@ -194,12 +185,14 @@
                     range={{ from: filters.from, to: filters.to }}
                     onchange={(range: WorkRangeFilters) => visit(range)}
                 />
-                {#if loading}
+                {#if report.loading}
                     <Spinner size={14} />
                 {/if}
             </div>
-            {#if error}
-                <p role="alert" class="mt-1.5 text-xs text-danger">{error}</p>
+            {#if report.error}
+                <p role="alert" class="mt-1.5 text-xs text-danger">
+                    {report.error}
+                </p>
             {/if}
         </div>
 
@@ -212,7 +205,10 @@
                 </p>
             </section>
         {:else}
-            <section class="transition-opacity" class:opacity-60={loading}>
+            <section
+                class="transition-opacity"
+                class:opacity-60={report.loading}
+            >
                 <div class="overflow-x-auto">
                     <table
                         class={`w-full text-[13px] ${withAttendance ? 'min-w-[860px]' : 'min-w-[640px]'}`}

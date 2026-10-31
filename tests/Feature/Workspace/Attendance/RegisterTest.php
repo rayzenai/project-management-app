@@ -204,7 +204,7 @@ it('shows an admin everyone in the organization and a director only the people b
         ->and($boss['summary']['staff'])->toBe(14)
         ->and($director['summary']['staff'])->toBe(10)
         ->and(array_keys(registerRows($director)))->not->toContain('Peer', 'Executive Director', 'Director')
-        ->and($admin['filters'])->toBe(['date' => '2026-11-02', 'under' => null, 'organization' => $this->sdoc->id]);
+        ->and($admin['filters'])->toBe(['date' => '2026-11-02', 'organization' => $this->sdoc->id, 'under' => null]);
 });
 
 it('offers the teams of people in view as the person filter', function () {

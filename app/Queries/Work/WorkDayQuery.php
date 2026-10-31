@@ -43,7 +43,7 @@ final class WorkDayQuery
     public function run(Authenticatable $viewer, int $organizationId, CarbonImmutable $date, ?Member $under = null): array
     {
         $inView = $this->people->run($viewer, $organizationId);
-        $people = $under === null ? $inView : $this->people->run($viewer, $organizationId, $under);
+        $people = $this->people->run($viewer, $organizationId, $under);
         $activity = $this->activity->forMembers($viewer, $people, $date, $date);
         $attendance = $this->attendance->day($viewer, $organizationId, $date, $under);
 

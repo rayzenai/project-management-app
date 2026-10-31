@@ -1,13 +1,15 @@
 <script lang="ts">
-    import { inertia, router } from '@inertiajs/svelte';
-    import { CalendarDays, ChevronLeft, ChevronRight } from '@lucide/svelte';
+    import { inertia } from '@inertiajs/svelte';
+    import { CalendarDays } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import DayPicker from '../../components/filters/DayPicker.svelte';
     import ScopeSelects from '../../components/filters/ScopeSelects.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import StatusGlyph from '../../components/StatusGlyph.svelte';
-    import { isoDay, longDay, shiftDay } from '../../lib/dates';
+    import { isoDay, longDay } from '../../lib/dates';
     import { plural } from '../../lib/format';
+    import { ReportVisit } from '../../lib/reportVisit.svelte';
     import type { Id } from '../../lib/types';
     import {
         attendanceDayLabel,
@@ -39,40 +41,24 @@
     const today = isoDay(new Date());
     const isToday = $derived(date === today);
 
-    let loading = $state(false);
-    let error = $state<string | null>(null);
+    const report = new ReportVisit();
 
     function visit(change: Partial<WorkDayFilters>) {
         const next = { ...filters, ...change };
 
-        router.get(
+        report.go(
             '/workspace/work',
             {
                 date: next.date,
-                ...(options.organizations.length > 0
-                    ? { organization: next.organization }
-                    : {}),
-                ...(next.under !== null ? { under: next.under } : {}),
+                organization: next.organization,
+                under: next.under,
             },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                onStart: () => (loading = true),
-                onSuccess: () => (error = null),
-                onError: (errors) => (error = Object.values(errors)[0] ?? null),
-                onFinish: () => (loading = false),
-            },
+            options.organizations,
         );
     }
 
     function setScope(change: { organization?: Id; under: Id | null }) {
         visit(change);
-    }
-
-    function setDate(value: string) {
-        if (value !== '' && value !== date) {
-            visit({ date: value });
-        }
     }
 
     const fmt = (n: number) => n.toLocaleString();
@@ -168,44 +154,18 @@
                     label="Whose work"
                     onchange={setScope}
                 />
-                <div class="flex items-center gap-1">
-                    <button
-                        type="button"
-                        class="btn-icon"
-                        aria-label="The day before"
-                        onclick={() => setDate(shiftDay(date, -1))}
-                    >
-                        <ChevronLeft class="h-4 w-4" />
-                    </button>
-                    <input
-                        type="date"
-                        class="input h-7 w-auto py-0"
-                        aria-label="Day"
-                        value={date}
-                        onchange={(e) => setDate(e.currentTarget.value)}
-                    />
-                    <button
-                        type="button"
-                        class="btn-icon"
-                        aria-label="The day after"
-                        onclick={() => setDate(shiftDay(date, 1))}
-                    >
-                        <ChevronRight class="h-4 w-4" />
-                    </button>
-                    {#if !isToday}
-                        <button
-                            type="button"
-                            class="btn-ghost"
-                            onclick={() => setDate(today)}>Today</button
-                        >
-                    {/if}
-                </div>
-                {#if loading}
+                <DayPicker
+                    {date}
+                    onchange={(value) => visit({ date: value })}
+                />
+                {#if report.loading}
                     <Spinner size={14} />
                 {/if}
             </div>
-            {#if error}
-                <p role="alert" class="mt-1.5 text-xs text-danger">{error}</p>
+            {#if report.error}
+                <p role="alert" class="mt-1.5 text-xs text-danger">
+                    {report.error}
+                </p>
             {/if}
         </div>
 
@@ -263,7 +223,7 @@
         {:else}
             <section
                 class="panel transition-opacity"
-                class:opacity-60={loading}
+                class:opacity-60={report.loading}
             >
                 {#each people as row (row.member.id)}
                     {@const attendance = row.attendance

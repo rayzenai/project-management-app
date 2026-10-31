@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { inertia, router } from '@inertiajs/svelte';
+    import { inertia } from '@inertiajs/svelte';
     import { CircleCheck, Clock, Code, GitMerge } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
@@ -8,6 +8,7 @@
     import RangePicker from '../../components/work/RangePicker.svelte';
     import { dayRange, hoursLabel, weekday } from '../../lib/dates';
     import { plural } from '../../lib/format';
+    import { ReportVisit } from '../../lib/reportVisit.svelte';
     import { personWorkHref, taskHref } from '../../lib/work';
     import type { WorkPersonProps, WorkRangeFilters } from '../../lib/work';
 
@@ -27,22 +28,13 @@
         filters,
     }: WorkPersonProps = $props();
 
-    let loading = $state(false);
-    let error = $state<string | null>(null);
+    const report = new ReportVisit();
 
     function visit(next: WorkRangeFilters) {
-        router.get(
-            personWorkHref(member.id),
-            { from: next.from, to: next.to },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                onStart: () => (loading = true),
-                onSuccess: () => (error = null),
-                onError: (errors) => (error = Object.values(errors)[0] ?? null),
-                onFinish: () => (loading = false),
-            },
-        );
+        report.go(personWorkHref(member.id), {
+            from: next.from,
+            to: next.to,
+        });
     }
 
     const fmt = (n: number) => n.toLocaleString();
@@ -104,18 +96,18 @@
                     range={{ from: filters.from, to: filters.to }}
                     onchange={visit}
                 />
-                {#if loading}
+                {#if report.loading}
                     <Spinner size={14} />
                 {/if}
             </div>
         </div>
-        {#if error}
-            <p role="alert" class="text-xs text-danger">{error}</p>
+        {#if report.error}
+            <p role="alert" class="text-xs text-danger">{report.error}</p>
         {/if}
 
         <div
             class="grid gap-3 transition-opacity sm:grid-cols-2 lg:grid-cols-3"
-            class:opacity-60={loading}
+            class:opacity-60={report.loading}
         >
             {#if attendance}
                 <section class="panel px-4 py-3">
