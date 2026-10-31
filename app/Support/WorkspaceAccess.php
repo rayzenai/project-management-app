@@ -932,4 +932,16 @@ class WorkspaceAccess
 
         return $member !== null && self::oversees($user, $member);
     }
+
+    /**
+     * Record approved leave or kaaj for someone directly: whoever
+     * `oversees` them, for an active person of an organization whose
+     * attendance is on (never oneself; ask instead).
+     */
+    public static function canRecordLeaveFor(?Authenticatable $user, Member $member): bool
+    {
+        return $member->is_active
+            && self::attendanceEnabled($member->organization_id)
+            && self::oversees($user, $member);
+    }
 }

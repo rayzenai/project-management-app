@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AssignmentController;
+use App\Http\Controllers\Api\Attendance\AttendanceRegisterController;
+use App\Http\Controllers\Api\Attendance\LeaveController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CodeActivityController;
 use App\Http\Controllers\Api\ContactController;
@@ -126,6 +128,15 @@ Route::prefix('v1')->name('api.')->group(function () {
             // Attendance: the clock, the register, leave and kaaj, settings.
             // (attendance: clock and settings routes end)
 
+            // The register (who is in on a day), attendance totals, leave and kaaj.
+            Route::get('/organizations/{organization}/attendance', [AttendanceRegisterController::class, 'index'])->name('organizations.attendance');
+            Route::get('/organizations/{organization}/attendance/summary', [AttendanceRegisterController::class, 'summary'])->name('organizations.attendance.summary');
+            Route::get('/leave', [LeaveController::class, 'index'])->name('leave.index');
+            Route::post('/leave', [LeaveController::class, 'store'])->name('leave.store');
+            Route::post('/leave/{leaveRequest}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
+            Route::post('/leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+            Route::post('/leave/{leaveRequest}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+            Route::post('/members/{member}/leave', [LeaveController::class, 'record'])->name('members.leave.store');
             // (attendance: register, leave and kaaj routes end)
 
             // Work reports: today's work, a person's work, a team's work.

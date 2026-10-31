@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\GitWebhookController;
 use App\Http\Controllers\Workspace\AssignmentController;
+use App\Http\Controllers\Workspace\Attendance\AttendanceRegisterController;
+use App\Http\Controllers\Workspace\Attendance\LeaveController;
 use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
@@ -142,6 +144,14 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         // Attendance: the clock, the register, leave and kaaj, settings.
         // (attendance: clock and settings routes end)
 
+        // The register (who is in today), leave and kaaj.
+        Route::get('/attendance', [AttendanceRegisterController::class, 'index'])->name('attendance');
+        Route::get('/leave', [LeaveController::class, 'index'])->name('leave');
+        Route::post('/leave', [LeaveController::class, 'store'])->name('leave.store');
+        Route::post('/leave/{leaveRequest}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
+        Route::post('/leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+        Route::post('/leave/{leaveRequest}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+        Route::post('/members/{member}/leave', [LeaveController::class, 'record'])->name('members.leave.store');
         // (attendance: register, leave and kaaj routes end)
 
         // Work reports: today's work, a person's work, a team's work.
