@@ -38,7 +38,7 @@ final class TeamWorkQuery
         $inView = $this->people->run($viewer, $organizationId);
         $people = $under === null ? $inView : $this->people->run($viewer, $organizationId, $under);
         $activity = $this->activity->forMembers($viewer, $people, $from, $to, withOverdue: true);
-        $attendance = $this->attendance->range($organizationId, array_values(array_map(intval(...), $people->modelKeys())), $from, $to);
+        $attendance = $this->attendance->range($organizationId, array_values(array_map(intval(...), $people->reject(fn (Member $member): bool => $member->attendance_exempt)->modelKeys())), $from, $to);
 
         $rows = [];
 

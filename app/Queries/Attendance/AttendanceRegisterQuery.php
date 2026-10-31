@@ -81,6 +81,14 @@ final class AttendanceRegisterQuery
             ->unique('member_id')
             ->keyBy('member_id');
 
+        // Nobody is listed for a day before they were added, unless they
+        // punched that day.
+        $listed = $listed
+            ->reject(fn (Member $member): bool => $member->created_at !== null
+                && $member->created_at->toDateString() > $day->date->toDateString()
+                && ! $punches->has($member->id))
+            ->values();
+
         $rows = array_values($listed
             ->map(fn (Member $member): array => $this->row(
                 $member,

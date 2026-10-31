@@ -22,7 +22,8 @@ beforeEach(function () {
 
     $this->org = Organization::factory()->create();
     AttendanceSetting::factory()->create(['organization_id' => $this->org->id, 'enabled_at' => '2026-10-01 09:00:00']);
-    $this->asha = Member::factory()->create(['organization_id' => $this->org->id, 'name' => 'Asha']);
+    // People on the staff since before the week, unless a test says otherwise.
+    $this->asha = Member::factory()->create(['organization_id' => $this->org->id, 'name' => 'Asha', 'created_at' => '2026-09-01 09:00:00']);
     $this->query = app(AttendanceSummaryQuery::class);
 });
 
@@ -123,7 +124,7 @@ it('takes the median clock-in as the usual time', function () {
 });
 
 it('expects nothing of an exempt person, and nothing before attendance was turned on', function () {
-    $exempt = Member::factory()->create(['organization_id' => $this->org->id, 'attendance_exempt' => true]);
+    $exempt = Member::factory()->create(['organization_id' => $this->org->id, 'attendance_exempt' => true, 'created_at' => '2026-09-01 09:00:00']);
     AttendanceSetting::query()->where('organization_id', $this->org->id)->update(['enabled_at' => '2026-11-04 15:00:00']);
 
     $rows = $this->query->forMembers([$exempt->id, $this->asha->id], CarbonImmutable::parse('2026-11-02'), CarbonImmutable::parse('2026-11-08'));
@@ -154,7 +155,7 @@ it('returns a row of zeros for people with nothing, and nothing for nobody', fun
 });
 
 it('reads the same few queries for one person or many, over any number of days', function () {
-    $people = Member::factory()->count(6)->create(['organization_id' => $this->org->id]);
+    $people = Member::factory()->count(6)->create(['organization_id' => $this->org->id, 'created_at' => '2026-09-01 09:00:00']);
 
     foreach ($people as $person) {
         summaryPunch($person, 'in', '2026-11-02 10:00:00');
@@ -174,4 +175,10 @@ it('reads the same few queries for one person or many, over any number of days',
 
     expect($count($people->modelKeys(), '2026-08-10'))->toBe($one)
         ->and($one)->toBeLessThanOrEqual(5);
+});
+
+it('expects nobody before the day they were added', function () {
+    $newcomer = Member::factory()->create(['organization_id' => $this->org->id, 'created_at' => '2026-11-04 11:00:00']);
+
+    expect(summaryWeek($this->query, $newcomer)['days_expected'])->toBe(3);
 });

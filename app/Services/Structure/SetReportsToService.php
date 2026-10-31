@@ -26,6 +26,8 @@ class SetReportsToService
     {
         $bossId = $boss instanceof Member ? (int) $boss->getKey() : $boss;
 
+        // Retried on a deadlock with a person-form save, which locks the
+        // same rows in another order (see MemberController::LOCK_ATTEMPTS).
         $result = DB::transaction(function () use ($member, $bossId): ServiceResult {
             if ($member->organization_id === null) {
                 return $this->refuse('Only people in an organization report to someone.');
@@ -69,7 +71,7 @@ class SetReportsToService
             $member->setRelation('reportsTo', $bossRow);
 
             return ServiceResult::success($member, "{$member->name} now reports to {$bossRow->name}.");
-        });
+        }, 3);
 
         OrgChart::flush();
 

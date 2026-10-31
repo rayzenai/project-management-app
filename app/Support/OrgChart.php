@@ -49,7 +49,8 @@ final class OrgChart
     }
 
     /**
-     * The member's higher authority, theirs, and so on to the top.
+     * The member's higher authority, theirs, and so on to the top; never a
+     * deleted person, and the walk stops at one, as `descendantIds` does.
      *
      * @return list<int>
      */
@@ -61,9 +62,11 @@ final class OrgChart
                 WITH RECURSIVE above(id) AS (
                     SELECT reports_to_id FROM members WHERE id = ? AND reports_to_id IS NOT NULL
                     UNION
-                    SELECT m.reports_to_id FROM members m JOIN above a ON m.id = a.id WHERE m.reports_to_id IS NOT NULL
+                    SELECT m.reports_to_id FROM members m JOIN above a ON m.id = a.id
+                    WHERE m.reports_to_id IS NOT NULL AND m.deleted_at IS NULL
                 )
-                SELECT id FROM above WHERE id <> ?
+                SELECT above.id FROM above JOIN members up ON up.id = above.id
+                WHERE above.id <> ? AND up.deleted_at IS NULL
                 SQL, [$id, $id]));
     }
 

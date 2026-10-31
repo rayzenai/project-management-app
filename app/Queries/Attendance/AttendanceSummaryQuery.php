@@ -77,7 +77,7 @@ final class AttendanceSummaryQuery
             return $totals;
         }
 
-        $members = Member::withTrashed()->whereIn('id', $ids)->get(['id', 'organization_id', 'attendance_exempt']);
+        $members = Member::withTrashed()->whereIn('id', $ids)->get(['id', 'organization_id', 'attendance_exempt', 'created_at']);
 
         /** @var array<int, list<DaySchedule>> $days */
         $days = [];
@@ -111,10 +111,14 @@ final class AttendanceSummaryQuery
                 continue;
             }
 
+            // Nobody is expected before they were added.
+            $joined = $member->created_at?->toDateString();
+            $from = $countsFrom[$organizationId];
+
             $totals[(int) $member->id] = $this->totals(
                 $member,
                 $days[$organizationId],
-                $countsFrom[$organizationId],
+                $from === null || $joined === null ? $from : max($from, $joined),
                 $punches,
                 $leave->get($member->id, new Collection),
                 $now,

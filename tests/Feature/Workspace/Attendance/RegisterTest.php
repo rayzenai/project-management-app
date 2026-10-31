@@ -7,6 +7,7 @@ use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\User;
+use App\Queries\Attendance\AttendanceRegisterQuery;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Testing\TestResponse;
@@ -274,4 +275,16 @@ it('opens a super-admin on the first organization with attendance on, and lists 
 
 it('rejects a malformed date', function () {
     $this->actingAs($this->admin->user)->get('/workspace/attendance?date=2-11-2026')->assertSessionHasErrors('date');
+});
+
+it('lists nobody on a day before they were added, unless they punched that day', function () {
+    $newcomer = registerPerson($this->sdoc, 'Newcomer', ['created_at' => '2026-11-03 10:00:00']);
+    $early = registerPerson($this->sdoc, 'Early bird', ['created_at' => '2026-11-03 10:00:00']);
+    registerPunch($early, 'in', '2026-11-02 09:50:00');
+
+    $names = collect(app(AttendanceRegisterQuery::class)
+        ->run($this->admin->user, $this->sdoc->id, CarbonImmutable::parse('2026-11-02'))['people'])
+        ->pluck('member.name');
+
+    expect($names)->not->toContain('Newcomer')->toContain('Early bird');
 });

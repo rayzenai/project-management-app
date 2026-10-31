@@ -3,6 +3,7 @@
 use App\Models\AttendancePunch;
 use App\Models\AttendanceSetting;
 use App\Models\LeaveRequest;
+use App\Models\Member;
 use Carbon\CarbonImmutable;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
@@ -18,6 +19,8 @@ use Tests\Feature\Workspace\Work\WorkFixture as W;
 beforeEach(function () {
     $this->travelTo(CarbonImmutable::parse('2026-10-28 15:00:00'));
     $this->w = W::make();
+    // The fixture's people were on the staff before the weeks these tests read.
+    Member::query()->update(['created_at' => '2026-09-01 09:00:00']);
 });
 
 /** @return array<string, mixed> */

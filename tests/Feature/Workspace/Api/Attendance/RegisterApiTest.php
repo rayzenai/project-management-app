@@ -28,7 +28,7 @@ beforeEach(function () {
     $person = function (Organization $organization, string $name, array $attributes = []): Member {
         $user = User::factory()->create(['name' => $name]);
 
-        return Member::factory()->linkedTo($user)->create(['organization_id' => $organization->id, ...$attributes]);
+        return Member::factory()->linkedTo($user)->create(['organization_id' => $organization->id, 'created_at' => '2026-09-01 09:00:00', ...$attributes]);
     };
 
     $this->boss = User::factory()->create(['email' => 'boss@example.com']);

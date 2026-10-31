@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Organization;
 use App\Models\ProjectActivity;
 use App\Models\User;
+use App\Support\OrgChart;
 use App\Support\WorkspaceAccess;
 
 /*
@@ -130,4 +131,25 @@ it('needs the field, even when it is null', function () {
         ->assertSessionHasErrors('reports_to_id');
 
     expect($this->engineer->fresh()->reports_to_id)->toBe($this->director->id);
+});
+
+it('never lets an organizational admin put someone over a fellow admin', function () {
+    $coAdmin = Member::factory()->withUser()->create(['organization_id' => $this->org->id, 'is_office_admin' => true]);
+
+    $this->actingAs($this->admin->user)
+        ->putJson("/api/v1/workspace/members/{$coAdmin->id}/reports-to", ['reports_to_id' => $this->engineer->id])
+        ->assertForbidden();
+
+    expect($coAdmin->fresh()->reports_to_id)->toBeNull();
+
+    $this->actingAs($this->boss)
+        ->putJson("/api/v1/workspace/members/{$coAdmin->id}/reports-to", ['reports_to_id' => $this->ed->id])
+        ->assertOk();
+});
+
+it('walks up past nobody deleted', function () {
+    Member::query()->whereKey($this->director->id)->delete(); // a bulk delete skips the observer
+    OrgChart::flush();
+
+    expect(OrgChart::ancestorIds($this->engineer))->toBe([]);
 });

@@ -31,6 +31,13 @@ use RuntimeException;
  */
 class MemberController extends Controller
 {
+    /**
+     * A save that sets someone's higher authority locks rows in another order
+     * than the organogram does; on Postgres a rare clash between the two is
+     * a deadlock, which Laravel retries this many times.
+     */
+    private const LOCK_ATTEMPTS = 3;
+
     public function store(StoreMemberRequest $request, SendLoginDetailsService $loginDetails, UpdateMemberRolesService $roles, SetReportsToService $reportsTo): RedirectResponse
     {
         $password = $request->validated('password') ?: Str::password(14, symbols: false);
@@ -123,7 +130,7 @@ class MemberController extends Controller
                 }
                 $user->save();
             }
-        });
+        }, self::LOCK_ATTEMPTS);
 
         SyncForgeOwners::dispatchFor($ownersChanged);
 

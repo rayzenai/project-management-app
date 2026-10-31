@@ -8,8 +8,10 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Choosing whom a person reports to (null: no one): whoever administers the
- * person's organization, since the lines decide who sees whose attendance,
- * location and work. Who may be chosen is SetReportsToService's check
+ * person's organization and may manage the person (canManageMember: never
+ * another organizational admin or a super-admin's login), since the lines
+ * decide who sees whose attendance, location and work, the same rule as the
+ * person form. Who may be chosen is SetReportsToService's check
  * (same organization, active, no loop), answered as a 422.
  */
 class SetReportsToRequest extends FormRequest
@@ -19,7 +21,8 @@ class SetReportsToRequest extends FormRequest
         $member = $this->route('member');
 
         return $member instanceof Member
-            && WorkspaceAccess::canManageStructure($this->user(), $member->organization_id);
+            && WorkspaceAccess::canManageStructure($this->user(), $member->organization_id)
+            && WorkspaceAccess::canManageMember($this->user(), $member);
     }
 
     /**

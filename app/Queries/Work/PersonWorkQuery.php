@@ -47,7 +47,7 @@ final class PersonWorkQuery
                 'reports_to' => $boss === null ? null : ['id' => (int) $boss->getKey(), 'name' => $boss->name],
             ],
             'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
-            'attendance' => $member->organization_id === null
+            'attendance' => $member->organization_id === null || $member->attendance_exempt
                 ? null
                 : ($this->attendance->range((int) $member->organization_id, [(int) $member->getKey()], $from, $to)[(int) $member->getKey()] ?? null),
             'tasks' => [
