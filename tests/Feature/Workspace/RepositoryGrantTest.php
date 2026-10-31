@@ -14,6 +14,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 
 /*
  * Giving people access to a linked repository from the web: list, search,
@@ -66,7 +67,11 @@ beforeEach(function () {
 /** @return array{0: User, 1: Member} */
 function grantWebPerson(Organization $organization, string $name, ?string $gitUsername = null, ?string $title = null, bool $admin = false): array
 {
-    $user = User::factory()->create(['name' => $name, 'git_username' => $gitUsername]);
+    static $people = 0;
+
+    // A fixed email, so a candidate search by name never matches a random one.
+    $email = Str::slug($name, '.').'.'.(++$people).'@sdoc.example';
+    $user = User::factory()->create(['name' => $name, 'email' => $email, 'git_username' => $gitUsername]);
     $member = Member::factory()->linkedTo($user)->create(['organization_id' => $organization->id, 'is_office_admin' => $admin, 'title' => $title]);
 
     return [$user, $member];
