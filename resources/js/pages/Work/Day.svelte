@@ -6,14 +6,12 @@
     import Spinner from '../../components/Spinner.svelte';
     import StatusGlyph from '../../components/StatusGlyph.svelte';
     import ScopeSelects from '../../components/work/ScopeSelects.svelte';
+    import { isoDay, longDay, shiftDay } from '../../lib/dates';
+    import { plural } from '../../lib/format';
     import type { Id } from '../../lib/types';
     import {
-        addDays,
         attendanceDayLabel,
-        dayLabel,
-        isoDay,
         personWorkHref,
-        plural,
         taskHref,
     } from '../../lib/work';
     import type {
@@ -174,7 +172,7 @@
                         type="button"
                         class="btn-icon"
                         aria-label="The day before"
-                        onclick={() => setDate(addDays(date, -1))}
+                        onclick={() => setDate(shiftDay(date, -1))}
                     >
                         <ChevronLeft class="h-4 w-4" />
                     </button>
@@ -189,7 +187,7 @@
                         type="button"
                         class="btn-icon"
                         aria-label="The day after"
-                        onclick={() => setDate(addDays(date, 1))}
+                        onclick={() => setDate(shiftDay(date, 1))}
                     >
                         <ChevronRight class="h-4 w-4" />
                     </button>
@@ -211,7 +209,7 @@
         </div>
 
         <div>
-            <h1 class="text-[15px] font-semibold">{dayLabel(date)}</h1>
+            <h1 class="text-[15px] font-semibold">{longDay(date)}</h1>
             <div
                 class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-fg-muted"
             >

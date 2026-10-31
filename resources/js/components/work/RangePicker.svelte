@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { weekRanges } from '../../lib/work';
+    import { weekRanges } from '../../lib/dates';
     import type { WorkRangeFilters } from '../../lib/work';
     import PillGroup from '../PillGroup.svelte';
 

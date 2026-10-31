@@ -1,3 +1,5 @@
+import { clockTime } from './dates';
+import { formatDistance } from './format';
 /**
  * Attendance: the clock (MyAttendanceQuery, shared as the `attendance`
  * prop) and an organization's settings (AttendanceSettingsQuery).
@@ -106,23 +108,6 @@ const PLACE_PHRASES: Record<PunchPlace, string> = {
     outside: 'outside the office',
     unknown: 'from an unknown place',
 };
-
-/**
- * "9:52": the server's local time read straight from the ISO string, so a
- * browser in another timezone shows the office's clock.
- */
-export function clockTime(iso: string): string {
-    const match = /T(\d{2}):(\d{2})/.exec(iso);
-
-    return match ? `${Number(match[1])}:${match[2]}` : '';
-}
-
-/** "40 m" or "3.4 km". */
-export function formatDistance(metres: number): string {
-    return metres < 1000
-        ? `${Math.round(metres)} m`
-        : `${(metres / 1000).toFixed(1)} km`;
-}
 
 /** "Clocked in at 9:52 on the office network, 40 m from SDOC." */
 export function describePunch(punch: Punch): string {

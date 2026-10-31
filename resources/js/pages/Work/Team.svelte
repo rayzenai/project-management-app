@@ -6,13 +6,10 @@
     import Spinner from '../../components/Spinner.svelte';
     import RangePicker from '../../components/work/RangePicker.svelte';
     import ScopeSelects from '../../components/work/ScopeSelects.svelte';
+    import { dayRange, hoursLabel } from '../../lib/dates';
+    import { plural } from '../../lib/format';
     import type { Id } from '../../lib/types';
-    import {
-        hoursLabel,
-        personWorkHref,
-        plural,
-        rangeLabel,
-    } from '../../lib/work';
+    import { personWorkHref } from '../../lib/work';
     import type {
         WorkRangeFilters,
         WorkTeamFilters,
@@ -338,7 +335,10 @@
                 >
                     <span
                         >Listed by name; click a heading to sort. Overdue is as
-                        of today; the rest is {rangeLabel(filters)}.</span
+                        of today; the rest is {dayRange(
+                            filters.from,
+                            filters.to,
+                        )}.</span
                     >
                     <span
                         >{plural(people.length, 'person', 'people')}{under

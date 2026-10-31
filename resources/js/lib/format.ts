@@ -122,3 +122,19 @@ export function priorityColor(priority: string | null | undefined): string {
             return 'bg-surface-alt text-fg-faint';
     }
 }
+
+/** "40 m", "3.4 km", "12 km"; empty for none. */
+export function formatDistance(metres: number | null): string {
+    if (metres === null) {
+        return '';
+    }
+
+    return metres < 1000
+        ? `${Math.round(metres)} m`
+        : `${(metres / 1000).toFixed(metres < 10_000 ? 1 : 0)} km`;
+}
+
+/** "1 commit", "3 commits", "2 people". */
+export function plural(n: number, one: string, many = `${one}s`): string {
+    return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+}

@@ -19,14 +19,6 @@
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import Spinner from '../../components/Spinner.svelte';
-    import {
-        clockTime,
-        dayRange,
-        distance,
-        isoDay,
-        longDay,
-        shiftDay,
-    } from '../../lib/attendanceRegister';
     import type {
         DaySchedule,
         RegisterFilters,
@@ -35,6 +27,14 @@
         RegisterState,
         RegisterSummary,
     } from '../../lib/attendanceRegister';
+    import {
+        clockTime,
+        dayRange,
+        isoDay,
+        longDay,
+        shiftDay,
+    } from '../../lib/dates';
+    import { formatDistance } from '../../lib/format';
     import type { OrganizationOption, SharedProps } from '../../lib/types';
 
     /**
@@ -169,13 +169,13 @@
     {:else if row.place === 'near_office'}
         <MapPin class="h-3.5 w-3.5 shrink-0" />Near office{row.distance_m !==
         null
-            ? `, ${distance(row.distance_m)}`
+            ? `, ${formatDistance(row.distance_m)}`
             : ''}
     {:else if row.place === 'outside'}
         <span class="inline-flex items-center gap-1.5 text-warn">
             <TriangleAlert class="h-3.5 w-3.5 shrink-0" />Outside office{row.distance_m !==
             null
-                ? `, ${distance(row.distance_m)}`
+                ? `, ${formatDistance(row.distance_m)}`
                 : ''}
         </span>
     {:else if row.place === 'unknown'}

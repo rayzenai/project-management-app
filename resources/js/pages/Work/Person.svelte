@@ -6,14 +6,9 @@
     import Spinner from '../../components/Spinner.svelte';
     import StatusGlyph from '../../components/StatusGlyph.svelte';
     import RangePicker from '../../components/work/RangePicker.svelte';
-    import {
-        hoursLabel,
-        personWorkHref,
-        plural,
-        rangeLabel,
-        taskHref,
-        weekday,
-    } from '../../lib/work';
+    import { dayRange, hoursLabel, weekday } from '../../lib/dates';
+    import { plural } from '../../lib/format';
+    import { personWorkHref, taskHref } from '../../lib/work';
     import type { WorkPersonProps, WorkRangeFilters } from '../../lib/work';
 
     /**
@@ -100,7 +95,7 @@
                                 : null,
                         ]
                             .filter(Boolean)
-                            .join(' · ') || rangeLabel(range)}
+                            .join(' · ') || dayRange(range.from, range.to)}
                     </p>
                 </div>
             </div>
@@ -246,7 +241,7 @@
             {:else}
                 {#if tasks.counts.hidden_closed === 0}
                     <p class="px-5 py-2 text-[13px] text-fg-faint lg:px-6">
-                        Nothing finished {rangeLabel(range)}.
+                        Nothing finished {dayRange(range.from, range.to)}.
                     </p>
                 {/if}
             {/each}
@@ -276,7 +271,7 @@
             {:else}
                 {#if tasks.counts.hidden_started === 0}
                     <p class="px-5 py-2 text-[13px] text-fg-faint lg:px-6">
-                        Nothing started {rangeLabel(range)}.
+                        Nothing started {dayRange(range.from, range.to)}.
                     </p>
                 {/if}
             {/each}

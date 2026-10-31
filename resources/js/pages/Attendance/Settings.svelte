@@ -2,7 +2,7 @@
     import { router, useForm } from '@inertiajs/svelte';
     import { LocateFixed, Plus, TriangleAlert, X } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
-    import { formatDistance, WEEKDAYS } from '../../lib/attendance';
+    import { WEEKDAYS } from '../../lib/attendance';
     import type {
         AttendanceSettings,
         Holiday,
@@ -10,6 +10,7 @@
         OfficePlace,
         Season,
     } from '../../lib/attendance';
+    import { formatDistance } from '../../lib/format';
 
     /**
      * One organization's attendance: the switch (super-admins), working

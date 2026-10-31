@@ -5,6 +5,7 @@
     import { SvelteMap } from 'svelte/reactivity';
     import { fly } from 'svelte/transition';
     import { formatTimeAgo } from '../../lib/format';
+    import { plural } from '../../lib/format';
     import {
         DAY,
         dayOf,
@@ -199,10 +200,6 @@
         month: 'short',
         year: 'numeric',
     });
-
-    function plural(n: number, word: string): string {
-        return `${n} ${word}${n === 1 ? '' : 's'}`;
-    }
 
     const facts = $derived.by(() => {
         if (!task) {

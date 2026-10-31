@@ -1,4 +1,5 @@
 <script module lang="ts">
+    import { localDay } from '../../lib/dates';
     import type { CodeActivityDay, Id } from '../../lib/types';
 
     /**
@@ -70,12 +71,6 @@
         day: 'numeric',
         year: 'numeric',
     });
-
-    function localDay(iso: string): Date {
-        const [y, m, d] = iso.split('-').map(Number);
-
-        return new Date(y, m - 1, d);
-    }
 
     const days = $derived(series[0]?.days ?? []);
     const count = $derived(days.length);

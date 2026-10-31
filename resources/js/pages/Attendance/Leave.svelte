@@ -5,8 +5,6 @@
     import Avatar from '../../components/Avatar.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
     import {
-        dayRange,
-        isoDay,
         LEAVE_KIND_LABEL,
         LEAVE_STATUS_LABEL,
     } from '../../lib/attendanceRegister';
@@ -16,6 +14,7 @@
         LeaveStatus,
         RecordablePerson,
     } from '../../lib/attendanceRegister';
+    import { dayRange, isoDay } from '../../lib/dates';
 
     /**
      * Leave and kaaj: ask for it, see and cancel one's own requests, decide

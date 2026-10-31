@@ -11,11 +11,11 @@
     } from '@lucide/svelte';
     import {
         ACTION_LABELS,
-        clockTime,
         describePunch,
         stateLabel,
     } from '../../lib/attendance';
     import type { MyAttendance, PunchKind } from '../../lib/attendance';
+    import { clockTime } from '../../lib/dates';
     import Spinner from '../Spinner.svelte';
 
     /**

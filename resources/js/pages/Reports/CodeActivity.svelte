@@ -10,6 +10,7 @@
     import type { ChartSeries } from '../../components/reports/DailyCodeChart.svelte';
     import PersonCommitsDrawer from '../../components/reports/PersonCommitsDrawer.svelte';
     import Spinner from '../../components/Spinner.svelte';
+    import { isoDay } from '../../lib/dates';
     import type {
         CodeActivityFilters,
         CodeActivityOptions,
@@ -83,12 +84,6 @@
                 },
             },
         );
-    }
-
-    function isoDay(date: Date): string {
-        const pad = (n: number) => String(n).padStart(2, '0');
-
-        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     }
 
     function dayNumber(iso: string): number {
