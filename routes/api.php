@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\TaskSearchController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TeamMemberController;
 use App\Http\Controllers\Api\ThemeController;
+use App\Http\Controllers\Api\WorkController;
 use App\Http\Controllers\Api\WorkspaceNoteController;
 use App\Http\Middleware\EnsureCanSignIn;
 use App\Http\Middleware\EnsureProjectVisible;
@@ -129,6 +130,9 @@ Route::prefix('v1')->name('api.')->group(function () {
             // (attendance: register, leave and kaaj routes end)
 
             // Work reports: today's work, a person's work, a team's work.
+            Route::get('/organizations/{organization}/work/day', [WorkController::class, 'day'])->whereNumber('organization')->name('organizations.work.day');
+            Route::get('/organizations/{organization}/work/team', [WorkController::class, 'team'])->whereNumber('organization')->name('organizations.work.team');
+            Route::get('/members/{member}/work', [WorkController::class, 'person'])->whereNumber('member')->name('members.work');
             // (work routes end)
 
             // Tasks + task-children: gated centrally by EnsureProjectVisible
