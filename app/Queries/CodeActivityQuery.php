@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
+use App\Support\Git\Checks;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -66,7 +67,7 @@ class CodeActivityQuery
      * they exist.
      *
      * @param  Filters  $filters
-     * @return list<array{sha: string, message: string, repository: string, url: string, committed_at: string, code_added: int, code_removed: int, comment_added: int, comment_removed: int, stats_status: ?string}>
+     * @return list<array{sha: string, message: string, repository: string, url: string, committed_at: string, code_added: int, code_removed: int, comment_added: int, comment_removed: int, stats_status: ?string, checks: array{state: string, checks: list<array{name: string, state: string, url: string|null}>}|null}>
      */
     public function commitsOf(?Authenticatable $user, int $userId, array $filters, int $limit = 50): array
     {
@@ -88,6 +89,7 @@ class CodeActivityQuery
                 'comment_added' => $commit->comment_added,
                 'comment_removed' => $commit->comment_removed,
                 'stats_status' => $commit->stats_status,
+                'checks' => Checks::shape($commit->checks_state, $commit->checks),
             ])
             ->all());
     }
@@ -124,7 +126,9 @@ class CodeActivityQuery
             ->selectRaw('count(*) as commits')
             ->selectRaw('count(distinct date(git_commits.committed_at)) as active_days')
             ->selectRaw('count(distinct git_commits.git_repository_id) as repositories')
-            ->selectRaw('coalesce(sum(git_commits.files_changed), 0) as files_changed');
+            ->selectRaw('coalesce(sum(git_commits.files_changed), 0) as files_changed')
+            ->selectRaw("sum(case when git_commits.checks_state = '".Checks::PASSED."' then 1 else 0 end) as checks_passed")
+            ->selectRaw("sum(case when git_commits.checks_state = '".Checks::FAILED."' then 1 else 0 end) as checks_failed");
 
         foreach (self::COUNTS as $column) {
             $commits->selectRaw("coalesce(sum(git_commits.{$column}), 0) as {$column}");
@@ -148,7 +152,7 @@ class CodeActivityQuery
             $key = $row->user_id ?? '';
             $rows[$key] = ['tasks' => (int) ($tasks[$key] ?? 0)];
 
-            foreach (['commits', 'active_days', 'repositories', 'files_changed', ...self::COUNTS] as $column) {
+            foreach (['commits', 'active_days', 'repositories', 'files_changed', 'checks_passed', 'checks_failed', ...self::COUNTS] as $column) {
                 $rows[$key][$column] = (int) $row->{$column};
             }
         }
@@ -174,7 +178,7 @@ class CodeActivityQuery
                 'user_id' => $key === '' ? null : (int) $key,
                 'name' => $name($key),
                 'designation' => $key === '' ? null : ($names[(int) $key]['designation'] ?? null),
-                ...array_fill_keys(['commits', 'active_days', 'repositories', 'files_changed', ...self::COUNTS, 'pull_requests_opened', 'pull_requests_merged', 'tasks'], 0),
+                ...array_fill_keys(['commits', 'active_days', 'repositories', 'files_changed', 'checks_passed', 'checks_failed', ...self::COUNTS, 'pull_requests_opened', 'pull_requests_merged', 'tasks'], 0),
                 ...$counts,
             ];
         }

@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Models\TaskGitLink;
+use App\Services\Git\CommitChecks;
 use App\Services\Git\GitIngest;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Database\QueryException;
@@ -19,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -525,7 +527,7 @@ it('does nothing when the job runs again for a processed delivery', function () 
     hookSend($this->connection, 'push', hookPush([hookCommit('TP-1 fix')]))->assertStatus(202);
     GitCommit::query()->delete();
 
-    (new ProcessGitDelivery(GitWebhookDelivery::query()->sole()))->handle(app(GitIngest::class));
+    (new ProcessGitDelivery(GitWebhookDelivery::query()->sole()))->handle(app(GitIngest::class), app(CommitChecks::class));
 
     expect(GitCommit::query()->count())->toBe(0);
 });
@@ -541,7 +543,7 @@ it('rethrows a failure so the queue retries it, three tries a minute apart', fun
     $this->mock(GitIngest::class, fn ($mock) => $mock->shouldReceive('commit')->andThrow(new RuntimeException('database went away')));
     $job = new ProcessGitDelivery($stored);
 
-    expect(fn () => $job->handle(app(GitIngest::class)))->toThrow(RuntimeException::class, 'database went away')
+    expect(fn () => $job->handle(app(GitIngest::class), app(CommitChecks::class)))->toThrow(RuntimeException::class, 'database went away')
         ->and($job->tries)->toBe(3)
         ->and($job->backoff)->toBe(60)
         ->and($stored->fresh()?->error)->toContain('database went away');
@@ -732,4 +734,86 @@ it('leaves a repository created on the forge alone: nothing links it yet', funct
 
     expect(GitRepository::query()->pluck('forge_id')->all())->toBe([501])
         ->and(GitWebhookDelivery::query()->sole()->processed_at)->not->toBeNull();
+});
+
+/**
+ * A finished workflow run, as services/webhook/notifier.go ActionRunNowDone
+ * sends it: no top-level repository, the run names it.
+ *
+ * @return array<string, mixed> api.ActionPayload
+ */
+function hookActionRun(string $action, string $sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9001122334', ?array $repository = null): array
+{
+    $run = [
+        'id' => 41,
+        'title' => 'TP-1 fix the login',
+        'repository' => $repository ?? hookRepository(),
+        'workflow_id' => 'tests.yml',
+        'index_in_repo' => 7,
+        'trigger_user' => hookUser('bikash'),
+        'ScheduleID' => 0,
+        'prettyref' => 'main',
+        'is_ref_deleted' => false,
+        'commit_sha' => $sha,
+        'is_fork_pull_request' => false,
+        'need_approval' => false,
+        'approved_by' => 0,
+        'event' => 'push',
+        'event_payload' => '{}',
+        'trigger_event' => 'push',
+        'status' => $action,
+        'started' => '2026-10-31T10:00:00+05:45',
+        'stopped' => '2026-10-31T10:03:00+05:45',
+        'created' => '2026-10-31T09:59:00+05:45',
+        'updated' => '2026-10-31T10:03:00+05:45',
+        'duration' => 180000000000,
+        'html_url' => 'https://git.example/sdoc/app/actions/runs/7',
+    ];
+
+    return ['action' => $action, 'run' => $run, 'prior_status' => 'running', 'last_run' => null];
+}
+
+// Checks
+it("reads a finished run's commit checks, for the repository the run names", function (string $event, string $status, string $state) {
+    hookSend($this->connection, 'push', hookPush([hookCommit('TP-1 fix the login')]))->assertStatus(202);
+    Http::fake(['git.example/api/v1/repos/sdoc/app/commits/a1b2c3d4e5f60718293a4b5c6d7e8f9001122334/status*' => Http::response([
+        'state' => $status,
+        'sha' => 'a1b2c3d4e5f60718293a4b5c6d7e8f9001122334',
+        'total_count' => 1,
+        'statuses' => [['id' => 1, 'status' => $status, 'target_url' => 'https://git.example/sdoc/app/actions/runs/7/jobs/0', 'description' => '', 'url' => '', 'context' => 'tests / pest (push)', 'creator' => null]],
+    ])]);
+
+    hookSend($this->connection, $event, hookActionRun($status === 'success' ? 'success' : 'failure'))->assertStatus(202);
+
+    $commit = GitCommit::query()->sole();
+    expect($commit->checks_state)->toBe($state)
+        ->and($commit->checks)->toEqual([['name' => 'tests / pest (push)', 'state' => $state, 'url' => 'https://git.example/sdoc/app/actions/runs/7/jobs/0']])
+        ->and(GitWebhookDelivery::query()->where('event', $event)->sole()->processed_at)->not->toBeNull();
+})->with([
+    'success' => ['action_run_success', 'success', 'passed'],
+    'failure' => ['action_run_failure', 'failure', 'failed'],
+]);
+
+it('leaves a finished run to git:commit-checks when the forge does not answer', function () {
+    hookSend($this->connection, 'push', hookPush([hookCommit('TP-1 fix the login')]))->assertStatus(202);
+    Http::fake(['git.example/*' => Http::response('boom', 502)]);
+
+    hookSend($this->connection, 'action_run_success', hookActionRun('success'))->assertStatus(202);
+
+    expect(GitCommit::query()->sole()->checks_state)->toBeNull()
+        ->and(GitWebhookDelivery::query()->where('event', 'action_run_success')->sole()->processed_at)->not->toBeNull();
+});
+
+it('asks nothing about a run of a repository no project links', function () {
+    Http::fake();
+
+    hookSend($this->connection, 'action_run_failure', hookActionRun('failure', repository: hookRepository(777, 'sdoc', 'other')))->assertStatus(202);
+
+    Http::assertNothingSent();
+});
+
+it("keeps a pull request's head commit", function () {
+    hookSend($this->connection, 'pull_request', hookPullRequest('opened'))->assertStatus(202);
+
+    expect(GitPullRequest::query()->sole()->head_sha)->toBe('a1b2c3d4e5f60718293a4b5c6d7e8f9001122334');
 });

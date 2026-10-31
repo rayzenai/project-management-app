@@ -240,6 +240,14 @@
                 label: 'Pull requests merged',
                 value: (p) => p.pull_requests_merged,
             },
+            {
+                label: 'Commits whose tests passed',
+                value: (p) => p.checks_passed,
+            },
+            {
+                label: 'Commits whose tests failed',
+                value: (p) => p.checks_failed,
+            },
             { label: 'Tasks', value: (p) => p.tasks },
         ];
 
@@ -253,6 +261,7 @@
         | 'blank'
         | 'docs'
         | 'pull_requests'
+        | 'tests'
         | 'tasks';
 
     const SORT_VALUE: Record<
@@ -266,6 +275,7 @@
         blank: (p) => p.blank_added + p.blank_removed,
         docs: (p) => p.docs_added + p.docs_removed,
         pull_requests: (p) => p.pull_requests_opened,
+        tests: (p) => p.checks_failed,
         tasks: (p) => p.tasks,
     };
 
@@ -529,6 +539,7 @@
                                     'pull_requests',
                                     'Pull requests',
                                 )}
+                                {@render sortHead('tests', 'Tests')}
                                 {@render sortHead('tasks', 'Tasks')}
                             </tr>
                         </thead>
@@ -680,6 +691,21 @@
                                             >{fmt(
                                                 person.pull_requests_merged,
                                             )}</span
+                                        ></td
+                                    >
+                                    <td
+                                        class="px-3 text-right font-mono tabular-nums"
+                                        title="Commits whose tests passed / failed"
+                                        ><span
+                                            class={tone(person.checks_passed)}
+                                            >{fmt(person.checks_passed)}</span
+                                        ><span class="text-fg-faint">
+                                            /
+                                        </span><span
+                                            class={person.checks_failed > 0
+                                                ? 'text-danger'
+                                                : tone(0)}
+                                            >{fmt(person.checks_failed)}</span
                                         ></td
                                     >
                                     <td

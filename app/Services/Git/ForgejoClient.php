@@ -199,8 +199,10 @@ class ForgejoClient
     }
 
     /**
-     * Creates a private, empty repository (default branch `main`) in the forge
-     * organization and returns its JSON. A taken name is a 409.
+     * Creates a private repository in the forge organization, its `main`
+     * starting from a README (nobody can push to a protected `main`, so it
+     * must exist for pull requests to land in), and returns its JSON. A taken
+     * name is a 409.
      *
      * @return array<string, mixed>
      */
@@ -210,9 +212,20 @@ class ForgejoClient
             'name' => $name,
             'description' => $description ?? '',
             'private' => true,
-            'auto_init' => false,
+            'auto_init' => true,
+            'readme' => 'Default',
             'default_branch' => 'main',
         ]));
+    }
+
+    /**
+     * A commit's checks, the latest status of each (api.CombinedStatus).
+     *
+     * @return array<string, mixed>
+     */
+    public function combinedStatus(string $owner, string $name, string $sha): array
+    {
+        return $this->json($this->send('get', $this->repoPath($owner, $name).'/commits/'.rawurlencode($sha).'/status', query: ['limit' => 50]));
     }
 
     /**

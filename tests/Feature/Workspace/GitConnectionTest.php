@@ -586,7 +586,7 @@ it('creates the organization webhook with the signed payload and stores an encry
         return $data['type'] === 'forgejo'
             && $data['active'] === true
             && $data['branch_filter'] === '*'
-            && $data['events'] === ['push', 'create', 'delete', 'pull_request', 'repository']
+            && $data['events'] === ['push', 'create', 'delete', 'pull_request', 'repository', 'action_run_success', 'action_run_failure']
             && $data['config'] === [
                 'url' => route('git.webhook', $connection),
                 'content_type' => 'json',

@@ -32,6 +32,7 @@ php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback 
 php artisan git:reconcile [--connection=1]        # the nightly forge repair, by hand
 php artisan git:sync-access [--connection=1]      # write every linked repository's collaborators to the forge
 php artisan git:commit-stats [--limit=300]        # count the lines of commits not counted yet
+php artisan git:commit-checks [--limit=200]       # read recent commits' test results (checks) a webhook missed
 ```
 
 Output of pint/phpstan/pest is rewritten to JSON by `laravel/pao`; when a PHP
@@ -485,19 +486,19 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   or on its team, the rest stays stored and gives nothing; `isEffective`
   asks it of one grant, and the resource's `effective` says it, the access
   list asking the scope once). `GitRepository`
-  gains `protects_main` (set only for repositories the tracker created and
-  protected) and `access_synced_at`. `GitCommit` gains `user_id` (the user
+  gains `protects_main` (whether the tracker's rule, `MainBranch`, is on its
+  default branch: every access sync writes it) and `access_synced_at`. `GitCommit` gains `user_id` (the user
   whose lowercased `git_username` equals `author_username`), `is_merge`,
   `files_changed`, `additions`, `deletions`, the classified
   `code|comment|blank|docs` `_added|_removed`, `generated_lines`,
   `stats_status` (`ok|merge|too_large|missing`) and `stats_computed_at`.
 - **Create**: `CreateRepositoryService` (`POST .../repositories/new`, the web
-  Code tab's New repository): private, empty, `main` default; name = the
-  lowercased project key or that plus `-...`, forge-safe, at most 100
-  characters; protects `main` with `CreateRepositoryService::MAIN_RULE`
-  (push allow-list plus the Owners team, one approval), then links through
-  `LinkRepositoryService`. A refused rule still links (message says to
-  protect it); a failed link after creation says it exists.
+  Code tab's New repository): private, a README on `main`, its default
+  branch; name = the lowercased project key or that plus `-...`,
+  forge-safe, at most 100 characters; protects `main` with `MainBranch`
+  (see Checks below), then links through `LinkRepositoryService`. A refused
+  rule still links (the access sync keeps trying); a failed link after
+  creation says it exists.
 - **Link imports access**: `LinkRepositoryService` saves the row and
   `RepositoryAccess::importExisting` (the forge's current collaborators an
   organizational admin could grant, whoever links: an active person of the
@@ -513,10 +514,10 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   (the higher when both). Order: removals of tracker-known logins no longer
   wanted (a failure stops the run), then every PUT (a 422 = no forge user yet,
   *waiting*; another refusal for one login does not stop the rest and fails
-  the run afterwards; unreachable stops at once), then, if `protects_main`,
-  the PATCH of `main`'s allow-list (last: the forge drops allow-listed users
-  who are not write collaborators at that moment; a 404 clears
-  `protects_main`). `{owner}-bot`, `forge-admin` and logins with no tracker
+  the run afterwards; unreachable stops at once), then `MainBranch::ensure`
+  on the default branch, every run, whatever was changed or deleted on the
+  forge (PATCH, else POST; a refusal sets `protects_main` false and fails the
+  run after the rest). `{owner}-bot`, `forge-admin` and logins with no tracker
   user are never touched (`ForgeMembership::untouchableLogins`). Logs at
   `warning`, no token.
 - **Triggers**: `SyncRepositoryAccess` (a job: no unique lock, `afterCommit`,
@@ -576,6 +577,43 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   the sidebar's Code activity (shown with git). Keep the Guide in step:
   developers commit with the email they sign in with (sign-in gives the forge
   that email; nothing to add on the forge).
+
+## Git (Forgejo): runners, protected main and checks
+
+Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
+
+- **Runners**: four Forgejo runners (`forgejo/runner/`, the Dokploy compose
+  `git-runners` in project `git`), one job each, registered to the forge
+  organization `sdoc`; every job runs inside one `docker:dind` held to 4
+  vCPUs and 10 GB. Actions are on with `DEFAULT_ACTIONS_URL=github`
+  (`forgejo/Dockerfile`), so GitHub workflows run as they are, from
+  `.forgejo/workflows` or `.github/workflows`.
+- **Protected main**: `App\Services\Git\MainBranch::RULE` on every linked
+  repository's default branch: no pushes for anyone (`apply_to_admins`),
+  merges only with one approval and every status check (`*`) passed, so a
+  repository with no tests merges nothing. Written by `CreateRepositoryService`
+  and by every `RepositoryAccess::sync` (so a rule changed on the forge comes
+  back within ten minutes). Forge site administrators can still bypass it.
+- **Checks** (`App\Support\Git\Checks`): the forge's commit statuses as
+  `passed|failed|running|none` per check and overall (only `success`
+  passes; `pending` runs; `error|failure|warning` fail). `CommitChecks::refresh`
+  reads one commit's combined status and stores it on the commit
+  (`checks_state`, `checks`, `checks_checked_at`) and on its repository's
+  pull requests whose `head_sha` it is. Triggers: the webhook's
+  `action_run_success` / `action_run_failure` (`ProcessGitDelivery`, the
+  repository read from `run.repository`), and `git:commit-checks` every two
+  minutes (`withoutOverlapping(10)`): commits the tracker learned of in the
+  last two days still unknown or running, `none` again while under ten
+  minutes old, each asked at most every 90 s; 0/401/403/429 stop that
+  connection for the run. `GitIngest::pullRequest` keeps `head_sha` and
+  copies the head commit's checks when the head moves. `MainChecksQuery`
+  gives each repository's default-branch checks in one query. Shown through
+  `Checks::shape` (null until asked) on commits and pull requests
+  (`TaskCodeQuery`, `GitPullRequestResource`, `CodeActivityQuery::commitsOf`),
+  `main_checks` and `protects_main` on `GitRepositoryResource`, the code
+  activity report's `checks_passed` / `checks_failed`, and Maintenance's
+  `repositories_failing_main`, `repositories_unprotected` and
+  `repositories_without_tests`. UI: `components/ChecksMark.svelte`.
 
 ## Structure, attendance and work reports
 

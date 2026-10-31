@@ -8,6 +8,7 @@ use App\Models\GitCommit;
 use App\Models\GitPullRequest;
 use App\Models\Project;
 use App\Models\Task;
+use App\Support\Git\Checks;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -70,6 +71,7 @@ class TaskCodeQuery
                 'repository' => $commit->repository->full_name,
                 'committed_at' => $commit->committed_at->toIso8601String(),
                 'unreachable' => $commit->unreachable_at !== null,
+                'checks' => Checks::shape($commit->checks_state, $commit->checks),
             ]);
 
         return [

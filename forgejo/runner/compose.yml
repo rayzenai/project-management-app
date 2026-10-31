@@ -1,0 +1,128 @@
+# Forgejo Actions runners for git.sdoc.gov.np: the Dokploy compose
+# git-runners (project "git"), compose path ./forgejo/runner/compose.yml.
+# Runbook: docs/forgejo.md, section 14.
+#
+# Four runners, one job each, registered to the forge organization sdoc.
+# Every job runs inside the dind service, never on the VM's own Docker, so
+# dind's limits hold all four jobs together to 4 vCPUs and 10 GB. dind talks
+# to the runners only through a unix socket in a shared volume: no TCP port
+# a job could reach to take over dind. The secrets RUNNER_SECRET_1 to 4 go
+# in the Environment tab (.env.example next to this file).
+
+x-runner: &runner
+  build: .
+  image: sdoc-forgejo-runner:13.2.0
+  restart: unless-stopped
+  depends_on:
+    dind:
+      condition: service_healthy
+  # The runner only hands jobs to dind; their work is counted there.
+  mem_limit: 512m
+  tmpfs:
+    - /run/sdoc-runner:mode=0700,uid=1000,gid=1000
+
+x-runner-env: &runner-env
+  DOCKER_HOST: unix:///var/run/dind/docker.sock
+  FORGEJO_URL: https://git.sdoc.gov.np/
+
+services:
+  dind:
+    image: docker:29.8.2-dind
+    privileged: true
+    restart: unless-stopped
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command:
+      - dockerd
+      - --host=unix:///var/run/dind/docker.sock
+      # The runners run as 1000:1000.
+      - --group=1000
+      # The VM's resolvers: they answer git.sdoc.gov.np with the VM's own
+      # address, so jobs can clone (the public address doesn't loop back).
+      - --dns=202.45.144.2
+      - --dns=202.45.144.3
+      # Job networks, clear of the VM's (172.17 to 172.21) and its LAN.
+      - --bip=10.211.0.1/24
+      - --default-address-pool=base=10.210.0.0/16,size=24
+    cpus: 4
+    mem_limit: 10g
+    memswap_limit: 10g
+    volumes:
+      - dind-socket:/var/run/dind
+      - dind-data:/var/lib/docker
+    healthcheck:
+      test: ["CMD", "docker", "--host=unix:///var/run/dind/docker.sock", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  runner-1:
+    <<: *runner
+    environment:
+      <<: *runner-env
+      RUNNER_NAME: sdoc-runner-1
+      RUNNER_SECRET: ${RUNNER_SECRET_1:?Set RUNNER_SECRET_1 in the Environment tab}
+    volumes:
+      - dind-socket:/var/run/dind
+      - runner-1:/data
+
+  runner-2:
+    <<: *runner
+    environment:
+      <<: *runner-env
+      RUNNER_NAME: sdoc-runner-2
+      RUNNER_SECRET: ${RUNNER_SECRET_2:?Set RUNNER_SECRET_2 in the Environment tab}
+    volumes:
+      - dind-socket:/var/run/dind
+      - runner-2:/data
+
+  runner-3:
+    <<: *runner
+    environment:
+      <<: *runner-env
+      RUNNER_NAME: sdoc-runner-3
+      RUNNER_SECRET: ${RUNNER_SECRET_3:?Set RUNNER_SECRET_3 in the Environment tab}
+    volumes:
+      - dind-socket:/var/run/dind
+      - runner-3:/data
+
+  runner-4:
+    <<: *runner
+    environment:
+      <<: *runner-env
+      RUNNER_NAME: sdoc-runner-4
+      RUNNER_SECRET: ${RUNNER_SECRET_4:?Set RUNNER_SECRET_4 in the Environment tab}
+    volumes:
+      - dind-socket:/var/run/dind
+      - runner-4:/data
+
+  # Once a day: what finished jobs leave in dind. Pulled images stay, so
+  # the next job doesn't pull them again (docs/forgejo.md, section 14).
+  prune:
+    image: docker:29.8.2-cli
+    restart: unless-stopped
+    depends_on:
+      dind:
+        condition: service_healthy
+    environment:
+      DOCKER_HOST: unix:///var/run/dind/docker.sock
+    volumes:
+      - dind-socket:/var/run/dind
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while :; do
+          docker container prune --force --filter until=6h
+          docker network prune --force --filter until=6h
+          docker volume prune --force
+          docker image prune --force
+          sleep 86400
+        done
+
+volumes:
+  dind-socket:
+  dind-data:
+  runner-1:
+  runner-2:
+  runner-3:
+  runner-4:

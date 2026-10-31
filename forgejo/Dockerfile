@@ -48,6 +48,11 @@ ENV FORGEJO__server__HTTP_PORT=3000 \
     FORGEJO__oauth2_client__USERNAME=nickname \
     FORGEJO__oauth2_client__ACCOUNT_LINKING=login \
     FORGEJO__migrations__ALLOW_LOCALNETWORKS=false \
+    # Actions, run by the git-runners compose (forgejo/runner, docs/forgejo.md
+    # section 14). Short `uses:` names (actions/checkout@v4) come from GitHub,
+    # so workflows written for GitHub run unchanged.
+    FORGEJO__actions__ENABLED=true \
+    FORGEJO__actions__DEFAULT_ACTIONS_URL=github \
     FORGEJO__mailer__PROTOCOL=smtps \
     # Branding: the name in page titles and every email's footer, no
     # "Powered by", version or timings in the page footer, sdoc.gov.np's

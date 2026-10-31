@@ -25,6 +25,9 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property CarbonImmutable|null $merged_at
  * @property CarbonImmutable|null $closed_at
  * @property CarbonImmutable|null $forge_updated_at
+ * @property string|null $head_sha its head commit
+ * @property string|null $checks_state that commit's checks (Checks), null until asked
+ * @property list<array{name: string, state: string, url: string|null}>|null $checks
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -49,6 +52,7 @@ class GitPullRequest extends Model
         'merged_at',
         'closed_at',
         'forge_updated_at',
+        'head_sha',
     ];
 
     /**
@@ -62,6 +66,7 @@ class GitPullRequest extends Model
             'merged_at' => 'datetime',
             'closed_at' => 'datetime',
             'forge_updated_at' => 'datetime',
+            'checks' => 'array',
         ];
     }
 

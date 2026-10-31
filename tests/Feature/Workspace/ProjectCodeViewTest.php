@@ -169,6 +169,8 @@ it('lists the linked repositories with their open pull requests on the project p
                 'default_branch' => 'main',
                 'last_pushed_at' => '2026-10-27T09:00:00+05:45',
                 'created_at' => '2026-10-28T10:00:00+05:45',
+                'protects_main' => false,
+                'main_checks' => null,
                 // All twelve are counted; the list shows ten.
                 'open_pull_requests_count' => 12,
             ])
@@ -184,6 +186,7 @@ it('lists the linked repositories with their open pull requests on the project p
                 'opened_at' => '2026-10-13T08:00:00+05:45',
                 'merged_at' => null,
                 'closed_at' => null,
+                'checks' => null,
             ]));
 });
 
@@ -278,6 +281,7 @@ it('gives the task preview its pull requests, branches, commits and branch name'
             'opened_at' => '2026-10-25T08:00:00+05:45',
             'merged_at' => '2026-10-27T12:00:00+05:45',
             'closed_at' => '2026-10-27T12:00:00+05:45',
+            'checks' => null,
         ])
         ->and($code['branches'])->toEqual([
             ['id' => $nested->id, 'name' => 'feature/TP-1#login', 'repository' => 'sdoc/app', 'url' => 'https://git.example/sdoc/app/src/branch/feature/TP-1%23login'],
@@ -293,6 +297,7 @@ it('gives the task preview its pull requests, branches, commits and branch name'
             'repository' => 'sdoc/app',
             'committed_at' => '2026-10-22T08:00:00+05:45',
             'unreachable' => true,
+            'checks' => null,
         ])
         ->and($code['commits'][1]['unreachable'])->toBeFalse();
 });

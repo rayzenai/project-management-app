@@ -7,7 +7,11 @@
     import OrganizationSelect from '../../components/filters/OrganizationSelect.svelte';
     import { fullDay } from '../../lib/dates';
     import { plural } from '../../lib/format';
-    import type { Maintenance, ProjectRef } from '../../lib/maintenance';
+    import type {
+        Maintenance,
+        ProjectRef,
+        RepositoryRef,
+    } from '../../lib/maintenance';
     import type { Id, OrganizationOption, PersonRef } from '../../lib/types';
 
     /**
@@ -36,7 +40,7 @@
     }
 
     interface Section {
-        key: 'projects' | 'programs' | 'people' | 'attendance';
+        key: 'projects' | 'programs' | 'people' | 'attendance' | 'code';
         title: string;
         /** The summary's word for one row, and for several. */
         noun: [string, string];
@@ -237,6 +241,39 @@
             ['setting', 'settings'],
             attendance,
         );
+
+        // Only an organization with repositories has code to check.
+        if (m.repositories > 0) {
+            const repository = (r: RepositoryRef): Omit<Row, 'issues'> => ({
+                key: r.full_name,
+                label: r.full_name,
+                designation: r.label,
+                href: `/workspace/projects/${r.slug}?view=code`,
+            });
+            const code = new Map<string, Row>();
+            collect(
+                code,
+                m.repositories_failing_main,
+                'Repositories whose main branch fails its tests',
+                repository,
+                () => 'Main branch fails its tests',
+            );
+            collect(
+                code,
+                m.repositories_unprotected,
+                'Repositories whose main branch is not protected',
+                repository,
+                () => 'Main branch not protected yet',
+            );
+            collect(
+                code,
+                m.repositories_without_tests,
+                'Repositories with no tests',
+                repository,
+                () => 'No tests yet, so nothing can merge',
+            );
+            section('code', 'Code', ['repository', 'repositories'], code);
+        }
 
         return { sections, passed };
     });

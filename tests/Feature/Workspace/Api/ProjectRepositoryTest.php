@@ -131,6 +131,8 @@ function apiRepoResource(GitRepository $repo): array
         'default_branch' => 'main',
         'last_pushed_at' => $repo->last_pushed_at?->toIso8601String(),
         'created_at' => $repo->created_at?->toIso8601String(),
+        'protects_main' => (bool) $repo->protects_main,
+        'main_checks' => null,
     ];
 }
 

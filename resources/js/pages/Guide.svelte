@@ -140,7 +140,11 @@
         ],
         [
             'New repository',
-            "Link repository, then New repository, makes a private repository on the forge and links it. Its name is the project's key in lowercase (tp) or starts with it and a hyphen (tp-api), in lowercase letters and digits with a single ., _ or - between them. Its main branch is protected: changes reach it through pull requests with one approval, and only the project's manager, its program's manager and the organizational admins push to it directly.",
+            "Link repository, then New repository, makes a private repository on the forge and links it. Its name is the project's key in lowercase (tp) or starts with it and a hyphen (tp-api), in lowercase letters and digits with a single ., _ or - between them. It starts with a README on its main branch, and main is protected: nobody pushes to it, not even an admin, and changes reach it only through a pull request with one approval whose tests pass.",
+        ],
+        [
+            'Tests',
+            "Every repository runs its tests on the forge's runners. Add a workflow under .forgejo/workflows (or .github/workflows) that runs on every pull request, with runs-on: ubuntu-latest; a pull request with no tests, or with a test still running or failing, can't be merged. The tick or cross beside each commit and pull request in the Code tab and the task's Code section opens the run on the forge.",
         ],
         [
             'Repository access',
@@ -160,11 +164,11 @@
         ],
         [
             'Merging',
-            'A merged pull request never marks a task done. Move the card when the work is really finished.',
+            'Merge once the pull request has its approval and its tests have passed. A merged pull request never marks a task done. Move the card when the work is really finished.',
         ],
         [
             'Code activity',
-            "Code activity, under Reports in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
+            "Code activity, under Reports in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. Tests shows how many of their commits passed and failed their tests. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
         ],
         [
             'Your git email',

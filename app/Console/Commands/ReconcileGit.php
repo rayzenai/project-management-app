@@ -174,12 +174,14 @@ class ReconcileGit extends Command
 
     /**
      * Puts back the webhook when a forge owner deleted it (a new hook and
-     * secret), or changed it: switched it off, pointed it elsewhere, dropped
-     * events the tracker needs, narrowed its branches or its content type
-     * (every setting again, with the stored secret). The forge never shows a
-     * hook's secret, so one changed there can't be seen: every run writes
-     * the settings and the stored secret back, and says so only when a
-     * setting it can see was off.
+     * secret), or changed it: switched it off, pointed it elsewhere, narrowed
+     * its branches or its content type (every setting again, with the stored
+     * secret). A hook missing an event the tracker needs is replaced by a new
+     * one, then deleted: Forgejo 15's hook edit can't switch the workflow-run
+     * events on (editHook in routers/api/v1/utils/hook.go leaves them out).
+     * The forge never shows a hook's secret, so one changed there can't be
+     * seen: every run writes the settings and the stored secret back, and
+     * says so only when a setting it can see was off.
      *
      * @return string|null what it did, or null when the hook looked as it should
      */
@@ -190,7 +192,7 @@ class ReconcileGit extends Command
         $id = $connection->webhook_id;
         $hook = $id === null ? null : $client->organizationHook($connection->owner, $id);
 
-        if ($id !== null && $hook !== null) {
+        if ($id !== null && $hook !== null && self::hookHasEvents($hook)) {
             $client->updateOrganizationHook($connection->owner, $id, $url, (string) $connection->webhook_secret);
 
             if (self::hookIsIntact($hook, $url)) {
@@ -202,6 +204,31 @@ class ReconcileGit extends Command
             return 'repaired the webhook';
         }
 
+        $this->createWebhook($connection, $client, $url);
+
+        if ($id === null || $hook === null) {
+            Log::warning('Recreated the forge webhook.', ['owner' => $connection->owner, 'url' => $connection->base_url]);
+
+            return 'recreated the webhook';
+        }
+
+        try {
+            $client->deleteOrganizationHook($connection->owner, $id);
+        } catch (ForgejoException $e) {
+            // Signed with the old secret, its deliveries are refused here.
+            Log::warning("Couldn't delete the forge webhook the tracker replaced; delete it on the forge.", ['owner' => $connection->owner, 'url' => $connection->base_url, 'hook' => $id, 'status' => $e->status]);
+        }
+
+        Log::warning('Replaced the forge webhook, which lacked events the tracker needs.', ['owner' => $connection->owner, 'url' => $connection->base_url]);
+
+        return 'replaced the webhook';
+    }
+
+    /**
+     * A new hook with a new secret, kept on the connection.
+     */
+    private function createWebhook(GitConnection $connection, ForgejoClient $client, string $url): void
+    {
         $secret = Str::random(40);
         $id = $client->createOrganizationHook($connection->owner, $url, $secret);
 
@@ -213,29 +240,35 @@ class ReconcileGit extends Command
 
             throw $e;
         }
-
-        Log::warning('Recreated the forge webhook.', ['owner' => $connection->owner, 'url' => $connection->base_url]);
-
-        return 'recreated the webhook';
     }
 
     /**
-     * Forgejo lists `pull_request` as itself plus its sub-events, and an
-     * owner may add events: the hook only has to hold every event the
-     * tracker subscribes to. A branch filter of `*` or none sends them all.
+     * A branch filter of `*` or none sends every branch.
      *
      * @param  array<string, mixed>  $hook  api.Hook
      */
     private static function hookIsIntact(array $hook, string $url): bool
     {
         $config = ForgeShapes::map($hook, 'config');
-        $events = is_array($hook['events'] ?? null) ? $hook['events'] : [];
 
         return ($hook['active'] ?? false) === true
             && ($config['url'] ?? null) === $url
             && ($config['content_type'] ?? null) === 'json'
-            && in_array($hook['branch_filter'] ?? '', ['', '*'], true)
-            && array_diff(GitWebhookDelivery::EVENTS, $events) === [];
+            && in_array($hook['branch_filter'] ?? '', ['', '*'], true);
+    }
+
+    /**
+     * Forgejo lists `pull_request` as itself plus its sub-events, and an
+     * owner may add events: the hook only has to hold every event the
+     * tracker subscribes to.
+     *
+     * @param  array<string, mixed>  $hook  api.Hook
+     */
+    private static function hookHasEvents(array $hook): bool
+    {
+        $events = is_array($hook['events'] ?? null) ? $hook['events'] : [];
+
+        return array_diff(GitWebhookDelivery::EVENTS, $events) === [];
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Queries;
 use App\Http\Resources\GitRepositoryResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\TaskResource;
+use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
@@ -22,6 +23,8 @@ class ProjectShowQuery
 {
     /** Open pull requests shown per repository on the Code tab. */
     private const OPEN_PULL_REQUESTS = 10;
+
+    public function __construct(private MainChecksQuery $mainChecks) {}
 
     /**
      * @return array{project: array<string, mixed>, tasks: array<int, array<string, mixed>>, team: array<string, mixed>|null, git: array{repositories: list<array<string, mixed>>, can_manage: bool}|null, programs: array<int, array{id: int, slug: string, name: string}>}
@@ -68,8 +71,12 @@ class ProjectShowQuery
             ->orderBy('full_name')
             ->get();
 
+        $mainChecks = $this->mainChecks->get(array_values(array_map(intval(...), $repositories->modelKeys())));
+
         return [
-            'repositories' => array_values(GitRepositoryResource::collection($repositories)->resolve()),
+            'repositories' => array_values($repositories
+                ->map(fn (GitRepository $repository): array => (new GitRepositoryResource($repository))->withMainChecks($mainChecks[$repository->id] ?? null)->resolve())
+                ->all()),
             'can_manage' => WorkspaceAccess::canManageProjectRepositories($viewer, $project),
         ];
     }

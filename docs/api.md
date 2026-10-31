@@ -265,20 +265,32 @@ returns it as `team { id, is_cross_organization, members: [{ id, name, email, de
 A project links repositories of its organization's forge organization. Every
 route answers 403 when the organization has no git connection, whoever asks.
 A repository payload is `{ id, owner, name, full_name, html_url, clone_url,
-ssh_url, default_branch, last_pushed_at, created_at }`; nothing of the
-connection (never the bot token). On the project show it adds
-`open_pull_requests` (the 10 newest open ones) and `open_pull_requests_count`.
-A pull request is `{ id, number, title, state (open|merged|closed), url,
-head_branch, author_username, repository?, opened_at, merged_at, closed_at }`
-(`repository` is the `full_name`, given in a task's `code`); its body stays
-on the forge.
+ssh_url, default_branch, protects_main, main_checks, last_pushed_at,
+created_at }`; nothing of the connection (never the bot token).
+`protects_main`: the tracker's rule is on the default branch (nobody pushes
+to it; a pull request merges with one approval once every check passed).
+`main_checks`: the checks of the commit the default branch points at, or
+`null` while unknown. On the project show it adds `open_pull_requests` (the
+10 newest open ones) and `open_pull_requests_count`. A pull request is `{ id,
+number, title, state (open|merged|closed), url, head_branch,
+author_username, repository?, opened_at, merged_at, closed_at, checks }`
+(`repository` is the `full_name`, given in a task's `code`; `checks` its
+head commit's); its body stays on the forge.
+
+**Checks** are the tests the forge's runners ran on a commit: `null` until
+the tracker has asked the forge (within about two minutes of a push, at once
+when a run finishes), else `{ state, checks: [{ name, state, url }] }`.
+Each check (`name` as the forge names it, `tests / pest (pull_request)`) is
+`passed`, `failed` or `running`, `url` its run on the forge or `null`; the
+overall `state` is `failed` if one failed, else `running` if one runs, else
+`passed`, or `none` when nothing checks the commit.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
 | GET | `/workspace/projects/{slug}/repositories` | the project's repositories, by name (JSON API only; the web Code tab gets them with the project) |
 | GET | `/workspace/projects/{slug}/repositories/candidates?q=` | `{ data: [{ full_name, name, description, html_url }] }`: up to 50 repositories of the forge organization that no project links yet, by name, `q` matching the name in any case. 502 with the forge's answer (`The forge answered 500.`) when it can't list them |
 | POST | `/workspace/projects/{slug}/repositories` | `full_name` (`owner/name`, no `.` or `..` part). The forge decides: 422 with `That repository isn't in the {owner} organization on the forge.` (also when the forge has no such repository), `That repository is already linked to {project title}.` (`another project` when the caller can't see it), `Couldn't reach the forge at {base_url}.` or `The forge answered {status}. Try again shortly.`. On success: `Linked {full_name}.`, the forge's external tracker is set to `{APP_URL}/workspace/go/{user}/{index}` (style `alphanumeric`), and a backfill is queued (open pull requests and those updated in the last 90 days, every branch, the default branch's commits of the last 90 days, all linked to tasks without changing any). When the forge refuses the external tracker the link stands and the message adds ` The forge link back couldn't be set; the nightly reconcile will retry.` |
-| POST | `/workspace/projects/{slug}/repositories/new` | Creates a repository in the forge organization and links it. `name`: the project's key lowercased (`tp`) or that followed by `-` and more (`tp-api`); lowercase letters and digits with a single `.`, `_` or `-` between them; at most 100 characters; not ending in `.git`, `.wiki`, `.rss` or `.atom` (validation 422s: `Start the name with {key}, such as {key}-api.`, `Use lowercase letters and digits, with a single ., _ or - between them.`, `The name can't end in .git, .wiki, .rss or .atom.`). `description`: optional, at most 255 characters. On the forge it is private and empty with `main` as its default branch, and `main` is protected: changes reach it through a pull request with one approval, and only the forge organization's Owners and the repository's maintainers (the project's manager and its program's manager, kept on the rule's push allow-list by the access sync) push to it. Then it is linked as above. 422 with `A repository named {name} already exists in {owner}. Link it instead.`, `Couldn't reach the forge at {base_url}.` or `The forge answered {status}. Try again shortly.` (nothing is linked), or `Created {owner}/{name} on the forge, but couldn't link it: {why}` (it exists on the forge and can be linked). On success: `Created and linked {owner}/{name}.`, or `Created and linked {owner}/{name}, but main couldn't be protected: protect it on the forge.` when the forge refused the rule (the repository is linked all the same) |
+| POST | `/workspace/projects/{slug}/repositories/new` | Creates a repository in the forge organization and links it. `name`: the project's key lowercased (`tp`) or that followed by `-` and more (`tp-api`); lowercase letters and digits with a single `.`, `_` or `-` between them; at most 100 characters; not ending in `.git`, `.wiki`, `.rss` or `.atom` (validation 422s: `Start the name with {key}, such as {key}-api.`, `Use lowercase letters and digits, with a single ., _ or - between them.`, `The name can't end in .git, .wiki, .rss or .atom.`). `description`: optional, at most 255 characters. On the forge it is private, with a README on `main`, its default branch, and `main` is protected: nobody pushes to it, admins included, and a pull request merges with one approval once every check on it passed (a repository with no tests merges nothing). The access sync puts the same rule on every linked repository's default branch, and back whenever it was changed on the forge. Then it is linked as above. 422 with `A repository named {name} already exists in {owner}. Link it instead.`, `Couldn't reach the forge at {base_url}.` or `The forge answered {status}. Try again shortly.` (nothing is linked), or `Created {owner}/{name} on the forge, but couldn't link it: {why}` (it exists on the forge and can be linked). On success: `Created and linked {owner}/{name}.`, or `Created and linked {owner}/{name}, but main couldn't be protected yet; the tracker keeps trying.` when the forge refused the rule (the repository is linked all the same, with `protects_main` false) |
 | DELETE | `/workspace/projects/{slug}/repositories/{repository}` | `Unlinked {full_name}. The repository is untouched on the forge. People who had access keep it on the forge until it's changed there or the repository is linked again.`: its branches, commits, pull requests and task links go; nothing changes on the forge, its collaborators included (the access sync stops writing them). 404 for a repository of another project |
 
 On the JSON API these are `/api/v1/workspace/projects/{slug}/repositories…`
@@ -423,7 +435,8 @@ super-admin, not other viewers of a public project. Elsewhere `git` and
   for the task (`tp-12-fix-the-login`). `pull_requests`: up to 10 that
   mention the task, open first, then newest. `branches`: every one that
   names it, `{ id, name, repository, url }`. `commits`: the latest 10, `{ id,
-  subject, short_sha, url, author, repository, committed_at, unreachable }`;
+  subject, short_sha, url, author, repository, committed_at, unreachable,
+  checks }` (see Checks above);
   `unreachable` is true for a commit no branch holds any more (force-pushed,
   or squash-merged and its branch deleted), which stays listed.
 
@@ -467,8 +480,8 @@ Query string, on both routes:
 
 | Method | Path | Returns |
 | --- | --- | --- |
-| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, repositories, options }, filters { from, to, project, program, members } }`. `people`: one row per person, by name (case-insensitive; never ranked by a figure), the unmatched row last: `{ user_id, name, designation, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, pull_requests_opened, pull_requests_merged, tasks }` (`name` and `designation` are the person's in the People directory; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to). For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `repositories`: how many linked repositories' code the caller may see (0: nothing linked yet, so no commit can count). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, for the filters |
-| GET | `/workspace/reports/code/people/{user}` | `{ data: [{ sha, message, repository, url, committed_at, code_added, code_removed, comment_added, comment_removed, stats_status }] }`: that user's latest 50 counted commits in the range and the caller's scope, newest first; `message` is the first line, `repository` the `full_name`, `url` the commit on the forge, `stats_status` `ok`, `too_large`, `missing` or `null` (not counted yet). Someone outside the caller's scope, or no one, is `{ data: [] }`, never a 403 or 404 |
+| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, repositories, options }, filters { from, to, project, program, members } }`. `people`: one row per person, by name (case-insensitive; never ranked by a figure), the unmatched row last: `{ user_id, name, designation, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, checks_passed, checks_failed, pull_requests_opened, pull_requests_merged, tasks }` (`name` and `designation` are the person's in the People directory; `checks_passed` and `checks_failed` count their commits whose tests passed and failed, running and untested ones in neither; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to). For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `repositories`: how many linked repositories' code the caller may see (0: nothing linked yet, so no commit can count). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, for the filters |
+| GET | `/workspace/reports/code/people/{user}` | `{ data: [{ sha, message, repository, url, committed_at, code_added, code_removed, comment_added, comment_removed, stats_status, checks }] }`: that user's latest 50 counted commits in the range and the caller's scope, newest first; `message` is the first line, `repository` the `full_name`, `url` the commit on the forge, `stats_status` `ok`, `too_large`, `missing` or `null` (not counted yet). Someone outside the caller's scope, or no one, is `{ data: [] }`, never a 403 or 404 |
 
 On the JSON API these are `/api/v1/workspace/reports/code…` (names
 `api.workspace.reports.code` and `api.workspace.reports.code.person`). On
@@ -670,7 +683,11 @@ Every list is empty when all is well:
     "people_reporting_to_inactive": [],
     "people_outside_organogram": [],
     "people_without_login": [],
-    "attendance_without_office": false
+    "attendance_without_office": false,
+    "repositories": 4,
+    "repositories_failing_main": [{ "full_name": "sdoc/tp-api", "slug": "tax-portal", "label": "Tax Portal" }],
+    "repositories_unprotected": [],
+    "repositories_without_tests": []
   }
 }
 ```
@@ -689,6 +706,13 @@ Every list is empty when all is well:
   with no login.
 - `attendance_without_office`: attendance is on, but no office network or
   office place is set.
+- `repositories`: how many repositories its active projects link (the
+  page's Code part shows only when there are some). Of them:
+  `repositories_failing_main`, the latest commit of the default branch
+  failed its tests; `repositories_unprotected`, the tracker's rule isn't on
+  the default branch yet; `repositories_without_tests`, no commit has run
+  any check yet, so nothing can merge there. `slug` and `label` are the
+  project's.
 
 The web page is `GET /workspace/maintenance` (name `workspace.maintenance`):
 the viewer's organization, and a super-admin picks one with
@@ -992,6 +1016,22 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Runners, protected main and test results.**
+
+- A repository payload adds `protects_main` (now for every linked
+  repository: the access sync puts the rule on each default branch) and
+  `main_checks`; a pull request adds `checks`, as do a task's `code.commits`
+  and the code activity report's commits. The report's people add
+  `checks_passed` and `checks_failed`. See Checks under Code repositories.
+- The rule changed: nobody pushes to the default branch, maintainers and
+  Owners included; a pull request needs one approval and every check
+  passed. A new repository starts with a README on `main`. The message when
+  the forge refuses the rule is now `Created and linked {owner}/{name}, but
+  main couldn't be protected yet; the tracker keeps trying.`
+- Maintenance adds `repositories`, `repositories_failing_main`,
+  `repositories_unprotected` and `repositories_without_tests`, counted in
+  `maintenance_count`.
 
 **Projects may have no manager; the maintenance list.**
 

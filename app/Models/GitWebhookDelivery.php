@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class GitWebhookDelivery extends Model
 {
     /** The events the organization webhook subscribes to and the tracker applies. */
-    public const EVENTS = ['push', 'create', 'delete', 'pull_request', 'repository'];
+    public const EVENTS = ['push', 'create', 'delete', 'pull_request', 'repository', 'action_run_success', 'action_run_failure'];
 
     public $timestamps = false;
 

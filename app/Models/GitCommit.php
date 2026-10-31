@@ -37,6 +37,9 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property int $generated_lines
  * @property string|null $stats_status ok, merge, too_large or missing
  * @property CarbonImmutable|null $stats_computed_at
+ * @property string|null $checks_state passed, failed, running or none (Checks); null until asked
+ * @property list<array{name: string, state: string, url: string|null}>|null $checks
+ * @property CarbonImmutable|null $checks_checked_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -64,6 +67,8 @@ class GitCommit extends Model
             'unreachable_at' => 'datetime',
             'is_merge' => 'boolean',
             'stats_computed_at' => 'datetime',
+            'checks' => 'array',
+            'checks_checked_at' => 'datetime',
         ];
     }
 

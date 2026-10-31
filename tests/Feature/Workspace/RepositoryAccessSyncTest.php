@@ -10,6 +10,7 @@ use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\Git\MainBranch;
 use App\Services\Git\RepositoryAccess;
 use App\Services\Git\RepositoryAccessFailed;
 use Carbon\CarbonImmutable;
@@ -226,9 +227,10 @@ it('makes the manager and program manager admins and keeps each grant\'s permiss
         'PUT pradeep admin',
     ])
         ->and(accSorted($result['granted']))->toBe(['asha', 'bikash', 'mira', 'pradeep'])
-        ->and($this->repo->refresh()->access_synced_at?->equalTo(now()))->toBeTrue();
-    // Not a repository whose main the tracker protects.
-    Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH');
+        ->and($this->repo->refresh()->access_synced_at?->equalTo(now()))->toBeTrue()
+        ->and($this->repo->protects_main)->toBeTrue();
+    // Every sync writes main's rule.
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && str_ends_with($r->url(), '/branch_protections/main'));
 });
 
 it('wants nobody for a grant that no longer counts', function () {
@@ -299,7 +301,8 @@ it('never wants the bot or forge-admin, even when a person carries their name', 
     app(RepositoryAccess::class)->sync($this->repo);
 
     expect(accSorted(array_values(array_filter(accWrites(), fn (string $w) => str_starts_with($w, 'PUT')))))->toBe(['PUT asha write', 'PUT bikash read', 'PUT pradeep admin']);
-    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r['push_whitelist_usernames'] === ['pradeep']);
+    // Nobody pushes to main, the bot and forge-admin included.
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r['enable_push'] === false && $r['push_whitelist_usernames'] === []);
 });
 
 it('keeps a collaborator the forge spells in another case: one PUT, no removal', function () {
@@ -340,7 +343,7 @@ it('lists someone who never signed in to the forge as waiting', function () {
     $result = app(RepositoryAccess::class)->sync($this->repo);
 
     expect(accSorted($result['waiting']))->toBe(['Dina Waiting', 'Era Unlinked'])
-        ->and(accWrites())->toHaveCount(5); // four PUTs and Chet's removal
+        ->and(accWrites())->toHaveCount(6); // four PUTs, Chet's removal and main's rule
 });
 
 // When the forge says no
@@ -399,52 +402,64 @@ it('stops at once when the forge stops answering a PUT', function () {
 
 // The main rule
 
-it('allow-lists the maintainers who are collaborators on a protected main', function () {
-    $this->repo->forceFill(['protects_main' => true])->save();
-    $missing = [];
-    Http::fake(accForge(stubs: [
-        'git.example/api/v1/repos/sdoc/tp-api/collaborators/*' => function (Request $request) use (&$missing) {
-            return accCollaboratorWrites($missing)($request);
-        },
-    ]));
-    $allowList = fn (): array => Http::recorded(fn (Request $r) => $r->method() === 'PATCH')
+it('writes the tracker\'s rule onto main last, on every run, whatever the forge had', function () {
+    // The forge's rule still lets people push: the sync puts the tracker's back.
+    Http::fake(accForge());
+    $rules = fn (): array => Http::recorded(fn (Request $r) => $r->method() === 'PATCH')
         ->map(fn (array $pair) => $pair[0]->data())
         ->values()
         ->all();
 
     app(RepositoryAccess::class)->sync($this->repo);
-
-    [$rule] = $allowList();
-    expect($allowList())->toHaveCount(1)
-        ->and(array_diff_key($rule, ['push_whitelist_usernames' => true]))->toEqual([
-            'enable_push' => true,
-            'enable_push_whitelist' => true,
-            'push_whitelist_teams' => ['Owners'],
-        ])
-        ->and(accSorted($rule['push_whitelist_usernames']))->toBe(['mira', 'pradeep']);
-    // The rule is rewritten after the PUTs: the forge drops allow-listed users without write.
-    expect(accWrites()[array_key_last(accWrites())])->toBe('PATCH main');
-
-    // Pradeep has no forge account any more.
-    $missing = ['pradeep' => 422];
     app(RepositoryAccess::class)->sync($this->repo);
 
-    expect($allowList()[1]['push_whitelist_usernames'])->toBe(['mira']);
+    expect($rules())->toBe([MainBranch::RULE, MainBranch::RULE])
+        ->and(accWrites()[array_key_last(accWrites())])->toBe('PATCH main')
+        ->and($this->repo->refresh()->protects_main)->toBeTrue();
 });
 
-it('stops protecting main when the rule was deleted on the forge', function () {
-    Log::spy();
+it('puts main\'s rule back when someone deleted it on the forge', function () {
     $this->repo->forceFill(['protects_main' => true])->save();
     Http::fake(accForge(stubs: [
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['rule_name' => 'main'], 201),
     ]));
 
     app(RepositoryAccess::class)->sync($this->repo);
 
-    expect($this->repo->refresh()->protects_main)->toBeFalse()
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/branch_protections')
+        && $r->data() === ['rule_name' => 'main', 'branch_name' => 'main', ...MainBranch::RULE]);
+    expect($this->repo->refresh()->protects_main)->toBeTrue()
         ->and($this->repo->access_synced_at)->not->toBeNull();
-    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === "The forge repository's main rule is gone; the tracker no longer protects it."
-        && $context == ['owner' => 'sdoc', 'repository' => 'tp-api'])->once();
+});
+
+it("protects a linked repository's default branch, whatever it is called", function () {
+    $this->repo->update(['default_branch' => 'master']);
+    Http::fake(accForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/master' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['rule_name' => 'master'], 201),
+    ]));
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/branch_protections')
+        && $r->data() === ['rule_name' => 'master', 'branch_name' => 'master', ...MainBranch::RULE]);
+    Http::assertNotSent(fn (Request $r) => str_ends_with($r->url(), '/branch_protections/main'));
+    expect($this->repo->refresh()->protects_main)->toBeTrue();
+});
+
+it('marks main unprotected and fails the run when the forge refuses the rule, after everything else', function () {
+    $this->repo->forceFill(['protects_main' => true])->save();
+    Http::fake(accForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'Forbidden'], 403),
+    ]));
+
+    expect(fn () => app(RepositoryAccess::class)->sync($this->repo))
+        ->toThrow(fn (RepositoryAccessFailed $e) => expect([$e->status, $e->operation])->toBe([403, 'patch']));
+
+    expect(accWrites())->toContain('PUT mira admin', 'PUT asha write', 'DELETE Chet')
+        ->and($this->repo->refresh()->protects_main)->toBeFalse()
+        ->and($this->repo->access_synced_at)->toBeNull();
 });
 
 // Importing a repository's collaborators

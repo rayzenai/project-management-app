@@ -180,7 +180,7 @@ function recForgeHook(GitConnection $connection, array $overrides = []): array
             'create', 'delete', 'push', 'pull_request', 'pull_request_assign', 'pull_request_label',
             'pull_request_milestone', 'pull_request_comment', 'pull_request_review_approved',
             'pull_request_review_rejected', 'pull_request_review_comment', 'pull_request_sync',
-            'pull_request_review_request', 'repository',
+            'pull_request_review_request', 'repository', 'action_run_success', 'action_run_failure',
         ],
         'authorization_header' => '',
         'active' => true,
@@ -233,8 +233,10 @@ function recForge(string $host = 'git.example', string $owner = 'sdoc', string $
         "{$repo}/pulls?*" => recPage([]),
         "{$repo}/branches?*" => recPage([]),
         "{$repo}/commits?*" => recPage([]),
-        // Each repository's access step: no collaborators, nobody wanted on a project without a team.
+        // Each repository's access step: no collaborators, nobody wanted on a project without a team,
+        // and main's rule written.
         "{$api}/repos/{$owner}/*/collaborators?*" => recPage([]),
+        "{$api}/repos/{$owner}/*/branch_protections/main" => Http::response(['rule_name' => 'main']),
         "{$api}/orgs/{$owner}/teams?*" => recPage([['id' => 4, 'name' => 'Readers'], ['id' => 5, 'name' => 'Owners']]),
         "{$api}/teams/5/members?*" => recLogins(["{$owner}-bot"]),
         "{$api}/teams/5/members/*" => Http::response('', 204),
@@ -326,7 +328,6 @@ it('puts back the settings of a webhook a forge owner changed, with the stored s
     $hook = recForgeHook($this->connection, match ($change) {
         'disabled' => ['active' => false],
         'pointed elsewhere' => ['config' => ['url' => 'https://elsewhere.example/hook', 'content_type' => 'json']],
-        'events trimmed' => ['events' => ['push', 'pull_request']],
         'sent as a form' => ['config' => ['url' => route('git.webhook', $this->connection), 'content_type' => 'form']],
         'one branch only' => ['branch_filter' => 'main'],
     });
@@ -349,7 +350,51 @@ it('puts back the settings of a webhook a forge owner changed, with the stored s
     expect($this->connection->refresh()->only(['webhook_id', 'webhook_secret']))->toBe(['webhook_id' => 99, 'webhook_secret' => 'secret-sdoc-never-shown']);
     Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => $message === "Put the forge webhook's settings back."
         && ! str_contains((string) json_encode($context), 'never-shown'))->once();
-})->with(['disabled', 'pointed elsewhere', 'events trimmed', 'sent as a form', 'one branch only']);
+})->with(['disabled', 'pointed elsewhere', 'sent as a form', 'one branch only']);
+
+it('replaces a webhook missing an event, which the forge cannot add to a hook, and deletes the old one', function (array $events) {
+    Log::spy();
+    Http::fake(recForge(stubs: [
+        'git.example/api/v1/orgs/sdoc/hooks/99' => fn (Request $r) => $r->method() === 'DELETE'
+            ? Http::response('', 204)
+            : Http::response(recForgeHook($this->connection, ['events' => $events])),
+        'git.example/api/v1/orgs/sdoc/hooks' => Http::response(['id' => 123], 201),
+    ]));
+
+    $this->artisan('git:reconcile')
+        ->expectsOutputToContain('sdoc at https://git.example: reconciled 1 repository, replaced the webhook.')
+        ->doesntExpectOutputToContain('never-shown')
+        ->assertSuccessful();
+
+    $connection = $this->connection->refresh();
+    expect($connection->webhook_id)->toBe(123)
+        ->and($connection->webhook_secret)->not->toBe('secret-sdoc-never-shown')->toHaveLength(40);
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && $r->url() === 'https://git.example/api/v1/orgs/sdoc/hooks'
+        && $r['events'] === GitWebhookDelivery::EVENTS && $r['config']['secret'] === $connection->webhook_secret);
+    Http::assertSent(fn (Request $r) => $r->method() === 'DELETE' && $r->url() === 'https://git.example/api/v1/orgs/sdoc/hooks/99');
+    Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH' && str_contains($r->url(), '/hooks/'));
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message) => $message === 'Replaced the forge webhook, which lacked events the tracker needs.')->once();
+})->with([
+    // A hook made before the tracker read workflow runs: the forge's edit can't add them.
+    'no workflow-run events' => [['create', 'delete', 'push', 'pull_request', 'repository']],
+    'events trimmed' => [['push', 'pull_request']],
+]);
+
+it('keeps the replacement when the old webhook cannot be deleted, and says so', function () {
+    Log::spy();
+    Http::fake(recForge(stubs: [
+        'git.example/api/v1/orgs/sdoc/hooks/99' => fn (Request $r) => $r->method() === 'DELETE'
+            ? Http::response(['message' => 'Internal Server Error'], 500)
+            : Http::response(recForgeHook($this->connection, ['events' => ['push']])),
+        'git.example/api/v1/orgs/sdoc/hooks' => Http::response(['id' => 123], 201),
+    ]));
+
+    $this->artisan('git:reconcile')->expectsOutputToContain('replaced the webhook')->assertSuccessful();
+
+    expect($this->connection->refresh()->webhook_id)->toBe(123);
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []) => str_starts_with($message, "Couldn't delete the forge webhook the tracker replaced")
+        && $context['hook'] === 99 && $context['status'] === 500)->once();
+});
 
 // Repositories
 

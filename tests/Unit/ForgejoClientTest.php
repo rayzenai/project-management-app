@@ -38,7 +38,7 @@ it('creates the organization hook and returns its id', function () {
         'type' => 'forgejo',
         'active' => true,
         'branch_filter' => '*',
-        'events' => ['push', 'create', 'delete', 'pull_request', 'repository'],
+        'events' => ['push', 'create', 'delete', 'pull_request', 'repository', 'action_run_success', 'action_run_failure'],
         'config' => ['url' => 'https://app.test/git/webhooks/1', 'content_type' => 'json', 'secret' => 's3cret'],
     ] && $r->hasHeader('Authorization', 'token secret-bot-token'));
 });
@@ -84,7 +84,7 @@ it('puts every setting of an organization hook back, with the secret', function 
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r->url() === FORGE.'/orgs/sdoc/hooks/5' && $r->data() === [
         'active' => true,
         'branch_filter' => '*',
-        'events' => ['push', 'create', 'delete', 'pull_request', 'repository'],
+        'events' => ['push', 'create', 'delete', 'pull_request', 'repository', 'action_run_success', 'action_run_failure'],
         'config' => ['url' => 'https://app.test/git/webhooks/1', 'content_type' => 'json', 'secret' => 's3cret'],
     ]);
 });
@@ -296,7 +296,7 @@ it('reports status 0 and keeps the cause when the forge cannot be reached', func
     }
 });
 
-it('creates a private empty organization repository with main as default branch', function () {
+it('creates a private organization repository whose main starts from a README', function () {
     Http::fake([FORGE.'/orgs/sdoc/repos' => Http::response(['id' => 7, 'name' => 'egp-api'], 201)]);
 
     expect(forgeClient()->createOrganizationRepository('sdoc', 'egp-api', null))->toBe(['id' => 7, 'name' => 'egp-api']);
@@ -305,9 +305,16 @@ it('creates a private empty organization repository with main as default branch'
         'name' => 'egp-api',
         'description' => '',
         'private' => true,
-        'auto_init' => false,
+        'auto_init' => true,
+        'readme' => 'Default',
         'default_branch' => 'main',
     ]);
+});
+
+it('reads a commit\'s combined status', function () {
+    Http::fake([FORGE.'/repos/sdoc/egp-api/commits/abc123/status?limit=50' => Http::response(['state' => 'success', 'total_count' => 1, 'statuses' => []])]);
+
+    expect(forgeClient()->combinedStatus('sdoc', 'egp-api', 'abc123'))->toBe(['state' => 'success', 'total_count' => 1, 'statuses' => []]);
 });
 
 it('sends the description of a new repository', function () {

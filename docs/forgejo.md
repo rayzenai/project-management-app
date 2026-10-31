@@ -8,8 +8,9 @@ commits, branches and pull requests show on their tasks. Design and reasons:
 [`docs/superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md`](superpowers/specs/2026-10-30-git-phase-2-access-and-reports-design.md)
 (Phase 2: [section 13](#13-repositories-access-and-code-activity)). The deploy kit is [`forgejo/`](../forgejo): a
 Dockerfile on the pinned Forgejo image, its start script and `.env.example`,
-plus `local.sh` for a laptop. The forge deploys on its own, never with the
-tracker.
+plus `local.sh` for a laptop; [`forgejo/runner/`](../forgejo/runner) holds
+the runners that test every pull request ([section 14](#14-runners-and-test-results)).
+The forge deploys on its own, never with the tracker.
 
 In production since 2026-10-30: DNS ([section 1](#1-dns-at-nitc)) and the
 Dokploy project ([section 4](#4-the-dokploy-project)) are done, and
@@ -37,7 +38,8 @@ command does it: [Try it locally](#try-it-locally).
 | Web | `https://git.sdoc.gov.np` through Traefik (Let's Encrypt), container port 3000, never published |
 | Git over SSH | Forgejo's built-in SSH server on host port **2222** (the host's sshd keeps 22). The gateway forwards only 80 and 443, so 2222 is reachable only at `10.5.23.138`: from the VPN, whose resolver returns that address, and from office machines only if their resolver returns it too. HTTPS works wherever the web does |
 | Sign-in | Only "Sign in with sdoc-tasks", the tracker as OpenID Connect provider, then the forge's own second factor, which every person must enrol ([section 2](#2-public-behind-two-factor-sign-in)). No password sign-in anywhere: no password form and no password over HTTP basic auth. Access tokens and SSH keys work. No sign-up form, no OpenID 2.0, no anonymous browsing |
-| Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, the side that calls the forge's API with the `sdoc-bot` token, and the receiver of the forge's webhook (`/git/webhooks/{id}`, [section 12](#12-webhook-and-nightly-reconcile)). `tasks-scheduler` also runs `git:reconcile` nightly, `git:sync-access` every ten minutes and `git:commit-stats` every five ([section 13](#13-repositories-access-and-code-activity)) |
+| Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, the side that calls the forge's API with the `sdoc-bot` token, and the receiver of the forge's webhook (`/git/webhooks/{id}`, [section 12](#12-webhook-and-nightly-reconcile)). `tasks-scheduler` also runs `git:reconcile` nightly, `git:sync-access` every ten minutes, `git:commit-stats` every five ([section 13](#13-repositories-access-and-code-activity)) and `git:commit-checks` every two ([section 14](#14-runners-and-test-results)) |
+| Runners | Dokploy compose `git-runners` in project `git` (from `forgejo/runner/`): four Forgejo runners, one job each, registered to `sdoc`, every job inside one `docker:dind` held to 4 vCPUs and 10 GB ([section 14](#14-runners-and-test-results)) |
 
 ## 1. DNS at NITC
 
@@ -929,8 +931,9 @@ alternative for the volume copy once such a destination exists.
 Turning git on ([bootstrap step 6](#7-bootstrap)) creates one organization
 webhook on `sdoc`, owned by the tracker: type Forgejo, `POST` to
 `{APP_URL}/git/webhooks/{connection id}` (`https://tasks.sdoc.gov.np/git/webhooks/1`),
-JSON, every branch, the events push, create, delete, pull request and
-repository (the forge lists pull request with its sub-events), signed with a
+JSON, every branch, the events push, create, delete, pull request,
+repository and the workflow-run events success and failure (the forge lists
+pull request with its sub-events), signed with a
 secret the tracker keeps encrypted. Leave it alone on the forge: the
 reconcile puts back whatever an owner changes. Entering the token again keeps
 it; pointing the connection at another forge, or another forge organization,
@@ -954,7 +957,7 @@ The tracker stores each delivery once, by its delivery id, keeps it 14 days,
 and answers: 202 `Received.` (queued), 200 `Already received.` (a delivery
 id it already has; one still unprocessed is queued again), 403 for a missing
 or wrong signature, 404 for an unknown connection, 413 over 2 MB, 400 for
-anything that is not a forge delivery. Events other than those five are
+anything that is not a forge delivery. Events other than those seven are
 stored and ignored. Applying a delivery twice changes nothing, so any
 delivery can be sent again. The forge never retries on its own. To resend
 one that failed (the forge shows it with a warning sign; the tracker keeps a
@@ -980,8 +983,12 @@ logged and the rest still run; an unreachable forge ends that connection's
 steps):
 
 1. **The webhook.** A deleted one is created again, with a new secret. One
-   that was switched off, pointed elsewhere (or still at an old `APP_URL`),
-   lost an event, or narrowed to some branches or another content type gets
+   that lacks an event the tracker needs is replaced: a new hook with a new
+   secret, then the old one deleted ("replaced the webhook"), because
+   Forgejo 15 can't add the workflow-run events to an existing hook (the
+   first reconcile after 2026-10-31 did this to the hook made at the
+   bootstrap). One that was switched off, pointed elsewhere (or still at an
+   old `APP_URL`), or narrowed to some branches or another content type gets
    every setting back, with the stored secret ("repaired the webhook"). The
    forge never shows a hook's secret, so a secret changed there can't be
    seen: every run writes the settings and the stored secret back, one
@@ -1000,7 +1007,7 @@ steps):
    deleted, and lose the mark if they come back. Branches gone from the
    forge leave their tasks.
 3. **Its access**, right after its own step (not for one found gone): the
-   collaborators and `main`'s push allow-list are written as the tracker
+   collaborators and the main branch's rule are written as the tracker
    wants them ([section 13](#13-repositories-access-and-code-activity)). It
    shows as `{full_name} access` in a failure.
 4. **Owners.** Every active organizational admin of the office who has a forge
@@ -1014,7 +1021,7 @@ steps):
 
 It prints one line per connection, such as `sdoc at
 https://git.sdoc.gov.np: reconciled 3 repositories.`, adding `, unlinked 1`,
-`, recreated the webhook` or `, repaired the webhook` when it did those. A
+`, recreated the webhook`, `, replaced the webhook` or `, repaired the webhook` when it did those. A
 failure reads `sdoc at …: failed (sdoc/app: The forge answered 500);
 reconciled 2 repositories.`, and the command exits non-zero. Its warnings and
 errors carry no token or secret. Production logs to standard error
@@ -1104,27 +1111,26 @@ most 255 characters.
 
 The tracker, with the bot's token:
 
-1. Creates it in the forge organization: private, empty (`auto_init` off),
-   `main` as the default branch. A name that exists answers "A repository
-   named {name} already exists in {owner}. Link it instead."
-2. Protects `main`: changes reach it through a pull request with one
-   approval (stale approvals dismissed, a rejecting review blocks the merge),
-   and only the forge organization's Owners and the repository's maintainers
-   (below) may push to it directly.
-3. Links it to the project like any other ([Phase 1's linking](#8-check)), which queues
-   the access sync that puts the maintainers on the rule's push allow-list.
+1. Creates it in the forge organization: private, with a README on `main`,
+   its default branch. A name that exists answers "A repository named {name}
+   already exists in {owner}. Link it instead."
+2. Protects `main` with the tracker's rule ([section 14](#14-runners-and-test-results)):
+   nobody pushes to it, and a pull request merges with one approval once
+   every check on it passed.
+3. Links it to the project like any other ([Phase 1's linking](#8-check)).
 
 If the forge refuses the rule, the repository is still created and linked and
 the message says "Created and linked sdoc/sg-api, but main couldn't be
-protected: protect it on the forge." If linking fails after the forge made it,
-the message says the repository exists ("Created sdoc/sg-api on the forge, but
-couldn't link it: …") and it can be linked from the list. Only repositories
-the tracker created are marked as protecting `main`; a repository that was
-linked keeps whatever rules its owners set and the sync never touches them.
+protected yet; the tracker keeps trying." (the access sync puts the rule on
+within ten minutes, and Maintenance lists the repository until it does). If
+linking fails after the forge made it, the message says the repository exists
+("Created sdoc/sg-api on the forge, but couldn't link it: …") and it can be
+linked from the list. A linked repository gets the same rule on its default
+branch from its first access sync.
 
-In a new repository, push `main` first: the first branch pushed to an empty
-repository becomes its default, and only maintainers (and Owners) may push
-`main`, so a maintainer makes the first push.
+Work starts on a branch: clone, branch, push the branch, open a pull request.
+The first one adds the repository's workflow ([section 14](#14-runners-and-test-results)),
+since until a check has run nothing can merge.
 
 ### Who has access
 
@@ -1202,15 +1208,13 @@ In this order, so nobody gains access while a removal is stuck:
    exist") means the person has not signed in to the forge yet: they are
    *waiting*, and the next run gives them access. Any other refusal for one
    login (a disabled account answers 500, a blocked one 403) holds up nobody
-   else; the run finishes the others and the allow-list, then fails with the
-   first refusal. An unreachable forge fails the run at once.
-3. **`main`'s push allow-list**, for a repository the tracker protects: the
-   maintainers now collaborators, plus the Owners team. This comes last
-   because Forgejo silently drops allow-listed users who are not collaborators
-   with write at the moment of the update. A rule deleted on the forge (404)
-   was somebody's decision: the tracker stops protecting that repository and
-   logs "The forge repository's main rule is gone; the tracker no longer
-   protects it."
+   else; the run finishes the others and the rule, then fails with the first
+   refusal. An unreachable forge fails the run at once.
+3. **The main branch's rule** (the repository's default branch), every run:
+   written over whatever is on the forge, and created again if someone
+   deleted it ([section 14](#14-runners-and-test-results)). A refusal marks
+   the repository unprotected (Maintenance lists it) and fails the run after
+   the rest.
 
 Never touched, in any step: `{owner}-bot`, `forge-admin`, and logins the
 tracker has no user for. The forge's organization-level access is
@@ -1237,12 +1241,10 @@ off only people the tracker knows).
 
 What the forge does, as checked on a real instance and relied on above:
 
-- An admin collaborator cannot push to a protected `main` unless they are on
-  the push allow-list; write collaborators are refused ("Not allowed to push to
-  protected branch main") and push branches and open pull requests. That is
-  why maintainers are listed on the rule.
-- Allow-listed users who are not collaborators with write are dropped at update
-  time, and a user is dropped from the list when they stop being a collaborator.
+- With pushes off and the rule applied to admins, nobody pushes to the
+  protected branch, admin collaborators and Owners included ("Not allowed to
+  push to protected branch main"); everyone with write pushes other branches
+  and opens pull requests.
 - Adding a collaborator who already is one answers 204 and sets the
   permission; removing one who isn't answers 204.
 
@@ -1341,13 +1343,165 @@ fails the run's exit code like any other step.
 | Symptom | Likely cause |
 | --- | --- |
 | Someone is listed as waiting for days | They never signed in to the forge, so it has no user for their login. The sync gives them access on its next run after they do. |
-| A person has the grant but cannot push `main` | Only maintainers and Owners push `main`; a `write` grant pushes branches and opens pull requests. |
+| A person has the grant but cannot push `main` | Nobody pushes `main`: push a branch and open a pull request. |
+| A pull request can't be merged though it is approved | A check failed or still runs, or the repository has no workflow yet ([section 14](#14-runners-and-test-results)). |
 | `git:sync-access` prints `failed (forge answered 403)` | The bot lost ownership of the forge organization or its token is under-scoped (`write:repository`). |
 | Someone added by hand on the forge disappears | The sync took them off: add them as a grant in the tracker instead. |
 | A removed collaborator is still on the forge | The removal failed; the log has "Couldn't sync a forge repository's access." with the status. The next run retries. |
 | People still reach a repository that was unlinked | Unlinking keeps forge collaborators: change them on the forge, or link the repository again. |
 | The report keeps showing uncounted commits | The forge was down or refused; look for "Counting a commit failed." and run `git:commit-stats` by hand. |
 | A person's commits are "Not matched to anyone" | Their commit email isn't on their forge account (above). |
+
+## 14. Runners and test results
+
+Every pull request runs its repository's tests on the forge's own runners,
+`main` takes nothing that hasn't passed, and the tracker shows the results.
+
+### What runs
+
+- **Actions** are on in the forge (`forgejo/Dockerfile`):
+  `FORGEJO__actions__ENABLED=true` and `DEFAULT_ACTIONS_URL=github`, so a
+  workflow's `uses: actions/checkout@v4` or `shivammathur/setup-php@v2`
+  comes from GitHub, as it would there. The forge reads workflows from
+  `.forgejo/workflows`, else `.gitea/workflows`, else `.github/workflows`.
+- **Runners**: the Dokploy compose `git-runners` (project `git`), built from
+  [`forgejo/runner/`](../forgejo/runner/compose.yml): four Forgejo runners
+  `13.2.0` (`sdoc-runner-1` to `4`), one job each, registered to the forge
+  organization `sdoc` (its repositories only, not personal ones). Every job
+  runs in a container of the compose's `docker:dind` service, never on the
+  VM's Docker, and dind is held to **4 vCPUs and 10 GB** for all four jobs
+  together. Jobs are not privileged, mount nothing and get no Docker socket;
+  dind reaches the runners only through a unix socket in a volume, never a
+  TCP port a job could reach. dind is privileged (Docker inside Docker needs
+  it), so a job that broke out of its container would still have dind
+  between it and the VM: keep the runners to SDOC's own repositories.
+- **Images**: `runs-on: ubuntu-latest` (or `ubuntu-24.04`) runs
+  `ghcr.io/catthehacker/ubuntu:act-24.04`, `ubuntu-22.04` its 22.04
+  sibling: GitHub's runner image as act publishes it, with apt, sudo and
+  the usual tools. The first job pulls it (about a gigabyte), later jobs
+  reuse it. A job that runs over an hour is stopped.
+- **Caches**: `actions/cache` works; each runner keeps its own on its
+  volume. The `prune` service clears what finished jobs leave in dind once a
+  day, keeping pulled images.
+- **The rule on main** (`App\Services\Git\MainBranch`), on every linked
+  repository's default branch, written by every access sync: no pushes, for
+  anyone (`apply_to_admins`); a pull request merges with one approval (stale
+  ones dismissed; a request for changes blocks) once **every** status check
+  on its head commit passed (`status_check_contexts: ["*"]`; a check still
+  running, failed, or no check at all keeps the merge button off). Forgejo
+  lets its own site administrators merge past it; nobody else can.
+- **Results in the tracker**: a finished run's webhook (`action_run_success`,
+  `action_run_failure`) makes the tracker read that commit's statuses at
+  once; `git:commit-checks` every two minutes asks about recent commits
+  whose result it hasn't got yet, so a lost delivery only delays it. Each
+  commit and pull request shows a tick, a cross or a dashed ring (still
+  running) in the project's Code tab and the task's Code section, each
+  opening its run on the forge; the code activity report has a Tests column
+  (commits passed and failed per person) and Maintenance lists repositories
+  whose main branch fails, isn't protected, or has no tests.
+
+### A repository's workflow
+
+Each repository needs one, on every pull request (no `paths` filter there:
+a pull request no check runs on can't merge). For a Laravel repository,
+`.forgejo/workflows/tests.yml` (or `.github/workflows/`, where the
+`~/rayzen` standard already puts `tests.yml` and `lint.yml`):
+
+```yaml
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env && php artisan key:generate
+      - run: ./vendor/bin/pest
+```
+
+A job may use `services:` (`postgres:17`, `redis:7-alpine`) as on GitHub.
+It can't use `docker build` or mount volumes. The checks are named
+`{workflow} / {job} ({event})`, `tests / pest (pull_request)`.
+
+### Setting it up
+
+Done on 2026-10-31. To build it again, on the forge first:
+
+1. Deploy `git-forgejo` after the `forgejo/Dockerfile` change that turns
+   Actions on (it is stop-first, about a minute of downtime).
+2. Make four secrets and register them, on the VM (`FJ` as in
+   [section 4](#4-the-dokploy-project)); the secrets go nowhere else but
+   the compose's Environment tab:
+
+   ```sh
+   for n in 1 2 3 4; do
+     read -rs -p "secret for sdoc-runner-$n (openssl rand -hex 20): " SECRET; echo
+     printf '%s' "$SECRET" | sudo docker exec -u git -i "$FJ" forgejo forgejo-cli actions register --secret-stdin --scope sdoc --name "sdoc-runner-$n"; echo
+     unset SECRET
+   done
+   ```
+
+   Each prints the runner's uuid. Registering again with the same secret
+   changes nothing.
+3. In Dokploy, project `git`: **Create Service → Compose** `git-runners`,
+   type Docker Compose, Provider Git
+   `https://github.com/rayzenai/project-management-app.git`, branch `main`,
+   compose path `./forgejo/runner/compose.yml`, auto deploy off.
+   Environment: [`forgejo/runner/.env.example`](../forgejo/runner/.env.example)
+   with the four secrets (Create Env File on). No domain: nothing in it
+   listens. Deploy.
+4. Check: sdoc → Settings → Actions → Runners lists the four as idle, and
+
+   ```sh
+   sudo docker ps --format '{{.Names}} {{.Status}}' | grep git-runners
+   sudo docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' | grep git-runners
+   ```
+
+   shows dind (healthy), four runners and prune.
+
+The runners deploy, restart and fail on their own: a deploy of the forge or
+the tracker never touches them, and while they are down pull requests wait
+(their checks stay pending) and nothing merges.
+
+### Operating it
+
+- **Add a runner**: a fifth secret, registered as above, and a `runner-5`
+  block in the compose (they share dind's 4 vCPUs). **More CPU**: raise
+  `cpus` on dind.
+- **Take one out**: Settings → Actions → Runners → the runner → Delete, then
+  remove it from the compose. A secret that leaked: delete that runner on the
+  forge, register a new secret under the same name, put it in the
+  Environment tab, deploy.
+- **Upgrade**: bump the image tag in `forgejo/runner/Dockerfile` (and dind's
+  in the compose), deploy. Running jobs are cancelled; re-run them on the
+  forge.
+- **Disk**: `sudo docker exec $(sudo docker ps -qf name=git-runners.*dind) docker --host=unix:///var/run/dind/docker.sock system df`
+  shows what dind keeps. To drop old images too, run the same with
+  `image prune --all --force` (the next job pulls what it needs).
+
+### When something is off
+
+| Symptom | Likely cause |
+| --- | --- |
+| A pull request says checks are waiting and nothing runs | No runner is idle (Settings → Actions → Runners), or the repository has no workflow on `pull_request`. |
+| A runner shows offline | Its container restarts: its log says why (`sdoc-runner: …` for a missing or wrong secret, or dind not healthy yet). |
+| Jobs can't clone (`Could not resolve host` or a timeout) | dind's DNS: it must use the VM's resolvers, which answer `git.sdoc.gov.np` with `10.5.23.138` ([section 4](#tracker-and-forge-reach-each-other-on-the-vm)). |
+| The tracker shows no tick or cross | The webhook's events lack the workflow-run ones (the reconcile puts them back), or the forge refused the tracker: look for "Reading a commit's checks failed." and run `git:commit-checks`. |
+| Maintenance lists a repository as not protected | The bot can't write the rule (it lost ownership, or its token lacks `write:repository`); `git:sync-access` shows the forge's answer. |
+
+```sh
+php artisan git:commit-checks              # up to 200 commits
+php artisan git:commit-checks --limit=20
+```
 
 ## Try it locally
 

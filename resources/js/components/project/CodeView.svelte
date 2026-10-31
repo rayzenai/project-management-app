@@ -7,6 +7,8 @@
         GitPullRequest,
         Link,
         Plus,
+        ShieldAlert,
+        ShieldCheck,
         Unlink,
         Users,
     } from '@lucide/svelte';
@@ -22,6 +24,7 @@
         ProjectGit,
         RepositoryCandidate,
     } from '../../lib/types';
+    import ChecksMark from '../ChecksMark.svelte';
     import Popover from '../Popover.svelte';
     import Spinner from '../Spinner.svelte';
     import RepositoryAccess from './RepositoryAccess.svelte';
@@ -565,6 +568,24 @@
                                 >{repository.default_branch}</span
                             >
                         </span>
+                        {#if repository.protects_main}
+                            <span
+                                class="inline-flex items-center gap-1"
+                                title={`Nobody pushes to ${repository.default_branch}. A pull request merges once its tests pass and someone approves it.`}
+                            >
+                                <ShieldCheck class="h-3 w-3 text-fg-faint" />
+                                Protected
+                            </span>
+                        {:else}
+                            <span
+                                class="inline-flex items-center gap-1 text-warn"
+                                title={`The tracker couldn't protect ${repository.default_branch} yet; it keeps trying.`}
+                            >
+                                <ShieldAlert class="h-3 w-3" />
+                                Not protected yet
+                            </span>
+                        {/if}
+                        <ChecksMark checks={repository.main_checks} label />
                         <span
                             >{repository.last_pushed_at
                                 ? `Last push ${formatTimeAgo(repository.last_pushed_at)}`
@@ -628,6 +649,7 @@
                                         class="min-w-0 flex-1 truncate text-fg hover:text-accent"
                                         >{pull.title}</a
                                     >
+                                    <ChecksMark checks={pull.checks} />
                                     <span
                                         class="hidden max-w-48 shrink-0 truncate font-mono text-[11px] text-fg-faint sm:inline"
                                         >{pull.head_branch}</span

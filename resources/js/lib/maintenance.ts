@@ -28,6 +28,21 @@ export interface Maintenance {
     people_outside_organogram: PersonRef[];
     people_without_login: PersonRef[];
     attendance_without_office: boolean;
+    /** Repositories linked to its active projects; the code checks below look at them. */
+    repositories: number;
+    /** The main (default) branch's latest commit failed its tests. */
+    repositories_failing_main: RepositoryRef[];
+    /** The tracker's rule isn't on the main (default) branch yet. */
+    repositories_unprotected: RepositoryRef[];
+    /** No commit has run tests: nothing can merge there yet. */
+    repositories_without_tests: RepositoryRef[];
+}
+
+export interface RepositoryRef {
+    full_name: string;
+    /** Its project's slug and label. */
+    slug: string;
+    label: string;
 }
 
 export interface ProjectRef {

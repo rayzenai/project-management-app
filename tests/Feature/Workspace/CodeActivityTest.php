@@ -11,6 +11,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Git\Checks;
 use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
@@ -407,6 +408,19 @@ it('counts the tasks their commits are linked to, not trashed ones', function ()
     expect($people['Asha Dev']['tasks'])->toBe(2);
 });
 
+it("counts each person's commits whose tests passed and failed; running and untested count in neither", function () {
+    GitCommit::query()->where('sha', 'a1')->update(['checks_state' => Checks::PASSED, 'checks' => '[]']);
+    GitCommit::query()->where('sha', 'a2')->update(['checks_state' => Checks::FAILED, 'checks' => '[]']);
+    codeActivityCommit($this->taxRepo, $this->asha, 'a3', '2026-10-22 09:00:00', ['checks_state' => Checks::PASSED, 'checks' => []]);
+    codeActivityCommit($this->taxRepo, $this->asha, 'a4', '2026-10-22 10:00:00', ['checks_state' => Checks::RUNNING, 'checks' => []]);
+    codeActivityCommit($this->taxRepo, $this->asha, 'a5', '2026-10-22 11:00:00', ['checks_state' => Checks::NONE, 'checks' => []]);
+
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
+
+    expect($people['Asha Dev'])->toMatchArray(['commits' => 5, 'checks_passed' => 2, 'checks_failed' => 1])
+        ->and($people['Bikash Dev'])->toMatchArray(['checks_passed' => 0, 'checks_failed' => 0]);
+});
+
 it('counts the commits in scope still waiting for their line counts', function () {
     codeActivityCommit($this->taxRepo, $this->asha, 'w1', '2026-10-25 10:00:00', ['stats_status' => null, 'stats_computed_at' => null]);
     codeActivityCommit($this->budgetRepo, $this->chandra, 'w2', '2026-10-25 10:00:00', ['stats_status' => null, 'stats_computed_at' => null]);
@@ -530,6 +544,7 @@ it("lists a person's commits in the scope, newest first, with the first line of 
             'comment_added' => 0,
             'comment_removed' => 0,
             'stats_status' => 'ok',
+            'checks' => null,
         ]);
 });
 

@@ -8,38 +8,22 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\Git\ForgejoClient;
 use App\Services\Git\ForgejoException;
+use App\Services\Git\MainBranch;
 use App\Services\Workspace\Concerns\WordsForgeFailures;
 use App\Support\ServiceResult;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Makes a repository in the organization's forge organization (private,
- * empty, `main` as its default branch) with the bot's token, protects `main`
- * and links it to the project through LinkRepositoryService, whose access
- * sync then puts the maintainers on main's push allow-list. A repository
- * whose `main` couldn't be protected is still linked, and the message says
- * to protect it on the forge.
+ * `main` as its default branch, starting from a README) with the bot's
+ * token, protects `main` with the tracker's rule (MainBranch) and links it
+ * to the project through LinkRepositoryService. A repository whose `main`
+ * couldn't be protected yet is still linked: the access sync keeps trying,
+ * and Maintenance lists it until it is.
  */
 class CreateRepositoryService
 {
     use WordsForgeFailures;
-
-    /**
-     * Changes reach `main` through a pull request with one approval; only
-     * the forge organization's Owners and the allow-listed users (the
-     * maintainers, written by the access sync) push to it.
-     */
-    public const MAIN_RULE = [
-        'rule_name' => 'main',
-        'branch_name' => 'main',
-        'enable_push' => true,
-        'enable_push_whitelist' => true,
-        'push_whitelist_usernames' => [],
-        'push_whitelist_teams' => ['Owners'],
-        'required_approvals' => 1,
-        'dismiss_stale_approvals' => true,
-        'block_on_rejected_reviews' => true,
-    ];
 
     public function __construct(private readonly LinkRepositoryService $link) {}
 
@@ -72,11 +56,9 @@ class CreateRepositoryService
         $repository = $linked->data;
 
         if (! $protected) {
-            return ServiceResult::success($repository, "Created and linked {$owner}/{$name}, but main couldn't be protected: protect it on the forge.");
+            return ServiceResult::success($repository, "Created and linked {$owner}/{$name}, but main couldn't be protected yet; the tracker keeps trying.");
         }
 
-        // Saved before the response: the access sync the link queued runs
-        // after it and writes the maintainers onto the rule's allow-list.
         $repository->forceFill(['protects_main' => true])->save();
 
         return ServiceResult::success($repository, "Created and linked {$owner}/{$name}.");
@@ -85,7 +67,7 @@ class CreateRepositoryService
     private function protectMain(ForgejoClient $client, GitConnection $connection, string $name): bool
     {
         try {
-            $client->protectBranch($connection->owner, $name, self::MAIN_RULE);
+            MainBranch::ensure($client, $connection->owner, $name);
 
             return true;
         } catch (ForgejoException $e) {

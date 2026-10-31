@@ -36,7 +36,7 @@ final class ForgeShapes
      * `refs/pull/{n}/head` once the branch is deleted (services/convert/pull.go).
      *
      * @param  array<string, mixed>  $pr  api.PullRequest
-     * @return array{number: int, title: string, body: ?string, state: string, url: string, head_branch: string, author_username: ?string, opened_at: string, merged_at: ?string, closed_at: ?string, updated_at: ?string}
+     * @return array{number: int, title: string, body: ?string, state: string, url: string, head_branch: string, head_sha?: ?string, author_username: ?string, opened_at: string, merged_at: ?string, closed_at: ?string, updated_at: ?string}
      */
     public static function pullRequest(array $pr): array
     {
@@ -53,6 +53,7 @@ final class ForgeShapes
             },
             'url' => (string) self::string($pr, 'html_url'),
             'head_branch' => self::string($head, 'label') ?? (string) self::string($head, 'ref'),
+            'head_sha' => self::string($head, 'sha'),
             'author_username' => self::string(self::map($pr, 'user'), 'login'),
             'opened_at' => (string) self::string($pr, 'created_at'),
             'merged_at' => self::string($pr, 'merged_at'),

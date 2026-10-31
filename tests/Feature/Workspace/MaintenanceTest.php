@@ -3,6 +3,8 @@
 use App\Models\AttendanceNetwork;
 use App\Models\AttendanceSetting;
 use App\Models\Designation;
+use App\Models\GitConnection;
+use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Program;
@@ -12,6 +14,7 @@ use App\Models\ProjectAssignment;
 use App\Models\Task;
 use App\Models\User;
 use App\Queries\Maintenance\MaintenanceQuery;
+use App\Support\Git\Checks;
 use Inertia\Testing\AssertableInertia;
 
 /*
@@ -198,4 +201,43 @@ it('keeps the count cached until the page is opened again', function () {
     $this->actingAs($this->admin->user)->get('/workspace/maintenance')->assertOk();
 
     expect($query->count($this->org->id))->toBe(7);
+});
+
+it("lists the active projects' repositories whose main fails, is unprotected or has run no tests", function () {
+    $connection = GitConnection::query()->create(['organization_id' => $this->org->id, 'base_url' => 'https://git.example', 'owner' => 'sdoc', 'token' => 'bot-token']);
+    $repo = function (Project $project, string $name, bool $protected, ?string $mainState = null, ?string $workState = null) use ($connection): GitRepository {
+        static $forgeId = 600;
+        $repository = GitRepository::query()->create([
+            'git_connection_id' => $connection->id, 'project_id' => $project->id, 'forge_id' => ++$forgeId,
+            'owner' => 'sdoc', 'name' => $name, 'full_name' => "sdoc/{$name}", 'html_url' => "https://git.example/sdoc/{$name}",
+            'clone_url' => "https://git.example/sdoc/{$name}.git", 'ssh_url' => "git@git.example:sdoc/{$name}.git", 'default_branch' => 'main',
+        ]);
+        $repository->forceFill(['protects_main' => $protected])->save();
+        foreach (['main' => $mainState, 'work' => $workState] as $branch => $state) {
+            $sha = "{$name}-{$branch}";
+            $repository->commits()->create([
+                'sha' => $sha, 'message' => 'Work', 'author_name' => 'Asha', 'url' => "https://git.example/sdoc/{$name}/commit/{$sha}", 'committed_at' => now(),
+            ])->forceFill(['checks_state' => $state, 'checks' => $state === null ? null : []])->save();
+            $repository->branches()->create(['name' => $branch, 'head_sha' => $sha]);
+        }
+
+        return $repository;
+    };
+    // Linking writes project activity, so these stay off quiet projects.
+    $repo($this->fine, 'fine', true, Checks::PASSED);
+    $broken = $repo($this->fine, 'broken', false, Checks::FAILED);
+    // Its main was never checked, but a branch was: it has tests.
+    $repo($this->empty, 'branchy', true, null, Checks::PASSED);
+    $untested = $repo($this->empty, 'untested', true, Checks::NONE);
+    $repo(Project::query()->where('title', 'Archived')->sole(), 'archived', false, Checks::FAILED);
+
+    $data = app(MaintenanceQuery::class)->get($this->org->id);
+    $ref = fn (GitRepository $repository, Project $project): array => ['full_name' => $repository->full_name, 'slug' => $project->slug, 'label' => $project->title];
+
+    expect($data['repositories'])->toBe(4)
+        ->and($data['repositories_failing_main'])->toEqual([$ref($broken, $this->fine)])
+        ->and($data['repositories_unprotected'])->toEqual([$ref($broken, $this->fine)])
+        ->and($data['repositories_without_tests'])->toEqual([$ref($untested, $this->empty)])
+        // The nine rows of the organization, and the two repositories.
+        ->and(app(MaintenanceQuery::class)->count($this->org->id))->toBe(11);
 });

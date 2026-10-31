@@ -5,13 +5,16 @@ namespace App\Queries\Maintenance;
 use App\Models\AttendanceNetwork;
 use App\Models\AttendancePlace;
 use App\Models\AttendanceSetting;
+use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\Task;
+use App\Queries\MainChecksQuery;
 use App\Queries\Structure\PersonRef;
+use App\Support\Git\Checks;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -32,7 +35,10 @@ use Illuminate\Support\Facades\Cache;
  *   reporting to someone deactivated (`reports_to`), outside the organogram
  *   (reporting to no one, and no one reporting to them), and with no login;
  * - attendance switched on with no office network or office place to judge
- *   punches by.
+ *   punches by;
+ * - repositories linked to its active projects whose main (default) branch
+ *   fails its checks or isn't protected by the tracker's rule (MainBranch),
+ *   or that have run no tests yet (nothing merges there until they have).
  *
  * A constant number of queries, however big the organization. The
  * sidebar's count (count()) is cached for COUNT_TTL_SECONDS per
@@ -40,6 +46,8 @@ use Illuminate\Support\Facades\Cache;
  */
 final class MaintenanceQuery
 {
+    public function __construct(private MainChecksQuery $mainChecks) {}
+
     public const QUIET_DAYS = 30;
 
     /** How long the sidebar's count may lag behind a fix. */
@@ -61,6 +69,10 @@ final class MaintenanceQuery
      *     people_outside_organogram: list<array{id: int, name: string, designation: string|null}>,
      *     people_without_login: list<array{id: int, name: string, designation: string|null}>,
      *     attendance_without_office: bool,
+     *     repositories: int,
+     *     repositories_failing_main: list<array{full_name: string, slug: string, label: string}>,
+     *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
+     *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
      * }
      */
     public function get(int $organizationId): array
@@ -87,6 +99,7 @@ final class MaintenanceQuery
             'programs_without_manager' => $this->programsWithoutManager($organizationId),
             ...$this->peopleChecks($people),
             'attendance_without_office' => $this->attendanceWithoutOffice($organizationId),
+            ...$this->codeChecks($projects),
         ];
 
         Cache::put(self::countKey($organizationId), self::countOf($report), self::COUNT_TTL_SECONDS);
@@ -123,7 +136,8 @@ final class MaintenanceQuery
         return $rows(['projects_without_manager', 'projects_without_people', 'unassigned_tasks', 'tasks_with_inactive_people', 'quiet_projects'], 'slug')
             + count($report['programs_without_manager'])
             + $rows(['people_off_projects', 'people_without_designation', 'people_reporting_to_inactive', 'people_outside_organogram', 'people_without_login'], 'id')
-            + ($report['attendance_without_office'] ? 1 : 0);
+            + ($report['attendance_without_office'] ? 1 : 0)
+            + $rows(['repositories_failing_main', 'repositories_unprotected', 'repositories_without_tests'], 'full_name');
     }
 
     /**
@@ -237,6 +251,39 @@ final class MaintenanceQuery
                 ->all()),
             'people_outside_organogram' => $refs(fn (Member $member): bool => $member->reports_to_id === null && ! isset($withReports[$member->id])),
             'people_without_login' => $refs(fn (Member $member): bool => $member->user_id === null),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Project>  $projects
+     * @return array{
+     *     repositories: int,
+     *     repositories_failing_main: list<array{full_name: string, slug: string, label: string}>,
+     *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
+     *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
+     * }
+     */
+    private function codeChecks(Collection $projects): array
+    {
+        $byId = $projects->keyBy('id');
+        $repositories = GitRepository::query()
+            ->whereIn('project_id', $byId->keys())
+            ->withExists(['commits as has_tests' => fn (Builder $commit): Builder => $commit->whereIn('checks_state', [Checks::PASSED, Checks::FAILED, Checks::RUNNING])])
+            ->orderBy('full_name')
+            ->get();
+        $main = $this->mainChecks->get(array_values(array_map(intval(...), $repositories->modelKeys())));
+        $ref = fn (GitRepository $repository): array => [
+            'full_name' => $repository->full_name,
+            'slug' => (string) $byId->get($repository->project_id)?->slug,
+            'label' => (string) $byId->get($repository->project_id)?->label(),
+        ];
+        $where = fn (callable $keep): array => array_values($repositories->filter($keep)->map($ref)->all());
+
+        return [
+            'repositories' => $repositories->count(),
+            'repositories_failing_main' => $where(fn (GitRepository $r): bool => ($main[$r->id]['state'] ?? null) === Checks::FAILED),
+            'repositories_unprotected' => $where(fn (GitRepository $r): bool => ! $r->protects_main),
+            'repositories_without_tests' => $where(fn (GitRepository $r): bool => ! $r->getAttribute('has_tests')),
         ];
     }
 

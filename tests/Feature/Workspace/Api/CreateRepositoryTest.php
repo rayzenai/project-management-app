@@ -81,6 +81,7 @@ function apiNewRepoFakeForge(array $stubs = []): void
 {
     Http::fake(array_merge([
         'git.example/api/v1/orgs/sdoc/repos' => Http::response(apiNewRepoForge(), 201),
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['rule_name' => 'main'], 201),
         'git.example/api/v1/repos/sdoc/tp-api' => Http::response(apiNewRepoForge()),
         'git.example/api/v1/repos/sdoc/tp-api/collaborators*' => Http::response([]),
@@ -107,12 +108,14 @@ it('creates, protects and links a repository, answering 201 with it', function (
             'default_branch' => 'main',
             'last_pushed_at' => null,
             'created_at' => $repo->created_at?->toIso8601String(),
+            'protects_main' => true,
+            'main_checks' => null,
         ],
     ]);
     expect($repo->protects_main)->toBeTrue();
     expect($response->getContent())->not->toContain('bot-token-never-shown')->not->toContain('hook-secret-never-shown');
     Http::assertSent(fn (ClientRequest $r) => $r->method() === 'POST' && $r->url() === 'https://git.example/api/v1/orgs/sdoc/repos'
-        && $r->data() == ['name' => 'tp-api', 'description' => 'The Tax Portal API', 'private' => true, 'auto_init' => false, 'default_branch' => 'main']);
+        && $r->data() == ['name' => 'tp-api', 'description' => 'The Tax Portal API', 'private' => true, 'auto_init' => true, 'readme' => 'Default', 'default_branch' => 'main']);
     Http::assertSent(fn (ClientRequest $r) => $r->url() === 'https://git.example/api/v1/repos/sdoc/tp-api/branch_protections');
     Queue::assertPushed(SyncRepositoryAccess::class, 1);
 });
@@ -164,7 +167,7 @@ it('still answers 201 when main couldn\'t be protected, and says so', function (
 
     $this->postJson($this->url, ['name' => 'tp-api'])
         ->assertCreated()
-        ->assertJsonPath('message', "Created and linked sdoc/tp-api, but main couldn't be protected: protect it on the forge.")
+        ->assertJsonPath('message', "Created and linked sdoc/tp-api, but main couldn't be protected yet; the tracker keeps trying.")
         ->assertJsonPath('data.full_name', 'sdoc/tp-api');
 
     expect(GitRepository::query()->sole()->protects_main)->toBeFalse();

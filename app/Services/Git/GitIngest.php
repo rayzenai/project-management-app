@@ -151,7 +151,7 @@ class GitIngest
      * backfill or a retried delivery overtaken by a newer delivery) changes
      * nothing, links included. One as new or newer is written.
      *
-     * @param  array{number: int, title: string, body: ?string, state: string, url: string, head_branch: string, author_username: ?string, opened_at: string, merged_at: ?string, closed_at: ?string, updated_at: ?string}  $pr
+     * @param  array{number: int, title: string, body: ?string, state: string, url: string, head_branch: string, head_sha?: ?string, author_username: ?string, opened_at: string, merged_at: ?string, closed_at: ?string, updated_at: ?string}  $pr
      */
     public function pullRequest(GitRepository $repo, array $pr): GitPullRequest
     {
@@ -168,12 +168,19 @@ class GitIngest
             'state' => $pr['state'],
             'url' => $pr['url'],
             'head_branch' => $pr['head_branch'],
+            'head_sha' => $pr['head_sha'] ?? $stored?->head_sha,
             'author_username' => $pr['author_username'],
             'opened_at' => $this->time($pr['opened_at']),
             'merged_at' => $this->time($pr['merged_at']),
             'closed_at' => $this->time($pr['closed_at']),
             'forge_updated_at' => $updatedAt ?? $stored?->forge_updated_at,
         ]);
+
+        // A new head carries its own checks: the commit's, when the tracker knows them.
+        if ($pullRequest->wasChanged('head_sha') || ($pullRequest->wasRecentlyCreated && $pullRequest->head_sha !== null)) {
+            $head = $repo->commits()->where('sha', $pullRequest->head_sha)->first(['checks_state', 'checks']);
+            $pullRequest->forceFill(['checks_state' => $head?->checks_state, 'checks' => $head?->checks])->save();
+        }
 
         $refs = array_values(array_unique([
             ...TaskReferences::inText($pr['title']),

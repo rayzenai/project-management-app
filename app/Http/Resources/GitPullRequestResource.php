@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\GitPullRequest;
+use App\Support\Git\Checks;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,6 +34,7 @@ class GitPullRequestResource extends JsonResource
             'opened_at' => $this->opened_at->toIso8601String(),
             'merged_at' => $this->merged_at?->toIso8601String(),
             'closed_at' => $this->closed_at?->toIso8601String(),
+            'checks' => Checks::shape($this->checks_state, $this->checks),
         ];
     }
 }

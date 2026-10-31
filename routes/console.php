@@ -15,10 +15,12 @@ Schedule::command('passport:purge')->daily()->withoutOverlapping();
 // changed, and keep forge owners and members in step with the tracker.
 Schedule::command('git:reconcile')->dailyAt('01:30')->withoutOverlapping();
 
-// Each linked repository's forge collaborators in step with the tracker.
+// Each linked repository's forge collaborators, and main's rule, in step with the tracker.
 Schedule::command('git:sync-access')->everyTenMinutes()->withoutOverlapping(15);
 // Count each new commit's code, comment and blank lines from its diff.
 Schedule::command('git:commit-stats')->everyFiveMinutes()->withoutOverlapping(30);
+// Read recent commits' checks (test results) a webhook may have missed.
+Schedule::command('git:commit-checks')->everyTwoMinutes()->withoutOverlapping(10);
 
 // Each command runs in a process of its own whose output, and with
 // LOG_CHANNEL=stderr its log, would be thrown away. In a container whose

@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\GitRepository;
 use App\Models\GitWebhookDelivery;
+use App\Services\Git\CommitChecks;
+use App\Services\Git\ForgejoException;
 use App\Services\Git\ForgeShapes;
 use App\Services\Git\GitIngest;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -39,17 +41,17 @@ class ProcessGitDelivery implements ShouldQueue
 
     public function __construct(public GitWebhookDelivery $delivery) {}
 
-    public function handle(GitIngest $ingest): void
+    public function handle(GitIngest $ingest, CommitChecks $checks): void
     {
         try {
-            DB::transaction(function () use ($ingest): void {
+            DB::transaction(function () use ($ingest, $checks): void {
                 $delivery = GitWebhookDelivery::query()->lockForUpdate()->find($this->delivery->id);
 
                 if ($delivery === null || $delivery->processed_at !== null) {
                     return;
                 }
 
-                $this->apply($ingest, $delivery);
+                $this->apply($ingest, $checks, $delivery);
 
                 $delivery->forceFill(['processed_at' => now(), 'error' => null])->save();
             });
@@ -66,10 +68,11 @@ class ProcessGitDelivery implements ShouldQueue
         }
     }
 
-    private function apply(GitIngest $ingest, GitWebhookDelivery $delivery): void
+    private function apply(GitIngest $ingest, CommitChecks $checks, GitWebhookDelivery $delivery): void
     {
         $payload = $delivery->payload;
-        $repository = ForgeShapes::map($payload, 'repository');
+        // A finished workflow run names its repository inside the run.
+        $repository = ForgeShapes::map($payload, 'repository') ?: ForgeShapes::map(ForgeShapes::map($payload, 'run'), 'repository');
 
         $repo = GitRepository::query()
             ->where('git_connection_id', $delivery->git_connection_id)
@@ -98,8 +101,30 @@ class ProcessGitDelivery implements ShouldQueue
             'create' => $this->createBranch($ingest, $repo, $payload),
             'delete' => $this->deleteBranch($ingest, $repo, $payload),
             'pull_request' => $ingest->pullRequest($repo, ForgeShapes::pullRequest(ForgeShapes::map($payload, 'pull_request'))),
+            'action_run_success', 'action_run_failure' => $this->checks($checks, $repo, $payload),
             default => null,
         };
+    }
+
+    /**
+     * A workflow run finished: its commit's checks are read again. A forge
+     * that doesn't answer now leaves them to `git:commit-checks`.
+     *
+     * @param  array<string, mixed>  $payload  api.ActionPayload
+     */
+    private function checks(CommitChecks $checks, GitRepository $repo, array $payload): void
+    {
+        $sha = ForgeShapes::string(ForgeShapes::map($payload, 'run'), 'commit_sha');
+
+        if ($sha === null) {
+            return;
+        }
+
+        try {
+            $checks->refresh($repo, $sha);
+        } catch (ForgejoException) {
+            // Asked again by git:commit-checks.
+        }
     }
 
     /**

@@ -7,6 +7,7 @@
         CodeActivityPerson,
     } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
+    import ChecksMark from '../ChecksMark.svelte';
 
     /**
      * One person's latest commits in the report's range and filters
@@ -225,6 +226,11 @@
                                     <span class="truncate font-mono"
                                         >{commit.repository}</span
                                     >
+                                    <ChecksMark
+                                        checks={commit.checks}
+                                        label
+                                        link={false}
+                                    />
                                     <span
                                         >{when.format(
                                             new Date(commit.committed_at),

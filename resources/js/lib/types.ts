@@ -128,6 +128,23 @@ export interface ProjectTeam {
     can_remove_manager: boolean;
 }
 
+/** One check on a commit: a Forgejo Actions job, "workflow / job (event)". */
+export interface Check {
+    name: string;
+    state: 'passed' | 'failed' | 'running';
+    url: string | null;
+}
+
+/**
+ * A commit's checks (Checks on the server): `failed` if any failed, else
+ * `running` if any runs, else `passed`, or `none` when nothing checks it.
+ * Null where the tracker hasn't asked the forge yet.
+ */
+export interface Checks {
+    state: 'passed' | 'failed' | 'running' | 'none';
+    checks: Check[];
+}
+
 /** A pull request on the forge (GitPullRequestResource). */
 export interface GitPullRequest {
     id: Id;
@@ -142,6 +159,8 @@ export interface GitPullRequest {
     opened_at: string;
     merged_at: string | null;
     closed_at: string | null;
+    /** Its head commit's checks: it merges into a protected main only once they pass. */
+    checks: Checks | null;
 }
 
 /** A forge repository linked to a project (GitRepositoryResource). */
@@ -156,6 +175,10 @@ export interface GitRepository {
     default_branch: string;
     last_pushed_at: string | null;
     created_at: string | null;
+    /** The tracker's rule holds main: no pushes, merges only once checks pass. */
+    protects_main: boolean;
+    /** The checks of main's latest commit, on the Code tab; null until known. */
+    main_checks?: Checks | null;
     /** The newest open ones, ten at most. */
     open_pull_requests?: GitPullRequest[];
     /** Every open one, however many the list shows. */
@@ -220,6 +243,7 @@ export interface TaskCode {
         repository: string;
         committed_at: string;
         unreachable: boolean;
+        checks: Checks | null;
     }[];
 }
 
@@ -668,6 +692,9 @@ export interface CodeActivityPerson {
     pull_requests_opened: number;
     pull_requests_merged: number;
     tasks: number;
+    /** Their commits whose checks passed, and failed. */
+    checks_passed: number;
+    checks_failed: number;
 }
 
 export interface CodeActivityDay {
@@ -708,6 +735,7 @@ export interface CodeActivityCommit {
     comment_added: number;
     comment_removed: number;
     stats_status: 'ok' | 'too_large' | 'missing' | null;
+    checks: Checks | null;
 }
 
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */

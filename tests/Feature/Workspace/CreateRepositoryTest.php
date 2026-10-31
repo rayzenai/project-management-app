@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\Git\MainBranch;
 use App\Services\Git\RepositoryAccess;
 use App\Services\Workspace\CreateRepositoryService;
 use Illuminate\Http\Client\ConnectionException;
@@ -100,9 +101,9 @@ function newRepoForge(string $name, int $id = 701): array
 }
 
 /**
- * The forge making sdoc/{$name}: it creates it, accepts the rule, describes
- * it, has no collaborators on it and takes the link back, except what
- * $stubs replace.
+ * The forge making sdoc/{$name}: it creates it, has no rule on its main yet
+ * and accepts the new one, describes it, has no collaborators on it and
+ * takes the link back, except what $stubs replace.
  *
  * @param  array<string, mixed>  $stubs
  */
@@ -110,31 +111,41 @@ function newRepoFakeForge(string $name = 'tp-api', array $stubs = []): void
 {
     Http::fake(array_merge([
         'git.example/api/v1/orgs/sdoc/repos' => Http::response(newRepoForge($name), 201),
+        "git.example/api/v1/repos/sdoc/{$name}/branch_protections/main" => Http::response(['message' => 'The target couldn\'t be found.'], 404),
         "git.example/api/v1/repos/sdoc/{$name}/branch_protections" => Http::response(['rule_name' => 'main', 'branch_name' => 'main'], 201),
         "git.example/api/v1/repos/sdoc/{$name}" => Http::response(newRepoForge($name)),
         "git.example/api/v1/repos/sdoc/{$name}/collaborators*" => Http::response([]),
     ], $stubs));
 }
 
-/** @return array<string, mixed> the `main` rule, written out */
+/**
+ * The `main` rule, written out: nobody pushes, admins included; a pull
+ * request merges once every check passed and someone approved it.
+ *
+ * @return array<string, mixed>
+ */
 function newRepoMainRule(): array
 {
     return [
         'rule_name' => 'main',
         'branch_name' => 'main',
-        'enable_push' => true,
-        'enable_push_whitelist' => true,
+        'enable_push' => false,
+        'enable_push_whitelist' => false,
         'push_whitelist_usernames' => [],
-        'push_whitelist_teams' => ['Owners'],
+        'push_whitelist_teams' => [],
+        'enable_merge_whitelist' => false,
+        'enable_status_check' => true,
+        'status_check_contexts' => ['*'],
         'required_approvals' => 1,
         'dismiss_stale_approvals' => true,
         'block_on_rejected_reviews' => true,
+        'apply_to_admins' => true,
     ];
 }
 
 // Creating
 
-it('lets a project manager create a repository: private, empty, main protected, linked', function () {
+it('lets a project manager create a repository: private, with a README, main protected, linked', function () {
     newRepoFakeForge();
 
     $this->actingAs(newRepoActor('manager', $this->project))
@@ -143,17 +154,19 @@ it('lets a project manager create a repository: private, empty, main protected, 
         ->assertSessionHas('workspace_flash', ['success' => true, 'message' => 'Created and linked sdoc/tp-api.']);
 
     $sent = Http::recorded()->map(fn (array $pair): string => $pair[0]->method().' '.$pair[0]->url())->all();
-    expect(array_slice($sent, 0, 3))->toBe([
+    expect(array_slice($sent, 0, 4))->toBe([
         'POST https://git.example/api/v1/orgs/sdoc/repos',
+        'PATCH https://git.example/api/v1/repos/sdoc/tp-api/branch_protections/main',
         'POST https://git.example/api/v1/repos/sdoc/tp-api/branch_protections',
         'GET https://git.example/api/v1/repos/sdoc/tp-api',
     ]);
+    // main starts from a README: nobody can push a first commit to it.
     Http::assertSent(fn (Request $r) => $r->method() === 'POST' && $r->url() === 'https://git.example/api/v1/orgs/sdoc/repos'
-        && $r->data() == ['name' => 'tp-api', 'description' => 'The Tax Portal API', 'private' => true, 'auto_init' => false, 'default_branch' => 'main']
+        && $r->data() == ['name' => 'tp-api', 'description' => 'The Tax Portal API', 'private' => true, 'auto_init' => true, 'readme' => 'Default', 'default_branch' => 'main']
         && $r->hasHeader('Authorization', 'token bot-token-never-shown'));
     Http::assertSent(fn (Request $r) => $r->method() === 'POST' && $r->url() === 'https://git.example/api/v1/repos/sdoc/tp-api/branch_protections'
         && $r->data() == newRepoMainRule());
-    expect(CreateRepositoryService::MAIN_RULE)->toEqual(newRepoMainRule());
+    expect(['rule_name' => 'main', 'branch_name' => 'main', ...MainBranch::RULE])->toEqual(newRepoMainRule());
 
     $repo = GitRepository::query()->sole();
     expect($repo->only(['git_connection_id', 'project_id', 'forge_id', 'full_name', 'default_branch', 'protects_main']))->toEqual([
@@ -169,7 +182,7 @@ it('lets a project manager create a repository: private, empty, main protected, 
     Queue::assertPushed(SyncRepositoryAccess::class, fn (SyncRepositoryAccess $job) => $job->repository->is($repo) && $job->repository->protects_main);
 });
 
-it('puts the manager on main\'s push allow-list when the link\'s access sync runs', function () {
+it('makes the manager an admin and keeps main\'s rule when the link\'s access sync runs', function () {
     newRepoFakeForge(stubs: [
         'git.example/api/v1/repos/sdoc/tp-api/collaborators/mira' => Http::response('', 204),
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['rule_name' => 'main']),
@@ -183,7 +196,7 @@ it('puts the manager on main\'s push allow-list when the link\'s access sync run
     Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && $r->url() === 'https://git.example/api/v1/repos/sdoc/tp-api/collaborators/mira'
         && $r->data() === ['permission' => 'admin']);
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r->url() === 'https://git.example/api/v1/repos/sdoc/tp-api/branch_protections/main'
-        && $r->data()['push_whitelist_usernames'] === ['mira']);
+        && $r->data() === MainBranch::RULE);
 });
 
 it('lets the program manager, the office admin and a super-admin create one too', function (string $role) {
@@ -319,7 +332,7 @@ it('links a repository whose main couldn\'t be protected, and says so', function
     $this->actingAs(newRepoActor('manager', $this->project))
         ->post($this->url, ['name' => 'tp-api'])
         ->assertSessionHasNoErrors()
-        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => "Created and linked sdoc/tp-api, but main couldn't be protected: protect it on the forge."]);
+        ->assertSessionHas('workspace_flash', ['success' => true, 'message' => "Created and linked sdoc/tp-api, but main couldn't be protected yet; the tracker keeps trying."]);
 
     $repo = GitRepository::query()->sole();
     expect($repo->protects_main)->toBeFalse();

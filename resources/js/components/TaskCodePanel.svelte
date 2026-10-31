@@ -11,6 +11,7 @@
     import { formatTimeAgo } from '../lib/format';
     import { toast } from '../lib/toast.svelte';
     import type { TaskCode } from '../lib/types';
+    import ChecksMark from './ChecksMark.svelte';
 
     /**
      * A task's Code section, in the Peek and on the task page: the pull
@@ -98,6 +99,7 @@
                         class="min-w-0 flex-1 truncate text-fg hover:text-accent"
                         >{pull.title}</a
                     >
+                    <ChecksMark checks={pull.checks} />
                     <span
                         class="hidden shrink-0 font-mono text-[11px] text-fg-faint tabular-nums sm:inline"
                         >{pull.repository}#{pull.number}</span
@@ -166,6 +168,7 @@
                     {#if commit.unreachable}
                         <span class="chip shrink-0">Unreachable</span>
                     {/if}
+                    <ChecksMark checks={commit.checks} />
                     <span class="shrink-0 text-xs text-fg-muted"
                         >{commit.author} · {formatTimeAgo(
                             commit.committed_at,
