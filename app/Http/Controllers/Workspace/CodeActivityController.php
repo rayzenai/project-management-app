@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Workspace;
 
 use App\Http\Requests\CodeActivityRequest;
 use App\Queries\CodeActivityQuery;
+use App\Support\WorkspaceOrganization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
@@ -17,7 +18,7 @@ class CodeActivityController extends Controller
 {
     public function index(CodeActivityRequest $request, CodeActivityQuery $query): Response
     {
-        return Inertia::render('Reports/CodeActivity', $query->get($request->user(), $request->filters()) + [
+        return Inertia::render('Reports/CodeActivity', $query->get($request->user(), $request->filters(), WorkspaceOrganization::chosen($request->user())) + [
             'filters' => $request->appliedFilters(),
         ]);
     }
@@ -28,6 +29,6 @@ class CodeActivityController extends Controller
      */
     public function person(CodeActivityRequest $request, string $user, CodeActivityQuery $query): JsonResponse
     {
-        return response()->json(['data' => $query->commitsOf($request->user(), (int) $user, $request->filters())]);
+        return response()->json(['data' => $query->commitsOf($request->user(), (int) $user, $request->filters(), organizationId: WorkspaceOrganization::chosen($request->user()))]);
     }
 }

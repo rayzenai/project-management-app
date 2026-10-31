@@ -3,6 +3,9 @@
 use App\Models\AttendanceSetting;
 use App\Models\Member;
 use App\Models\Organization;
+use App\Models\Project;
+use App\Models\ProjectAssignment;
+use App\Models\Task;
 use App\Models\User;
 use App\Support\WorkspaceOrganization;
 use Illuminate\Testing\TestResponse;
@@ -140,4 +143,45 @@ it('writes the choice only when it changes', function () {
     $this->actingAs($this->boss)->get("/workspace/organogram?organization={$this->mof->id}")->assertOk();
 
     expect($this->boss->refresh()->updated_at->equalTo($stamp))->toBeTrue();
+});
+
+it('keeps Home, Projects, My Workspace and the activity feed to the switched organization, and the app to everything', function () {
+    $me = Member::forUser($this->boss);
+    $projects = [];
+    foreach ([$this->sdoc, $this->mof] as $organization) {
+        $project = Project::factory()->create(['organization_id' => $organization->id, 'title' => "{$organization->name} work"]);
+        $task = Task::factory()->for($project)->create(['status' => 'not_started', 'title' => "Task of {$organization->name}"]);
+        ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $me->id]);
+        $projects[] = $project;
+    }
+    $projects[0]->forceFill(['archived_at' => now()])->save();
+    Project::factory()->create(['organization_id' => $this->sdoc->id, 'title' => 'Archived SDOC', 'archived_at' => now()]);
+    $titles = fn (array $tasks): array => array_column($tasks, 'title');
+
+    // Everything while switched to all, as before.
+    $everything = switchProps($this->actingAs($this->boss)->get('/workspace/projects?archived=1'));
+    expect($everything['archivedCount'])->toBe(2);
+
+    $projects[0]->forceFill(['archived_at' => null])->save();
+    WorkspaceOrganization::choose($this->boss, $this->mof->id);
+
+    $home = switchProps($this->actingAs($this->boss)->get('/workspace'));
+    expect(array_column($home['projects'], 'title'))->toBe(['MoF work'])
+        ->and(collect($home['buckets'])->flatMap(fn (array $bucket) => $titles($bucket['tasks']))->all())->toBe(['Task of MoF'])
+        ->and($home['stats']['open'])->toBe(1);
+
+    $list = switchProps($this->actingAs($this->boss)->get('/workspace/projects'));
+    expect(array_column($list['projects'], 'title'))->toBe(['MoF work'])
+        ->and($list['archivedCount'])->toBe(0);
+
+    $mine = switchProps($this->actingAs($this->boss)->get('/workspace/my'));
+    expect(collect($mine['assignments'])->pluck('task.title')->all())->toBe(['Task of MoF'])
+        ->and(array_column($mine['projects'], 'title'))->toBe(['MoF work']);
+
+    $feed = switchProps($this->actingAs($this->boss)->get('/workspace/notifications?tab=activity'));
+    expect(collect($feed['activity']['data'])->pluck('project_title')->unique()->values()->all())->toBe(['MoF work']);
+
+    // The app has no switch: its Home keeps every organization.
+    $app = $this->actingAs($this->boss, 'sanctum')->getJson('/api/v1/workspace/home')->assertOk()->json();
+    expect(array_column($app['projects'], 'title'))->toBe(['MoF work', 'SDOC work']);
 });

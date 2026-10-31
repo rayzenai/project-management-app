@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Workspace;
 
 use App\Queries\MyWorkspaceQuery;
+use App\Support\WorkspaceOrganization;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
@@ -12,6 +13,6 @@ class MyWorkspaceController extends Controller
 {
     public function __invoke(Request $request): Response
     {
-        return Inertia::render('MyWorkspace', (new MyWorkspaceQuery)->get($request));
+        return Inertia::render('MyWorkspace', (new MyWorkspaceQuery)->get($request, WorkspaceOrganization::chosen($request->user())));
     }
 }

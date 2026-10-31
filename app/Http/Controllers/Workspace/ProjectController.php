@@ -11,6 +11,7 @@ use App\Queries\ProjectShowQuery;
 use App\Services\Workspace\CreateProjectService;
 use App\Services\Workspace\UpdateProjectService;
 use App\Support\WorkspaceAccess;
+use App\Support\WorkspaceOrganization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -23,7 +24,7 @@ class ProjectController extends Controller
 
     public function index(Request $request, ProjectIndexQuery $query): Response
     {
-        return Inertia::render('Projects/Index', $query->data($request));
+        return Inertia::render('Projects/Index', $query->data($request, WorkspaceOrganization::chosen($request->user())));
     }
 
     public function show(Request $request, Project $project, ProjectShowQuery $query): Response

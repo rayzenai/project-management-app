@@ -683,7 +683,15 @@ Shared building blocks (reach for these before writing anything new):
   back to the page without its `organization` and `under`) and by any
   page's own pick (`RemembersOrganizationChoice`: a super-admin's GET with
   `?organization=`, People's `all`), so they never disagree. Ignored for
-  anyone else; an explicit `?organization=` still wins on its page.
+  anyone else; an explicit `?organization=` still wins on its page. The
+  web's lists follow it too: Home (`HomeQuery`), Projects
+  (`ProjectIndexQuery`), My Workspace (`MyWorkspaceQuery`), the activity
+  feed (`ActivityFeedQuery`), each through `Project::inOrganization`, and
+  Code activity (`CodeActivityQuery` narrows a super-admin's `all` scope
+  to the organization, as its admins see it). Their web controllers pass
+  `WorkspaceOrganization::chosen`; the API passes nothing (the app has no
+  switch). Search, quick add, My week and single project or program pages
+  stay organization-wide.
 - `app/Http/Requests/Concerns/`: `ReadsReportScope` (organization and
   `under` for a list report; the report supplies `maySeeOrganization`),
   `ReadsDay` (`?date=`), `ReadsDayRange` (`?from=`/`?to=`, overridable

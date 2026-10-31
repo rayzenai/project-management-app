@@ -18,14 +18,16 @@ use Illuminate\Http\Request;
  * JSON API index: each project with its manager, program, team size and how
  * its work stands (the page groups the ones in a program under it and the
  * rest by manager), the programs the viewer may open, the archived-count
- * badge, and the create-form context.
+ * badge, and the create-form context. `$organizationId` (the web's
+ * super-admin switch) keeps the list, the badge and the programs to that
+ * organization; the create form still offers every one.
  */
 class ProjectIndexQuery
 {
     /**
      * @return array<string, mixed>
      */
-    public function data(Request $request): array
+    public function data(Request $request, ?int $organizationId = null): array
     {
         $user = $request->user();
         $archivedView = $request->boolean('archived');
@@ -33,6 +35,7 @@ class ProjectIndexQuery
 
         $projects = Project::query()
             ->visibleTo($user)
+            ->inOrganization($organizationId)
             ->with(['organization:id,name', 'program:id,slug,name', 'teams' => fn ($q) => $q->withCount('members')->with('leaders.designation:id,name')])
             ->when($archivedView, fn ($q) => $q->archived(), fn ($q) => $q->active())
             ->withCount([
@@ -83,6 +86,7 @@ class ProjectIndexQuery
         // The programs the viewer may open: the page links their headings.
         $programs = Program::query()
             ->visibleTo($user)
+            ->when($organizationId !== null, fn ($q) => $q->where('programs.organization_id', $organizationId))
             ->with(['organization:id,name', 'manager:id,name,designation_id', 'manager.designation:id,name'])
             ->withCount('projects')
             ->orderBy('name')
@@ -93,7 +97,7 @@ class ProjectIndexQuery
             'programs' => ProgramResource::collection($programs)->resolve(),
             'canManagePrograms' => WorkspaceAccess::canManagePrograms($user, $officeAdminOf),
             'archivedView' => $archivedView,
-            'archivedCount' => Project::query()->visibleTo($user)->archived()->count(),
+            'archivedCount' => Project::query()->visibleTo($user)->inOrganization($organizationId)->archived()->count(),
             'managerCandidates' => $managerCandidates,
             'canCreate' => $canCreate,
             'programRequired' => $programRequired,

@@ -47,16 +47,16 @@ class CodeActivityQuery
      *                            commits".
      * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, repositories: int, options: array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}}
      */
-    public function get(?Authenticatable $user, array $filters): array
+    public function get(?Authenticatable $user, array $filters, ?int $organizationId = null): array
     {
-        $scope = WorkspaceAccess::codeReportScope($user);
+        $scope = self::narrowed(WorkspaceAccess::codeReportScope($user), $organizationId);
 
         return [
             'range' => ['from' => $filters['from']->toDateString(), 'to' => $filters['to']->toDateString()],
             'people' => $this->people($scope, $filters),
             'series' => $this->series($scope, $filters),
             'uncounted' => $this->commits($scope, $filters)->whereNull('git_commits.stats_computed_at')->count(),
-            'repositories' => GitRepository::query()->whereIn('project_id', Project::query()->codeVisibleTo($user)->select('projects.id'))->count(),
+            'repositories' => GitRepository::query()->whereIn('project_id', Project::query()->codeVisibleTo($user)->inOrganization($organizationId)->select('projects.id'))->count(),
             'options' => $this->options($scope),
         ];
     }
@@ -69,9 +69,9 @@ class CodeActivityQuery
      * @param  Filters  $filters
      * @return list<array{sha: string, message: string, repository: string, url: string, committed_at: string, code_added: int, code_removed: int, comment_added: int, comment_removed: int, stats_status: ?string, checks: array{state: string, checks: list<array{name: string, state: string, url: string|null}>}|null}>
      */
-    public function commitsOf(?Authenticatable $user, int $userId, array $filters, int $limit = 50): array
+    public function commitsOf(?Authenticatable $user, int $userId, array $filters, int $limit = 50, ?int $organizationId = null): array
     {
-        return array_values($this->commits(WorkspaceAccess::codeReportScope($user), $filters)
+        return array_values($this->commits(self::narrowed(WorkspaceAccess::codeReportScope($user), $organizationId), $filters)
             ->where('git_commits.user_id', $userId)
             ->with('repository:id,full_name')
             ->orderByDesc('git_commits.committed_at')
@@ -92,6 +92,24 @@ class CodeActivityQuery
                 'checks' => Checks::shape($commit->checks_state, $commit->checks),
             ])
             ->all());
+    }
+
+    /**
+     * A super-admin whose workspace is switched to one organization
+     * (WorkspaceOrganization, passed by the web only) sees it as its
+     * organizational admins do; anyone else's scope is never widened or
+     * changed.
+     *
+     * @param  array{all: bool, organization_ids: list<int>, program_ids: list<int>, project_ids: list<int>, user_id: int|null}  $scope
+     * @return array{all: bool, organization_ids: list<int>, program_ids: list<int>, project_ids: list<int>, user_id: int|null}
+     */
+    private static function narrowed(array $scope, ?int $organizationId): array
+    {
+        if ($organizationId === null || ! $scope['all']) {
+            return $scope;
+        }
+
+        return [...$scope, 'all' => false, 'organization_ids' => [$organizationId]];
     }
 
     /**

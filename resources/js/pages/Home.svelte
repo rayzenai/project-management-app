@@ -169,6 +169,20 @@
 
     const today = new Date();
     const heading = `${today.toLocaleDateString('en-GB', { weekday: 'long' })}, ${today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
+
+    // A super-admin switched to one organization sees only its work: say so.
+    const switchedTo = $derived.by(() => {
+        const organizationSwitch = (
+            (page.props ?? {}) as unknown as SharedProps
+        ).organizationSwitch;
+
+        return (
+            organizationSwitch?.organizations.find(
+                (organization) =>
+                    organization.id === organizationSwitch.current,
+            )?.name ?? null
+        );
+    });
 </script>
 
 <svelte:head><title>Home · Workspace</title></svelte:head>
@@ -215,7 +229,7 @@
                     {heading}
                 </h1>
                 <p class="mt-0.5 text-[13px] text-fg-muted">
-                    {scope === 'mine'
+                    {switchedTo ? `${switchedTo} · ` : ''}{scope === 'mine'
                         ? 'Your assigned work'
                         : 'Everything across your projects'} · {stats.open} open
                 </p>

@@ -23,6 +23,9 @@ use Illuminate\Support\Collection;
  * task in a project they can see. The default is `mine` when they have open
  * assignments and `all` when they do not, so a super-admin who is assigned
  * nothing still lands on a populated screen rather than an empty one.
+ *
+ * `$organizationId` (the web's super-admin switch, WorkspaceOrganization)
+ * keeps all of it to that organization's projects; null is every one.
  */
 class HomeQuery
 {
@@ -45,7 +48,7 @@ class HomeQuery
      *     projects: list<array<string, mixed>>
      * }
      */
-    public function get(Request $request): array
+    public function get(Request $request, ?int $organizationId = null): array
     {
         /** @var User $user */
         $user = $request->user();
@@ -55,10 +58,10 @@ class HomeQuery
         $weekEnd = $today->addDays(7);
         $stalledBefore = CarbonImmutable::now()->subDays(14);
 
-        $scope = $this->resolveScope($request, $user, $memberId);
+        $scope = $this->resolveScope($request, $user, $memberId, $organizationId);
 
         // Work still being done: failed tasks are closed, not on anyone's list.
-        $open = $this->inScope($user, $scope, $memberId)
+        $open = $this->inScope($user, $scope, $memberId, $organizationId)
             ->notClosed()
             ->with(['project:id,slug,title,key', 'assignments.member'])
             // Soonest first, then by how loudly the task is asking to be done.
@@ -67,7 +70,7 @@ class HomeQuery
             ->orderByItemNumber()
             ->get();
 
-        $recentlyDone = $this->inScope($user, $scope, $memberId)
+        $recentlyDone = $this->inScope($user, $scope, $memberId, $organizationId)
             ->complete()
             ->with(['project:id,slug,title,key', 'assignments.member'])
             ->where('completed_at', '>=', $today->subDays(7))
@@ -92,7 +95,7 @@ class HomeQuery
             ];
         }
 
-        $all = $this->inScope($user, $scope, $memberId)
+        $all = $this->inScope($user, $scope, $memberId, $organizationId)
             ->get(['id', 'project_id', 'status', 'deadline_at', 'status_updated_at']);
 
         $total = $all->count();
@@ -118,7 +121,7 @@ class HomeQuery
                 'complete' => $complete,
             ],
             'status_breakdown' => $this->statusBreakdown($all),
-            'projects' => $this->projectRollup($user, $all, $scope, $today, $weekEnd, $stalledBefore),
+            'projects' => $this->projectRollup($user, $all, $scope, $organizationId, $today, $weekEnd, $stalledBefore),
         ];
     }
 
@@ -156,6 +159,7 @@ class HomeQuery
         User $user,
         Collection $tasks,
         string $scope,
+        ?int $organizationId,
         CarbonImmutable $today,
         CarbonImmutable $weekEnd,
         CarbonImmutable $stalledBefore,
@@ -164,6 +168,7 @@ class HomeQuery
 
         $rows = Project::query()
             ->visibleTo($user)
+            ->inOrganization($organizationId)
             ->active()
             ->orderBy('title')
             ->get(['id', 'slug', 'title', 'title_np'])
@@ -209,11 +214,11 @@ class HomeQuery
      *
      * @return Builder<Task>
      */
-    private function inScope(User $user, string $scope, int $memberId): Builder
+    private function inScope(User $user, string $scope, int $memberId, ?int $organizationId): Builder
     {
         return Task::query()
             ->forActiveProjects()
-            ->whereIn('project_id', Project::query()->visibleTo($user)->select('id'))
+            ->whereIn('project_id', Project::query()->visibleTo($user)->inOrganization($organizationId)->select('id'))
             ->when(
                 $scope === 'mine',
                 fn (Builder $query): Builder => $query->whereHas(
@@ -227,7 +232,7 @@ class HomeQuery
      * An explicit ?scope= wins; otherwise fall back to whichever scope has
      * something in it.
      */
-    private function resolveScope(Request $request, User $user, int $memberId): string
+    private function resolveScope(Request $request, User $user, int $memberId, ?int $organizationId): string
     {
         $requested = (string) $request->query('scope', '');
 
@@ -235,7 +240,7 @@ class HomeQuery
             return $requested;
         }
 
-        return $this->inScope($user, 'mine', $memberId)->incomplete()->exists() ? 'mine' : 'all';
+        return $this->inScope($user, 'mine', $memberId, $organizationId)->incomplete()->exists() ? 'mine' : 'all';
     }
 
     private function bucketFor(Task $task, CarbonImmutable $today, CarbonImmutable $weekEnd): string

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Support\Git\Checks;
 use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
+use App\Support\WorkspaceOrganization;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -185,6 +186,20 @@ it('never ranks people by how much code they wrote: the order is by name, in any
     $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
 
     expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'bina Dev', 'Not matched to anyone']);
+});
+
+it('shows a super-admin switched to one organization only its people and repositories, as its admins see them', function () {
+    WorkspaceOrganization::choose($this->boss, $this->mof->id);
+
+    $report = codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code'));
+
+    expect(collect($report['people'])->pluck('name')->all())->toBe(['Chandra Dev'])
+        ->and($report['repositories'])->toBe(1)
+        ->and($this->actingAs($this->boss)->getJson("/workspace/reports/code/people/{$this->asha->id}")->json('data'))->toBe([]);
+
+    // The app has no switch: it keeps every organization.
+    expect(collect($this->actingAs($this->boss, 'sanctum')->getJson('/api/v1/workspace/reports/code')->json('data.people'))->pluck('name')->all())
+        ->toBe(['Asha Dev', 'Bikash Dev', 'Chandra Dev', 'Not matched to anyone']);
 });
 
 it('shows an organizational admin only their organization, with the commits no one is matched to', function () {

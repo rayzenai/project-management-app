@@ -6,6 +6,7 @@ use App\Models\ProjectActivity;
 use App\Models\User;
 use App\Queries\ActivityFeedQuery;
 use App\Queries\NotificationIndexQuery;
+use App\Support\WorkspaceOrganization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -31,7 +32,7 @@ class NotificationController extends Controller
         $tab = $request->query('tab') === 'activity' ? 'activity' : 'notifications';
 
         if ($tab === 'activity') {
-            $activity = $activityQuery->get($request);
+            $activity = $activityQuery->get($request, organizationId: WorkspaceOrganization::chosen($user));
 
             return Inertia::render('Notifications/Index', [
                 'tab' => $tab,

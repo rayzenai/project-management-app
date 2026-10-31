@@ -23,13 +23,14 @@ class ActivityFeedQuery
     /**
      * @return LengthAwarePaginator<int, ProjectActivity>
      */
-    public function get(Request $request, int $perPage = 40): LengthAwarePaginator
+    public function get(Request $request, int $perPage = 40, ?int $organizationId = null): LengthAwarePaginator
     {
         /** @var User $user */
         $user = $request->user();
 
+        // $organizationId: the web's super-admin switch (WorkspaceOrganization).
         return ProjectActivity::query()
-            ->whereIn('project_id', Project::query()->visibleTo($user)->select('id'))
+            ->whereIn('project_id', Project::query()->visibleTo($user)->inOrganization($organizationId)->select('id'))
             ->codeVisibleTo($user)
             ->with(['user', 'task.project', 'project'])
             ->latest()

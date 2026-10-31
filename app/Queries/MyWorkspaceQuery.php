@@ -27,9 +27,12 @@ use Illuminate\Http\Request;
 class MyWorkspaceQuery
 {
     /**
+     * `$organizationId` (the web's super-admin switch) keeps it to that
+     * organization's projects; null is every one.
+     *
      * @return array<string, mixed>
      */
-    public function get(Request $request): array
+    public function get(Request $request, ?int $organizationId = null): array
     {
         $user = $request->user();
         $member = Member::forUser($user);
@@ -41,7 +44,7 @@ class MyWorkspaceQuery
                 ->with(['task.project', 'task.assignments.member', 'member'])
                 ->where('member_id', $member->id),
             fn ($q) => $q->incomplete()->forActiveProjects()
-                ->whereIn('project_id', Project::query()->visibleTo($user)->select('id')),
+                ->whereIn('project_id', Project::query()->visibleTo($user)->inOrganization($organizationId)->select('id')),
         )
             ->where(function ($q) use ($now) {
                 $q->whereNull('snoozed_until')->orWhere('snoozed_until', '<=', $now);
@@ -55,7 +58,7 @@ class MyWorkspaceQuery
                 ->where('member_id', $member->id)
                 ->where('snoozed_until', '>', $now),
             fn ($q) => $q->forActiveProjects()
-                ->whereIn('project_id', Project::query()->visibleTo($user)->select('id')),
+                ->whereIn('project_id', Project::query()->visibleTo($user)->inOrganization($organizationId)->select('id')),
         )->count();
 
         $openTaskIds = $assignments
@@ -84,7 +87,7 @@ class MyWorkspaceQuery
                 ->get()
             : collect();
 
-        $projects = Project::query()->visibleTo($user)->active()->orderBy('title')->get(['id', 'slug', 'key', 'title']);
+        $projects = Project::query()->visibleTo($user)->inOrganization($organizationId)->active()->orderBy('title')->get(['id', 'slug', 'key', 'title']);
 
         $teamMembers = Member::query()->visibleTo($user)->active()->orderBy('name')->get(['id', 'name', 'email', 'user_id']);
 
@@ -93,7 +96,8 @@ class MyWorkspaceQuery
                 ->with(['task.project'])
                 ->where('user_id', $user->id)
                 ->where('is_done', false),
-            fn ($q) => $q->forActiveProjects(),
+            fn ($q) => $q->forActiveProjects()
+                ->when($organizationId !== null, fn ($q) => $q->whereIn('project_id', Project::query()->inOrganization($organizationId)->select('id'))),
         )
             ->orderByRaw('due_at IS NULL ASC')
             ->orderBy('due_at')

@@ -226,6 +226,19 @@ class Project extends Model
     }
 
     /**
+     * Projects of one organization; every one when null. The web's lists
+     * pass a super-admin's switch (WorkspaceOrganization); the API passes
+     * nothing.
+     *
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeInOrganization(Builder $query, ?int $organizationId): Builder
+    {
+        return $organizationId === null ? $query : $query->where('projects.organization_id', $organizationId);
+    }
+
+    /**
      * Projects the user may see: those of their organization's office they
      * administer, public ones of their own organization, those of the
      * programs they manage, and any attached to a team they are on (which is
