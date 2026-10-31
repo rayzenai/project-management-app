@@ -91,4 +91,14 @@ class AttendanceSetting extends Model
     {
         return $this->belongsTo(Organization::class);
     }
+
+    /**
+     * Whoever last turned attendance on.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function enabledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'enabled_by');
+    }
 }
