@@ -495,8 +495,13 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   or on its team, the rest stays stored and gives nothing; `isEffective`
   asks it of one grant, and the resource's `effective` says it, the access
   list asking the scope once). `GitRepository`
-  gains `protects_main` (whether the tracker's rule, `MainBranch`, is on its
-  default branch: every access sync writes it) and `access_synced_at`. `GitCommit` gains `user_id` (the user
+  gains `protected_branch` (the branch the tracker protects, fixed when the
+  row is made: the forge's default then, `main` for one the tracker creates
+  or when the forge names none; not fillable, so no webhook, sync or
+  reconcile moves it, while `default_branch` keeps following the forge;
+  unlinking and linking again records the forge's current default),
+  `protects_main` (whether the tracker's rule, `MainBranch`, is on
+  `protected_branch`: every access sync writes it) and `access_synced_at`. `GitCommit` gains `user_id` (the user
   whose lowercased `git_username` equals `author_username`), `is_merge`,
   `files_changed`, `additions`, `deletions`, the classified
   `code|comment|blank|docs` `_added|_removed`, `generated_lines`,
@@ -524,7 +529,7 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   wanted (a failure stops the run), then every PUT (a 422 = no forge user yet,
   *waiting*; another refusal for one login does not stop the rest and fails
   the run afterwards; unreachable stops at once), then `MainBranch::ensure`
-  on the default branch, every run, whatever was changed or deleted on the
+  on `protected_branch`, every run, whatever was changed or deleted on the
   forge (PATCH, else POST; a refusal sets `protects_main` false and fails the
   run after the rest). `{owner}-bot`, `forge-admin` and logins with no tracker
   user are never touched (`ForgeMembership::untouchableLogins`). Logs at
@@ -600,7 +605,9 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   (`forgejo/Dockerfile`), so GitHub workflows run as they are, from
   `.forgejo/workflows` or `.github/workflows`.
 - **Protected main**: `App\Services\Git\MainBranch::RULE` on every linked
-  repository's default branch: no pushes for anyone (`apply_to_admins`),
+  repository's `protected_branch` (never the forge's current default: a
+  maintainer is a forge admin and could otherwise move the rule off `main`
+  by making another branch the default), no pushes for anyone (`apply_to_admins`),
   merges only with one approval and every status check (`*`) passed, so a
   repository with no tests merges nothing. RULE names every field of
   Forgejo's EditBranchProtectionOption (an edit changes only what it is
@@ -611,7 +618,8 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   (a rule would block the first push). Called by `CreateRepositoryService`
   and every `RepositoryAccess::sync`. The approval is the real gate: writers
   can post statuses, and a pull request runs its own workflow. Forge site
-  administrators can still bypass it.
+  administrators can still bypass it, and a maintainer can delete the rule
+  on the forge until the next sync (at most ten minutes) puts it back.
 - **Checks** (`App\Support\Git\Checks`): the forge's commit statuses as
   `passed|failed|running|none` per check and overall (only `success`
   passes; `pending` runs; `error|failure|warning` fail). `CommitChecks::refresh`
@@ -628,13 +636,16 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   `git:commit-checks` run corrects open pull requests that missed them
   (`CommitChecks::catchUpPullRequests`). A check's `url` is kept only on the
   forge's own host. `MainChecksQuery`
-  gives each repository's default-branch checks in one query. Shown through
+  gives each repository's `protected_branch` checks in one query. Shown through
   `Checks::shape` (null until asked) on commits and pull requests
   (`TaskCodeQuery`, `GitPullRequestResource`, `CodeActivityQuery::commitsOf`),
-  `main_checks` and `protects_main` on `GitRepositoryResource`, the code
-  activity report's `checks_passed` / `checks_failed`, and Maintenance's
-  `repositories_failing_main`, `repositories_unprotected` and
-  `repositories_without_tests`. UI: `components/ChecksMark.svelte`.
+  `main_checks`, `protected_branch` and `protects_main` on
+  `GitRepositoryResource`, the code activity report's `checks_passed` /
+  `checks_failed`, and Maintenance's `repositories_failing_main`,
+  `repositories_unprotected`, `repositories_without_tests` and
+  `repositories_default_branch_changed` (the forge's default is another
+  branch than the protected one: work merged there skips the rule; the Code
+  tab marks it too). UI: `components/ChecksMark.svelte`.
 
 ## Structure, attendance and work reports
 

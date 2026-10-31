@@ -26,7 +26,9 @@ use Throwable;
 /**
  * Links a forge repository to a project. The forge is asked first: the
  * repository must be in the organization's forge organization and linked to
- * no project yet. The link and the grants for the people the repository
+ * no project yet. Its default branch now is the branch the tracker protects
+ * from then on (see GitRepository), unless the caller names one. The link
+ * and the grants for the people the repository
  * already has are saved together: when the forge can't say who they are,
  * nothing is linked, so linking never takes anyone's access away. Then the
  * forge is pointed back here (best effort), and the access sync and the
@@ -41,7 +43,10 @@ class LinkRepositoryService
         private readonly RepositoryAccess $access,
     ) {}
 
-    public function execute(Project $project, string $fullName, ?Authenticatable $actor): ServiceResult
+    /**
+     * @param  string|null  $protectedBranch  the branch to protect; the forge's default branch when null
+     */
+    public function execute(Project $project, string $fullName, ?Authenticatable $actor, ?string $protectedBranch = null): ServiceResult
     {
         $connection = GitConnection::query()->where('organization_id', $project->organization_id)->first();
 
@@ -72,12 +77,16 @@ class LinkRepositoryService
 
         try {
             // A savepoint, so a lost race or a failed import leaves any surrounding transaction usable.
-            $repo = DB::transaction(function () use ($project, $attributes, $connection, $forgeId, $actor): GitRepository {
-                $repo = $project->repositories()->create([
+            $repo = DB::transaction(function () use ($project, $attributes, $connection, $forgeId, $actor, $protectedBranch): GitRepository {
+                $repo = $project->repositories()->make([
                     ...array_map(fn (?string $value): string => (string) $value, $attributes),
                     'git_connection_id' => $connection->id,
                     'forge_id' => $forgeId,
                 ]);
+                if ($protectedBranch !== null) {
+                    $repo->protected_branch = $protectedBranch;
+                }
+                $repo->save();
                 $this->access->importExisting($repo, $actor instanceof User ? $actor : null);
 
                 return $repo;

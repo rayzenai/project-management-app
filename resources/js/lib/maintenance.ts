@@ -30,12 +30,20 @@ export interface Maintenance {
     attendance_without_office: boolean;
     /** Repositories linked to its active projects; the code checks below look at them. */
     repositories: number;
-    /** The main (default) branch's latest commit failed its tests. */
+    /** The main (protected) branch's latest commit failed its tests. */
     repositories_failing_main: RepositoryRef[];
-    /** The tracker's rule isn't on the main (default) branch yet. */
+    /** The tracker's rule isn't on the main (protected) branch yet. */
     repositories_unprotected: RepositoryRef[];
     /** No commit has run tests: nothing can merge there yet. */
     repositories_without_tests: RepositoryRef[];
+    /**
+     * Someone made another branch the default on the forge: the rule stays
+     * on the protected branch, but work merged into the new default skips it.
+     */
+    repositories_default_branch_changed: (RepositoryRef & {
+        default_branch: string;
+        protected_branch: string;
+    })[];
 }
 
 export interface RepositoryRef {

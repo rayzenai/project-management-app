@@ -509,8 +509,8 @@ it('puts main\'s rule back when someone deleted it on the forge', function () {
         ->and($this->repo->access_synced_at)->not->toBeNull();
 });
 
-it("protects a linked repository's default branch, whatever it is called", function () {
-    $this->repo->update(['default_branch' => 'master']);
+it('protects the branch recorded when the repository was linked, whatever it is called', function () {
+    $this->repo->forceFill(['default_branch' => 'master', 'protected_branch' => 'master'])->save();
     Http::fake(accForge(stubs: [
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections/master' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['rule_name' => 'master'], 201),
@@ -522,6 +522,24 @@ it("protects a linked repository's default branch, whatever it is called", funct
         && $r->data() === ['rule_name' => 'master', 'branch_name' => 'master', ...MainBranch::RULE]);
     Http::assertNotSent(fn (Request $r) => str_ends_with($r->url(), '/branch_protections/main'));
     expect($this->repo->refresh()->protects_main)->toBeTrue();
+});
+
+it('keeps protecting main after a maintainer makes another branch the default and deletes main\'s rule', function () {
+    // As the forge reported it to the webhook or the reconcile: a maintainer
+    // (forge admin) moved the default branch to escape the rule.
+    $this->repo->update(['default_branch' => 'escape']);
+    Http::fake(accForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['rule_name' => 'main'], 201),
+    ]));
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/branch_protections')
+        && $r->data() === ['rule_name' => 'main', 'branch_name' => 'main', ...MainBranch::RULE]);
+    Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'escape'));
+    expect($this->repo->refresh()->only(['default_branch', 'protected_branch', 'protects_main']))
+        ->toBe(['default_branch' => 'escape', 'protected_branch' => 'main', 'protects_main' => true]);
 });
 
 it('marks main unprotected and fails the run when the forge refuses the rule, after everything else', function () {

@@ -686,6 +686,19 @@ it('follows a rename on the forge', function () {
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && $r->url() === 'https://git.example/api/v1/repos/sdoc/portal');
 });
 
+it('follows a new default branch but keeps protecting the branch it recorded', function () {
+    Http::fake(recForge(stubs: [
+        'git.example/api/v1/repositories/501' => Http::response([...recForgeRepo(), 'default_branch' => 'escape']),
+    ]));
+
+    $this->artisan('git:reconcile')->assertSuccessful();
+
+    expect($this->repo->refresh()->only(['default_branch', 'protected_branch']))
+        ->toBe(['default_branch' => 'escape', 'protected_branch' => 'main']);
+    Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/repos/sdoc/app/branch_protections/main'));
+    Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'branch_protections/escape'));
+});
+
 // Forge membership
 
 it('keeps the Owners team in step with the office admins, and never touches the bots, forge-admin or strangers', function () {

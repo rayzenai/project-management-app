@@ -172,10 +172,13 @@ export interface GitRepository {
     html_url: string;
     clone_url: string;
     ssh_url: string;
+    /** The forge's default branch, as it last reported it. */
     default_branch: string;
+    /** The branch the tracker protects, fixed at link time; main_checks are its. */
+    protected_branch: string;
     last_pushed_at: string | null;
     created_at: string | null;
-    /** The tracker's rule holds main: no pushes, merges only once checks pass. */
+    /** The tracker's rule holds the protected branch: no pushes, merges only once checks pass. */
     protects_main: boolean;
     /** The checks of main's latest commit, on the Code tab; null until known. */
     main_checks?: Checks | null;

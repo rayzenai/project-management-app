@@ -12,6 +12,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * requests, and their task links, come in through GitIngest; unlinking
  * deletes the row (and all of them) and leaves the forge alone.
  *
+ * `default_branch` follows the forge; `protected_branch`, the branch the
+ * tracker protects (MainBranch) and reads main's checks from, is fixed when
+ * the row is made (the default branch then, `main` when the forge named
+ * none) and is not fillable, so nothing the forge reports moves it.
+ * Unlinking and linking again records the forge's default at that moment.
+ *
  * @property int $id
  * @property int $git_connection_id
  * @property int $project_id
@@ -23,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $clone_url
  * @property string $ssh_url
  * @property string $default_branch
+ * @property string $protected_branch
  * @property CarbonImmutable|null $last_pushed_at
  * @property CarbonImmutable|null $reconciled_at
  * @property bool $protects_main
@@ -48,6 +55,15 @@ class GitRepository extends Model
         'last_pushed_at',
         'reconciled_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (GitRepository $repository): void {
+            if (blank($repository->protected_branch)) {
+                $repository->protected_branch = filled($repository->default_branch) ? $repository->default_branch : 'main';
+            }
+        });
+    }
 
     /**
      * @return array<string, string>

@@ -390,12 +390,22 @@ it("reads each repository's main from the commit its branch points at", function
     ])->and(app(MainChecksQuery::class)->get([]))->toBe([]);
 });
 
-it("follows a repository's default branch, whatever it is called", function () {
-    $this->repo->update(['default_branch' => 'master']);
+it('follows the branch the tracker protects, whatever it is called', function () {
+    $this->repo->forceFill(['default_branch' => 'master', 'protected_branch' => 'master'])->save();
     checksCommit($this->repo, 'mmm')->forceFill(['checks_state' => Checks::PASSED, 'checks' => []])->save();
     checksCommit($this->repo, 'nnn')->forceFill(['checks_state' => Checks::FAILED, 'checks' => []])->save();
     GitBranch::query()->create(['git_repository_id' => $this->repo->id, 'name' => 'master', 'head_sha' => 'mmm']);
     GitBranch::query()->create(['git_repository_id' => $this->repo->id, 'name' => 'main', 'head_sha' => 'nnn']);
 
     expect(app(MainChecksQuery::class)->get([$this->repo->id]))->toEqual([$this->repo->id => ['state' => 'passed', 'checks' => []]]);
+});
+
+it("shows the protected branch's checks, not those of a default branch moved on the forge", function () {
+    $this->repo->update(['default_branch' => 'escape']);
+    checksCommit($this->repo, 'mmm')->forceFill(['checks_state' => Checks::FAILED, 'checks' => []])->save();
+    checksCommit($this->repo, 'eee')->forceFill(['checks_state' => Checks::PASSED, 'checks' => []])->save();
+    GitBranch::query()->create(['git_repository_id' => $this->repo->id, 'name' => 'main', 'head_sha' => 'mmm']);
+    GitBranch::query()->create(['git_repository_id' => $this->repo->id, 'name' => 'escape', 'head_sha' => 'eee']);
+
+    expect(app(MainChecksQuery::class)->get([$this->repo->id]))->toEqual([$this->repo->id => ['state' => 'failed', 'checks' => []]]);
 });

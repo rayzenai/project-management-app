@@ -241,3 +241,43 @@ it("lists the active projects' repositories whose main fails, is unprotected or 
         // The nine rows of the organization, and the two repositories.
         ->and(app(MaintenanceQuery::class)->count($this->org->id))->toBe(11);
 });
+
+it('lists the repositories whose default branch was changed on the forge away from the branch the tracker protects', function () {
+    $repo = function (Project $project, string $owner, string $name, string $defaultBranch): GitRepository {
+        static $forgeId = 700;
+        $connection = GitConnection::query()->firstOrCreate(
+            ['organization_id' => $project->organization_id],
+            ['base_url' => "https://git.{$owner}.example", 'owner' => $owner, 'token' => 'bot-token'],
+        );
+        // Linked while main was the default, so main is the branch protected.
+        $repository = GitRepository::query()->create([
+            'git_connection_id' => $connection->id, 'project_id' => $project->id, 'forge_id' => ++$forgeId,
+            'owner' => $owner, 'name' => $name, 'full_name' => "{$owner}/{$name}", 'html_url' => "https://git.example/{$owner}/{$name}",
+            'clone_url' => "https://git.example/{$owner}/{$name}.git", 'ssh_url' => "git@git.example:{$owner}/{$name}.git", 'default_branch' => 'main',
+        ]);
+        $repository->forceFill(['protects_main' => true])->save();
+        // What a webhook or the reconcile writes when the forge reports a new default.
+        $repository->update(['default_branch' => $defaultBranch]);
+
+        return $repository;
+    };
+    $moved = $repo($this->fine, 'sdoc', 'moved', 'escape');
+    $repo($this->fine, 'sdoc', 'steady', 'main');
+    $elsewhere = Project::factory()->create(['organization_id' => $this->otherOrg->id, 'title' => 'Elsewhere']);
+    $repo($elsewhere, 'mof', 'theirs', 'escape');
+
+    $data = app(MaintenanceQuery::class)->get($this->org->id);
+
+    expect($data['repositories_default_branch_changed'])->toEqual([[
+        'full_name' => $moved->full_name,
+        'slug' => $this->fine->slug,
+        'label' => $this->fine->title,
+        'default_branch' => 'escape',
+        'protected_branch' => 'main',
+    ]])
+        ->and($data['repositories_unprotected'])->toBe([])
+        // The nine rows of the organization, and the two repositories (neither
+        // has run tests); the moved one is still one row.
+        ->and(app(MaintenanceQuery::class)->count($this->org->id))->toBe(11)
+        ->and(app(MaintenanceQuery::class)->get($this->otherOrg->id)['repositories_default_branch_changed'])->toHaveCount(1);
+});

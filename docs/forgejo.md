@@ -1211,9 +1211,11 @@ In this order, so nobody gains access while a removal is stuck:
    login (a disabled account answers 500, a blocked one 403) holds up nobody
    else; the run finishes the others and the rule, then fails with the first
    refusal. An unreachable forge fails the run at once.
-3. **The main branch's rule** (the repository's default branch), every run:
-   written over whatever is on the forge, and created again if someone
-   deleted it ([section 14](#14-runners-and-test-results)). A refusal marks
+3. **The main branch's rule** (the repository's protected branch: its
+   default branch when it was linked, `main` for one the tracker made), every
+   run: written over whatever is on the forge, and created again if someone
+   deleted it ([section 14](#14-runners-and-test-results)). Making another
+   branch the default on the forge doesn't move it. A refusal marks
    the repository unprotected (Maintenance lists it) and fails the run after
    the rest.
 
@@ -1396,7 +1398,13 @@ Every pull request runs its repository's tests on the forge's own runners,
   finished jobs leave in dind once a day, keeping pulled images, and once a
   week every image no container uses.
 - **The rule on main** (`App\Services\Git\MainBranch`), on every linked
-  repository's default branch: no pushes, for anyone (`apply_to_admins`); a
+  repository's protected branch (`protected_branch`: its default branch when
+  it was linked, `main` for one the tracker made). A maintainer is an admin
+  of the repository on the forge and can make another branch the default:
+  the rule stays where it was, and Maintenance and the Code tab show the
+  repository until the default is set back on the forge (or the repository
+  is unlinked and linked again, which protects the new default and imports
+  its collaborators as grants once more). No pushes, for anyone (`apply_to_admins`); a
   pull request merges with one approval (stale ones dismissed; a request for
   changes blocks) once **every** status check on its head commit passed
   (`status_check_contexts: ["*"]`; a check still running, failed, or no

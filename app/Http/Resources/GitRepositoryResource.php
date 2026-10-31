@@ -43,10 +43,13 @@ class GitRepositoryResource extends JsonResource
             'html_url' => $this->html_url,
             'clone_url' => $this->clone_url,
             'ssh_url' => $this->ssh_url,
+            // The forge's default branch, as it last reported it.
             'default_branch' => $this->default_branch,
+            // The branch the tracker protects, fixed at link time; main_checks are its.
+            'protected_branch' => $this->protected_branch,
             'last_pushed_at' => $this->last_pushed_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
-            // The tracker's rule is in place on `main` (MainBranch).
+            // The tracker's rule is in place on `protected_branch` (MainBranch).
             'protects_main' => (bool) $this->protects_main,
             'main_checks' => $this->mainChecks,
             'open_pull_requests' => $this->whenLoaded('openPullRequests', fn () => GitPullRequestResource::collection($this->openPullRequests)->resolve()),

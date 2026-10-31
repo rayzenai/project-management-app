@@ -129,6 +129,7 @@ function apiRepoResource(GitRepository $repo): array
         'clone_url' => 'https://git.example/sdoc/app.git',
         'ssh_url' => 'git@git.example:sdoc/app.git',
         'default_branch' => 'main',
+        'protected_branch' => 'main',
         'last_pushed_at' => $repo->last_pushed_at?->toIso8601String(),
         'created_at' => $repo->created_at?->toIso8601String(),
         'protects_main' => (bool) $repo->protects_main,

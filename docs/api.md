@@ -265,12 +265,16 @@ returns it as `team { id, is_cross_organization, members: [{ id, name, email, de
 A project links repositories of its organization's forge organization. Every
 route answers 403 when the organization has no git connection, whoever asks.
 A repository payload is `{ id, owner, name, full_name, html_url, clone_url,
-ssh_url, default_branch, protects_main, main_checks, last_pushed_at,
-created_at }`; nothing of the connection (never the bot token).
-`protects_main`: the tracker's rule is on the default branch (nobody pushes
-to it; a pull request merges with one approval once every check passed).
-`main_checks`: the checks of the commit the default branch points at, or
-`null` while unknown. On the project show it adds `open_pull_requests` (the
+ssh_url, default_branch, protected_branch, protects_main, main_checks,
+last_pushed_at, created_at }`; nothing of the connection (never the bot
+token). `default_branch` is the forge's, as it last reported it;
+`protected_branch` is the branch the tracker protects, fixed when the
+repository was linked (`main` for one the tracker created): a default
+branch changed on the forge later doesn't move it (unlink and link again
+to protect the new default). `protects_main`: the tracker's rule is on
+`protected_branch` (nobody pushes to it; a pull request merges with one
+approval once every check passed). `main_checks`: the checks of the commit
+`protected_branch` points at, or `null` while unknown. On the project show it adds `open_pull_requests` (the
 10 newest open ones) and `open_pull_requests_count`. A pull request is `{ id,
 number, title, state (open|merged|closed), url, head_branch,
 author_username, repository?, opened_at, merged_at, closed_at, checks }`
@@ -708,11 +712,14 @@ Every list is empty when all is well:
   office place is set.
 - `repositories`: how many repositories its active projects link (the
   page's Code part shows only when there are some). Of them:
-  `repositories_failing_main`, the latest commit of the default branch
+  `repositories_failing_main`, the latest commit of the protected branch
   failed its tests; `repositories_unprotected`, the tracker's rule isn't on
-  the default branch yet; `repositories_without_tests`, no commit has run
-  any check yet, so nothing can merge there. `slug` and `label` are the
-  project's.
+  the protected branch yet; `repositories_without_tests`, no commit has run
+  any check yet, so nothing can merge there;
+  `repositories_default_branch_changed`, the forge's default branch is now
+  another branch than the protected one (each row adds `default_branch` and
+  `protected_branch`): work merged into the new default skips the rule.
+  `slug` and `label` are the project's.
 
 The web page is `GET /workspace/maintenance` (name `workspace.maintenance`):
 the viewer's organization, and a super-admin picks one with
@@ -1016,6 +1023,15 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**The protected branch no longer follows the forge's default.**
+
+- A repository payload adds `protected_branch`: the branch the tracker
+  protects and reads `main_checks` from, fixed at link time. Before, both
+  followed `default_branch`, so a maintainer (a forge admin) could move the
+  rule off `main` by making another branch the default.
+- Maintenance adds `repositories_default_branch_changed`, counted in
+  `maintenance_count`.
 
 **Runners, protected main and test results.**
 

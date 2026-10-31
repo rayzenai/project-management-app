@@ -47,7 +47,8 @@ class CreateRepositoryService
         }
 
         $protected = $this->protectMain($client, $connection, $name);
-        $linked = $this->link->execute($project, "{$owner}/{$name}", $actor);
+        // main, whatever the forge names as its default by the time it links.
+        $linked = $this->link->execute($project, "{$owner}/{$name}", $actor, 'main');
 
         if (! $linked->success || ! $linked->data instanceof GitRepository) {
             return ServiceResult::failure("Created {$owner}/{$name} on the forge, but couldn't link it: {$linked->message}", 422);

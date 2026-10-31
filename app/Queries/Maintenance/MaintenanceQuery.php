@@ -36,9 +36,11 @@ use Illuminate\Support\Facades\Cache;
  *   (reporting to no one, and no one reporting to them), and with no login;
  * - attendance switched on with no office network or office place to judge
  *   punches by;
- * - repositories linked to its active projects whose main (default) branch
- *   fails its checks or isn't protected by the tracker's rule (MainBranch),
- *   or that have run no tests yet (nothing merges there until they have).
+ * - repositories linked to its active projects whose main (protected)
+ *   branch fails its checks or isn't protected by the tracker's rule
+ *   (MainBranch), that have run no tests yet (nothing merges there until
+ *   they have), or whose default branch was changed on the forge away from
+ *   the branch the tracker protects (work merged there skips the rule).
  *
  * A constant number of queries, however big the organization. The
  * sidebar's count (count()) is cached for COUNT_TTL_SECONDS per
@@ -73,6 +75,7 @@ final class MaintenanceQuery
      *     repositories_failing_main: list<array{full_name: string, slug: string, label: string}>,
      *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
      *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
+     *     repositories_default_branch_changed: list<array{full_name: string, slug: string, label: string, default_branch: string, protected_branch: string}>,
      * }
      */
     public function get(int $organizationId): array
@@ -137,7 +140,7 @@ final class MaintenanceQuery
             + count($report['programs_without_manager'])
             + $rows(['people_off_projects', 'people_without_designation', 'people_reporting_to_inactive', 'people_outside_organogram', 'people_without_login'], 'id')
             + ($report['attendance_without_office'] ? 1 : 0)
-            + $rows(['repositories_failing_main', 'repositories_unprotected', 'repositories_without_tests'], 'full_name');
+            + $rows(['repositories_failing_main', 'repositories_unprotected', 'repositories_without_tests', 'repositories_default_branch_changed'], 'full_name');
     }
 
     /**
@@ -261,6 +264,7 @@ final class MaintenanceQuery
      *     repositories_failing_main: list<array{full_name: string, slug: string, label: string}>,
      *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
      *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
+     *     repositories_default_branch_changed: list<array{full_name: string, slug: string, label: string, default_branch: string, protected_branch: string}>,
      * }
      */
     private function codeChecks(Collection $projects): array
@@ -284,6 +288,13 @@ final class MaintenanceQuery
             'repositories_failing_main' => $where(fn (GitRepository $r): bool => ($main[$r->id]['state'] ?? null) === Checks::FAILED),
             'repositories_unprotected' => $where(fn (GitRepository $r): bool => ! $r->protects_main),
             'repositories_without_tests' => $where(fn (GitRepository $r): bool => ! $r->getAttribute('has_tests')),
+            // A forge admin made another branch the default: the rule stays on
+            // the protected branch, but work merged into the new default skips it.
+            // (A forge naming no default, an empty repository, is no change.)
+            'repositories_default_branch_changed' => array_values($repositories
+                ->filter(fn (GitRepository $r): bool => $r->default_branch !== '' && $r->default_branch !== $r->protected_branch)
+                ->map(fn (GitRepository $r): array => [...$ref($r), 'default_branch' => $r->default_branch, 'protected_branch' => $r->protected_branch])
+                ->all()),
         ];
     }
 

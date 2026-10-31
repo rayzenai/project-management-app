@@ -156,7 +156,7 @@ class RepositoryAccess
         }
 
         try {
-            $protected = MainBranch::ensure($client, $owner, $name, $repository->default_branch);
+            $protected = MainBranch::ensure($client, $owner, $name, $repository->protected_branch);
         } catch (ForgejoException $e) {
             $protected = false;
             $refused ??= new RepositoryAccessFailed($e, 'patch');

@@ -565,13 +565,13 @@
                         <span class="inline-flex items-center gap-1">
                             <GitBranch class="h-3 w-3 text-fg-faint" />
                             <span class="font-mono"
-                                >{repository.default_branch}</span
+                                >{repository.protected_branch}</span
                             >
                         </span>
                         {#if repository.protects_main}
                             <span
                                 class="inline-flex items-center gap-1"
-                                title={`Nobody pushes to ${repository.default_branch}. A pull request merges once its tests pass and someone approves it.`}
+                                title={`Nobody pushes to ${repository.protected_branch}. A pull request merges once its tests pass and someone approves it.`}
                             >
                                 <ShieldCheck class="h-3 w-3 text-fg-faint" />
                                 Protected
@@ -579,10 +579,22 @@
                         {:else}
                             <span
                                 class="inline-flex items-center gap-1 text-warn"
-                                title={`The tracker couldn't protect ${repository.default_branch} yet; it keeps trying.`}
+                                title={`The tracker couldn't protect ${repository.protected_branch} yet; it keeps trying.`}
                             >
                                 <ShieldAlert class="h-3 w-3" />
                                 Not protected yet
+                            </span>
+                        {/if}
+                        {#if repository.default_branch && repository.default_branch !== repository.protected_branch}
+                            <span
+                                class="inline-flex items-center gap-1 text-warn"
+                                title={`Someone made ${repository.default_branch} the default branch on the forge. The tracker still protects ${repository.protected_branch}; work merged into ${repository.default_branch} skips its rule.`}
+                            >
+                                <ShieldAlert class="h-3 w-3" />
+                                Default changed to
+                                <span class="font-mono"
+                                    >{repository.default_branch}</span
+                                >
                             </span>
                         {/if}
                         <ChecksMark checks={repository.main_checks} label />

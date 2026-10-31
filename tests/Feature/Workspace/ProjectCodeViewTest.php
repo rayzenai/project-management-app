@@ -167,6 +167,7 @@ it('lists the linked repositories with their open pull requests on the project p
                 'clone_url' => 'https://git.example/sdoc/app.git',
                 'ssh_url' => 'git@git.example:sdoc/app.git',
                 'default_branch' => 'main',
+                'protected_branch' => 'main',
                 'last_pushed_at' => '2026-10-27T09:00:00+05:45',
                 'created_at' => '2026-10-28T10:00:00+05:45',
                 'protects_main' => false,

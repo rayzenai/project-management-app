@@ -4,7 +4,9 @@ namespace App\Services\Git;
 
 /**
  * The tracker's rule for the main branch of every linked repository (its
- * default branch: `main` for every repository the tracker makes): nobody
+ * `protected_branch`, fixed at link time: `main` for every repository the
+ * tracker makes; a default branch changed on the forge later doesn't move
+ * it, and Maintenance lists the repository): nobody
  * pushes to it, repository admins (the maintainers) included, and a pull
  * request merges only once every check on it has passed and someone has
  * approved it. A repository with no checks merges nothing until it has

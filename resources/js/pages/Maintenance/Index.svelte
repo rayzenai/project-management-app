@@ -272,6 +272,14 @@
                 repository,
                 () => 'No tests yet, so nothing can merge',
             );
+            collect(
+                code,
+                m.repositories_default_branch_changed,
+                'Repositories whose default branch was changed on the forge',
+                repository,
+                (r) =>
+                    `Default branch is now ${r.default_branch}; only ${r.protected_branch} is protected`,
+            );
             section('code', 'Code', ['repository', 'repositories'], code);
         }
 

@@ -381,6 +381,29 @@ it('links the repository as the forge describes it, points the forge back here a
     expect(ProjectActivity::query()->where('project_id', $this->project->id)->pluck('description')->all())->toContain('Linked repository sdoc/app');
 });
 
+it('records the default branch the forge names at link time as the branch to protect', function () {
+    Queue::fake();
+    repoFakeForge(['git.example/api/v1/repos/sdoc/app' => Http::response([...repoForge(), 'default_branch' => 'trunk'])]);
+
+    $this->actingAs(repoActor('office admin', $this->project))
+        ->post($this->base, ['full_name' => 'sdoc/app'])
+        ->assertSessionHasNoErrors();
+
+    expect(GitRepository::query()->sole()->only(['default_branch', 'protected_branch']))
+        ->toBe(['default_branch' => 'trunk', 'protected_branch' => 'trunk']);
+});
+
+it('protects main when the forge names no default branch at link time', function () {
+    Queue::fake();
+    repoFakeForge(['git.example/api/v1/repos/sdoc/app' => Http::response([...repoForge(), 'default_branch' => null])]);
+
+    $this->actingAs(repoActor('office admin', $this->project))
+        ->post($this->base, ['full_name' => 'sdoc/app'])
+        ->assertSessionHasNoErrors();
+
+    expect(GitRepository::query()->sole()->protected_branch)->toBe('main');
+});
+
 it('refuses a repository of another forge organization', function () {
     Queue::fake();
     Http::fake(['git.example/api/v1/repos/moha/app' => Http::response(repoForge(601, 'moha', 'app'))]);

@@ -183,17 +183,31 @@ it('lets a project manager create a repository: private, with a README, main pro
     expect(['rule_name' => 'main', 'branch_name' => 'main', ...MainBranch::RULE])->toEqual(newRepoMainRule());
 
     $repo = GitRepository::query()->sole();
-    expect($repo->only(['git_connection_id', 'project_id', 'forge_id', 'full_name', 'default_branch', 'protects_main']))->toEqual([
+    expect($repo->only(['git_connection_id', 'project_id', 'forge_id', 'full_name', 'default_branch', 'protected_branch', 'protects_main']))->toEqual([
         'git_connection_id' => $this->connection->id,
         'project_id' => $this->project->id,
         'forge_id' => 701,
         'full_name' => 'sdoc/tp-api',
         'default_branch' => 'main',
+        'protected_branch' => 'main',
         'protects_main' => true,
     ]);
     // The link's own sync, and no second one.
     Queue::assertPushed(SyncRepositoryAccess::class, 1);
     Queue::assertPushed(SyncRepositoryAccess::class, fn (SyncRepositoryAccess $job) => $job->repository->is($repo) && $job->repository->protects_main);
+});
+
+it('protects main even when the forge already names another default branch by the time it links', function () {
+    newRepoFakeForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api' => Http::response([...newRepoForge('tp-api'), 'default_branch' => 'escape']),
+    ]);
+
+    $this->actingAs(newRepoActor('manager', $this->project))
+        ->post($this->url, ['name' => 'tp-api'])
+        ->assertSessionHasNoErrors();
+
+    expect(GitRepository::query()->sole()->only(['default_branch', 'protected_branch']))
+        ->toBe(['default_branch' => 'escape', 'protected_branch' => 'main']);
 });
 
 it('makes the manager an admin and keeps main\'s rule when the link\'s access sync runs', function () {

@@ -693,6 +693,14 @@ it('follows a rename, which Forgejo announces only through later deliveries', fu
         ->and($this->task->commits()->count())->toBe(1);
 });
 
+it('follows a new default branch but never moves the branch the tracker protects', function () {
+    hookSend($this->connection, 'push', hookPush([hookCommit('TP-1 fix')], repository: [...hookRepository(), 'default_branch' => 'escape']))
+        ->assertStatus(202);
+
+    expect($this->repo->fresh()?->only(['default_branch', 'protected_branch']))
+        ->toBe(['default_branch' => 'escape', 'protected_branch' => 'main']);
+});
+
 it('unlinks a repository deleted on the forge, with its links', function () {
     hookSend($this->connection, 'push', hookPush([hookCommit('TP-1 fix')]))->assertStatus(202);
     Log::spy();

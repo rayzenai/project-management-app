@@ -107,6 +107,7 @@ it('creates, protects and links a repository, answering 201 with it', function (
             'clone_url' => 'https://git.example/sdoc/tp-api.git',
             'ssh_url' => 'git@git.example:sdoc/tp-api.git',
             'default_branch' => 'main',
+            'protected_branch' => 'main',
             'last_pushed_at' => null,
             'created_at' => $repo->created_at?->toIso8601String(),
             'protects_main' => true,
