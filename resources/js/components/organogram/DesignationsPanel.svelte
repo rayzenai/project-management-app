@@ -147,7 +147,8 @@
                             class="shrink-0 text-xs text-fg-faint tabular-nums"
                             title={`Held by ${peopleCount(
                                 designation.people_count ?? 0,
-                            )}`}>{designation.people_count ?? 0}</span
+                            )}`}
+                            >{peopleCount(designation.people_count ?? 0)}</span
                         >
                         <button
                             type="button"

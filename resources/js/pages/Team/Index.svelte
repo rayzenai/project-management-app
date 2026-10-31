@@ -3,6 +3,7 @@
     import { Copy, Network, RefreshCw } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import DesignationSelect from '../../components/team/DesignationSelect.svelte';
     import MemberRoleFields from '../../components/team/MemberRoleFields.svelte';
     import { writeToClipboard } from '../../lib/clipboard';
     import {
@@ -11,11 +12,7 @@
         rolesToSend,
     } from '../../lib/memberRoles';
     import { projectLabel } from '../../lib/projectLabel';
-    import {
-        bossCandidates,
-        designationsFor,
-        structureToSend,
-    } from '../../lib/structure';
+    import { bossCandidates, structureToSend } from '../../lib/structure';
     import type {
         DesignationOption,
         StructuredMember,
@@ -417,31 +414,15 @@
     person: StructuredMember | null,
     errors: Partial<Record<string, string>>,
 )}
-    <div class="flex flex-col gap-1">
-        <label class="label" for={`${id}-designation`}>Designation</label>
-        <select
-            id={`${id}-designation`}
-            class="input"
-            disabled={organizationId === null}
-            value={form.designation_id ?? ''}
-            onchange={(e) =>
-                (form.designation_id = e.currentTarget.value
-                    ? Number(e.currentTarget.value)
-                    : null)}
-        >
-            <option value=""
-                >{organizationId === null
-                    ? 'Choose an organization first'
-                    : 'None'}</option
-            >
-            {#each designationsFor(designationOptions, organizationId) as designation (designation.id)}
-                <option value={designation.id}>{designation.name}</option>
-            {/each}
-        </select>
-        {#if errors.designation_id}
-            <p class="text-xs text-danger">{errors.designation_id}</p>
-        {/if}
-    </div>
+    <DesignationSelect
+        {id}
+        value={form.designation_id}
+        {organizationId}
+        options={designationOptions}
+        canAdd={canSetStructure}
+        error={errors.designation_id}
+        onchange={(designationId) => (form.designation_id = designationId)}
+    />
     <div class="flex flex-col gap-1">
         <label class="label" for={`${id}-reports-to`}>Reports to</label>
         <select
