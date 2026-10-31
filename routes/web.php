@@ -14,6 +14,7 @@ use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\DesignationController;
 use App\Http\Controllers\Workspace\GoToTaskController;
+use App\Http\Controllers\Workspace\GuideController;
 use App\Http\Controllers\Workspace\HomeController;
 use App\Http\Controllers\Workspace\MaintenanceController;
 use App\Http\Controllers\Workspace\MemberController;
@@ -107,7 +108,7 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         Route::delete('/organizations/{organization}/git', [OrganizationGitController::class, 'destroy'])->name('organizations.git.destroy');
 
         Route::get('/team', [TeamController::class, 'index'])->name('team');
-        Route::inertia('/guide', 'Guide')->name('guide');
+        Route::get('/guide', GuideController::class)->name('guide');
         Route::get('/teams/{team}/progress', TeamProgressController::class)->name('teams.progress');
         Route::get('/teams/{team}/candidates', [TeamMemberController::class, 'candidates'])->name('teams.candidates');
         Route::post('/teams/{team}/members', [TeamMemberController::class, 'store'])->name('teams.members.store');

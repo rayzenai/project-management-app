@@ -9,7 +9,15 @@
         UsersRound,
     } from '@lucide/svelte';
     import AppShell from '../components/AppShell.svelte';
+    import CommandBlock from '../components/CommandBlock.svelte';
     import type { SharedProps } from '../lib/types';
+
+    type Forge = { organization: string; url: string; owner: string };
+
+    let {
+        forges = [],
+        gitUsername = null,
+    }: { forges?: Forge[]; gitUsername?: string | null } = $props();
 
     const shared = $derived(page.props as unknown as SharedProps);
 
@@ -136,15 +144,7 @@
     const code = [
         [
             'Link a repository',
-            "On the project's Code tab, its manager, its program's manager or an organizational admin picks Link repository and chooses one of the office's repositories on the forge. Unlink stops following it; the repository stays on the forge.",
-        ],
-        [
-            'New repository',
-            "Link repository, then New repository, makes a private repository on the forge and links it. Its name is the project's key in lowercase (tp) or starts with it and a hyphen (tp-api), in lowercase letters and digits with a single ., _ or - between them. It starts with a README on its main branch, and main is protected: nobody pushes to it, not even an admin, and changes reach it only through a pull request with one approval whose tests pass.",
-        ],
-        [
-            'Tests',
-            "Every repository runs its tests on the forge's runners. Add a workflow under .forgejo/workflows (or .github/workflows) that runs on every pull request, with runs-on: ubuntu-latest; a pull request with no tests, or with a test still running or failing, can't be merged. The tick or cross beside each commit and pull request in the Code tab and the task's Code section opens the run on the forge. Someone other than the author approves (a teammate with write access, the program's manager or an organizational admin), and the approval is what guards main: look at changes to the workflow as closely as at the code.",
+            "On the project's Code tab, its manager, its program's manager or an organizational admin picks Link repository and chooses one of the office's repositories on the forge. Its main branch is protected from then on, as a new repository's is. Unlink stops following it; the repository stays on the forge.",
         ],
         [
             'Repository access',
@@ -152,32 +152,115 @@
         ],
         [
             'First sign-in',
-            "Someone given access who hasn't signed in to SDOC Git yet shows so under their name. The forge can't have them until they do, and gets them within ten minutes of their first sign-in.",
-        ],
-        [
-            'Name a branch',
-            "Start the name with the task's code: tp-12-fix-login. Copy branch name in the task's Code section gives you one.",
-        ],
-        [
-            'Write a commit',
-            'Put the code in capitals in the commit message or the pull request title, such as TP-12 Fix the login form. Each code you name links to its task.',
-        ],
-        [
-            'Merging',
-            'Merge once the pull request has its approval and its tests have passed. A merged pull request never marks a task done. Move the card when the work is really finished.',
+            "Someone given access who hasn't signed in to the forge yet shows so under their name. The forge can't have them until they do, and gets them within ten minutes of their first sign-in.",
         ],
         [
             'Code activity',
             "Code activity, under Reports in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. Tests shows how many of their commits passed and failed their tests. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
         ],
         [
-            'Your git email',
-            'A commit counts for you when git signs it with the email you sign in with. Signing in gives SDOC Git that email, so there is nothing to add. If git on your computer uses another address, run git config user.email with your sign-in email in the repository.',
-        ],
-        [
             'Forge access',
             "Organizational admins own the office's forge organization. An organizational admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it. Give access to a repository here, not on the forge: the tracker keeps the forge in step.",
         ],
+    ];
+
+    // The walkthrough names the reader's own forge. The examples use a
+    // project whose key is TP, as the rest of the guide does, and the
+    // office's own address for the email.
+    const forge = $derived(forges[0] ?? null);
+    const forgeHost = $derived(forge ? new URL(forge.url).host : 'the forge');
+    const cloneUrl = $derived(
+        forge
+            ? `${forge.url}/${forge.owner}/tp-api.git`
+            : 'https://your-forge/your-office/tp-api.git',
+    );
+    const commands = $derived({
+        email: 'git config --global user.email "ceo@sdoc.gov.np"',
+        clone: `git clone ${cloneUrl}\ncd tp-api`,
+        first: [
+            'git switch -c tp-1-set-up',
+            '# add the code, and .github/workflows/tests.yml',
+            'git add .',
+            'git commit -m "TP-1 Set up the project and its tests"',
+            'git push -u origin tp-1-set-up',
+        ].join('\n'),
+        bring: [
+            `git remote add origin ${cloneUrl}`,
+            'git fetch origin',
+            'git switch -c tp-1-bring-in',
+            'git merge origin/main --allow-unrelated-histories',
+            'git push -u origin tp-1-bring-in',
+        ].join('\n'),
+        change: [
+            'git switch main',
+            'git pull',
+            'git switch -c tp-12-fix-login',
+            '# change the code and its tests, run the tests',
+            'git add .',
+            'git commit -m "TP-12 Fix the login form"',
+            'git push -u origin tp-12-fix-login',
+        ].join('\n'),
+    });
+
+    const workflow = [
+        'name: tests',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        '  pull_request:',
+        '',
+        'jobs:',
+        '  pest:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: shivammathur/setup-php@v2',
+        '        with:',
+        "          php-version: '8.5'",
+        '          coverage: none',
+        '      - run: composer install --no-interaction --prefer-dist',
+        '      - run: cp .env.example .env && php artisan key:generate',
+        '      - run: ./vendor/bin/pest',
+    ].join('\n');
+
+    const tests = [
+        [
+            'Where they live',
+            "A workflow file in .forgejo/workflows or .github/workflows at the repository's root. The forge reads only the first of .forgejo, .gitea and .github that exists, so keep every workflow in one of them.",
+        ],
+        [
+            'When they run',
+            "When the workflow's on: says. Use pull_request, so every pull request runs them, and again on each push to it, and push to main, so main is checked after each merge. Don't limit pull_request with paths: a pull request no test ran on can't merge.",
+        ],
+        [
+            'Where they run',
+            'On Ubuntu: runs-on: ubuntu-latest, ubuntu-24.04 or ubuntu-22.04. A job asking for anything else never starts. The runners are shared by the whole office, so a run may wait its turn, and a job still running after an hour is stopped.',
+        ],
+        [
+            'What a job can use',
+            'Actions written for GitHub, such as actions/checkout, shivammathur/setup-php and actions/setup-node, and services such as postgres:17 or redis, as on GitHub. Not docker build, and no volumes. Nothing is kept between runs, so each run installs its dependencies afresh.',
+        ],
+        [
+            'Secrets',
+            "Secrets from GitHub don't come along. Add what a workflow reads from secrets on the forge, in the repository's or the organization's Settings, then Actions, then Secrets.",
+        ],
+        [
+            'Results',
+            "Beside each commit and pull request in the Code tab and the task's Code section: a green tick when the tests passed, a red cross when one failed, an amber dashed ring while they run, a faint ring when nothing tested it. Each opens its run on the forge. Code activity counts each person's commits that passed and failed, and Maintenance lists repositories whose main fails.",
+        ],
+        [
+            'Merging',
+            "Every test passed, and one approval from someone other than the author: a teammate with write access, the program's manager or an organizational admin. The author's own approval doesn't count, so a project's only developer asks one of them.",
+        ],
+    ];
+
+    const practice = [
+        'Add or change the tests with every change, in the same pull request.',
+        'Run them on your computer before you push: the runners are shared.',
+        'Keep them fast, and give slow parts a job of their own.',
+        'When main fails its tests, fixing it comes before anything new.',
+        'Read why a test failed before running it again. A test that fails now and then gets fixed, not re-run until it passes.',
+        'The approval is what guards main. A pull request runs its own version of the workflow, so read changes to it as closely as the code, and never post a test result by hand.',
     ];
 
     const structure = [
@@ -414,6 +497,157 @@
                     name its code. Both are for the project's team, its
                     program's manager and the organizational admins.
                 </p>
+
+                <h3 class="mt-5 mb-2 font-medium">Set up once</h3>
+                <ol
+                    class="list-decimal space-y-3 pl-5 text-[13px] text-fg-muted"
+                >
+                    <li>
+                        Sign in at
+                        {#if forge}<a
+                                class="text-accent hover:underline"
+                                href={forge.url}
+                                target="_blank"
+                                rel="noopener noreferrer">{forgeHost}</a
+                            >{:else}the forge{/if} with Sign in with sdoc-tasks, then
+                        set up two-factor sign-in: the forge asks every person for
+                        it.
+                        {#if gitUsername}
+                            Your forge username is
+                            <span class="font-mono text-fg">{gitUsername}</span
+                            >.
+                        {:else}
+                            Your forge username is made at that first sign-in.
+                        {/if}
+                    </li>
+                    <li>
+                        Let git on your computer reach it. HTTPS works from
+                        anywhere: on the forge, Settings, then Applications,
+                        generate a token that can read and write repositories,
+                        and give it when git asks for a password (the forge has
+                        no passwords of its own). Or add your SSH key under
+                        Settings, then SSH keys; SSH may not reach the forge
+                        from outside the office network.
+                    </li>
+                    <li>
+                        Commit with the email you sign in with, so your commits
+                        count for you, in place of ceo@sdoc.gov.np here:
+                        <CommandBlock code={commands.email} />
+                    </li>
+                    <li>
+                        Ask the project's manager for write access, on the Code
+                        tab's Access. It reaches the forge within ten minutes of
+                        your first sign-in there.
+                    </li>
+                </ol>
+
+                <h3 class="mt-6 mb-2 font-medium">Start a repository</h3>
+                <ol
+                    class="list-decimal space-y-3 pl-5 text-[13px] text-fg-muted"
+                >
+                    <li>
+                        On the project's Code tab, Link repository, then New
+                        repository. Its name is the project's key in lowercase
+                        (tp) or starts with it and a hyphen (tp-api), in
+                        lowercase letters and digits with a single ., _ or -
+                        between them. The project's manager, its program's
+                        manager or an organizational admin does this. It starts
+                        with a README on main, and main is protected from the
+                        start: nobody pushes to it, not even an admin.
+                    </li>
+                    <li>
+                        Clone it. The Code tab shows its HTTPS and SSH
+                        addresses, each with a copy button.
+                        <CommandBlock code={commands.clone} />
+                    </li>
+                    <li>
+                        The first branch brings the code and its tests, since
+                        nothing merges until a test has run (Tests, below):
+                        <CommandBlock code={commands.first} />
+                    </li>
+                    <li>
+                        On the forge, open a pull request from that branch into
+                        main. Its tests run; once they pass and someone else
+                        approves, merge it.
+                    </li>
+                </ol>
+
+                <h3 class="mt-6 mb-2 font-medium">
+                    Bring code you already have
+                </h3>
+                <p class="text-[13px] text-fg-muted">
+                    A new repository's main already has its README, and nobody
+                    can push over it. Join your history to it once, on a branch,
+                    then bring it in through a pull request; your history comes
+                    along.
+                </p>
+                <CommandBlock code={commands.bring} />
+                <p class="mt-1.5 text-[13px] text-fg-muted">
+                    If both have a README.md, git stops there: keep yours, then
+                    git add README.md and git commit before you push.
+                </p>
+
+                <h3 class="mt-6 mb-2 font-medium">Every change</h3>
+                <ol
+                    class="list-decimal space-y-3 pl-5 text-[13px] text-fg-muted"
+                >
+                    <li>
+                        Start from the latest main, on a branch whose name
+                        starts with the task's code: tp-12-fix-login. Copy
+                        branch name in the task's Code section gives you one.
+                    </li>
+                    <li>
+                        Commit with the task's code in capitals: TP-12 Fix the
+                        login form. Each code in a commit, a branch or a pull
+                        request's title links it to its task.
+                    </li>
+                    <li>
+                        Run the tests on your computer, push the branch and open
+                        a pull request into main. Its tests run on the forge,
+                        and again on every push to the branch.
+                    </li>
+                    <li>
+                        Once they pass and someone else approves, merge it on
+                        the forge. A merged pull request never marks a task
+                        done: move the card when the work is really finished.
+                    </li>
+                </ol>
+                <CommandBlock code={commands.change} />
+                <p class="mt-1.5 text-[13px] text-fg-muted">
+                    A push straight to main is always refused, an admin's too:
+                    that is the protection working.
+                </p>
+
+                <h3 class="mt-6 mb-1 font-medium">Tests</h3>
+                <p class="mb-2 text-[13px] text-fg-muted">
+                    Every pull request runs its repository's tests on the
+                    office's runners, and merges only once they all pass.
+                </p>
+                <dl class="border-t border-line">
+                    {#each tests as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+                <h4 class="mt-4 mb-1.5 text-[13px] font-medium">
+                    Good practice
+                </h4>
+                <ul class="list-disc space-y-1 pl-5 text-[13px] text-fg-muted">
+                    {#each practice as line (line)}
+                        <li>{line}</li>
+                    {/each}
+                </ul>
+                <p class="mt-4 text-[13px] text-fg-muted">
+                    A workflow for a Laravel project, in
+                    .github/workflows/tests.yml:
+                </p>
+                <CommandBlock code={workflow} />
+
+                <h3 class="mt-6 mb-2 font-medium">More about code</h3>
                 <dl class="border-t border-line">
                     {#each code as [term, meaning] (term)}
                         <div

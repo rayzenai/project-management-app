@@ -328,7 +328,12 @@ The sidebar's **Guide** (`pages/Guide.svelte`, `/workspace/guide`) explains
 to users the model (Organization, Program, Project, Team, Tasks), each role's
 routine (organizational admin, program manager, project manager, member) and how a
 ministry's titles map onto those roles ("In a ministry"): keep it in step
-when a feature changes how people work. The same mapping shows as hints by
+when a feature changes how people work. With git, its Code part walks a
+developer from forge sign-in through starting a repository, bringing
+existing code and every change to how tests run and the rules for them,
+with copyable commands (`components/CommandBlock.svelte`) filled in from
+`GuideQuery` (the reader's forges, their own organization's first, and
+their forge username; never a token). The same mapping shows as hints by
 the organizational admin switch and the program and project manager pickers.
 
 ## Two delivery surfaces
