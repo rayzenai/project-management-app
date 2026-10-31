@@ -54,6 +54,7 @@ class MemberResource extends JsonResource
             'managed_program_ids' => $this->whenLoaded('managedPrograms', fn () => $this->managedPrograms->map(fn (Program $p): int => $p->id)->all()),
             'designation' => $this->whenLoaded('designation', fn (): ?array => $this->designation === null ? null : ['id' => $this->designation->id, 'name' => $this->designation->name]),
             'reports_to_id' => $this->reports_to_id,
+            'attendance_exempt' => (bool) $this->attendance_exempt,
         ];
     }
 

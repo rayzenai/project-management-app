@@ -160,3 +160,28 @@ it('shows designations and the fields on the People page to whoever may change t
             ->where('canSetStructure', false)
             ->where('designationOptions', []));
 });
+
+it('lets the organizational admin exempt someone from attendance, and shows it', function () {
+    $this->actingAs($this->admin->user)
+        ->patch("/workspace/members/{$this->ed->id}", ['attendance_exempt' => true])
+        ->assertSessionHasNoErrors();
+
+    expect($this->ed->fresh()->attendance_exempt)->toBeTrue();
+
+    $this->actingAs($this->admin->user, 'sanctum')
+        ->patchJson("/api/v1/workspace/members/{$this->ed->id}", ['attendance_exempt' => false])
+        ->assertOk()
+        ->assertJsonPath('data.attendance_exempt', false);
+
+    expect($this->ed->fresh()->attendance_exempt)->toBeFalse();
+});
+
+it('drops the exemption from anyone who may not set the structure', function () {
+    $otherAdmin = Member::factory()->withUser()->create(['organization_id' => $this->otherOrg->id, 'is_office_admin' => true]);
+
+    $this->actingAs($otherAdmin->user, 'sanctum')
+        ->patchJson("/api/v1/workspace/members/{$this->ed->id}", ['attendance_exempt' => true])
+        ->assertForbidden();
+
+    expect($this->ed->fresh()->attendance_exempt)->toBeFalse();
+});

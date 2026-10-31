@@ -9,8 +9,9 @@ use Illuminate\Validation\Rule;
 /**
  * The person form's structure fields, shared by StoreMemberRequest and
  * UpdateMemberRequest: `designation_id` (one of the organization's
- * designations) and `reports_to_id` (a person of the organization), each
- * null to clear and left out to keep. Only whoever passes
+ * designations), `reports_to_id` (a person of the organization), each
+ * null to clear and left out to keep, and `attendance_exempt` (left out of
+ * the expected count). Only whoever passes
  * WorkspaceAccess::canManageStructure for the person's organization (after
  * any move) sets them; for anyone else they are silently dropped (no rules,
  * so never in `validated()`). `reports_to_id` is applied through
@@ -37,6 +38,7 @@ trait SetsMemberStructure
         return [
             'designation_id' => ['sometimes', 'nullable', 'integer', Rule::exists('designations', 'id')->where('organization_id', $organizationId)],
             'reports_to_id' => ['sometimes', 'nullable', 'integer', Rule::exists('members', 'id')->where('organization_id', $organizationId)->whereNull('deleted_at')],
+            'attendance_exempt' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -54,6 +56,19 @@ trait SetsMemberStructure
         }
 
         return ['designation_id' => is_numeric($id) ? (int) $id : null];
+    }
+
+    /**
+     * Whether the person is left out of attendance's expected count, when
+     * sent and allowed.
+     *
+     * @return array{attendance_exempt?: bool}
+     */
+    public function attendanceExemption(): array
+    {
+        $exempt = $this->validated('attendance_exempt', null);
+
+        return $exempt === null ? [] : ['attendance_exempt' => (bool) $exempt];
     }
 
     /**

@@ -608,7 +608,8 @@ page for these parts.
   (`EnableAttendanceService`, `canEnableAttendance`); its admins set
   workdays, hours, seasons (winter hours), grace, office places, office
   networks (nothing wider than /8 or /16) and holidays
-  (`canManageAttendance`). `AttendanceCalendar` is the one answer to "is
+  (`canManageAttendance`), and exempt people from the expected count on the
+  person form (`attendance_exempt`, one of `SetsMemberStructure`'s fields). `AttendanceCalendar` is the one answer to "is
   this a working day, what are its hours, when is late". `PunchService`
   takes a day's punches in order (`AttendancePunch::nextKinds`: in, lunch
   start, lunch end, out), at the server's time, under a lock on the member,

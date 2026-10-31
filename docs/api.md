@@ -943,8 +943,10 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
   `PATCH|DELETE /workspace/designations/{designation}`,
   `PUT /workspace/members/{member}/reports-to`; the web page
   `GET /workspace/organogram`.
-- Members: `designation_id` and `reports_to_id` on create and edit; member
-  payloads add `designation` and `reports_to_id`.
+- Members: `designation_id`, `reports_to_id` and `attendance_exempt` on create
+  and edit (organizational admins and super-admins only; silently dropped
+  for anyone else); member payloads add `designation`, `reports_to_id` and
+  `attendance_exempt`.
 - New: the clock (`GET /workspace/attendance/me`, `POST /workspace/attendance/punches`) and attendance settings (see Attendance: the clock, Attendance settings).
 - New: `GET /workspace/organizations/{organization}/attendance` and
   `GET …/attendance/summary` (see Attendance register).

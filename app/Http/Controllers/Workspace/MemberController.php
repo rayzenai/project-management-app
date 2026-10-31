@@ -57,6 +57,7 @@ class MemberController extends Controller
                 'email' => $request->validated('email'),
                 'title' => $request->validated('title'),
                 ...$request->designation(),
+                ...$request->attendanceExemption(),
             ]);
 
             if ($request->roles() !== []) {
@@ -91,8 +92,9 @@ class MemberController extends Controller
 
         DB::transaction(function () use ($request, $member, $roles, $reportsTo, &$deactivated, &$ownersChanged): void {
             $member->update([
-                ...$request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password', 'designation_id', 'reports_to_id']),
+                ...$request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password', 'designation_id', 'reports_to_id', 'attendance_exempt']),
                 ...$request->designation(),
+                ...$request->attendanceExemption(),
             ]);
             $deactivated = $member->wasChanged('is_active') && ! $member->is_active;
             $ownersChanged = SyncForgeOwners::organizationsChangedBy($member);

@@ -53,6 +53,7 @@ export interface OrgNode {
 export type StructuredMember = Member & {
     designation?: { id: Id; name: string } | null;
     reports_to_id?: Id | null;
+    attendance_exempt?: boolean;
 };
 
 /**
@@ -122,6 +123,8 @@ export function peopleCount(n: number): string {
 export interface StructureFields {
     designation_id: Id | null;
     reports_to_id: Id | null;
+    /** Left out of attendance's expected count. */
+    attendance_exempt: boolean;
 }
 
 /** The person form's designations for one organization. */
@@ -165,6 +168,10 @@ export function structureToSend(
 
     if (data.reports_to_id !== (person?.reports_to_id ?? null)) {
         sent.reports_to_id = data.reports_to_id;
+    }
+
+    if (data.attendance_exempt !== (person?.attendance_exempt ?? false)) {
+        sent.attendance_exempt = data.attendance_exempt;
     }
 
     return sent;

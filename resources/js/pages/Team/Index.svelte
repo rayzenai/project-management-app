@@ -112,6 +112,7 @@
         ...heldRoles(null),
         designation_id: null as Id | null,
         reports_to_id: null as Id | null,
+        attendance_exempt: false,
     });
 
     function openMemberForm() {
@@ -150,6 +151,7 @@
         ...heldRoles(null),
         designation_id: null as Id | null,
         reports_to_id: null as Id | null,
+        attendance_exempt: false,
     });
 
     /** The organization a new person joins: chosen by a super-admin. */
@@ -223,6 +225,7 @@
         Object.assign(memberEditForm, heldRoles(member));
         memberEditForm.designation_id = member.designation?.id ?? null;
         memberEditForm.reports_to_id = member.reports_to_id ?? null;
+        memberEditForm.attendance_exempt = member.attendance_exempt ?? false;
     }
 
     function saveMember(member: StructuredMember) {
@@ -358,7 +361,11 @@
 
 {#snippet structureFields(
     id: string,
-    form: { designation_id: Id | null; reports_to_id: Id | null },
+    form: {
+        designation_id: Id | null;
+        reports_to_id: Id | null;
+        attendance_exempt: boolean;
+    },
     organizationId: Id | null,
     person: StructuredMember | null,
     errors: Partial<Record<string, string>>,
@@ -407,6 +414,19 @@
             <p class="text-xs text-danger">{errors.reports_to_id}</p>
         {/if}
     </div>
+    <label class="flex items-start gap-2 text-[13px]">
+        <input
+            type="checkbox"
+            class="mt-0.5"
+            bind:checked={form.attendance_exempt}
+        />
+        <span>
+            Exempt from attendance
+            <span class="block text-xs text-fg-muted"
+                >Not counted among the people expected in each day.</span
+            >
+        </span>
+    </label>
 {/snippet}
 
 <AppShell>
