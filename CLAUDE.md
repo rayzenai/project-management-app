@@ -572,6 +572,77 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   developers commit with the email they sign in with (sign-in gives the forge
   that email; nothing to add on the forge).
 
+## Structure, attendance and work reports
+
+Spec: `docs/superpowers/specs/2026-10-31-structure-attendance-work-design.md`.
+API: `docs/api.md` (Structure, Attendance, Leave and kaaj, Work reports).
+
+The owner's rule for these parts: every read is one query class under
+`app/Queries/{Structure,Attendance,Work}/`, every write one service under
+`app/Services/{Structure,Attendance}/`; the web and API controllers only
+call them, so a new client (the Flutter app, a fingerprint machine) needs
+no new query. Never write a query in a controller, request, resource or
+page for these parts.
+
+- **Structure**: `designations` (per organization; `rank` orders them,
+  smaller is more senior), `members.designation_id`,
+  `members.reports_to_id` (one higher authority in the same organization),
+  set only through `SetReportsToService` (refuses another organization, an
+  inactive boss and loops: `OrgChart::wouldLoop`) by whoever passes
+  `canManageStructure` (= `administers`); the person form's two fields are
+  silently dropped for anyone else. `MoveReportsUpService` (from
+  `MemberObserver`) moves someone's reports up to their own higher
+  authority when they are deleted or change organization; deactivation
+  keeps the lines. `App\Support\OrgChart` walks the lines
+  (`descendantIds`, `ancestorIds`: recursive CTEs, memoized per request and
+  flushed by `WorkspaceAccess::flush`, which `Tests\TestCase::setUp` also
+  calls). Lines give no power over projects; they decide who sees whose
+  attendance and work: `oversees` (super-admin, an admin of the person's
+  organization, an active member of the same organization above them;
+  never oneself), its list twin `overseenMemberIds` (keep them in step),
+  `canViewPersonOf` (oneself or `oversees`), `canViewTeamWork`. Every list of
+  people a report shows comes from `PeopleInViewQuery`. The organogram
+  (`OrganogramQuery`, `/workspace/organogram`) is for the organization's
+  active people (`canViewOrganogram`), never with emails.
+- **Attendance**: off until a super-admin turns it on per organization
+  (`EnableAttendanceService`, `canEnableAttendance`); its admins set
+  workdays, hours, seasons (winter hours), grace, office places, office
+  networks (nothing wider than /8 or /16) and holidays
+  (`canManageAttendance`). `AttendanceCalendar` is the one answer to "is
+  this a working day, what are its hours, when is late". `PunchService`
+  takes a day's punches in order (`AttendancePunch::nextKinds`: in, lunch
+  start, lunch end, out), at the server's time, under a lock on the member,
+  with the request's address and the reported location; `PunchPlace` judges
+  where it came from (office network, near office within the radius plus
+  the reading's accuracy up to twice the radius, outside, unknown; outside
+  and unknown need a note). Punches are never edited or deleted; `source`
+  is web, app (the API) or device (a machine, later). Location is recorded
+  only at a punch. Leave and kaaj (`leave_requests`): asked by the person
+  (`canPunch`), decided by whoever `oversees` them (`canDecideLeave`), or
+  recorded by them directly (`canRecordLeaveFor`); kaaj is duty, never
+  absence. Reads: `MyAttendanceQuery` (the top bar's `ClockButton`, shared
+  as `attendance`), `AttendanceRegisterQuery` (a day: expected = listed
+  non-exempt people on a day that expects work, minus approved leave and
+  kaaj unless they clocked in), `AttendanceSummaryQuery` (per person over a
+  range, from the day attendance was turned on), `LeaveQuery`,
+  `AttendanceSettingsQuery`. The proxy (Traefik) replaces any client-sent
+  `X-Forwarded-For`, so with `trustProxies('*')` the recorded address is
+  the one the proxy saw; keep it so, and check from a phone on mobile data
+  what the settings page shows as "Your address now" before trusting a
+  network range.
+- **Work**: `WorkActivityQuery` is the one read of what people did over a
+  range: tasks closed and started by the activity log's actor (entering a
+  closed or `is_started` status, `Task::startedStatuses`), non-merge
+  reachable commits by `git_commits.user_id`, pull requests merged by
+  `git_username`; titles only from projects the viewer may view, repository
+  names only where they may view the code, the rest counted, never named.
+  `WorkDayQuery` (today's work), `PersonWorkQuery` (a person's range) and
+  `TeamWorkQuery` (a row per person) build on it, and on
+  `WorkAttendanceQuery` for attendance (null while it is off). People are
+  listed by name, never ranked by a figure.
+- **Sidebar**: `OfficeLinks` (shared as `office`, on the API's `/user`)
+  says which office pages the user may open; the pages check again.
+
 ## Semantic theming layer (web UI)
 
 `config/themes.php` holds exactly three themes: `system` (follows the OS),

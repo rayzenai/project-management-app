@@ -67,6 +67,7 @@
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team.',
                 'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
                 'Watch everything from the Projects page: projects in a program sit under it and the rest under their manager, with how much is done, what is overdue and the next deadline.',
+                "On the Organogram page, give each person a designation and the person they report to. That draws your office's organogram and decides who sees whose attendance and work.",
             ],
         },
         {
@@ -171,6 +172,67 @@
         [
             'Forge access',
             "Organizational admins own the office's forge organization. An organizational admin becomes an owner once they have signed in to the forge, and each night anyone who has left the office or its projects is taken off it. Give access to a repository here, not on the forge: the tracker keeps the forge in step.",
+        ],
+    ];
+
+    const structure = [
+        [
+            'Organogram',
+            'Each person with their designation and the one person they report to, their higher authority. Fold and unfold it; Chart shows the top-down picture and Print prints it on its own. Everyone in the organization sees it: names, designations and lines, never emails.',
+        ],
+        [
+            'Who changes it',
+            "Only organizational admins and super-admins, because the lines decide who sees whose attendance and work. They keep the list of designations on the same page, and set whom someone reports to by dragging them onto their new higher authority, from the row's menu, or on the person's form in People. Nobody can report to themselves or to someone below them.",
+        ],
+        [
+            'When people leave',
+            "When someone leaves the organization or is deleted, the people who reported to them move up to that person's own higher authority. Deactivating someone keeps the lines.",
+        ],
+    ];
+
+    const attendance = [
+        [
+            'Clocking in',
+            "When your organization uses attendance, a Clock in button sits in the top bar on every page. Press it when you arrive; it then offers Start lunch, End lunch and Clock out, in that order, each once a day. The time is always the server's, not your device's.",
+        ],
+        [
+            'What is recorded',
+            'Each press keeps the time, your network address and, if your browser allows it, your location at that moment, to say where it came from: the office network, near the office, outside the office, or unknown. Nothing is recorded between presses. A press outside the office or from an unknown place asks for a short reason, and the people above you see it.',
+        ],
+        [
+            'Leave and kaaj',
+            'Ask on the Leave and kaaj page: the days, a reason, and for kaaj where you are going. Anyone above you, or an organizational admin, approves or rejects it; they can also record it for you, for example when you call in sick. Cancel your own request while it waits, or after approval until it starts. Kaaj is duty and never counts as absence.',
+        ],
+        [
+            'Who should be in',
+            'On a working day that is not a holiday, everyone active in the organization is expected except people exempt from attendance and people on approved leave or kaaj. "In" is everyone who clocked in. A clock-in after the start time plus the grace minutes (10:15 on winter hours) is late. Admins see the whole organization; everyone else sees the people below them.',
+        ],
+        [
+            'Settings',
+            'A super-admin turns attendance on for an organization. Its organizational admins then set the working days and hours (with seasons such as winter hours), the grace before late, the office places (stand in the office and use "Use my location"), the office networks (the page shows your address now; never add the VPN\'s range) and the holidays.',
+        ],
+    ];
+
+    const work = [
+        [
+            "Today's work",
+            'For one day, what each person finished, started and committed, listed by name. Someone with nothing recorded shows plainly, and with attendance on you also see when they came in.',
+        ],
+        [
+            "Team's work",
+            "The same for a week or any range up to three months, one row per person, with days in and hours when attendance is on. Sort any column; a row opens that person's week.",
+        ],
+        [
+            'My week',
+            'Your own tasks finished and started, what is overdue for you now, your commits and merged pull requests, and your attendance.',
+        ],
+        [
+            'What counts',
+            "A task counts for whoever changed its status, on that day: finished means Done or Failed, started means In Progress. Commits count for the person who made them, by the email they sign in with, merges left out. Tasks in projects you can't open and code you can't see are counted but never named.",
+        ],
+        [
+            'Who sees it',
+            "You always see your own. Everyone above you in the organogram, and your organization's admins, see yours. The lists show the people below you, or the whole organization for its admins.",
         ],
     ];
 
@@ -346,6 +408,54 @@
                 </p>
                 <dl class="border-t border-line">
                     {#each code as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+            </section>
+        {/if}
+
+        {#if shared.office?.organogram}
+            <section>
+                <h2 class="section-title mb-3">Your office's structure</h2>
+                <dl class="border-t border-line">
+                    {#each structure as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+            </section>
+        {/if}
+
+        {#if shared.attendance || shared.office?.attendance || shared.office?.attendance_settings}
+            <section>
+                <h2 class="section-title mb-3">Attendance</h2>
+                <dl class="border-t border-line">
+                    {#each attendance as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+            </section>
+        {/if}
+
+        {#if shared.office?.my_work_member_id || shared.office?.team_work}
+            <section>
+                <h2 class="section-title mb-3">Work reports</h2>
+                <dl class="border-t border-line">
+                    {#each work as [term, meaning] (term)}
                         <div
                             class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
                         >
