@@ -1367,7 +1367,9 @@ Every pull request runs its repository's tests on the forge's own runners,
   workflow's `uses: actions/checkout@v4` or `shivammathur/setup-php@v2`
   comes from GitHub, as it would there. The forge reads workflows from
   `.forgejo/workflows`, else `.gitea/workflows`, else `.github/workflows`.
-- **Runners**: the Dokploy compose `git-runners` (project `git`), built from
+- **Runners**: the Dokploy compose `git-runners` (project `git`, app name
+  `compose-program-redundant-application-k85b3j`, which Dokploy chose and
+  won't change: its containers are named after it), built from
   [`forgejo/runner/`](../forgejo/runner/compose.yml): four Forgejo runners
   `13.2.0` (`sdoc-runner-1` to `4`), one job each, registered to the forge
   organization `sdoc` (its repositories only, not personal ones). Every job
@@ -1458,7 +1460,13 @@ It can't use `docker build` or mount volumes. The checks are named
 
 ### Setting it up
 
-Done on 2026-10-31. To build it again, on the forge first:
+Done on 2026-10-31, then proved end to end with a throwaway repository: the
+bot (an Owner) was refused a direct commit to `main`, a job cloned from the
+forge and ran on `ubuntu-latest`, a passing and a failing pull request got
+their statuses, the webhook brought both workflow-run events to the
+tracker, which read them as passed and failed, and merging the passing one
+without an approval was refused ("Does not have enough approvals"). To
+build it again, on the forge first:
 
 1. Deploy `git-forgejo` after the `forgejo/Dockerfile` change that turns
    Actions on (it is stop-first, about a minute of downtime).
@@ -1472,13 +1480,16 @@ Done on 2026-10-31. To build it again, on the forge first:
    ```sh
    for n in 1 2 3 4; do
      read -rs -p "secret for sdoc-runner-$n (openssl rand -hex 20): " SECRET; echo
-     printf '%s' "$SECRET" | sudo docker exec -u git -i "$FJ" forgejo forgejo-cli actions register --secret-stdin --scope sdoc --name "sdoc-runner-$n"; echo
+     printf '%s' "$SECRET" | sudo docker exec -u git -i "$FJ" forgejo forgejo-cli actions register --scope sdoc --name "sdoc-runner-$n" --secret-stdin=-; echo
      unset SECRET
    done
    ```
 
-   Each prints the runner's uuid. Registering again with the same secret
-   changes nothing.
+   Each prints the runner's uuid. In Forgejo 15 `--secret-stdin` takes a
+   value (any; the secret still comes from stdin): written bare before
+   `--scope`, it swallows `--scope` and the runner is registered for the
+   whole forge (sdoc → Settings → Actions → Runners wouldn't list it).
+   Registering again with the same secret only updates the name and scope.
 3. In Dokploy, project `git`: **Create Service → Compose** `git-runners`,
    type Docker Compose, Provider Git
    `https://github.com/rayzenai/project-management-app.git`, branch `main`,
@@ -1489,8 +1500,8 @@ Done on 2026-10-31. To build it again, on the forge first:
 4. Check: sdoc → Settings → Actions → Runners lists the four as idle, and
 
    ```sh
-   sudo docker ps --format '{{.Names}} {{.Status}}' | grep git-runners
-   sudo docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' | grep git-runners
+   sudo docker ps --format '{{.Names}} {{.Status}}' | grep k85b3j
+   sudo docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' | grep k85b3j
    ```
 
    shows dind (healthy), four runners and prune.
@@ -1511,7 +1522,7 @@ the tracker never touches them, and while they are down pull requests wait
 - **Upgrade**: bump the image tag in `forgejo/runner/Dockerfile` (and dind's
   in the compose), deploy. Running jobs are cancelled; re-run them on the
   forge.
-- **Disk**: `sudo docker exec $(sudo docker ps -qf name=git-runners.*dind) df -h /var/lib/docker`
+- **Disk**: `sudo docker exec $(sudo docker ps -qf name=k85b3j-dind) df -h /var/lib/docker`
   shows how much of the 30 GB is used, and `docker --host=unix:///var/run/dind/docker.sock system df`
   (same `docker exec`) what fills it. To drop every unused image at once, run
   the same with `image prune --all --force` (the next job pulls what it

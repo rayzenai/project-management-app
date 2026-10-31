@@ -23,6 +23,8 @@ final class Checks
     /**
      * A check's link is kept only when it is on the forge itself: anyone who
      * can write to a repository can post a status with any target URL.
+     * Forgejo Actions gives its runs as a path on the forge
+     * (`/sdoc/app/actions/runs/7/jobs/0`), made absolute here.
      *
      * @param  array<string, mixed>  $combined  api.CombinedStatus
      * @param  string  $forgeUrl  the connection's base URL
@@ -31,11 +33,17 @@ final class Checks
     public static function fromCombined(array $combined, string $forgeUrl): array
     {
         $forgeHost = strtolower((string) parse_url($forgeUrl, PHP_URL_HOST));
+        $origin = parse_url($forgeUrl, PHP_URL_SCHEME).'://'.parse_url($forgeUrl, PHP_URL_HOST)
+            .(parse_url($forgeUrl, PHP_URL_PORT) !== null ? ':'.parse_url($forgeUrl, PHP_URL_PORT) : '');
         $checks = [];
 
         foreach ((array) ($combined['statuses'] ?? []) as $status) {
             $status = (array) $status;
             $url = (string) ($status['target_url'] ?? '');
+
+            if (str_starts_with($url, '/') && ! str_starts_with($url, '//')) {
+                $url = $origin.$url;
+            }
             $onForge = in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['https', 'http'], true)
                 && strtolower((string) parse_url($url, PHP_URL_HOST)) === $forgeHost;
 

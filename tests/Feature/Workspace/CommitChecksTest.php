@@ -152,7 +152,9 @@ it("keeps a check's link only when it points at the forge", function () {
         checksStatus('b (push)', 'success', 'https://phish.example/login'),
         checksStatus('c (push)', 'success', 'javascript:alert(1)'),
         checksStatus('d (push)', 'success', 'https://git.example.evil.test/x'),
-        checksStatus('e (push)', 'success', '//git.example/x'),
+        checksStatus('e (push)', 'success', '//phish.example/x'),
+        // How Forgejo Actions gives its runs.
+        checksStatus('f (push)', 'success', '/sdoc/app/actions/runs/2/jobs/0'),
     ]), 'https://git.example');
 
     expect(array_column($read['checks'], 'url', 'name'))->toBe([
@@ -161,6 +163,7 @@ it("keeps a check's link only when it points at the forge", function () {
         'c (push)' => null,
         'd (push)' => null,
         'e (push)' => null,
+        'f (push)' => 'https://git.example/sdoc/app/actions/runs/2/jobs/0',
     ]);
 });
 
