@@ -1377,15 +1377,22 @@ Every pull request runs its repository's tests on the forge's own runners,
   runs in a container of the compose's dind service, never on the VM's
   Docker, and dind is held to **4 vCPUs, 10 GB of memory and 30 GB of disk**
   for all four jobs together: its `/var/lib/docker` is an ext4 filesystem in
-  a 30 GB file on its volume (`forgejo/runner/dind/start.sh`), so a job that
-  fills its disk fills only that file, never the disk the forge and the
-  tracker's database live on. Jobs are not privileged, mount nothing and get no Docker socket;
+  a 30 GB file on its volume (`forgejo/runner/dind/start.sh`), and that
+  volume is a logical volume of its own (see [Disk volumes](#disk-volumes)),
+  so a job that fills its disk fills only that file, never the disk the
+  tracker's database lives on. What jobs send the forge (logs, artifacts)
+  lands on the forge's own logical volumes, not the VM's disk either.
+  Jobs are not privileged, mount nothing and get no Docker socket;
   dind reaches the runners only through a unix socket in a volume, never a
   TCP port a job could reach. dind is privileged (Docker inside Docker needs
-  it), so a job that broke out of its container would still have dind
-  between it and the VM: keep the runners to SDOC's own repositories. Jobs
-  can reach the internet, the VM's published ports (80, 443, 2222) and the
-  office LAN, as any program on the VM could.
+  it), so a job that broke out of its container through a container-runtime
+  or kernel bug would be root on the VM: keep the runners to SDOC's own
+  repositories. Jobs can reach the internet and, checked on 2026-10-31,
+  every port the VM itself listens on: 80, 443 and 2222, but also SSH (22,
+  which takes passwords) and Docker Swarm's 2377 and 7946 (and 4789/udp;
+  `dokploy-network` is not encrypted). Nothing filters them yet (`ufw` is off,
+  `DOCKER-USER` is empty). Dokploy's 3000 and the office router did not
+  answer a job.
 - **Images**: `runs-on: ubuntu-latest` (or `ubuntu-24.04`) runs
   `ghcr.io/catthehacker/ubuntu:act-24.04`, `ubuntu-22.04` its 22.04
   sibling: GitHub's runner image as act publishes it, with apt, sudo and
@@ -1533,11 +1540,40 @@ the tracker never touches them, and while they are down pull requests wait
   shows how much of the 30 GB is used, and `docker --host=unix:///var/run/dind/docker.sock system df`
   (same `docker exec`) what fills it. To drop every unused image at once, run
   the same with `image prune --all --force` (the next job pulls what it
-  needs). The file never shrinks back on the VM's disk; it grows to the cap
-  at most. **More disk**: stop the compose, then on the VM, with `V` the
-  `dind-data` volume's directory (`sudo docker volume inspect` shows it):
-  `sudo truncate -s 50G $V/docker.ext4 && sudo e2fsck -f $V/docker.ext4 && sudo resize2fs $V/docker.ext4`,
+  needs). The file never shrinks back; it grows to the cap at most, on the
+  `runner-jobs` logical volume (34 GB). **More disk**: stop the compose, then
+  on the VM, with `V` the `dind-data` volume's directory (`sudo docker
+  volume inspect` shows it), grow the logical volume first and the file
+  after:
+  `sudo lvextend -r -L +20G ubuntu-vg/runner-jobs && sudo truncate -s 50G $V/docker.ext4 && sudo e2fsck -f $V/docker.ext4 && sudo resize2fs $V/docker.ext4`,
   set `DIND_DISK_SIZE` to match in the compose, deploy.
+
+### Disk volumes
+
+Since 2026-10-31 everything a job can make grow sits on a logical volume of
+its own, carved from `ubuntu-vg` (500 GB, of which the VM's root filesystem,
+`ubuntu-lv`, has 100 GB): a runaway job fills its volume, and the tracker's
+database, Dokploy and the VM keep running.
+
+| Logical volume | Size | Mounted over (the Docker volume's `_data`) | Holds |
+| --- | --- | --- | --- |
+| `runner-jobs` | 34 GB | `compose-program-redundant-application-k85b3j_dind-data` | dind's `docker.ext4` (30 GB): everything jobs pull, build and write |
+| `forge-data` | 40 GB | `git-forgejo-data` | repositories, LFS, finished job logs, artifacts |
+| `forge-db` | 20 GB | `git-postgres-gy325l-data` | the forge's Postgres, which also holds a running job's log |
+
+Each is an ext4 line in `/etc/fstab` (`nofail`, so a missing volume never
+stops the VM from booting; the file before the change is
+`/etc/fstab.pre-lv`). Under each mount, the volume's own `_data` directory is
+empty and immutable (`chattr +i`): if a logical volume ever fails to mount,
+its service fails to start instead of quietly writing to the root disk (and
+Postgres never initialises an empty database there). The data as it was
+before the move is in `_data.pre-lv` next to each; delete those once you are
+sure (`sudo rm -rf …/_data.pre-lv`). `df -h | grep ubuntu--vg` shows how full
+each is. To grow one, with no downtime: `sudo lvextend -r -L +10G
+ubuntu-vg/forge-data`. Neither Forgejo nor the runner caps a job's log, and
+the forge's quota only refuses uploads once an owner is already over it, so
+these volumes are the cap; a full `forge-db` stops the forge until it is
+grown or old runs' logs are deleted.
 
 ### When something is off
 
@@ -1546,6 +1582,7 @@ the tracker never touches them, and while they are down pull requests wait
 | A pull request says checks are waiting and nothing runs | No runner is idle (Settings → Actions → Runners), or the repository has no workflow on `pull_request`. |
 | A runner shows offline | Its container restarts: its log says why (`sdoc-runner: …` for a missing or wrong secret, or dind not healthy yet). |
 | Jobs fail with `no space left on device` | dind's 30 GB is full: prune its images (Operating it, Disk), or give it more. |
+| Uploads or the forge itself fail, `df` shows `forge-data` or `forge-db` full | A job flooded its log or artifacts: delete the run on the forge, or grow the volume ([Disk volumes](#disk-volumes)). |
 | Jobs can't clone (`Could not resolve host` or a timeout) | dind's DNS: it must use the VM's resolvers, which answer `git.sdoc.gov.np` with `10.5.23.138` ([section 4](#tracker-and-forge-reach-each-other-on-the-vm)). |
 | The tracker shows no tick or cross | The webhook's events lack the workflow-run ones (the reconcile puts them back), or the forge refused the tracker: look for "Reading a commit's checks failed." and run `git:commit-checks`. |
 | Maintenance lists a repository as not protected | The bot can't write the rule (it lost ownership, or its token lacks `write:repository`); `git:sync-access` shows the forge's answer. |

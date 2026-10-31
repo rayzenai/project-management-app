@@ -601,7 +601,11 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   organization `sdoc`; every job runs inside one dind held to 4 vCPUs, 10 GB
   and 30 GB of disk (`/var/lib/docker` on a file-backed ext4,
   `forgejo/runner/dind/start.sh`); no actions cache (it would write outside
-  the cap). Actions are on with `DEFAULT_ACTIONS_URL=github`
+  the cap). On the VM, dind's volume, the forge's data and the forge's
+  Postgres (where a running job's log goes) are each a logical volume of
+  their own (`runner-jobs`, `forge-data`, `forge-db`; docs/forgejo.md "Disk
+  volumes"), so no job can fill the disk the tracker's database is on.
+  Actions are on with `DEFAULT_ACTIONS_URL=github`
   (`forgejo/Dockerfile`), so GitHub workflows run as they are, from
   `.forgejo/workflows` or `.github/workflows`.
 - **Protected main**: `App\Services\Git\MainBranch::RULE` on every linked
