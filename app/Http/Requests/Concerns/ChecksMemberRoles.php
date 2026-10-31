@@ -105,6 +105,17 @@ trait ChecksMemberRoles
                     return;
                 }
             }
+
+            // Taking one away leaves it with no manager: canRemoveManager's call.
+            foreach (Project::query()->whereKey(array_diff($held, $projectIds))->with(['teams', 'program:id,name'])->orderBy('title')->get() as $project) {
+                $team = $project->team();
+
+                if ($team !== null && ! WorkspaceAccess::canRemoveManager($user, $team)) {
+                    $validator->errors()->add('managed_project_ids', $project->label().' belongs to another organization.');
+
+                    return;
+                }
+            }
         }
 
         $teamIds = $this->roleIds('team_ids');

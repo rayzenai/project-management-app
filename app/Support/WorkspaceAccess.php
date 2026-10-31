@@ -243,20 +243,27 @@ class WorkspaceAccess
 
     /**
      * A manager (or the program's manager) may take members off the team but
-     * not its manager, who is replaced (canAppointProjectManager), never
-     * removed.
+     * not its manager: only whoever may take the manager off
+     * (canRemoveManager) does.
      */
     public static function canRemoveFromTeam(?Authenticatable $user, Team $team, Member $member): bool
     {
-        if (self::canEditTeam($user, $team)) {
-            return true;
+        if ($team->leaders()->whereKey($member->getKey())->exists()) {
+            return self::canRemoveManager($user, $team);
         }
 
-        if (! self::leadsTeam($user, $team) && ! self::managesProgramOfTeam($user, $team)) {
-            return false;
-        }
+        return self::canEditTeam($user, $team) || self::leadsTeam($user, $team) || self::managesProgramOfTeam($user, $team);
+    }
 
-        return ! $team->leaders()->whereKey($member->getKey())->exists();
+    /**
+     * Taking a project's manager off (off the team, or back to a member),
+     * which leaves the project with none until someone is chosen: whoever
+     * administers the team's organization. Never its program's manager,
+     * who only chooses or replaces one, nor the manager themselves.
+     */
+    public static function canRemoveManager(?Authenticatable $user, Team $team): bool
+    {
+        return self::canEditTeam($user, $team);
     }
 
     public static function canViewTeamProgress(?Authenticatable $user, Team $team): bool
@@ -767,6 +774,15 @@ class WorkspaceAccess
      * attendance, location and work.
      */
     public static function canManageStructure(?Authenticatable $user, int|string|null $organizationId): bool
+    {
+        return $organizationId !== null && self::administers($user, $organizationId);
+    }
+
+    /**
+     * See what needs fixing in an organization (MaintenanceQuery): whoever
+     * administers it.
+     */
+    public static function canViewMaintenance(?Authenticatable $user, int|string|null $organizationId): bool
     {
         return $organizationId !== null && self::administers($user, $organizationId);
     }

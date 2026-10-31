@@ -64,10 +64,11 @@
                 'Create projects on the Projects page and choose who manages each one.',
                 "Give a task to anyone in your organization from the task form (press N): if they are not on the project's team, they join it. With no project yet, choose General there and it is made for you to manage.",
                 "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
-                'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team.',
+                'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team. Make member there leaves the project with no manager until you choose one.',
+                'Open Maintenance now and then: it lists what needs fixing in your organization, such as projects with no manager or nobody on the team, open tasks nobody holds, people on no project or with no designation, each with a link to where you fix it.',
                 'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
                 'Watch everything from the Projects page: projects in a program sit under it and the rest under their manager, with how much is done, what is overdue and the next deadline.',
-                "On the Organogram page, give each person a designation and the person they report to. That draws your office's organogram and decides who sees whose attendance and work.",
+                "On the Organogram page, give each person a designation and the person they report to (the menu at the end of each row). That draws your office's organogram and decides who sees whose attendance and work.",
             ],
         },
         {
@@ -298,9 +299,9 @@
                     team and one manager.
                 </li>
                 <li>
-                    Office titles such as senior developer or analyst are
-                    written on each person. Nothing in the workspace depends on
-                    them.
+                    Posts such as senior developer or analyst are the
+                    organization's designations, given to each person on the
+                    People page or the organogram. They give no powers.
                 </li>
                 <li>
                     You see the projects whose team you are on. A program
@@ -361,20 +362,22 @@
         <section>
             <h2 class="section-title mb-1">In a ministry</h2>
             <p class="mb-3 text-[13px] text-fg-muted">
-                Titles stay free text on each person, and everything here is
-                optional.
+                A person's post in the ministry is their designation, and
+                everything here is optional.
             </p>
             <table class="w-full text-[13px]">
                 <thead>
                     <tr class="border-b border-line text-left">
-                        <th class="col-head py-1.5 pr-4 font-normal">Title</th>
+                        <th class="col-head py-1.5 pr-4 font-normal">
+                            Designation
+                        </th>
                         <th class="col-head py-1.5 font-normal">Role</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {#each ministry as [title, roleName] (title)}
+                    {#each ministry as [designation, roleName] (designation)}
                         <tr class="border-b border-line-soft">
-                            <td class="py-2 pr-4 font-medium">{title}</td>
+                            <td class="py-2 pr-4 font-medium">{designation}</td>
                             <td class="py-2 text-fg-muted">{roleName}</td>
                         </tr>
                     {/each}

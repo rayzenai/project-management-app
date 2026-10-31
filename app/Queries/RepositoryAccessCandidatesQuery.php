@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Models\GitRepository;
 use App\Models\Member;
+use App\Queries\Structure\PersonRef;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +23,7 @@ class RepositoryAccessCandidatesQuery
     public const LIMIT = 20;
 
     /**
-     * @return list<array{id: int, name: string, title: string|null}>
+     * @return list<array{id: int, name: string, designation: string|null}>
      */
     public function get(?Authenticatable $user, GitRepository $repository, string $term): array
     {
@@ -45,12 +46,9 @@ class RepositoryAccessCandidatesQuery
             ->where(fn (Builder $q): Builder => $q->whereRaw('LOWER(name) LIKE ?', [$like])->orWhereRaw('LOWER(email) LIKE ?', [$like]))
             ->orderBy('name')
             ->limit(self::LIMIT)
-            ->get(['id', 'name', 'title'])
-            ->map(fn (Member $member): array => [
-                'id' => $member->id,
-                'name' => $member->name,
-                'title' => $member->title,
-            ])
+            ->with('designation:id,name')
+            ->get(['id', 'name', 'designation_id'])
+            ->map(PersonRef::of(...))
             ->all());
     }
 }

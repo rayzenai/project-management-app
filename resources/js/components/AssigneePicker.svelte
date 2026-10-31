@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Check, X } from '@lucide/svelte';
-    import type { Member } from '../lib/types';
+    import type { Member, PersonRef } from '../lib/types';
     import Avatar from './Avatar.svelte';
 
     let {
@@ -13,7 +13,7 @@
     }: {
         team: Member[];
         /** People not on the team who join it when picked; listed after it. */
-        others?: Member[];
+        others?: PersonRef[];
         selectedIds: number[];
         placeholder?: string;
         max?: number;
@@ -72,8 +72,14 @@
         return () => document.removeEventListener('click', onClick, true);
     });
 
-    const everyone = $derived([...team, ...others]);
+    const everyone = $derived<Member[]>([
+        ...team,
+        ...others.map(({ id, name }) => ({ id, name })),
+    ]);
     const otherIds = $derived(new Set(others.map((u) => u.id)));
+    const designations = $derived(
+        new Map(others.map((u) => [u.id, u.designation])),
+    );
     const filtered = $derived(
         query.trim() === ''
             ? everyone
@@ -196,7 +202,10 @@
                                 <span
                                     class="block truncate text-xs text-fg-muted"
                                     >{otherIds.has(user.id)
-                                        ? [user.title, 'Joins the team']
+                                        ? [
+                                              designations.get(user.id),
+                                              'Joins the team',
+                                          ]
                                               .filter(Boolean)
                                               .join(' · ')
                                         : user.email}</span

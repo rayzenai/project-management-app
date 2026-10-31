@@ -14,7 +14,8 @@ use Illuminate\Validation\Validator;
  * administers the team's organization (its office admin or a super-admin)
  * and to the manager of its project's program, never to a manager. The new
  * manager must be able to join the team, and a program manager's must be of
- * the team's organization (canAppointAsProjectManager).
+ * the team's organization (canAppointAsProjectManager). Making the manager a
+ * member again, with no one in their place, is canRemoveManager's.
  */
 class UpdateTeamMemberRoleRequest extends FormRequest
 {
@@ -23,9 +24,15 @@ class UpdateTeamMemberRoleRequest extends FormRequest
         $team = $this->route('team');
         $member = $this->route('member');
 
-        return $team instanceof Team
-            && $member instanceof Member
-            && WorkspaceAccess::canAppointProjectManager($this->user(), $team);
+        if (! $team instanceof Team || ! $member instanceof Member) {
+            return false;
+        }
+
+        if ($this->input('role') === 'member' && $team->leaders()->whereKey($member->getKey())->exists()) {
+            return WorkspaceAccess::canRemoveManager($this->user(), $team);
+        }
+
+        return WorkspaceAccess::canAppointProjectManager($this->user(), $team);
     }
 
     /**

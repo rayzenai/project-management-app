@@ -243,22 +243,22 @@ they were pruned. Anyone who is not an organizational admin of the program's
 organization or a super-admin gets 403 on POST, PATCH and DELETE. The web surface has the same writes at
 `/workspace/programs` (names `workspace.programs.store|update|destroy`); a web
 DELETE lands on the Projects page, since the program's page is gone. The web
-program page also gets `managerCandidates: [{ id, name, title }]` (the
+program page also gets `managerCandidates: [{ id, name, designation }]` (the
 organization's active people, for its Edit form) outside `progress`, empty
 for anyone who may not manage the program.
 
-## Project teams *(roster: the project's manager, its program's manager, its organizational admin or a super-admin; choosing the manager: organizational admin, super-admin or its program's manager, who never removes one)*
+## Project teams *(roster: the project's manager, its program's manager, its organizational admin or a super-admin; choosing the manager: organizational admin, super-admin or its program's manager; taking the manager off, leaving none: organizational admin or super-admin)*
 
 A team is made with its project and never on its own; `GET /workspace/projects/{slug}`
-returns it as `team { id, is_cross_organization, members: [{ id, name, email, title, organization, is_active, is_manager, can_remove, can_make_manager }], can_manage, can_choose_manager }`. `can_make_manager` is whether the caller may make that person its manager: an active non-manager who can join the team, and for a program manager only a person of the team's own organization, even on a cross-organization team.
+returns it as `team { id, is_cross_organization, members: [{ id, name, email, designation, organization, is_active, is_manager, can_remove, can_make_manager }], can_manage, can_choose_manager, can_remove_manager }`. `can_make_manager` is whether the caller may make that person its manager: an active non-manager who can join the team, and for a program manager only a person of the team's own organization, even on a cross-organization team.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
 | GET | `/workspace/team` | the People directory: `{ teams (each with its project and roster), members, organizations, canCreateMember, canSetRoles, roleOptions }`; super-admin may add `?organization=`. Each team's `project` is `{ slug, title, program, is_archived }` (`program`: its program's name, or null). Each member carries `team_ids`, `led_team_ids` (the teams they manage), `managed_project_ids` (those teams' projects) and `managed_program_ids`. `canSetRoles` is true for whoever may set people's roles (an organizational admin, a super-admin); `roleOptions` is then `{ programs: [{ id, name, organization_id, manager { id, name } \| null }], projects: [{ id, title, program (its program's name) \| null, organization_id, team_id, manager { id, name } \| null }] }` (active projects only) for the organizations they administer (all of them for a super-admin, whatever the filter), and empty lists otherwise |
 | GET | `/workspace/teams/{team}/candidates?q=` | up to 8 people who can join (min 2 characters): its organization, or anyone for a cross-organization team |
 | POST | `/workspace/teams/{team}/members` | `member_id` (an existing person; 422 if they can't join) |
-| DELETE | `/workspace/teams/{team}/members/{member}` | 422 for the manager: make someone else manager first |
-| PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member; 422 on `role` if they can't join, or for a program manager if they are of another organization); `role: member` on the manager is a 422 |
+| DELETE | `/workspace/teams/{team}/members/{member}` | the manager too, by an organizational admin or super-admin only (403 for anyone else); the project then has no manager |
+| PATCH | `/workspace/teams/{team}/members/{member}` | `role: leader` makes them the project's manager (the old one stays as a member; 422 on `role` if they can't join, or for a program manager if they are of another organization); `role: member` on the manager leaves the project with none (`{name} no longer manages {team}.`), by an organizational admin or super-admin only (403 for anyone else) |
 
 ## Code repositories *(only in an organization with git on; list: the project's team, its program's manager, its organizational admin or a super-admin; the rest: its manager, its program's manager, its organizational admin or a super-admin)*
 
@@ -304,7 +304,7 @@ someone inactive, someone with no organization or a maintainer. The same
 rule decides who may change a grant; removing one needs only the right to
 manage access.
 
-A grant is `{ id, permission, waiting, effective, member: { id, name, title },
+A grant is `{ id, permission, waiting, effective, member: { id, name, designation },
 granted_at }`. `waiting` is true while the person has never signed in to
 the forge (the forge can't have them until they do). `effective` is false
 while the grant gives nothing: the person is deactivated, or no longer in
@@ -338,8 +338,8 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
   "message": "Repository access retrieved.",
   "data": {
     "maintainers": [
-      { "id": 3, "name": "Mira Thapa", "title": "PM", "role": "manager", "waiting": false },
-      { "id": 2, "name": "Pradeep Rai", "title": "Engineering head", "role": "program manager", "waiting": true }
+      { "id": 3, "name": "Mira Thapa", "designation": "PM", "role": "manager", "waiting": false },
+      { "id": 2, "name": "Pradeep Rai", "designation": "Engineering head", "role": "program manager", "waiting": true }
     ],
     "grants": [
       {
@@ -347,7 +347,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
         "permission": "write",
         "waiting": false,
         "effective": true,
-        "member": { "id": 9, "name": "Asha Gurung", "title": "Senior developer" },
+        "member": { "id": 9, "name": "Asha Gurung", "designation": "Senior developer" },
         "granted_at": "2026-10-30T09:15:00+00:00"
       }
     ]
@@ -370,7 +370,7 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" 
     "permission": "read",
     "waiting": true,
     "effective": true,
-    "member": { "id": 14, "name": "Bina Shrestha", "title": "Analyst" },
+    "member": { "id": 14, "name": "Bina Shrestha", "designation": "Analyst" },
     "granted_at": "2026-10-30T10:02:11+00:00"
   }
 }
@@ -480,7 +480,7 @@ Inertia page `Reports/CodeActivity`, whose props are `data`'s fields plus
 ## Members *(create/edit/delete: organizational admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login),
-optional `password` (min 8), `title` and the role fields below. A super-admin also sends
+optional `password` (min 8) and the role fields below. A super-admin also sends
 `organization_id` (required) and may send `is_office_admin`; an organizational admin's
 people always join their own organization. Every member gets a login: the
 password you send, or a generated one if you send none. Either way the member is
@@ -500,16 +500,17 @@ person's organization after any move in the same request (422 on the field,
 another organization.`; a program must be of the person's own organization,
 and a project or team one they can join). Making someone manager of a program
 replaces its manager; of a project, makes them its team's one manager, and
-the old manager stays on the team as a member. A manager role is never taken
-away here: leaving out a program or project the person manages is a 422
-(`Choose another manager for the {name} program first.` / `Choose another
-manager for {title} first.`), and leaving out a team they manage keeps them on
-it. A manager role for an inactive person is a 422 (`Only an active person can
+the old manager stays on the team as a member. Leaving out a project the
+person manages leaves it with no manager and keeps them on its team as a
+member (only for a caller who administers the project's organization;
+otherwise 422, `{name} belongs to another organization.`); leaving out a
+program they manage is a 422 (`Choose another manager for the {name} program
+first.`); leaving out a team they still manage keeps them on it. A manager role for an inactive person is a 422 (`Only an active person can
 manage.`). A refused role undoes the whole request. When a role field was sent,
 `PATCH`'s `message` starts `Member updated. Roles saved.`; the new manager or
 team member is notified as from the program and team routes. A super-admin
-moving someone to another organization must first choose other managers for
-the projects they manage there (422 on `organization_id`). The member payload
+moving someone to another organization must first take them off managing its
+projects (422 on `organization_id`: `Take them off managing {names} first.`). The member payload
 returned by `POST`, `PATCH` and restore carries `team_ids`, `led_team_ids`,
 `managed_project_ids` and `managed_program_ids`.
 
@@ -612,6 +613,15 @@ and write nothing to project activity.
 | --- | --- | --- | --- |
 | GET | `/workspace/organizations/{organization}/organogram` | — | `{ data: organogram }` |
 | PUT | `/workspace/members/{member}/reports-to` | `reports_to_id` (int or null) | the member |
+| PUT | `/workspace/members/{member}/designation` | `designation_id` (int or null) | the member |
+
+**Designation.** `PUT /workspace/members/{member}/designation` with
+`designation_id` (one of the person's organization's designations, or
+`null` for none; the field must be sent) returns the member and `{name} is
+now {designation}.` or `{name} has no designation now.`. The same callers as
+reports-to (403 otherwise); another organization's or an unknown
+designation is a 422 on `designation_id`: `Choose one of the organization's
+designations.`
 
 **Person form.** `POST /workspace/members` and `PATCH
 /workspace/members/{member}` also take `designation_id` (one of the person's
@@ -634,9 +644,55 @@ loses their own higher authority, and a designation of the organization they
 left. Deactivating someone keeps every line.
 
 The web twins of the writes (same paths under `/workspace`, names
-`workspace.designations.store|update|destroy` and
-`workspace.members.reports-to`) redirect back with a `workspace_flash`, and
+`workspace.designations.store|update|destroy`, `workspace.members.reports-to`
+and `workspace.members.designation`) redirect back with a `workspace_flash`, and
 errors on the field.
+
+## Maintenance *(whoever administers the organization)*
+
+`GET /workspace/organizations/{organization}/maintenance` lists what needs
+looking at in the organization (403 for anyone who does not administer it).
+Every list is empty when all is well:
+
+```json
+{
+  "data": {
+    "organization": { "id": 1, "name": "SDOC" },
+    "quiet_days": 30,
+    "projects_without_manager": [{ "slug": "gioms", "label": "GIOMS", "manager": null }],
+    "projects_without_people": [{ "slug": "gioms", "label": "GIOMS" }],
+    "unassigned_tasks": [{ "slug": "sutra", "label": "SuTRA", "count": 3 }],
+    "tasks_with_inactive_people": [],
+    "quiet_projects": [{ "slug": "sms-gateway", "label": "SMS Gateway", "last_activity_at": "2026-09-21T14:36:10+05:45" }],
+    "programs_without_manager": [],
+    "people_off_projects": [{ "id": 7, "name": "Lal Bahadur", "designation": "Driver" }],
+    "people_without_designation": [],
+    "people_reporting_to_inactive": [],
+    "people_outside_organogram": [],
+    "people_without_login": [],
+    "attendance_without_office": false
+  }
+}
+```
+
+- Projects are the organization's active ones. `projects_without_manager`'s
+  `manager` is a deactivated manager, or null when there is none;
+  `projects_without_people` have no active person on the team.
+- `unassigned_tasks`: open tasks nobody holds; `tasks_with_inactive_people`:
+  open tasks only deactivated people hold (`count` per project).
+- `quiet_projects`: no activity for `quiet_days` (`last_activity_at`, or the
+  project's creation when it has none).
+- `programs_without_manager`: no manager, or a deactivated one (`manager`).
+- People are the organization's active ones: on no active project's team,
+  with no designation, reporting to someone deactivated (`reports_to`),
+  outside the organogram (reporting to no one, and no one reporting to them),
+  with no login.
+- `attendance_without_office`: attendance is on, but no office network or
+  office place is set.
+
+The web page is `GET /workspace/maintenance` (name `workspace.maintenance`):
+the viewer's organization, and a super-admin picks one with
+`?organization=` (anyone else's pick is ignored).
 
 ## Attendance: the clock
 
@@ -936,6 +992,26 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Projects may have no manager; the maintenance list.**
+
+- An organizational admin or super-admin can take a project's manager off:
+  `DELETE /workspace/teams/{team}/members/{member}` and `role: member` on the
+  team route now succeed for the manager (403 for anyone else), and leaving
+  a managed project out of `managed_project_ids` leaves it manager-less. The
+  project page's `team` adds `can_remove_manager`.
+- New: `GET /workspace/organizations/{organization}/maintenance` (see
+  Maintenance); `/user`'s `office` adds `maintenance`.
+
+**Designations replace titles.**
+
+- People have no `title` any more: members no longer take or return one, and
+  every place that named a person with their title (team and repository
+  access candidates, maintainers and grants, progress reports, the code
+  activity report, program and project managers, `/user`'s `member`) gives
+  `designation` (its name, or null) instead. Titles people had became
+  designations of their organization.
+- New: `PUT /workspace/members/{member}/designation` (see Structure).
 
 **Structure, attendance and work reports.**
 

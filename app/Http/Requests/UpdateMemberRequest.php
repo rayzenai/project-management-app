@@ -54,7 +54,6 @@ class UpdateMemberRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($linkedUserId)],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
-            'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
             'organization_id' => ['sometimes', 'required', 'integer', Rule::exists('organizations', 'id')],
             'is_office_admin' => ['sometimes', 'boolean'],
@@ -125,8 +124,8 @@ class UpdateMemberRequest extends FormRequest
                 ->get();
             $names = fn (Collection $named): string => $named->map(fn (Team $team): string => $team->project()?->label() ?? $team->name)->implode(', ');
 
-            // team_ids never takes a manager off their team, so its manager
-            // is chosen first.
+            // team_ids never takes a manager off their team, so they stop
+            // managing it first.
             $managed = $teams->filter(fn (Team $team): bool => ($team->pivot->role ?? 'member') === 'leader');
             $stranded = $teams->diff($managed)
                 ->when($this->has('team_ids'), fn ($c) => $c->whereIn('id', (array) $this->input('team_ids', [])));
@@ -136,7 +135,7 @@ class UpdateMemberRequest extends FormRequest
             }
 
             if ($managed->isNotEmpty()) {
-                $validator->errors()->add('organization_id', 'Choose another manager for '.$names($managed).' first.');
+                $validator->errors()->add('organization_id', 'Take them off managing '.$names($managed).' first.');
             }
 
             $programs = Program::query()

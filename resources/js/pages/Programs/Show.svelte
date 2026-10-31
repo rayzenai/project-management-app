@@ -7,7 +7,7 @@
     import ProgressRing from '../../components/ProgressRing.svelte';
     import ProjectCreateForm from '../../components/project/ProjectCreateForm.svelte';
     import { formatDate } from '../../lib/format';
-    import type { Member, ProgramProgress } from '../../lib/types';
+    import type { PersonRef, ProgramProgress } from '../../lib/types';
 
     let {
         progress,
@@ -15,7 +15,7 @@
     }: {
         progress: ProgramProgress;
         /** Who it can be handed to or manage a new project; empty unless the viewer may do either. */
-        managerCandidates?: Member[];
+        managerCandidates?: PersonRef[];
     } = $props();
 
     let editing = $state(false);
@@ -152,9 +152,9 @@
                             >{progress.program.manager.name}</span
                         ></span
                     >
-                    {#if progress.program.manager.title}
+                    {#if progress.program.manager.designation}
                         <span class="text-fg-faint"
-                            >{progress.program.manager.title}</span
+                            >{progress.program.manager.designation}</span
                         >
                     {/if}
                 </p>

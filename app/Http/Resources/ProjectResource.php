@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Project;
+use App\Queries\Structure\PersonRef;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -49,11 +50,8 @@ class ProjectResource extends JsonResource
                 'is_cross_organization' => (bool) $team->is_cross_organization,
                 'members_count' => $team->members_count ?? $team->members()->count(),
             ]),
-            'manager' => $this->whenLoaded('teams', fn (): ?array => ($manager = $this->manager()) === null ? null : [
-                'id' => $manager->id,
-                'name' => $manager->name,
-                'title' => $manager->title,
-            ]),
+            // Its designation only where the leaders' designations are loaded.
+            'manager' => $this->whenLoaded('teams', fn (): ?array => ($manager = $this->manager()) === null ? null : PersonRef::of($manager)),
             'tasks_count' => $this->whenCounted('tasks'),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

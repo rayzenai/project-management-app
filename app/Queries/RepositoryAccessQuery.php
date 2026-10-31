@@ -21,14 +21,14 @@ use App\Support\WorkspaceAccess;
 class RepositoryAccessQuery
 {
     /**
-     * @return array{maintainers: list<array{id: int, name: string, title: string|null, role: string, waiting: bool}>, grants: list<array<string, mixed>>}
+     * @return array{maintainers: list<array{id: int, name: string, designation: string|null, role: string, waiting: bool}>, grants: list<array<string, mixed>>}
      */
     public function get(GitRepository $repository): array
     {
         $project = $repository->project;
         $managerId = $project->manager()?->id;
         $ids = WorkspaceAccess::repositoryMaintainerIds($project);
-        $members = Member::query()->with('user')->whereKey($ids)->get()->keyBy('id');
+        $members = Member::query()->with(['user', 'designation:id,name'])->whereKey($ids)->get()->keyBy('id');
 
         $maintainers = [];
 
@@ -39,7 +39,7 @@ class RepositoryAccessQuery
                 $maintainers[] = [
                     'id' => $member->id,
                     'name' => $member->name,
-                    'title' => $member->title,
+                    'designation' => $member->designation?->name,
                     'role' => $member->id === $managerId ? 'manager' : 'program manager',
                     'waiting' => blank($member->user?->git_username),
                 ];
@@ -48,7 +48,7 @@ class RepositoryAccessQuery
 
         $grants = $repository->grants()
             ->whereHas('member')
-            ->with('member.user')
+            ->with(['member.user', 'member.designation:id,name'])
             ->orderBy(Member::query()->select('name')->whereColumn('members.id', 'git_repository_grants.member_id'))
             ->orderBy('id')
             ->get();

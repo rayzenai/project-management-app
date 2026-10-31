@@ -106,7 +106,6 @@
         name: '',
         email: '',
         password: generatePassword(),
-        title: '',
         organization_id: null as number | null,
         is_office_admin: false,
         ...heldRoles(null),
@@ -145,7 +144,6 @@
         name: '',
         email: '',
         password: '',
-        title: '',
         organization_id: null as number | null,
         is_office_admin: false,
         ...heldRoles(null),
@@ -168,6 +166,20 @@
             : (member.organization_id ?? null);
     }
 
+    /** A move to another organization clears what belonged to the old one. */
+    function chooseOrganization(
+        form: {
+            organization_id: Id | null;
+            designation_id: Id | null;
+            reports_to_id: Id | null;
+        },
+        organizationId: Id | null,
+    ) {
+        form.organization_id = organizationId;
+        form.designation_id = null;
+        form.reports_to_id = null;
+    }
+
     function addMember(e: SubmitEvent) {
         e.preventDefault();
 
@@ -186,7 +198,6 @@
                 name: data.name,
                 email: data.email,
                 password: data.password,
-                title: data.title,
                 ...(isSuperAdmin
                     ? {
                           organization_id: data.organization_id,
@@ -219,7 +230,6 @@
         memberEditForm.name = member.name;
         memberEditForm.email = member.email ?? '';
         memberEditForm.password = '';
-        memberEditForm.title = member.title ?? '';
         memberEditForm.organization_id = member.organization_id ?? null;
         memberEditForm.is_office_admin = member.is_office_admin ?? false;
         Object.assign(memberEditForm, heldRoles(member));
@@ -235,7 +245,6 @@
                     name: data.name,
                     email: data.email,
                     password: data.password,
-                    title: data.title,
                 };
 
                 // Organization and office-admin status are a super-admin's
@@ -359,6 +368,44 @@
     </select>
 {/snippet}
 
+<!-- A yes-or-no field shaped like the others: its heading, the box where
+     an input would be, and a hint under it. -->
+{#snippet tickField(
+    heading: string,
+    text: string,
+    hint: string,
+    checked: boolean,
+    disabled: boolean,
+    onchange: (on: boolean) => void,
+)}
+    <div class="flex flex-col gap-1">
+        <span class="label">{heading}</span>
+        <label
+            class={`input flex items-center gap-2 ${disabled ? 'opacity-60' : 'cursor-pointer'}`}
+        >
+            <input
+                type="checkbox"
+                {checked}
+                {disabled}
+                onchange={(e) => onchange(e.currentTarget.checked)}
+            />
+            {text}
+        </label>
+        <p class="text-xs text-fg-muted">{hint}</p>
+    </div>
+{/snippet}
+
+{#snippet officeAdminField(form: { is_office_admin: boolean })}
+    {@render tickField(
+        'Access',
+        'Organizational admin',
+        'In a ministry: the Minister, Secretary and Secretariat.',
+        form.is_office_admin,
+        false,
+        (on) => (form.is_office_admin = on),
+    )}
+{/snippet}
+
 {#snippet structureFields(
     id: string,
     form: {
@@ -375,13 +422,18 @@
         <select
             id={`${id}-designation`}
             class="input"
+            disabled={organizationId === null}
             value={form.designation_id ?? ''}
             onchange={(e) =>
                 (form.designation_id = e.currentTarget.value
                     ? Number(e.currentTarget.value)
                     : null)}
         >
-            <option value="">None</option>
+            <option value=""
+                >{organizationId === null
+                    ? 'Choose an organization first'
+                    : 'None'}</option
+            >
             {#each designationsFor(designationOptions, organizationId) as designation (designation.id)}
                 <option value={designation.id}>{designation.name}</option>
             {/each}
@@ -395,6 +447,7 @@
         <select
             id={`${id}-reports-to`}
             class="input"
+            disabled={organizationId === null}
             value={form.reports_to_id ?? ''}
             onchange={(e) =>
                 (form.reports_to_id = e.currentTarget.value
@@ -414,19 +467,14 @@
             <p class="text-xs text-danger">{errors.reports_to_id}</p>
         {/if}
     </div>
-    <label class="flex items-start gap-2 text-[13px]">
-        <input
-            type="checkbox"
-            class="mt-0.5"
-            bind:checked={form.attendance_exempt}
-        />
-        <span>
-            Exempt from attendance
-            <span class="block text-xs text-fg-muted"
-                >Not counted among the people expected in each day.</span
-            >
-        </span>
-    </label>
+    {@render tickField(
+        'Attendance',
+        'Exempt',
+        'Not counted among the people expected each day.',
+        form.attendance_exempt,
+        organizationId === null,
+        (on) => (form.attendance_exempt = on),
+    )}
 {/snippet}
 
 <AppShell>
@@ -545,17 +593,6 @@
                             </p>
                         {/if}
                     </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="label" for="member-title"
-                            >Title (optional)</label
-                        >
-                        <input
-                            id="member-title"
-                            type="text"
-                            bind:value={memberForm.title}
-                            class="input"
-                        />
-                    </div>
                     {#if isSuperAdmin}
                         <div class="flex flex-col gap-1">
                             <label class="label" for="member-organization"
@@ -564,7 +601,7 @@
                             {@render organizationSelect(
                                 'member-organization',
                                 memberForm.organization_id,
-                                (v) => (memberForm.organization_id = v),
+                                (v) => chooseOrganization(memberForm, v),
                             )}
                             {#if memberForm.errors.organization_id}
                                 <p class="text-xs text-danger">
@@ -572,23 +609,8 @@
                                 </p>
                             {/if}
                         </div>
-                        <div class="flex flex-col gap-1 self-end">
-                            <label
-                                class="flex items-center gap-2 text-[13px] text-fg"
-                            >
-                                <input
-                                    type="checkbox"
-                                    bind:checked={memberForm.is_office_admin}
-                                />
-                                Organizational admin of this organization
-                            </label>
-                            <p class="text-xs text-fg-muted">
-                                In a ministry: the Minister, Secretary and
-                                Secretariat.
-                            </p>
-                        </div>
                     {/if}
-                    {#if canSetStructure && newMemberOrganizationId !== null}
+                    {#if canSetStructure}
                         {@render structureFields(
                             'member',
                             memberForm,
@@ -596,6 +618,9 @@
                             null,
                             memberForm.errors,
                         )}
+                    {/if}
+                    {#if isSuperAdmin}
+                        {@render officeAdminField(memberForm)}
                     {/if}
                 </div>
                 {#if canSetRoles && newMemberOrganizationId !== null}
@@ -732,19 +757,6 @@
                                     <div class="flex flex-col gap-1">
                                         <label
                                             class="label"
-                                            for={`member-${member.id}-title`}
-                                            >Title</label
-                                        >
-                                        <input
-                                            id={`member-${member.id}-title`}
-                                            type="text"
-                                            bind:value={memberEditForm.title}
-                                            class="input"
-                                        />
-                                    </div>
-                                    <div class="flex flex-col gap-1">
-                                        <label
-                                            class="label"
                                             for={`member-${member.id}-password`}
                                             >Password</label
                                         >
@@ -776,8 +788,10 @@
                                                 `member-${member.id}-organization`,
                                                 memberEditForm.organization_id,
                                                 (v) =>
-                                                    (memberEditForm.organization_id =
-                                                        v),
+                                                    chooseOrganization(
+                                                        memberEditForm,
+                                                        v,
+                                                    ),
                                             )}
                                             {#if memberEditForm.errors.organization_id}
                                                 <p class="text-xs text-danger">
@@ -786,33 +800,19 @@
                                                 </p>
                                             {/if}
                                         </div>
-                                        <div
-                                            class="flex flex-col gap-1 self-end"
-                                        >
-                                            <label
-                                                class="flex items-center gap-2 text-[13px] text-fg"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    bind:checked={
-                                                        memberEditForm.is_office_admin
-                                                    }
-                                                />
-                                                Organizational admin of this organization
-                                            </label>
-                                            <p class="text-xs text-fg-muted">
-                                                In a ministry: the Minister,
-                                                Secretary and Secretariat.
-                                            </p>
-                                        </div>
                                     {/if}
-                                    {#if canSetStructure && editOrganizationId(member) !== null}
+                                    {#if canSetStructure}
                                         {@render structureFields(
                                             `member-${member.id}`,
                                             memberEditForm,
                                             editOrganizationId(member),
                                             member,
                                             memberEditForm.errors,
+                                        )}
+                                    {/if}
+                                    {#if isSuperAdmin}
+                                        {@render officeAdminField(
+                                            memberEditForm,
                                         )}
                                     {/if}
                                 </div>
@@ -871,9 +871,6 @@
                                     {#if member.designation}<span
                                             class="truncate"
                                             >{member.designation.name}</span
-                                        >{/if}
-                                    {#if member.title}<span class="truncate"
-                                            >{member.title}</span
                                         >{/if}
                                     {#if member.email}<span class="truncate"
                                             >{member.email}</span

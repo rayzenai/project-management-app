@@ -33,7 +33,7 @@ class ProjectIndexQuery
 
         $projects = Project::query()
             ->visibleTo($user)
-            ->with(['organization:id,name', 'program:id,slug,name', 'teams' => fn ($q) => $q->withCount('members')->with('leaders')])
+            ->with(['organization:id,name', 'program:id,slug,name', 'teams' => fn ($q) => $q->withCount('members')->with('leaders.designation:id,name')])
             ->when($archivedView, fn ($q) => $q->archived(), fn ($q) => $q->active())
             ->withCount([
                 'tasks',
@@ -75,14 +75,15 @@ class ProjectIndexQuery
             ->whereNotNull('organization_id')
             ->when(! $isSuperAdmin, fn ($q) => $q->where('organization_id', $officeAdminOf ?? $self?->organization_id))
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'title', 'organization_id'])
-            ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'title' => $m->title, 'organization_id' => $m->organization_id])
+            ->with('designation:id,name')
+            ->get(['id', 'name', 'email', 'designation_id', 'organization_id'])
+            ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'designation' => $m->designation?->name, 'organization_id' => $m->organization_id])
             ->all();
 
         // The programs the viewer may open: the page links their headings.
         $programs = Program::query()
             ->visibleTo($user)
-            ->with(['organization:id,name', 'manager:id,name,title'])
+            ->with(['organization:id,name', 'manager:id,name,designation_id', 'manager.designation:id,name'])
             ->withCount('projects')
             ->orderBy('name')
             ->get();

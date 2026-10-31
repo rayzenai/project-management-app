@@ -12,7 +12,6 @@ export interface Member {
     id: Id;
     name: string;
     email?: string | null;
-    title?: string | null;
     user_id?: Id | null;
     is_active?: boolean;
     team_ids?: Id[];
@@ -43,16 +42,19 @@ export interface RoleOptions {
         organization_id: Id;
         manager: RoleManager | null;
     }[];
-    /** Active projects; `team_id` is what "Member of" sends. */
-    projects: {
-        id: Id;
-        title: string;
-        /** Its program's name: tells apart the programs' General projects. */
-        program: string | null;
-        organization_id: Id;
-        team_id: Id | null;
-        manager: RoleManager | null;
-    }[];
+    /** Active projects. */
+    projects: RoleOption[];
+}
+
+/** A project the person form offers; `team_id` is what "Member" sends. */
+export interface RoleOption {
+    id: Id;
+    title: string;
+    /** Its program's name: tells apart the programs' General projects. */
+    program: string | null;
+    organization_id: Id;
+    team_id: Id | null;
+    manager: RoleManager | null;
 }
 
 /** The role fields of the person form, each the complete wanted set. */
@@ -67,7 +69,7 @@ export interface RosterEntry {
     id: Id;
     name: string;
     email?: string | null;
-    title?: string | null;
+    designation?: string | null;
     organization?: string | null;
     is_active: boolean;
     role: 'leader' | 'member';
@@ -104,7 +106,7 @@ export interface ProjectTeamMember {
     id: Id;
     name: string;
     email?: string | null;
-    title?: string | null;
+    designation?: string | null;
     organization?: string | null;
     is_active: boolean;
     is_manager: boolean;
@@ -122,6 +124,8 @@ export interface ProjectTeam {
     can_manage: boolean;
     /** Make someone its manager: office admin, super-admin, program manager. */
     can_choose_manager: boolean;
+    /** Take its manager off, leaving none: office admin, super-admin. */
+    can_remove_manager: boolean;
 }
 
 /** A pull request on the forge (GitPullRequestResource). */
@@ -182,7 +186,7 @@ export interface RepositoryAccess {
     maintainers: {
         id: Id;
         name: string;
-        title: string | null;
+        designation: string | null;
         role: 'manager' | 'program manager';
         waiting: boolean;
     }[];
@@ -196,7 +200,7 @@ export interface RepositoryGrant {
     waiting: boolean;
     /** False while it gives nothing: the person is deactivated, or no longer in the project's organization or on its team. */
     effective: boolean;
-    member: { id: Id; name: string; title: string | null };
+    member: PersonRef;
     granted_at: string | null;
 }
 
@@ -288,7 +292,7 @@ export interface Project extends ProjectSummary {
         members_count: number;
     } | null;
     /** Its team's one leader; null until one is chosen. */
-    manager?: { id: Id; name: string; title: string | null } | null;
+    manager?: PersonRef | null;
     tasks_count?: number;
     /** Present on the project index only. */
     percent_complete?: number;
@@ -490,7 +494,7 @@ export interface TaskPreview {
     activity: ActivityEntry[];
     team: Member[];
     /** People of the project's organization who join its team when picked; empty unless the viewer runs it. */
-    join_candidates?: Member[];
+    join_candidates?: PersonRef[];
     comments_count: number;
     /** The rest of the task's project, for the dependency picker. */
     dependency_candidates?: TaskRef[];
@@ -525,7 +529,7 @@ export interface TaskOption {
 export interface ProgressMember {
     id: number;
     name: string;
-    title: string | null;
+    designation: string | null;
     organization: string | null;
     role: 'leader' | 'member';
     is_active: boolean;
@@ -621,7 +625,7 @@ export interface Program {
     name: string;
     description: string | null;
     organization: { id: number; name: string };
-    manager: { id: number; name: string; title: string | null } | null;
+    manager: PersonRef | null;
     projects_count?: number;
     can_manage: boolean;
     /** Whether the viewer may create a project in it. */
@@ -648,7 +652,7 @@ export interface ProgramProgress extends ProgressReport {
 export interface CodeActivityPerson {
     user_id: Id | null;
     name: string;
-    title: string | null;
+    designation: string | null;
     commits: number;
     active_days: number;
     repositories: number;
@@ -720,8 +724,8 @@ export interface QuickAddContext {
     projects: QuickAddProject[];
     team: Member[];
     currentMemberId: Id | null;
-    /** The active people of the viewer's organization, `{ id, name, title }`, for whoever runs a team in it; else empty. */
-    organizationPeople?: Member[];
+    /** The active people of the viewer's organization, for whoever runs a team in it; else empty. */
+    organizationPeople?: PersonRef[];
     /** The viewer is an organizational admin whose organization has no project yet: offer "General". */
     startGeneral?: boolean;
 }
@@ -787,4 +791,5 @@ export interface OfficeLinks {
     team_work: boolean;
     /** The user's own member, for "My week"; null outside an organization. */
     my_work_member_id: number | null;
+    maintenance: boolean;
 }

@@ -23,7 +23,7 @@ beforeEach(function () {
     $this->admin = Member::factory()->linkedTo($this->adminUser)->create(['organization_id' => $this->org->id, 'is_office_admin' => true, 'name' => 'Admin']);
 
     $this->js = User::factory()->create();
-    $this->jsMember = Member::factory()->linkedTo($this->js)->create(['organization_id' => $this->org->id, 'name' => 'Joint Secretary', 'title' => 'Joint Secretary']);
+    $this->jsMember = Member::factory()->linkedTo($this->js)->designated('Joint Secretary')->create(['organization_id' => $this->org->id, 'name' => 'Joint Secretary']);
     $this->program = Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->jsMember->id, 'name' => 'Revenue']);
 
     $this->projectA = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->program->id, 'title' => 'Tax Portal']);
@@ -37,9 +37,9 @@ beforeEach(function () {
 
 it('gives the program page manager candidates only to those who manage programs or create projects in it', function () {
     $expected = [
-        ['id' => $this->admin->id, 'name' => 'Admin', 'title' => $this->admin->title],
-        ['id' => $this->jsMember->id, 'name' => 'Joint Secretary', 'title' => 'Joint Secretary'],
-        ['id' => $this->manager->id, 'name' => 'Under Secretary', 'title' => $this->manager->title],
+        ['id' => $this->admin->id, 'name' => 'Admin', 'designation' => null],
+        ['id' => $this->jsMember->id, 'name' => 'Joint Secretary', 'designation' => 'Joint Secretary'],
+        ['id' => $this->manager->id, 'name' => 'Under Secretary', 'designation' => null],
     ];
 
     $this->actingAs($this->adminUser)->get("/workspace/programs/{$this->program->slug}")

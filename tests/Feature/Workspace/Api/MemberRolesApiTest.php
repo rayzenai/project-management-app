@@ -69,17 +69,18 @@ it('sets a person\'s roles through the API', function () {
     Notification::assertSentTo($this->person->user, MadeProgramManager::class);
 });
 
-it('answers 422 on the field when a manager role would be left without a manager', function () {
+it('takes a project from its manager, but answers 422 when a program would be left without one', function () {
     Sanctum::actingAs($this->admin, ['*']);
 
     $this->patchJson("/api/v1/workspace/members/{$this->underSecretary->id}", ['managed_project_ids' => []])
-        ->assertUnprocessable()
-        ->assertJsonPath('errors.managed_project_ids.0', 'Choose another manager for Tax Portal first.');
+        ->assertOk()
+        ->assertJsonPath('data.managed_project_ids', []);
     $this->patchJson("/api/v1/workspace/members/{$this->jointSecretary->id}", ['managed_program_ids' => []])
         ->assertUnprocessable()
         ->assertJsonPath('errors.managed_program_ids.0', 'Choose another manager for the Revenue program first.');
 
-    expect($this->teamA->leaders()->pluck('members.id')->all())->toBe([$this->underSecretary->id])
+    expect($this->teamA->leaders()->count())->toBe(0)
+        ->and($this->teamA->members()->pluck('members.id')->all())->toBe([$this->underSecretary->id])
         ->and($this->program->fresh()->manager_id)->toBe($this->jointSecretary->id);
 });
 

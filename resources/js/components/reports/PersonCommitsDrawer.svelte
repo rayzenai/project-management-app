@@ -142,8 +142,8 @@
 
         <div class="min-h-0 flex-1 overflow-y-auto">
             <div class="border-b border-line px-5 py-3 text-[13px]">
-                {#if person.title}
-                    <div class="text-fg-muted">{person.title}</div>
+                {#if person.designation}
+                    <div class="text-fg-muted">{person.designation}</div>
                 {/if}
                 <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-fg-muted">
                     <span

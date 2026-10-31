@@ -98,7 +98,7 @@ class AuthController extends Controller
             'member' => $member === null ? null : [
                 'id' => $member->id,
                 'name' => $member->name,
-                'title' => $member->title,
+                'designation' => $member->designation?->name,
             ],
             'organization' => $member?->organization === null ? null : [
                 'id' => $member->organization->id,

@@ -32,13 +32,13 @@ beforeEach(function () {
     Member::factory()->linkedTo($this->adminUser)->create(['organization_id' => $this->org->id, 'is_office_admin' => true]);
 
     $this->js = User::factory()->create();
-    $this->jsMember = Member::factory()->linkedTo($this->js)->create(['organization_id' => $this->org->id, 'title' => 'Joint Secretary']);
+    $this->jsMember = Member::factory()->linkedTo($this->js)->designated('Joint Secretary')->create(['organization_id' => $this->org->id]);
     $this->programP = Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->jsMember->id, 'name' => 'Revenue']);
 
     $this->usUser = User::factory()->create();
-    $this->us = Member::factory()->linkedTo($this->usUser)->create(['organization_id' => $this->org->id, 'title' => 'Under Secretary']);
+    $this->us = Member::factory()->linkedTo($this->usUser)->designated('Under Secretary')->create(['organization_id' => $this->org->id]);
     $this->officerUser = User::factory()->create();
-    $this->officer = Member::factory()->linkedTo($this->officerUser)->create(['organization_id' => $this->org->id, 'title' => 'Officer']);
+    $this->officer = Member::factory()->linkedTo($this->officerUser)->designated('Officer')->create(['organization_id' => $this->org->id]);
     $this->projectA = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->programP->id, 'title' => 'Tax Portal']);
     $this->teamA = $this->projectA->ensureTeam();
     $this->teamA->members()->attach($this->us->id, ['role' => 'leader']);
@@ -322,12 +322,15 @@ it('still never lets a program manager remove a manager', function () {
     $this->actingAs($this->js, 'sanctum')->deleteJson("/api/v1/workspace/teams/{$this->teamA->id}/members/{$this->us->id}")
         ->assertForbidden();
 
-    // Nor step them down without choosing someone else.
+    // Nor make them a member, leaving the project without one.
     $this->actingAs($this->js)->patch("/workspace/teams/{$this->teamA->id}/members/{$this->us->id}", ['role' => 'member'])
-        ->assertSessionHasErrors('role');
+        ->assertForbidden();
+    $this->actingAs($this->js, 'sanctum')->patchJson("/api/v1/workspace/teams/{$this->teamA->id}/members/{$this->us->id}", ['role' => 'member'])
+        ->assertForbidden();
 
     expect($this->teamA->leaders()->pluck('members.id')->all())->toBe([$this->us->id])
-        ->and(WorkspaceAccess::canRemoveFromTeam($this->js, $this->teamA, $this->us))->toBeFalse();
+        ->and(WorkspaceAccess::canRemoveFromTeam($this->js, $this->teamA, $this->us))->toBeFalse()
+        ->and(WorkspaceAccess::canRemoveManager($this->js, $this->teamA))->toBeFalse();
 });
 
 it('takes the new powers away from a deactivated program manager', function () {

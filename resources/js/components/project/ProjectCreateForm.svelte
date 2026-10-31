@@ -8,7 +8,7 @@
         id: number;
         name: string;
         email?: string | null;
-        title?: string | null;
+        designation?: string | null;
         organization_id?: number | null;
     }
 

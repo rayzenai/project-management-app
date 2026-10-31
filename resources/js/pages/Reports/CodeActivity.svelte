@@ -575,10 +575,10 @@
                                                         class="block truncate font-medium hover:text-accent"
                                                         >{person.name}</span
                                                     >
-                                                    {#if person.title}
+                                                    {#if person.designation}
                                                         <span
                                                             class="block truncate text-xs text-fg-muted"
-                                                            >{person.title}</span
+                                                            >{person.designation}</span
                                                         >
                                                     {/if}
                                                 </span>

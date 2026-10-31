@@ -31,7 +31,7 @@ beforeEach(function () {
     Member::factory()->linkedTo($this->adminUser)->create(['organization_id' => $this->org->id, 'is_office_admin' => true]);
 
     $this->js = User::factory()->create();
-    $this->jsMember = Member::factory()->linkedTo($this->js)->create(['organization_id' => $this->org->id, 'title' => 'Joint Secretary']);
+    $this->jsMember = Member::factory()->linkedTo($this->js)->designated('Joint Secretary')->create(['organization_id' => $this->org->id]);
 
     $this->program = Program::factory()->create([
         'organization_id' => $this->org->id,
@@ -41,8 +41,8 @@ beforeEach(function () {
 
     $this->projectA = Project::factory()->create(['organization_id' => $this->org->id, 'program_id' => $this->program->id, 'title' => 'Tax Portal']);
     $this->teamA = $this->projectA->ensureTeam();
-    $this->underSecretary = Member::factory()->create(['organization_id' => $this->org->id, 'title' => 'Under Secretary']);
-    $this->officer = Member::factory()->create(['organization_id' => $this->org->id, 'title' => 'Officer']);
+    $this->underSecretary = Member::factory()->designated('Under Secretary')->create(['organization_id' => $this->org->id]);
+    $this->officer = Member::factory()->designated('Officer')->create(['organization_id' => $this->org->id]);
     $this->teamA->members()->attach($this->underSecretary->id, ['role' => 'leader']);
     $this->teamA->members()->attach($this->officer->id, ['role' => 'member']);
 

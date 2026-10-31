@@ -8,7 +8,9 @@
      * A project's team: its manager first, then everyone who can be given
      * its tasks. Its manager (or the office admin) adds and removes people;
      * only the office admin or its program's manager makes someone the
-     * manager (`team.can_choose_manager`, per person `can_make_manager`).
+     * manager (`team.can_choose_manager`, per person `can_make_manager`),
+     * and only the office admin takes the manager off, leaving none
+     * (`team.can_remove_manager`).
      */
     let {
         team,
@@ -32,7 +34,32 @@
         );
     }
 
+    function makeMember(member: ProjectTeamMember) {
+        if (
+            !confirm(
+                `Make ${member.name} a member? ${projectTitle} will have no manager until you choose one.`,
+            )
+        ) {
+            return;
+        }
+
+        router.patch(
+            `/workspace/teams/${team.id}/members/${member.id}`,
+            { role: 'member' },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
+
     function remove(member: ProjectTeamMember) {
+        if (
+            member.is_manager &&
+            !confirm(
+                `Take ${member.name} off the team? ${projectTitle} will have no manager until you choose one.`,
+            )
+        ) {
+            return;
+        }
+
         router.delete(`/workspace/teams/${team.id}/members/${member.id}`, {
             preserveScroll: true,
             preserveState: true,
@@ -41,7 +68,7 @@
 
     function detail(member: ProjectTeamMember): string {
         return [
-            member.title,
+            member.designation,
             team.is_cross_organization ? member.organization : null,
             member.is_active ? null : 'Deactivated',
         ]
@@ -91,6 +118,14 @@
                             </div>
                         {/if}
                     </div>
+                    {#if member.is_manager && team.can_remove_manager}
+                        <button
+                            type="button"
+                            class="btn-ghost shrink-0"
+                            onclick={() => makeMember(member)}
+                            >Make member</button
+                        >
+                    {/if}
                     {#if member.can_make_manager}
                         <button
                             type="button"

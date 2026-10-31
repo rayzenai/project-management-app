@@ -55,7 +55,6 @@ class MemberController extends Controller
                 'is_office_admin' => $request->validated('is_office_admin'),
                 'name' => $request->validated('name'),
                 'email' => $request->validated('email'),
-                'title' => $request->validated('title'),
                 ...$request->designation(),
                 ...$request->attendanceExemption(),
             ]);

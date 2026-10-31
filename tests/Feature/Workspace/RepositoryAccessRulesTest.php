@@ -323,7 +323,7 @@ it('lists exactly the people canGrantRepositoryAccessTo allows, for each role', 
         expect(grantRulesSorted(array_column($candidates, 'id')))->toBe(grantRulesSorted($allowed));
 
         foreach ($candidates as $candidate) {
-            expect($candidate)->toHaveKeys(['id', 'name', 'title'])->not->toHaveKey('email');
+            expect($candidate)->toHaveKeys(['id', 'name', 'designation'])->not->toHaveKey('email');
         }
     }
 

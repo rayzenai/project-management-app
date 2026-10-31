@@ -72,7 +72,7 @@ class ProgressReport
             return [
                 'id' => $member->id,
                 'name' => $member->name,
-                'title' => $member->title,
+                'designation' => $member->designation?->name,
                 'organization' => $member->organization?->name,
                 'role' => $roleOf($member),
                 'is_active' => (bool) $member->is_active,

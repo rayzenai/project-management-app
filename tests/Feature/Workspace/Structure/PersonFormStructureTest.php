@@ -65,7 +65,7 @@ it('clears them when sent empty and keeps them when left out', function () {
     $this->engineer->update(['designation_id' => $this->engineerTitle->id]);
 
     $this->actingAs($this->admin->user)
-        ->patch("/workspace/members/{$this->engineer->id}", ['title' => 'Backend'])
+        ->patch("/workspace/members/{$this->engineer->id}", ['name' => 'Anil K. Gurung'])
         ->assertSessionHasNoErrors();
 
     expect($this->engineer->fresh()->only(['designation_id', 'reports_to_id']))
@@ -120,14 +120,14 @@ it('drops the fields silently for someone who may not change the structure', fun
 
     $this->actingAs($this->boss)
         ->patch("/workspace/members/{$own->id}", [
-            'title' => 'Executive Director',
+            'name' => 'Executive Director',
             'designation_id' => $this->engineerTitle->id,
             'reports_to_id' => $this->ed->id,
         ])
         ->assertSessionHasNoErrors();
 
-    expect($own->fresh()->only(['title', 'designation_id', 'reports_to_id']))
-        ->toEqual(['title' => 'Executive Director', 'designation_id' => null, 'reports_to_id' => null]);
+    expect($own->fresh()->only(['name', 'designation_id', 'reports_to_id']))
+        ->toEqual(['name' => 'Executive Director', 'designation_id' => null, 'reports_to_id' => null]);
 });
 
 it('keeps a designation of the new organization given in the same move', function () {
@@ -167,7 +167,7 @@ it('lets a super-admin put their own member in an organization, with a designati
     expect($this->ed->fresh()->reports_to_id)->toBe($own->id);
 
     $this->actingAs($this->admin->user)
-        ->patch("/workspace/members/{$own->id}", ['title' => 'Someone else'])
+        ->patch("/workspace/members/{$own->id}", ['name' => 'Someone else'])
         ->assertForbidden();
 });
 

@@ -61,7 +61,7 @@ it('lets the office admin hand a project to a new manager, keeping the old one o
         ->and($team->members()->whereKey($old->id)->exists())->toBeTrue();
 });
 
-it('makes someone the manager through the team role too, and never leaves a project without one', function () {
+it('makes someone the manager through the team role too, and lets the office admin make them a member again', function () {
     $adminUser = User::factory()->create();
     $project = Project::factory()->create();
     Member::factory()->linkedTo($adminUser)->create(['organization_id' => $project->organization_id, 'is_office_admin' => true]);
@@ -72,9 +72,15 @@ it('makes someone the manager through the team role too, and never leaves a proj
     $this->actingAs($adminUser)->from("/workspace/projects/{$project->slug}");
 
     $this->patch("/workspace/teams/{$team->id}/members/{$new->id}", ['role' => 'leader'])->assertSessionHasNoErrors();
-    $this->patch("/workspace/teams/{$team->id}/members/{$new->id}", ['role' => 'member'])->assertSessionHasErrors('role');
 
     expect($team->leaders()->pluck('members.id')->all())->toBe([$new->id]);
+
+    $this->patch("/workspace/teams/{$team->id}/members/{$new->id}", ['role' => 'member'])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('workspace_flash.message', "{$new->name} no longer manages {$team->name}.");
+
+    expect($team->leaders()->count())->toBe(0)
+        ->and($team->members()->pluck('members.id')->sort()->values()->all())->toBe(collect([$old->id, $new->id])->sort()->values()->all());
 });
 
 it('lets a super-admin set is_public on update', function () {

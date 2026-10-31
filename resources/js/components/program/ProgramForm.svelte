@@ -1,6 +1,10 @@
 <script lang="ts">
     import { useForm } from '@inertiajs/svelte';
-    import type { Member, OrganizationOption, Program } from '../../lib/types';
+    import type {
+        OrganizationOption,
+        PersonRef,
+        Program,
+    } from '../../lib/types';
     import AssigneePicker from '../AssigneePicker.svelte';
 
     /**
@@ -17,7 +21,8 @@
     }: {
         program?: Program | null;
         /** Active people who may manage it (with `organization_id` when creating as a super-admin). */
-        managerCandidates: Member[];
+        /** With their organization where a super-admin chooses it first. */
+        managerCandidates: (PersonRef & { organization_id?: number })[];
         isSuperAdmin?: boolean;
         organizations?: OrganizationOption[];
         onsaved: () => void;

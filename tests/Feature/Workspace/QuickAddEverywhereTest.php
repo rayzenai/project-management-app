@@ -40,11 +40,11 @@ beforeEach(function () {
     Member::factory()->linkedTo($this->adminUser)->create(['organization_id' => $this->org->id, 'is_office_admin' => true]);
 
     $this->jsUser = User::factory()->create();
-    $this->js = Member::factory()->linkedTo($this->jsUser)->create(['organization_id' => $this->org->id, 'title' => 'Joint Secretary']);
+    $this->js = Member::factory()->linkedTo($this->jsUser)->designated('Joint Secretary')->create(['organization_id' => $this->org->id]);
     $this->program = Program::factory()->create(['organization_id' => $this->org->id, 'manager_id' => $this->js->id]);
 
     $this->pmUser = User::factory()->create();
-    $this->pm = Member::factory()->linkedTo($this->pmUser)->create(['organization_id' => $this->org->id, 'title' => 'Under Secretary']);
+    $this->pm = Member::factory()->linkedTo($this->pmUser)->designated('Under Secretary')->create(['organization_id' => $this->org->id]);
     $this->officerUser = User::factory()->create();
     $this->officer = Member::factory()->linkedTo($this->officerUser)->create(['organization_id' => $this->org->id]);
 
@@ -54,8 +54,8 @@ beforeEach(function () {
     $this->team->members()->attach($this->officer->id, ['role' => 'member']);
 
     $this->colleagueUser = User::factory()->create();
-    $this->colleague = Member::factory()->linkedTo($this->colleagueUser)->create([
-        'organization_id' => $this->org->id, 'name' => 'Sita Section Officer', 'title' => 'Section Officer',
+    $this->colleague = Member::factory()->linkedTo($this->colleagueUser)->designated('Section Officer')->create([
+        'organization_id' => $this->org->id, 'name' => 'Sita Section Officer',
     ]);
     $this->retired = Member::factory()->inactive()->create(['organization_id' => $this->org->id, 'name' => 'Retired Person']);
     $this->outsider = Member::factory()->withUser()->create(['organization_id' => $this->otherOrg->id, 'name' => 'Visiting Expert']);
@@ -310,7 +310,7 @@ it('shares who each viewer may add from the task form', function () {
             ->where('quickAddContext.organizationPeople', fn ($people): bool => in_array($this->colleague->id, $ids($people), true)
                 && ! in_array($this->retired->id, $ids($people), true)
                 && ! in_array($this->outsider->id, $ids($people), true)
-                && collect($people)->firstWhere('id', $this->colleague->id) == ['id' => $this->colleague->id, 'name' => 'Sita Section Officer', 'title' => 'Section Officer']));
+                && collect($people)->firstWhere('id', $this->colleague->id) == ['id' => $this->colleague->id, 'name' => 'Sita Section Officer', 'designation' => 'Section Officer']));
 
     $this->actingAs($this->officerUser)->get('/workspace/projects')
         ->assertInertia(fn (AssertableInertia $page) => $page

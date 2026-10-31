@@ -8,8 +8,9 @@ use App\Support\ServiceResult;
 
 /**
  * Sets a person's role on a project's team. Making someone the leader makes
- * them the project's manager; the manager cannot simply step down, because
- * a project always keeps one: someone else is made manager instead.
+ * them the project's manager; making the manager a member leaves the project
+ * with none until someone is chosen (who may is the request's check,
+ * WorkspaceAccess::canRemoveManager).
  */
 class UpdateTeamRoleService
 {
@@ -22,11 +23,9 @@ class UpdateTeamRoleService
         }
 
         if ($team->leaders()->whereKey($member->id)->exists()) {
-            return ServiceResult::failure(
-                'A project always has a manager. Make someone else its manager instead.',
-                422,
-                ['role' => 'A project always has a manager. Make someone else its manager instead.'],
-            );
+            $team->members()->updateExistingPivot($member->id, ['role' => 'member']);
+
+            return ServiceResult::success($member, $member->name.' no longer manages '.$team->name.'.');
         }
 
         return ServiceResult::success($member, $member->name.' is a member of '.$team->name.'.');

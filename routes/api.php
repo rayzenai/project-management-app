@@ -14,7 +14,9 @@ use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DesignationController;
 use App\Http\Controllers\Api\HomeController;
+use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\MemberController;
+use App\Http\Controllers\Api\MemberDesignationController;
 use App\Http\Controllers\Api\MyWorkspaceController;
 use App\Http\Controllers\Api\NoteController;
 use App\Http\Controllers\Api\NotificationController;
@@ -131,12 +133,16 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
             Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
+            // What needs looking at in an organization.
+            Route::get('/organizations/{organization}/maintenance', [MaintenanceController::class, 'show'])->name('maintenance');
+
             // Structure: designations, reporting lines, the organogram.
             Route::get('/organizations/{organization}/organogram', [OrganogramController::class, 'show'])->name('organogram');
             Route::post('/organizations/{organization}/designations', [DesignationController::class, 'store'])->name('designations.store');
             Route::patch('/designations/{designation}', [DesignationController::class, 'update'])->name('designations.update');
             Route::delete('/designations/{designation}', [DesignationController::class, 'destroy'])->name('designations.destroy');
             Route::put('/members/{member}/reports-to', [ReportsToController::class, 'update'])->name('members.reports-to');
+            Route::put('/members/{member}/designation', [MemberDesignationController::class, 'update'])->name('members.designation');
             // (structure routes end)
 
             // Attendance: the clock, the register, leave and kaaj, settings.

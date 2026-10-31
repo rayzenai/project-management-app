@@ -20,6 +20,7 @@
         Search,
         Settings,
         SlidersHorizontal,
+        Stethoscope,
         StickyNote,
         Table2,
         UserRound,
@@ -165,6 +166,7 @@
             leave: false,
             team_work: false,
             my_work_member_id: null,
+            maintenance: false,
         },
     );
 
@@ -242,6 +244,15 @@
                       label: 'Attendance settings',
                       href: '/workspace/attendance/settings',
                       icon: SlidersHorizontal,
+                  },
+              ]
+            : []),
+        ...(office.maintenance
+            ? [
+                  {
+                      label: 'Maintenance',
+                      href: '/workspace/maintenance',
+                      icon: Stethoscope,
                   },
               ]
             : []),

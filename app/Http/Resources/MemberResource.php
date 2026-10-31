@@ -38,7 +38,6 @@ class MemberResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
-            'title' => $this->title,
             'user_id' => $this->user_id,
             'is_active' => (bool) $this->is_active,
             'organization_id' => $this->organization_id,

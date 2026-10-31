@@ -73,6 +73,7 @@ final class Assignees
             ->where('organization_id', $project->organization_id)
             ->whereDoesntHave('teams', fn ($q) => $q->where('teams.id', $team->getKey()))
             ->orderBy('name')
-            ->get(['id', 'name', 'title']);
+            ->with('designation:id,name')
+            ->get(['id', 'name', 'designation_id']);
     }
 }

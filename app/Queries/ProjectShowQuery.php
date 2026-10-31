@@ -33,7 +33,7 @@ class ProjectShowQuery
 
         $project->load([
             'program:id,slug,name',
-            'teams' => fn ($q) => $q->withCount('members')->with(['leaders', 'members' => fn ($m) => $m->with('organization:id,name')->orderBy('name')]),
+            'teams' => fn ($q) => $q->withCount('members')->with(['leaders', 'members' => fn ($m) => $m->with(['organization:id,name', 'designation:id,name'])->orderBy('name')]),
             'tasks' => fn ($q) => $q->with(['assignments.member', 'dependencies', 'dependents'])->withCount(['notes', 'contacts'])
                 // The board's pull-request mark, only where code shows at all,
                 // and only for pull requests the viewer may see.
@@ -90,9 +90,10 @@ class ProjectShowQuery
         $user = request()->user();
         $canChooseManager = WorkspaceAccess::canAppointProjectManager($user, $team);
         $canManage = WorkspaceAccess::canManageRosterOf($user, $team);
+        $canRemoveManager = WorkspaceAccess::canRemoveManager($user, $team);
 
         $members = $team->members
-            ->map(function (Member $member) use ($team, $user, $canChooseManager, $canManage): array {
+            ->map(function (Member $member) use ($team, $user, $canChooseManager, $canManage, $canRemoveManager): array {
                 /** @var object{role: string} $pivot */
                 $pivot = $member->getRelation('pivot');
                 $isManager = $pivot->role === 'leader';
@@ -101,12 +102,12 @@ class ProjectShowQuery
                     'id' => $member->id,
                     'name' => $member->name,
                     'email' => $member->email,
-                    'title' => $member->title,
+                    'designation' => $member->designation?->name,
                     'organization' => $member->organization?->name,
                     'is_active' => (bool) $member->is_active,
                     'is_manager' => $isManager,
-                    // The manager leaves only once someone else manages.
-                    'can_remove' => ! $isManager && ($canChooseManager || $canManage),
+                    // Only whoever may take the manager off removes them.
+                    'can_remove' => $isManager ? $canRemoveManager : ($canChooseManager || $canManage),
                     // "Make manager": a program manager's choice stays in the team's organization.
                     'can_make_manager' => $canChooseManager && ! $isManager && $member->is_active
                         && WorkspaceAccess::canAppointAsProjectManager($user, $team, $member),
@@ -122,6 +123,7 @@ class ProjectShowQuery
             'members' => $members,
             'can_manage' => $canManage,
             'can_choose_manager' => $canChooseManager,
+            'can_remove_manager' => $canRemoveManager,
         ];
     }
 }

@@ -41,7 +41,6 @@ class StoreMemberRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:8'],
-            'title' => ['nullable', 'string', 'max:255'],
             'organization_id' => [
                 Rule::requiredIf(fn (): bool => WorkspaceAccess::isSuperAdmin($this->user())),
                 'nullable', 'integer', Rule::exists('organizations', 'id'),

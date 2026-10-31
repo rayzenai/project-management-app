@@ -128,7 +128,7 @@
         <div
             class={`grid min-w-0 ${canManage ? 'lg:grid-cols-[minmax(0,1fr)_300px]' : ''}`}
         >
-            <OrganogramOutline {tree} {people} {canManage} />
+            <OrganogramOutline {tree} {people} {designations} {canManage} />
 
             {#if canManage}
                 <DesignationsPanel

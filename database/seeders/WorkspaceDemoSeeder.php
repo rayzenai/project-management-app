@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Designation;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Project;
@@ -142,13 +143,13 @@ class WorkspaceDemoSeeder extends Seeder
      */
     private function seedPeople(): void
     {
-        /** @var list<array{handle: string, name: string, email: string, title: string, login: bool, active?: bool, office_admin?: bool, organization?: string, categories?: list<string>, coordinator_role?: string}> $people */
+        /** @var list<array{handle: string, name: string, email: string, designation: string, login: bool, active?: bool, office_admin?: bool, organization?: string, categories?: list<string>, coordinator_role?: string}> $people */
         $people = [
             [
                 'handle' => 'admin',
                 'name' => 'Workspace Admin',
                 'email' => (string) (config('project-management.super_admins')[0] ?? 'pmopm@example.com'),
-                'title' => 'Chief Secretary',
+                'designation' => 'Chief Secretary',
                 'login' => true,
             ],
             [
@@ -158,14 +159,14 @@ class WorkspaceDemoSeeder extends Seeder
                 'handle' => 'namrata',
                 'name' => 'Namrata Lohani',
                 'email' => 'namru.mail@gmail.com',
-                'title' => 'Workspace Owner',
+                'designation' => 'Workspace Owner',
                 'login' => true,
             ],
             [
                 'handle' => 'asha',
                 'name' => 'Asha Gurung',
                 'email' => 'asha@pmopm.test',
-                'title' => 'Delivery Unit Chief',
+                'designation' => 'Delivery Unit Chief',
                 'login' => true,
                 'office_admin' => true,
                 'categories' => ['digital_governance', 'service_delivery'],
@@ -175,7 +176,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'handle' => 'bikash',
                 'name' => 'Bikash Thapa',
                 'email' => 'bikash@pmopm.test',
-                'title' => 'Reform Desk Lead',
+                'designation' => 'Reform Desk Lead',
                 'login' => true,
                 'categories' => ['admin_reform', 'anti_corruption'],
                 'coordinator_role' => 'Reform coordinator',
@@ -184,28 +185,28 @@ class WorkspaceDemoSeeder extends Seeder
                 'handle' => 'chhaya',
                 'name' => 'Chhaya Rai',
                 'email' => 'chhaya@pmopm.test',
-                'title' => 'Programme Officer',
+                'designation' => 'Programme Officer',
                 'login' => true,
             ],
             [
                 'handle' => 'deepak',
                 'name' => 'Deepak Shrestha',
                 'email' => 'deepak@pmopm.test',
-                'title' => 'Field Operations Lead',
+                'designation' => 'Field Operations Lead',
                 'login' => true,
             ],
             [
                 'handle' => 'eliza',
                 'name' => 'Eliza Magar',
                 'email' => 'eliza@pmopm.test',
-                'title' => 'Data Analyst',
+                'designation' => 'Data Analyst',
                 'login' => true,
             ],
             [
                 'handle' => 'nirmala',
                 'name' => 'Nirmala Bhandari',
                 'email' => 'nirmala@pmopm.test',
-                'title' => 'District Liaison',
+                'designation' => 'District Liaison',
                 'login' => false,
                 'organization' => 'partner',
             ],
@@ -213,7 +214,7 @@ class WorkspaceDemoSeeder extends Seeder
                 'handle' => 'sujan',
                 'name' => 'Sujan Karki',
                 'email' => 'sujan@pmopm.test',
-                'title' => 'Records Officer (on leave)',
+                'designation' => 'Records Officer (on leave)',
                 'login' => false,
                 'active' => false,
             ],
@@ -242,14 +243,18 @@ class WorkspaceDemoSeeder extends Seeder
                 $this->users[$spec['handle']] = $user;
             }
 
+            $organizationId = $this->organizationIdFor($spec);
+
             $this->members[$spec['handle']] = Member::query()->updateOrCreate(
                 ['email' => $spec['email']],
                 [
                     'user_id' => $user?->getKey(),
-                    'organization_id' => $this->organizationIdFor($spec),
+                    'organization_id' => $organizationId,
                     'is_office_admin' => $spec['office_admin'] ?? false,
                     'name' => $spec['name'],
-                    'title' => $spec['title'],
+                    'designation_id' => $organizationId === null ? null : Designation::query()->firstOrCreate(
+                        ['organization_id' => $organizationId, 'name' => $spec['designation']],
+                    )->getKey(),
                     'is_active' => $spec['active'] ?? true,
                     'coordinator_categories' => $spec['categories'] ?? null,
                     'coordinator_role' => $spec['coordinator_role'] ?? null,

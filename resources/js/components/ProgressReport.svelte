@@ -194,7 +194,7 @@
                                             class="block truncate text-xs text-fg-muted"
                                         >
                                             {[
-                                                member.title,
+                                                member.designation,
                                                 showOrganization
                                                     ? member.organization
                                                     : null,

@@ -30,7 +30,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $is_office_admin
  * @property string $name
  * @property string|null $email
- * @property string|null $title
  * @property array<int, string>|null $coordinator_categories
  * @property string|null $coordinator_role
  * @property bool $is_active
@@ -54,7 +53,6 @@ class Member extends Model
         'is_office_admin',
         'name',
         'email',
-        'title',
         'coordinator_categories',
         'coordinator_role',
         'is_active',

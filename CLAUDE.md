@@ -99,8 +99,8 @@ thin method to **both** controllers and a route in **both** route files.
 multi-tenant: an **organization** (an office or ministry) is the tenant
 boundary. Every project has exactly one team of its own (made with it,
 never on its own), and that team's one leader is the project's **manager**.
-Office roles (senior dev, QA, ...) are not modeled: a person's free-text
-`title` carries them. Five tiers:
+Office roles (senior dev, QA, ...) give no powers: they are the
+organization's designations (see Structure below). Five tiers:
 
 1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
    Belongs to no organization unless given one (their own member can join
@@ -143,7 +143,7 @@ chosen: `canJoinTeam`, and for a program manager the team's organization
 only),
 `canManageRosterOf` (project twin `canManageRosterOfProject`, answered
 from the loaded project without a query; keep them in step),
-`canRemoveFromTeam`, `canJoinTeam`,
+`canRemoveFromTeam` (the manager only by `canRemoveManager`), `canJoinTeam`,
 `canAssignOutsideTeam` (give a task to someone not on the team, who joins
 it first: whoever passes `canManageRosterOf`, for an active person of the
 project's own organization who passes `canJoinTeam`; list twin
@@ -183,8 +183,10 @@ Privilege-escalation protections — do not regress:
   organization while on its teams.
 - `project_team` is unique on both columns and `member_team` holds one
   `leader` per team: never attach a second team to a project or a second
-  leader to a team; appoint through `AppointProjectManagerService`. The
-  manager cannot be removed or demoted, only replaced.
+  leader to a team; appoint through `AppointProjectManagerService`. A
+  project may have no manager: only whoever administers its organization
+  takes one off (`canRemoveManager`: off the team, back to a member, or
+  unticked on the person form); a program manager or a manager never does.
 - `canManageMember` blocks a super-admin's linked login and other organizational
   admins; managers manage no people at all (so a cross-organization manager
   can never reset an outsider's password).
@@ -197,8 +199,10 @@ Privilege-escalation protections — do not regress:
   the user `administers` and fit the person after any move
   (`Concerns\ChecksMemberRoles`); they are applied only by
   `UpdateMemberRolesService`, which appoints through
-  `AppointProjectManagerService`, never takes a manager role away, never
-  takes anyone off a team they manage, and never `sync`s. A refused role
+  `AppointProjectManagerService`, makes a project they stop managing
+  manager-less (they stay on its team; taking a project away needs
+  `canRemoveManager`), never takes a program from its manager, never takes
+  anyone off a team they still manage, and never `sync`s. A refused role
   undoes the whole save (the member controllers throw inside their
   transaction). `manager_id`, `is_cross_organization` and `is_public` on a project are
   silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
@@ -241,7 +245,7 @@ Privilege-escalation protections — do not regress:
   `manager_id`, the team role route), only people of the project's
   organization even on a cross-organization team
   (`canAppointAsProjectManager`), and never removes a manager
-  (`canRemoveFromTeam` keeps `canEditTeam`).
+  (`canRemoveManager` is `canEditTeam`).
 
 Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 
@@ -331,7 +335,7 @@ the organizational admin switch and the program and project manager pickers.
 - **Web** (`routes/web.php`, prefix `workspace`, names `workspace.*`):
   `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`
   (`projects` with `member_ids`, `organization_id` and `can_add_people` =
-  `canManageRosterOfProject`, no query per project; `organizationPeople` `{id, name, title}`, the active
+  `canManageRosterOfProject`, no query per project; `organizationPeople` (`PersonRef`s), the active
   people of the viewer's organization for whoever runs a team in it or may
   start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`),
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
@@ -593,11 +597,15 @@ Shared building blocks (reach for these before writing anything new):
   `OrganizationChoicesQuery` (which organization a page opens on and which
   a super-admin may switch between; `withAttendance:` for attendance
   pages), `ReportOptionsQuery` (a list report's `options`: organizations
-  and teams), `PersonRef` (how every report names a person).
+  and teams), `PersonRef` (how every report and person picker names a
+  person: `{id, name, designation}`).
 - `app/Http/Requests/Concerns/`: `ReadsReportScope` (organization and
   `under` for a list report; the report supplies `maySeeOrganization`),
   `ReadsDay` (`?date=`), `ReadsDayRange` (`?from=`/`?to=`, overridable
-  `defaultFrom` and `maxRangeDays`; the code activity report uses it too).
+  `defaultFrom` and `maxRangeDays`; the code activity report uses it too),
+  `OpensOrganization` (a page about one organization: the API's path, else
+  the default, a super-admin's `?organization=` pick; the organogram and
+  maintenance).
 - Model scopes: `Member::scopeAttending` (who attendance expects),
   `AttendanceSetting::scopeEnabled`, `Organization::scopeWithAttendanceOn`.
 - Frontend: `resources/js/lib/dates.ts` (days and clock times read as the
@@ -615,7 +623,10 @@ Shared building blocks (reach for these before writing anything new):
   set only through `SetReportsToService` (refuses another organization, an
   inactive boss and loops: `OrgChart::wouldLoop`) by whoever passes
   `canManageStructure` (= `administers`); the person form's two fields are
-  silently dropped for anyone else. `MoveReportsUpService` (from
+  silently dropped for anyone else. The organogram's row menu sets a
+  designation through `SetDesignationService` (one of the organization's
+  own; the same callers as reports-to). People have no free-text title:
+  a designation is what names their post everywhere. `MoveReportsUpService` (from
   `MemberObserver`) moves someone's reports up to their own higher
   authority when they are deleted or change organization; deactivation
   keeps the lines. `App\Support\OrgChart` walks the lines
@@ -671,6 +682,15 @@ Shared building blocks (reach for these before writing anything new):
   listed by name, never ranked by a figure.
 - **Sidebar**: `OfficeLinks` (shared as `office`, on the API's `/user`)
   says which office pages the user may open; the pages check again.
+- **Maintenance**: `MaintenanceQuery` (`app/Queries/Maintenance/`, page
+  `Maintenance/Index`, `canViewMaintenance` = `administers`) lists what
+  needs looking at in an organization: active projects with no active
+  manager or people, open tasks nobody holds or only deactivated people
+  hold, projects quiet for `QUIET_DAYS`, programs with no active manager,
+  active people on no project, with no designation, reporting to someone
+  deactivated, outside the organogram or with no login, and attendance on
+  with no office network or place. A new check is one more list there and
+  one more entry in the page's `checks`.
 
 ## Semantic theming layer (web UI)
 

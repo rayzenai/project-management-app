@@ -35,16 +35,16 @@ beforeEach(function () {
         'webhook_secret' => 'hook-secret-never-shown',
     ]);
 
-    [$this->programManagerUser, $this->programManager] = grantApiPerson($this->organization, 'Pradeep Program', gitUsername: null, title: 'Engineering head');
+    [$this->programManagerUser, $this->programManager] = grantApiPerson($this->organization, 'Pradeep Program', gitUsername: null, designation: 'Engineering head');
     $this->program = Program::factory()->create(['organization_id' => $this->organization->id, 'manager_id' => $this->programManager->id, 'name' => 'Revenue']);
     $this->project = Project::factory()->create(['organization_id' => $this->organization->id, 'program_id' => $this->program->id, 'title' => 'Tax Portal', 'key' => 'TP']);
     $this->team = $this->project->ensureTeam();
 
-    [$this->managerUser, $this->manager] = grantApiPerson($this->organization, 'Mira Manager', gitUsername: 'mira', title: 'PM');
+    [$this->managerUser, $this->manager] = grantApiPerson($this->organization, 'Mira Manager', gitUsername: 'mira', designation: 'PM');
     [$this->teamMemberUser, $this->teamMember] = grantApiPerson($this->organization, 'Tara Teammember');
-    [, $this->asha] = grantApiPerson($this->organization, 'Asha Teammate', gitUsername: 'asha', title: 'Senior developer');
+    [, $this->asha] = grantApiPerson($this->organization, 'Asha Teammate', gitUsername: 'asha', designation: 'Senior developer');
     [$this->adminUser] = grantApiPerson($this->organization, 'Kamala Admin', admin: true);
-    $this->bina = Member::factory()->create(['organization_id' => $this->organization->id, 'name' => 'Bina Colleague', 'email' => 'bina@sdoc.example', 'title' => 'Analyst']);
+    $this->bina = Member::factory()->designated('Analyst')->create(['organization_id' => $this->organization->id, 'name' => 'Bina Colleague', 'email' => 'bina@sdoc.example']);
 
     $this->team->members()->attach($this->manager->id, ['role' => 'leader']);
     $this->team->members()->attach($this->teamMember->id, ['role' => 'member']);
@@ -56,10 +56,12 @@ beforeEach(function () {
 });
 
 /** @return array{0: User, 1: Member} */
-function grantApiPerson(Organization $organization, string $name, ?string $gitUsername = null, ?string $title = null, bool $admin = false): array
+function grantApiPerson(Organization $organization, string $name, ?string $gitUsername = null, ?string $designation = null, bool $admin = false): array
 {
     $user = User::factory()->create(['name' => $name, 'git_username' => $gitUsername]);
-    $member = Member::factory()->linkedTo($user)->create(['organization_id' => $organization->id, 'is_office_admin' => $admin, 'title' => $title]);
+    $member = Member::factory()->linkedTo($user)
+        ->when($designation !== null, fn ($factory) => $factory->designated((string) $designation))
+        ->create(['organization_id' => $organization->id, 'is_office_admin' => $admin]);
 
     return [$user, $member];
 }
@@ -138,7 +140,7 @@ it('lets an organizational admin give someone of the organization who is not on 
         'permission' => 'write',
         'waiting' => true,
         'effective' => true,
-        'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => 'Analyst'],
+        'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'designation' => 'Analyst'],
         'granted_at' => $grant->created_at->toIso8601String(),
     ])
         ->and($grant->granted_by)->toBe($this->adminUser->id);
@@ -191,12 +193,12 @@ it('lists the maintainers with their role and the grants by name, each saying wh
     $response = $this->getJson($this->base)->assertOk();
 
     expect($response->json('data.maintainers'))->toEqual([
-        ['id' => $this->manager->id, 'name' => 'Mira Manager', 'title' => 'PM', 'role' => 'manager', 'waiting' => false],
-        ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'title' => 'Engineering head', 'role' => 'program manager', 'waiting' => true],
+        ['id' => $this->manager->id, 'name' => 'Mira Manager', 'designation' => 'PM', 'role' => 'manager', 'waiting' => false],
+        ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'designation' => 'Engineering head', 'role' => 'program manager', 'waiting' => true],
     ])
         ->and($response->json('data.grants'))->toEqual([
-            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'effective' => true, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'title' => 'Senior developer'], 'granted_at' => $asha->created_at->toIso8601String()],
-            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'effective' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => 'Analyst'], 'granted_at' => $bina->created_at->toIso8601String()],
+            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'effective' => true, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'designation' => 'Senior developer'], 'granted_at' => $asha->created_at->toIso8601String()],
+            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'effective' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'designation' => 'Analyst'], 'granted_at' => $bina->created_at->toIso8601String()],
         ]);
 });
 
@@ -351,7 +353,7 @@ it('offers a project manager exactly the people the rule lets them give access t
 
     expect($ids)->toBe(grantApiRuleSet($this->managerUser, $this->api))
         ->and($ids)->toBe([$this->teamMember->id])
-        ->and(grantApiKeys($data))->toBe(['id', 'name', 'title']);
+        ->and(grantApiKeys($data))->toBe(['designation', 'id', 'name']);
 });
 
 it('offers an organizational admin exactly the people the rule lets them give access to, without emails', function () {
@@ -365,5 +367,5 @@ it('offers an organizational admin exactly the people the rule lets them give ac
 
     expect($ids)->toBe(grantApiRuleSet($this->adminUser, $this->api))
         ->and($ids)->toContain($this->bina->id)
-        ->and(grantApiKeys($data))->toBe(['id', 'name', 'title']);
+        ->and(grantApiKeys($data))->toBe(['designation', 'id', 'name']);
 });

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\GitRepositoryGrant;
+use App\Queries\Structure\PersonRef;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -42,11 +43,7 @@ class GitRepositoryGrantResource extends JsonResource
             'permission' => $this->permission,
             'waiting' => blank($this->member->user?->git_username),
             'effective' => $this->effective ?? $this->resource->isEffective(),
-            'member' => [
-                'id' => $this->member->id,
-                'name' => $this->member->name,
-                'title' => $this->member->title,
-            ],
+            'member' => PersonRef::of($this->member->loadMissing('designation:id,name')),
             'granted_at' => $this->created_at?->toIso8601String(),
         ];
     }

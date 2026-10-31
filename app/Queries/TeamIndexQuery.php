@@ -38,7 +38,7 @@ class TeamIndexQuery
             ->visibleTo($user)
             ->when($organizationFilter, fn ($q) => $q->where('organization_id', $organizationFilter))
             ->withCount('members')
-            ->with(['members' => fn ($q) => $q->with('organization:id,name')->orderBy('name'), 'organization:id,name', 'projects:id,slug,title,program_id,archived_at', 'projects.program:id,name'])
+            ->with(['members' => fn ($q) => $q->with(['organization:id,name', 'designation:id,name'])->orderBy('name'), 'organization:id,name', 'projects:id,slug,title,program_id,archived_at', 'projects.program:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -54,6 +54,7 @@ class TeamIndexQuery
         foreach ($teams as $i => $team) {
             $canEdit = WorkspaceAccess::canEditTeam($user, $team);
             $canManageRoster = WorkspaceAccess::canManageRosterOf($user, $team);
+            $canRemoveManager = WorkspaceAccess::canRemoveManager($user, $team);
             $project = $team->project();
             $teamRows[$i]['project'] = $project === null ? null : [
                 'slug' => $project->slug,
@@ -62,7 +63,7 @@ class TeamIndexQuery
                 'is_archived' => $project->archived_at !== null,
             ];
 
-            $teamRows[$i]['roster'] = $team->members->map(function (Member $member) use ($canEdit, $canManageRoster): array {
+            $teamRows[$i]['roster'] = $team->members->map(function (Member $member) use ($canEdit, $canManageRoster, $canRemoveManager): array {
                 /** @var object{role: string} $pivot */
                 $pivot = $member->getRelation('pivot');
                 $isLeader = $pivot->role === 'leader';
@@ -71,12 +72,12 @@ class TeamIndexQuery
                     'id' => $member->id,
                     'name' => $member->name,
                     'email' => $member->email,
-                    'title' => $member->title,
+                    'designation' => $member->designation?->name,
                     'organization' => $member->organization?->name,
                     'is_active' => (bool) $member->is_active,
                     'role' => $isLeader ? 'leader' : 'member',
-                    // The manager leaves only once someone else manages.
-                    'can_remove' => ! $isLeader && ($canEdit || $canManageRoster),
+                    // Only whoever may take the manager off removes them.
+                    'can_remove' => $isLeader ? $canRemoveManager : ($canEdit || $canManageRoster),
                 ];
             })->values()->all();
         }

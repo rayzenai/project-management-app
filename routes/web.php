@@ -15,7 +15,9 @@ use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\DesignationController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\HomeController;
+use App\Http\Controllers\Workspace\MaintenanceController;
 use App\Http\Controllers\Workspace\MemberController;
+use App\Http\Controllers\Workspace\MemberDesignationController;
 use App\Http\Controllers\Workspace\MyWorkspaceController;
 use App\Http\Controllers\Workspace\NoteController;
 use App\Http\Controllers\Workspace\NotificationController;
@@ -147,12 +149,16 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
         Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
 
+        // What needs looking at in an organization.
+        Route::get('/maintenance', [MaintenanceController::class, 'index'])->name('maintenance');
+
         // Structure: designations, reporting lines, the organogram.
         Route::get('/organogram', [OrganogramController::class, 'index'])->name('organogram');
         Route::post('/organizations/{organization}/designations', [DesignationController::class, 'store'])->name('designations.store');
         Route::patch('/designations/{designation}', [DesignationController::class, 'update'])->name('designations.update');
         Route::delete('/designations/{designation}', [DesignationController::class, 'destroy'])->name('designations.destroy');
         Route::put('/members/{member}/reports-to', [ReportsToController::class, 'update'])->name('members.reports-to');
+        Route::put('/members/{member}/designation', [MemberDesignationController::class, 'update'])->name('members.designation');
         // (structure routes end)
 
         // Attendance: the clock, the register, leave and kaaj, settings.

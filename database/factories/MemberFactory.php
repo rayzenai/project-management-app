@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Designation;
 use App\Models\Member;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -19,7 +20,6 @@ class MemberFactory extends Factory
             'user_id' => null,
             'name' => $this->faker->name(),
             'email' => $this->faker->unique()->safeEmail(),
-            'title' => $this->faker->optional()->jobTitle(),
             'is_active' => true,
             'organization_id' => fn (): int => OrganizationFactory::defaultId(),
         ];
@@ -50,5 +50,17 @@ class MemberFactory extends Factory
     public function inactive(): self
     {
         return $this->state(['is_active' => false]);
+    }
+
+    /**
+     * Holds the designation of this name in their organization, made when
+     * the organization has none by that name.
+     */
+    public function designated(string $name): self
+    {
+        return $this->afterCreating(function (Member $member) use ($name): void {
+            $designation = Designation::query()->firstOrCreate(['organization_id' => $member->organization_id, 'name' => $name]);
+            $member->update(['designation_id' => $designation->getKey()]);
+        });
     }
 }

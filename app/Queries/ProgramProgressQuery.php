@@ -7,6 +7,7 @@ use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\Task;
+use App\Queries\Structure\PersonRef;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -55,7 +56,7 @@ class ProgramProgressQuery
                 }
                 $q->orWhereIn('id', $assignedIds);
             })
-            ->with('organization:id,name')
+            ->with(['organization:id,name', 'designation:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -103,7 +104,7 @@ class ProgramProgressQuery
      * to (Edit) and who may manage a new project in it (New project). Only for
      * whoever may do either; empty otherwise.
      *
-     * @return list<array{id: int, name: string, title: string|null}>
+     * @return list<array{id: int, name: string, designation: string|null}>
      */
     public function managerCandidates(Program $program, ?Authenticatable $user): array
     {
@@ -116,8 +117,9 @@ class ProgramProgressQuery
             ->active()
             ->where('organization_id', $program->organization_id)
             ->orderBy('name')
-            ->get(['id', 'name', 'title'])
-            ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'title' => $m->title])
+            ->with('designation:id,name')
+            ->get(['id', 'name', 'designation_id'])
+            ->map(PersonRef::of(...))
             ->all());
     }
 }

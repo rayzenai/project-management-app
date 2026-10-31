@@ -249,7 +249,7 @@ it('makes no call when the update leaves the member active', function () {
     [, $member] = forgePerson($sdoc);
     $admin = forgeAdmin($sdoc);
 
-    $this->actingAs($admin)->patch("/workspace/members/{$member->id}", ['title' => 'Away'])
+    $this->actingAs($admin)->patch("/workspace/members/{$member->id}", ['name' => 'Away'])
         ->assertSessionHas('workspace_flash.message', 'Member updated.');
     $this->actingAs($admin)->patch("/workspace/members/{$member->id}", ['is_active' => true])
         ->assertSessionHas('workspace_flash.message', 'Member updated.');

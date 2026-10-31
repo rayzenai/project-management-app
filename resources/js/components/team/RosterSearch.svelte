@@ -15,7 +15,7 @@
         id: number;
         name: string;
         email: string | null;
-        title: string | null;
+        designation: string | null;
         organization: string | null;
     }
 
@@ -107,7 +107,7 @@
                         </div>
                         <div class="truncate text-xs text-fg-muted">
                             {[
-                                candidate.title,
+                                candidate.designation,
                                 candidate.email,
                                 team.is_cross_organization
                                     ? candidate.organization

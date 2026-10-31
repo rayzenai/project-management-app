@@ -29,7 +29,7 @@ beforeEach(function () {
     Member::factory()->linkedTo($this->adminUser)->create(['organization_id' => $this->org->id, 'is_office_admin' => true]);
 
     $this->jsUser = User::factory()->create();
-    $this->js = Member::factory()->linkedTo($this->jsUser)->create(['organization_id' => $this->org->id, 'title' => 'Joint Secretary']);
+    $this->js = Member::factory()->linkedTo($this->jsUser)->designated('Joint Secretary')->create(['organization_id' => $this->org->id]);
     $this->officer = Member::factory()->create(['organization_id' => $this->org->id]);
 });
 

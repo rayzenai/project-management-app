@@ -215,7 +215,7 @@ it('finds candidates only in the team\'s organization for an ordinary team', fun
             'id' => $colleague->id,
             'name' => 'Sita Colleague',
             'email' => $colleague->email,
-            'title' => $colleague->title,
+            'designation' => null,
             'organization' => 'Ministry A',
         ]]);
 });
@@ -245,7 +245,7 @@ it('refuses the candidate search to anyone who cannot manage the roster', functi
     $this->actingAs(tenancyOfficeAdmin($this->orgB))->getJson("/workspace/teams/{$team->id}/candidates?q=si")->assertForbidden();
 });
 
-it('lets a manager take a member off the team, but nobody takes the manager off', function () {
+it('lets a manager take a member off the team, and only the office admin takes the manager off', function () {
     $manager = tenancyPerson($this->orgA);
     $team = tenancyTeam($this->orgA);
     $team->members()->attach(tenancyMemberOf($manager)->id, ['role' => 'leader']);
@@ -255,12 +255,15 @@ it('lets a manager take a member off the team, but nobody takes the manager off'
     $this->actingAs($manager);
     $this->delete("/workspace/teams/{$team->id}/members/{$plain->id}")->assertRedirect();
     $this->delete("/workspace/teams/{$team->id}/members/".tenancyMemberOf($manager)->id)->assertForbidden();
+    $this->patch("/workspace/teams/{$team->id}/members/".tenancyMemberOf($manager)->id, ['role' => 'member'])->assertForbidden();
+
+    expect($team->members()->pluck('members.id')->all())->toBe([tenancyMemberOf($manager)->id]);
 
     $this->actingAs(tenancyOfficeAdmin($this->orgA))
         ->delete("/workspace/teams/{$team->id}/members/".tenancyMemberOf($manager)->id)
-        ->assertSessionHasErrors('member');
+        ->assertSessionHasNoErrors();
 
-    expect($team->members()->pluck('members.id')->all())->toBe([tenancyMemberOf($manager)->id]);
+    expect($team->members()->count())->toBe(0);
 });
 
 it('lets an office admin choose leaders only in their own organization', function () {
@@ -527,10 +530,11 @@ it('shows a project\'s own team on its page, manager first', function () {
     $this->actingAs($admin)->get("/workspace/projects/{$project->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('team.members', fn ($members) => collect($members)->map(fn ($m) => [$m['name'], $m['is_manager'], $m['can_remove']])->all() === [
-                ['Zoya Manager', true, false],
+                ['Zoya Manager', true, true],
                 ['Aarav Member', false, true],
             ])
             ->where('team.can_choose_manager', true)
+            ->where('team.can_remove_manager', true)
             ->where('project.manager.name', 'Zoya Manager'));
 });
 

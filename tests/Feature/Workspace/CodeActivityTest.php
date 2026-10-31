@@ -57,7 +57,7 @@ beforeEach(function () {
 
     $this->taxManager = codeActivityPerson($this->sdoc, 'Tara Manager', team: $this->tax, role: 'leader');
     $this->hrManager = codeActivityPerson($this->sdoc, 'Hari Manager', team: $this->hr, role: 'leader');
-    $this->asha = codeActivityPerson($this->sdoc, 'Asha Dev', team: $this->tax, title: 'Senior developer', gitUsername: 'asha');
+    $this->asha = codeActivityPerson($this->sdoc, 'Asha Dev', team: $this->tax, designation: 'Senior developer', gitUsername: 'asha');
     $this->bikash = codeActivityPerson($this->sdoc, 'Bikash Dev', team: $this->hr, gitUsername: 'bikash');
     $this->chandra = codeActivityPerson($this->mof, 'Chandra Dev', team: $this->budget, gitUsername: 'chandra');
 
@@ -98,14 +98,15 @@ function codeActivityRepository(GitConnection $connection, Project $project, str
     ]);
 }
 
-function codeActivityPerson(Organization $organization, string $name, bool $officeAdmin = false, ?Project $team = null, string $role = 'member', ?string $title = null, ?string $gitUsername = null): User
+function codeActivityPerson(Organization $organization, string $name, bool $officeAdmin = false, ?Project $team = null, string $role = 'member', ?string $designation = null, ?string $gitUsername = null): User
 {
     $user = User::factory()->create(['name' => $name, 'git_username' => $gitUsername]);
-    $member = Member::factory()->linkedTo($user)->create([
-        'organization_id' => $organization->id,
-        'is_office_admin' => $officeAdmin,
-        'title' => $title,
-    ]);
+    $member = Member::factory()->linkedTo($user)
+        ->when($designation !== null, fn ($factory) => $factory->designated((string) $designation))
+        ->create([
+            'organization_id' => $organization->id,
+            'is_office_admin' => $officeAdmin,
+        ]);
 
     $team?->ensureTeam()->members()->attach($member->id, ['role' => $role]);
 
@@ -193,7 +194,7 @@ it('shows an organizational admin only their organization, with the commits no o
         ->and($people['Not matched to anyone']['commits'])->toBe(1)
         ->and($people['Asha Dev'])->toMatchArray([
             'user_id' => $this->asha->id,
-            'title' => 'Senior developer',
+            'designation' => 'Senior developer',
             'commits' => 2,
             'active_days' => 2,
             'repositories' => 1,

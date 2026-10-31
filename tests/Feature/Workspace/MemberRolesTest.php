@@ -192,13 +192,35 @@ it('refuses to take a program from its manager without a new one, changing nothi
         ->and($this->jointSecretary->fresh()->name)->not->toBe('Renamed');
 });
 
-it('refuses to take a project from its manager without a new one, changing nothing', function () {
+it('lets the organizational admin take a project from its manager, leaving it with none and them on its team', function () {
     $this->actingAs($this->admin)
         ->patch("/workspace/members/{$this->underSecretary->id}", ['name' => 'Renamed', 'managed_project_ids' => []])
-        ->assertSessionHasErrors(['managed_project_ids' => 'Choose another manager for Tax Portal (Revenue) first.']);
+        ->assertSessionHasNoErrors();
 
-    expect(memberRolesLeaderIds($this->teamA))->toBe([$this->underSecretary->id])
-        ->and($this->underSecretary->fresh()->name)->not->toBe('Renamed');
+    expect(memberRolesLeaderIds($this->teamA))->toBe([])
+        ->and(memberRolesTeamIds($this->underSecretary))->toBe([$this->teamA->id])
+        ->and($this->underSecretary->fresh()->name)->toBe('Renamed');
+
+    // Unticking both takes them off the team too.
+    $this->teamA->members()->updateExistingPivot($this->underSecretary->id, ['role' => 'leader']);
+    $this->actingAs($this->admin)
+        ->patch("/workspace/members/{$this->underSecretary->id}", ['managed_project_ids' => [], 'team_ids' => []])
+        ->assertSessionHasNoErrors();
+
+    expect(memberRolesTeamIds($this->underSecretary))->toBe([]);
+});
+
+it('never lets an organizational admin take another organization\'s project from its manager', function () {
+    // Joint Desk (Elsewhere) is open to other organizations, and this
+    // admin's person manages it.
+    $this->teamY->members()->detach($this->managerY->id);
+    $this->teamY->members()->attach($this->person->id, ['role' => 'leader']);
+
+    $this->actingAs($this->admin)
+        ->patch("/workspace/members/{$this->person->id}", ['managed_project_ids' => []])
+        ->assertSessionHasErrors(['managed_project_ids' => 'Joint Desk belongs to another organization.']);
+
+    expect(memberRolesLeaderIds($this->teamY))->toBe([$this->person->id]);
 });
 
 it('only lets an active person manage', function () {
@@ -328,13 +350,13 @@ it('checks roles against the organization a super-admin moves the person to', fu
         ->and($stayer->teams()->exists())->toBeFalse();
 });
 
-it('never leaves a team without its manager when a super-admin moves them', function () {
+it('asks for the manager to be taken off first when a super-admin moves them', function () {
     $this->actingAs(memberRolesBoss())
         ->patch("/workspace/members/{$this->underSecretary->id}", [
             'organization_id' => $this->otherOrg->id,
             'team_ids' => [],
         ])
-        ->assertSessionHasErrors(['organization_id' => 'Choose another manager for Tax Portal (Revenue) first.']);
+        ->assertSessionHasErrors(['organization_id' => 'Take them off managing Tax Portal (Revenue) first.']);
 
     expect($this->underSecretary->fresh()->organization_id)->toBe($this->org->id)
         ->and(memberRolesLeaderIds($this->teamA))->toBe([$this->underSecretary->id]);
@@ -390,7 +412,7 @@ it('changes no roles for a save without role fields', function () {
         ->assertSessionHasNoErrors()
         ->assertSessionHas('workspace_flash.message', 'Member updated.');
     $this->actingAs($this->admin)
-        ->patch("/workspace/members/{$this->jointSecretary->id}", ['title' => 'Joint Secretary'])
+        ->patch("/workspace/members/{$this->jointSecretary->id}", ['name' => 'Joint Secretary'])
         ->assertSessionHasNoErrors();
 
     expect(memberRolesLeaderIds($this->teamA))->toBe([$this->underSecretary->id])
@@ -470,8 +492,8 @@ it('names each project with its program, so two General projects can be told apa
         ->and($teams[$generalR->team()->id]['project']['program'])->toBe('Revenue')
         ->and($teams[$this->teamB->id]['project']['program'])->toBeNull();
 
-    $this->patch("/workspace/members/{$this->jointSecretary->id}", ['managed_project_ids' => []])
-        ->assertSessionHasErrors(['managed_project_ids' => 'Choose another manager for General (Revenue) first.']);
+    $this->actingAs(memberRolesBoss())->patch("/workspace/members/{$this->jointSecretary->id}", ['organization_id' => $this->otherOrg->id])
+        ->assertSessionHasErrors(['organization_id' => 'Take them off managing General (Revenue) first.']);
 
     expect(memberRolesLeaderIds($generalR->team()))->toBe([$this->jointSecretary->id]);
 });

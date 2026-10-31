@@ -169,7 +169,7 @@ class CodeActivityQuery
             $people[] = [
                 'user_id' => $key === '' ? null : (int) $key,
                 'name' => $name($key),
-                'title' => $key === '' ? null : ($names[(int) $key]['title'] ?? null),
+                'designation' => $key === '' ? null : ($names[(int) $key]['designation'] ?? null),
                 ...array_fill_keys(['commits', 'active_days', 'repositories', 'files_changed', ...self::COUNTS, 'pull_requests_opened', 'pull_requests_merged', 'tasks'], 0),
                 ...$counts,
             ];
@@ -392,11 +392,11 @@ class CodeActivityQuery
     }
 
     /**
-     * Each user's name and title: their member's when they have one (the
-     * people directory's), else the login's name.
+     * Each user's name and designation: their member's when they have one
+     * (the people directory's), else the login's name.
      *
      * @param  list<int|string>  $userIds
-     * @return array<int, array{name: string, title: ?string}>
+     * @return array<int, array{name: string, designation: ?string}>
      */
     private function names(array $userIds): array
     {
@@ -407,11 +407,11 @@ class CodeActivityQuery
         $names = [];
 
         foreach (User::query()->whereIn('id', $userIds)->get(['id', 'name']) as $user) {
-            $names[$user->id] = ['name' => $user->name, 'title' => null];
+            $names[$user->id] = ['name' => $user->name, 'designation' => null];
         }
 
-        foreach (Member::query()->whereIn('user_id', $userIds)->get(['user_id', 'name', 'title']) as $member) {
-            $names[(int) $member->user_id] = ['name' => $member->name, 'title' => $member->title];
+        foreach (Member::query()->whereIn('user_id', $userIds)->with('designation:id,name')->get(['user_id', 'name', 'designation_id']) as $member) {
+            $names[(int) $member->user_id] = ['name' => $member->name, 'designation' => $member->designation?->name];
         }
 
         return $names;

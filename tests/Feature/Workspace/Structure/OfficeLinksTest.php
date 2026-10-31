@@ -26,6 +26,7 @@ it('offers someone with nobody below them the organogram and their own week', fu
         'leave' => false,
         'team_work' => false,
         'my_work_member_id' => $this->engineer->id,
+        'maintenance' => false,
     ]);
 });
 
@@ -34,7 +35,7 @@ it('adds attendance, leave and the work reports once there is attendance and peo
 
     expect(OfficeLinks::for($this->director->user))->toMatchArray(['attendance' => true, 'leave' => true, 'team_work' => true, 'attendance_settings' => false])
         ->and(OfficeLinks::for($this->engineer->user))->toMatchArray(['attendance' => false, 'leave' => true, 'team_work' => false])
-        ->and(OfficeLinks::for($this->admin->user))->toMatchArray(['attendance' => true, 'attendance_settings' => true, 'team_work' => true]);
+        ->and(OfficeLinks::for($this->admin->user))->toMatchArray(['attendance' => true, 'attendance_settings' => true, 'team_work' => true, 'maintenance' => true]);
 });
 
 it('gives a deactivated person no office links', function () {
@@ -43,12 +44,12 @@ it('gives a deactivated person no office links', function () {
     WorkspaceAccess::flush();
 
     expect(OfficeLinks::for($this->director->user))->toMatchArray([
-        'organogram' => false, 'attendance' => false, 'leave' => false, 'team_work' => false, 'my_work_member_id' => null,
+        'organogram' => false, 'attendance' => false, 'leave' => false, 'team_work' => false, 'my_work_member_id' => null, 'maintenance' => false,
     ]);
 });
 
 it('offers a super-admin settings everywhere and the register once any organization has attendance', function () {
-    expect(OfficeLinks::for($this->boss))->toMatchArray(['organogram' => true, 'attendance_settings' => true, 'team_work' => true, 'attendance' => false]);
+    expect(OfficeLinks::for($this->boss))->toMatchArray(['organogram' => true, 'attendance_settings' => true, 'team_work' => true, 'attendance' => false, 'maintenance' => true]);
 
     AttendanceSetting::factory()->create(['organization_id' => $this->org->id]);
     WorkspaceAccess::flush();

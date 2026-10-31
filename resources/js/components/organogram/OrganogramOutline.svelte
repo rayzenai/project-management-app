@@ -8,23 +8,25 @@
     } from '@lucide/svelte';
     import { SvelteSet } from 'svelte/reactivity';
     import { idsBelow, peopleCount } from '../../lib/structure';
-    import type { OrgNode, OrgPerson } from '../../lib/structure';
+    import type { Designation, OrgNode, OrgPerson } from '../../lib/structure';
     import Avatar from '../Avatar.svelte';
     import Popover from '../Popover.svelte';
 
     /**
      * The organogram as an outline to fold, unfold and rearrange: drag a row
      * by its handle onto someone, or onto "No one above", or pick "Reports
-     * to" in its menu. Only managers (whoever administers the organization)
-     * rearrange; everyone else reads.
+     * to" in its menu, where its designation is chosen too. Only managers
+     * (whoever administers the organization) change it; everyone else reads.
      */
     let {
         tree,
         people,
+        designations,
         canManage,
     }: {
         tree: OrgNode[];
         people: OrgPerson[];
+        designations: Designation[];
         canManage: boolean;
     } = $props();
 
@@ -72,6 +74,18 @@
         router.put(
             `/workspace/members/${person.id}/reports-to`,
             { reports_to_id: bossId },
+            { preserveScroll: true, preserveState: true },
+        );
+    }
+
+    function setDesignation(person: OrgPerson, designationId: number | null) {
+        if (person.designation_id === designationId) {
+            return;
+        }
+
+        router.put(
+            `/workspace/members/${person.id}/designation`,
+            { designation_id: designationId },
             { preserveScroll: true, preserveState: true },
         );
     }
@@ -265,19 +279,41 @@
                 role="dialog"
                 align="right"
                 triggerClass="btn-icon h-6 w-6"
-                triggerLabel={`Change whom ${person.name} reports to`}
+                triggerLabel={`Change ${person.name}'s designation or whom they report to`}
             >
                 {#snippet trigger()}
                     <Ellipsis class="h-3.5 w-3.5" />
                 {/snippet}
                 <div class="flex w-64 flex-col gap-1 p-2">
-                    <label class="label" for={`reports-to-${person.id}`}
+                    <label class="label" for={`designation-${person.id}`}
+                        >Designation</label
+                    >
+                    <select
+                        id={`designation-${person.id}`}
+                        class="input"
+                        use:focusOnMount
+                        value={person.designation_id ?? ''}
+                        onchange={(e) =>
+                            setDesignation(
+                                person,
+                                e.currentTarget.value
+                                    ? Number(e.currentTarget.value)
+                                    : null,
+                            )}
+                    >
+                        <option value="">None</option>
+                        {#each designations as designation (designation.id)}
+                            <option value={designation.id}
+                                >{designation.name}</option
+                            >
+                        {/each}
+                    </select>
+                    <label class="label mt-2" for={`reports-to-${person.id}`}
                         >Reports to</label
                     >
                     <select
                         id={`reports-to-${person.id}`}
                         class="input"
-                        use:focusOnMount
                         value={person.reports_to_id ?? ''}
                         onchange={(e) =>
                             moveTo(

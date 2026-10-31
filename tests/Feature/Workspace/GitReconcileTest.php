@@ -926,7 +926,7 @@ it('makes no forge call when the flag stays as it was', function (string $surfac
     Http::fake(recForge());
     [, $asha] = recPerson($this->organization, 'asha', officeAdmin: true);
 
-    recUpdateMember($surface, $asha, ['title' => 'Director', 'is_office_admin' => true]);
+    recUpdateMember($surface, $asha, ['name' => 'Asha Director', 'is_office_admin' => true]);
 
     Http::assertNothingSent();
 })->with(['web', 'api']);

@@ -17,16 +17,17 @@ use Throwable;
 /**
  * Sets a person's roles from the person form: the programs and projects they
  * manage and the project teams they are on. Each set is the complete wanted
- * one; a set left out is not touched. A manager role is handed over, never
- * taken away: a program or project stays with its manager until someone
- * else is chosen, a project's old manager stays on its team, and nobody is
- * taken off a team they manage. Who may hand out which program or team is
- * the FormRequests' check ({@see ChecksMemberRoles}).
+ * one; a set left out is not touched. A program stays with its manager until
+ * someone else is chosen. A project they no longer manage is left with no
+ * manager and keeps them on its team as a member, and nobody is taken off a
+ * team they still manage. Who may hand out or take away which program,
+ * project or team is the FormRequests' check ({@see ChecksMemberRoles}).
  */
 class UpdateMemberRolesService
 {
     public function __construct(
         private AppointProjectManagerService $appoint,
+        private UpdateTeamRoleService $role,
         private RemoveTeamMemberService $remove,
     ) {}
 
@@ -40,6 +41,7 @@ class UpdateMemberRolesService
 
         $newPrograms = new Collection;
         $newProjects = new Collection;
+        $droppedProjects = new Collection;
 
         if (array_key_exists('managed_program_ids', $roles)) {
             $held = Program::query()->where('manager_id', $member->id)->orderBy('name')->get();
@@ -58,12 +60,7 @@ class UpdateMemberRolesService
                 ->with('program:id,name')
                 ->orderBy('title')
                 ->get();
-            $dropped = $held->reject(fn (Project $project): bool => in_array($project->id, $roles['managed_project_ids'], true));
-
-            if ($dropped->isNotEmpty()) {
-                return $this->refuse('managed_project_ids', 'Choose another manager for '.$dropped->map(fn (Project $project): string => $project->label())->implode(', ').' first.');
-            }
-
+            $droppedProjects = $held->reject(fn (Project $project): bool => in_array($project->id, $roles['managed_project_ids'], true));
             $newProjects = Project::query()->whereKey($roles['managed_project_ids'])->whereKeyNot($held->modelKeys())->get();
         }
 
@@ -76,18 +73,18 @@ class UpdateMemberRolesService
         }
 
         try {
-            DB::transaction(function () use ($member, $roles, $newPrograms, $newProjects): void {
+            DB::transaction(function () use ($member, $roles, $newPrograms, $newProjects, $droppedProjects): void {
+                foreach ($droppedProjects as $project) {
+                    $this->ensureDone($this->role->execute($project->ensureTeam(), $member, 'member'));
+                }
+
                 foreach ($newPrograms as $program) {
                     $program->manager_id = $member->id;
                     $program->save();
                 }
 
                 foreach ($newProjects as $project) {
-                    $appointed = $this->appoint->execute($project->ensureTeam(), $member);
-
-                    if ($appointed->failed()) {
-                        throw new RuntimeException((string) $appointed->message);
-                    }
+                    $this->ensureDone($this->appoint->execute($project->ensureTeam(), $member));
                 }
 
                 if (array_key_exists('team_ids', $roles)) {
@@ -120,11 +117,15 @@ class UpdateMemberRolesService
         $leaving = array_diff($current, $wanted, $member->ledTeams()->pluck('teams.id')->map(fn ($id): int => (int) $id)->all());
 
         foreach (Team::query()->whereKey($leaving)->get() as $team) {
-            $removed = $this->remove->execute($team, $member);
+            $this->ensureDone($this->remove->execute($team, $member));
+        }
+    }
 
-            if ($removed->failed()) {
-                throw new RuntimeException((string) $removed->message);
-            }
+    /** A failed step undoes the whole save. */
+    private function ensureDone(ServiceResult $result): void
+    {
+        if ($result->failed()) {
+            throw new RuntimeException((string) $result->message);
         }
     }
 

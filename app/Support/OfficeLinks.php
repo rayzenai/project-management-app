@@ -6,13 +6,13 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * Which of the office pages (organogram, attendance, leave and kaaj, work
- * reports) the user may open, for the sidebar and the API's user payload.
+ * reports, maintenance) the user may open, for the sidebar and the API's user payload.
  * Every answer comes from WorkspaceAccess; the pages check again.
  */
 final class OfficeLinks
 {
     /**
-     * @return array{organogram: bool, attendance: bool, attendance_settings: bool, leave: bool, team_work: bool, my_work_member_id: int|null}
+     * @return array{organogram: bool, attendance: bool, attendance_settings: bool, leave: bool, team_work: bool, my_work_member_id: int|null, maintenance: bool}
      */
     public static function for(?Authenticatable $user): array
     {
@@ -30,6 +30,7 @@ final class OfficeLinks
             'leave' => WorkspaceAccess::canPunch($user) || $register,
             'team_work' => $superAdmin || WorkspaceAccess::canViewTeamWork($user, $organizationId),
             'my_work_member_id' => $organizationId === null ? null : (int) $member?->getKey(),
+            'maintenance' => $superAdmin || WorkspaceAccess::canViewMaintenance($user, $organizationId),
         ];
     }
 }

@@ -33,7 +33,7 @@
     interface Candidate {
         id: Id;
         name: string;
-        title: string | null;
+        designation: string | null;
     }
 
     type Permission = RepositoryGrant['permission'];
@@ -206,12 +206,12 @@
     }
 </script>
 
-{#snippet person(name: string, title: string | null, note: string | null)}
+{#snippet person(name: string, designation: string | null, note: string | null)}
     <Avatar {name} size="md" />
     <div class="min-w-0 flex-1 leading-tight">
         <div class="truncate font-medium text-fg">{name}</div>
-        {#if title}
-            <div class="truncate text-xs text-fg-muted">{title}</div>
+        {#if designation}
+            <div class="truncate text-xs text-fg-muted">{designation}</div>
         {/if}
         {#if note}
             <div class="text-xs text-warn">{note}</div>
@@ -258,7 +258,7 @@
                                 maintainer.role === 'manager'
                                     ? 'Manager'
                                     : 'Program manager',
-                                maintainer.title,
+                                maintainer.designation,
                             ]
                                 .filter(Boolean)
                                 .join(' · '),
@@ -285,7 +285,7 @@
                     <li class="flex min-h-10 items-center gap-2.5 py-1">
                         {@render person(
                             grant.member.name,
-                            grant.member.title,
+                            grant.member.designation,
                             !grant.effective
                                 ? NO_ACCESS
                                 : grant.waiting
@@ -351,7 +351,11 @@
                     <li
                         class="flex min-h-10 items-center gap-2.5 border-b border-line-soft px-2 py-1 last:border-b-0"
                     >
-                        {@render person(candidate.name, candidate.title, null)}
+                        {@render person(
+                            candidate.name,
+                            candidate.designation,
+                            null,
+                        )}
                         <button
                             type="button"
                             class="btn-ghost shrink-0"

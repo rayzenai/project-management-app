@@ -18,7 +18,7 @@
         id: number;
         name: string;
         email: string | null;
-        title: string | null;
+        designation: string | null;
         organization_id: number;
     }
 
@@ -394,10 +394,10 @@
                                 <span class="truncate font-medium text-fg"
                                     >{group.manager.name}</span
                                 >
-                                {#if group.manager.title}
+                                {#if group.manager.designation}
                                     <span
                                         class="hidden truncate text-xs text-fg-muted sm:inline"
-                                        >{group.manager.title}</span
+                                        >{group.manager.designation}</span
                                     >
                                 {/if}
                             {:else}

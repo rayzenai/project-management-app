@@ -31,7 +31,7 @@ class ProjectProgressQuery
             ->where(fn ($q) => $q
                 ->whereIn('id', Member::query()->assignableFor($project)->select('members.id'))
                 ->orWhereIn('id', $assignedIds))
-            ->with('organization:id,name')
+            ->with(['organization:id,name', 'designation:id,name'])
             ->orderBy('name')
             ->get();
 

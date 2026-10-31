@@ -36,7 +36,6 @@ it('creates a member with a working login', function () {
         'name' => 'Ram Karki',
         'email' => 'ram@example.com',
         'password' => 'secret-pass-123',
-        'title' => 'Engineer',
         'team_ids' => [$team->id],
     ])->assertRedirect();
 

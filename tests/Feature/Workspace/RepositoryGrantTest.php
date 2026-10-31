@@ -44,14 +44,14 @@ beforeEach(function () {
         'webhook_secret' => 'hook-secret-never-shown',
     ]);
 
-    [$this->programManagerUser, $this->programManager] = grantWebPerson($this->organization, 'Pradeep Program', gitUsername: null, title: 'Engineering head');
+    [$this->programManagerUser, $this->programManager] = grantWebPerson($this->organization, 'Pradeep Program', gitUsername: null, designation: 'Engineering head');
     $this->program = Program::factory()->create(['organization_id' => $this->organization->id, 'manager_id' => $this->programManager->id, 'name' => 'Revenue']);
     $this->project = Project::factory()->create(['organization_id' => $this->organization->id, 'program_id' => $this->program->id, 'title' => 'Tax Portal', 'key' => 'TP']);
     $this->team = $this->project->ensureTeam();
 
-    [$this->managerUser, $this->manager] = grantWebPerson($this->organization, 'Mira Manager', gitUsername: 'mira', title: 'PM');
+    [$this->managerUser, $this->manager] = grantWebPerson($this->organization, 'Mira Manager', gitUsername: 'mira', designation: 'PM');
     [$this->teamMemberUser, $this->teamMember] = grantWebPerson($this->organization, 'Tara Teammember');
-    [, $this->asha] = grantWebPerson($this->organization, 'Asha Teammate', gitUsername: 'asha', title: 'Senior developer');
+    [, $this->asha] = grantWebPerson($this->organization, 'Asha Teammate', gitUsername: 'asha', designation: 'Senior developer');
     [$this->adminUser] = grantWebPerson($this->organization, 'Kamala Admin', admin: true);
     $this->bina = Member::factory()->create(['organization_id' => $this->organization->id, 'name' => 'Bina Colleague', 'email' => 'bina@sdoc.example']);
 
@@ -65,14 +65,16 @@ beforeEach(function () {
 });
 
 /** @return array{0: User, 1: Member} */
-function grantWebPerson(Organization $organization, string $name, ?string $gitUsername = null, ?string $title = null, bool $admin = false): array
+function grantWebPerson(Organization $organization, string $name, ?string $gitUsername = null, ?string $designation = null, bool $admin = false): array
 {
     static $people = 0;
 
     // A fixed email, so a candidate search by name never matches a random one.
     $email = Str::slug($name, '.').'.'.(++$people).'@sdoc.example';
     $user = User::factory()->create(['name' => $name, 'email' => $email, 'git_username' => $gitUsername]);
-    $member = Member::factory()->linkedTo($user)->create(['organization_id' => $organization->id, 'is_office_admin' => $admin, 'title' => $title]);
+    $member = Member::factory()->linkedTo($user)
+        ->when($designation !== null, fn ($factory) => $factory->designated((string) $designation))
+        ->create(['organization_id' => $organization->id, 'is_office_admin' => $admin]);
 
     return [$user, $member];
 }
@@ -197,7 +199,7 @@ it('removes a grant', function () {
 });
 
 it('lists the maintainers with their role and the grants by name, each saying whether they wait for a first sign-in', function () {
-    [, $chitra] = grantWebPerson($this->organization, 'Chitra Nousername', title: 'Junior developer');
+    [, $chitra] = grantWebPerson($this->organization, 'Chitra Nousername', designation: 'Junior developer');
     $bina = grantWebGrant($this->api, $this->bina, GitRepositoryGrant::READ);
     $chitraGrant = grantWebGrant($this->api, $chitra);
     $asha = grantWebGrant($this->api, $this->asha);
@@ -206,13 +208,13 @@ it('lists the maintainers with their role and the grants by name, each saying wh
     $data = $this->actingAs($this->managerUser)->getJson($this->base)->assertOk()->json('data');
 
     expect($data['maintainers'])->toEqual([
-        ['id' => $this->manager->id, 'name' => 'Mira Manager', 'title' => 'PM', 'role' => 'manager', 'waiting' => false],
-        ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'title' => 'Engineering head', 'role' => 'program manager', 'waiting' => true],
+        ['id' => $this->manager->id, 'name' => 'Mira Manager', 'designation' => 'PM', 'role' => 'manager', 'waiting' => false],
+        ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'designation' => 'Engineering head', 'role' => 'program manager', 'waiting' => true],
     ])
         ->and(collect($data['grants'])->map(fn (array $g): array => collect($g)->except('granted_at')->all())->all())->toEqual([
-            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'effective' => true, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'title' => 'Senior developer']],
-            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'effective' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => $this->bina->title]],
-            ['id' => $chitraGrant->id, 'permission' => 'write', 'waiting' => true, 'effective' => true, 'member' => ['id' => $chitra->id, 'name' => 'Chitra Nousername', 'title' => 'Junior developer']],
+            ['id' => $asha->id, 'permission' => 'write', 'waiting' => false, 'effective' => true, 'member' => ['id' => $this->asha->id, 'name' => 'Asha Teammate', 'designation' => 'Senior developer']],
+            ['id' => $bina->id, 'permission' => 'read', 'waiting' => true, 'effective' => true, 'member' => ['id' => $this->bina->id, 'name' => 'Bina Colleague', 'designation' => null]],
+            ['id' => $chitraGrant->id, 'permission' => 'write', 'waiting' => true, 'effective' => true, 'member' => ['id' => $chitra->id, 'name' => 'Chitra Nousername', 'designation' => 'Junior developer']],
         ])
         ->and($data['grants'][0]['granted_at'])->toBe($asha->created_at->toIso8601String());
 });
@@ -245,7 +247,7 @@ it('lists a program manager who also manages the project once, as its manager', 
     $maintainers = $this->actingAs($this->adminUser)->getJson($this->base)->assertOk()->json('data.maintainers');
 
     expect($maintainers)->toEqual([
-        ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'title' => 'Engineering head', 'role' => 'manager', 'waiting' => true],
+        ['id' => $this->programManager->id, 'name' => 'Pradeep Program', 'designation' => 'Engineering head', 'role' => 'manager', 'waiting' => true],
     ]);
 });
 
@@ -391,7 +393,7 @@ it('offers a project manager exactly the people the rule lets them give access t
 
     expect($ids)->toBe(grantWebRuleSet($this->managerUser, $this->api))
         ->and($ids)->toBe(collect([$this->teamMember->id, $newcomer->id])->sort()->values()->all())
-        ->and(grantWebKeys($data))->toBe(['id', 'name', 'title']);
+        ->and(grantWebKeys($data))->toBe(['designation', 'id', 'name']);
 });
 
 it('offers an organizational admin exactly the people the rule lets them give access to, without emails', function () {
@@ -404,11 +406,11 @@ it('offers an organizational admin exactly the people the rule lets them give ac
 
     expect($ids)->toBe(grantWebRuleSet($this->adminUser, $this->api))
         ->and($ids)->toContain($this->bina->id)
-        ->and(grantWebKeys($data))->toBe(['id', 'name', 'title']);
+        ->and(grantWebKeys($data))->toBe(['designation', 'id', 'name']);
 });
 
 it('filters candidates by the search term', function () {
     $data = $this->actingAs($this->adminUser)->getJson("{$this->base}/candidates?q=bina")->assertOk()->json('data');
 
-    expect($data)->toBe([['id' => $this->bina->id, 'name' => 'Bina Colleague', 'title' => $this->bina->title]]);
+    expect($data)->toBe([['id' => $this->bina->id, 'name' => 'Bina Colleague', 'designation' => null]]);
 });

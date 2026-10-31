@@ -11,6 +11,7 @@ use App\Models\ProjectNote;
 use App\Models\User;
 use App\Models\WorkspaceNote;
 use App\Queries\Attendance\MyAttendanceQuery;
+use App\Queries\Structure\PersonRef;
 use App\Services\ResolveThemeTokens;
 use App\Support\Git\GitAccess;
 use App\Support\OfficeLinks;
@@ -121,8 +122,9 @@ class ShareWorkspaceData
                 'projects' => $projects->all(),
                 'organizationPeople' => $addsPeople
                     ? Member::query()->active()->where('organization_id', $organizationId)->orderBy('name')
-                        ->get(['id', 'name', 'title'])
-                        ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'title' => $m->title])
+                        ->with('designation:id,name')
+                        ->get(['id', 'name', 'designation_id'])
+                        ->map(PersonRef::of(...))
                         ->all()
                     : [],
                 'startGeneral' => $startGeneral,
