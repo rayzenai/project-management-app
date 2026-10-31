@@ -73,23 +73,34 @@
             : 'Not a working day';
     });
 
+    /**
+     * One reading, or null when refused or slow. The browser's own timeout
+     * starts only once permission is given, so an unanswered permission
+     * prompt is cut off here too.
+     */
     function locate(): Promise<Reading | null> {
         if (typeof navigator === 'undefined' || !navigator.geolocation) {
             return Promise.resolve(null);
         }
 
-        return new Promise((resolve) =>
+        return new Promise((resolve) => {
+            const giveUp = setTimeout(() => resolve(null), 15_000);
+            const done = (reading: Reading | null) => {
+                clearTimeout(giveUp);
+                resolve(reading);
+            };
+
             navigator.geolocation.getCurrentPosition(
                 (position) =>
-                    resolve({
+                    done({
                         latitude: position.coords.latitude,
                         longitude: position.coords.longitude,
                         accuracy_m: position.coords.accuracy,
                     }),
-                () => resolve(null),
+                () => done(null),
                 { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
-            ),
-        );
+            );
+        });
     }
 
     async function punch(kind: PunchKind): Promise<void> {

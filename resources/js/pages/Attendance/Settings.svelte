@@ -458,7 +458,7 @@
                             />
                             <button
                                 type="button"
-                                class="btn-icon"
+                                class="btn-icon col-span-2 justify-self-end sm:col-span-1"
                                 aria-label="Remove season"
                                 onclick={() => removeSeason(i)}
                                 ><X class="h-3.5 w-3.5" /></button

@@ -69,7 +69,8 @@ it('clocks in near the office off its network without a note', function () {
 
 it('asks for a note outside the office, and takes the punch with one', function () {
     punchFrom(PUNCH_HOME_IP, ['kind' => 'in', 'latitude' => 27.7286, 'longitude' => 85.3240, 'accuracy_m' => 10])
-        ->assertSessionHasErrors(['note' => "Say why you're away from the office."]);
+        ->assertSessionHasErrors(['note' => "Say why you're away from the office."])
+        ->assertSessionMissing('workspace_flash');
 
     expect(AttendancePunch::query()->count())->toBe(0);
 

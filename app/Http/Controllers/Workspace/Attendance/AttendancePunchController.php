@@ -23,8 +23,13 @@ class AttendancePunchController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        return $this->redirectWithResult(
-            $service->punch($user, $request->string('kind')->value(), $request->context(AttendancePunch::SOURCE_WEB)),
-        );
+        $result = $service->punch($user, $request->string('kind')->value(), $request->context(AttendancePunch::SOURCE_WEB));
+
+        // The clock's popover asks for the note itself: no error toast on top.
+        if ($result->failed() && is_array($result->data) && isset($result->data['note'])) {
+            return back()->withErrors($result->data);
+        }
+
+        return $this->redirectWithResult($result);
     }
 }
