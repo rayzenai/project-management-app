@@ -45,10 +45,11 @@ runner:
     - ubuntu-24.04:docker://ghcr.io/catthehacker/ubuntu:act-24.04
     - ubuntu-22.04:docker://ghcr.io/catthehacker/ubuntu:act-22.04
 
-# actions/cache: each runner keeps its own cache on its volume.
+# No actions/cache server: it would write to the VM's disk outside dind's
+# cap, and four runners' separate caches would rarely hit. A job's cache
+# step finds nothing and goes on.
 cache:
-  enabled: true
-  dir: /data/cache
+  enabled: false
 
 container:
   # A network of its own for each job, inside dind.

@@ -4,10 +4,11 @@
 #
 # Four runners, one job each, registered to the forge organization sdoc.
 # Every job runs inside the dind service, never on the VM's own Docker, so
-# dind's limits hold all four jobs together to 4 vCPUs and 10 GB. dind talks
-# to the runners only through a unix socket in a shared volume: no TCP port
-# a job could reach to take over dind. The secrets RUNNER_SECRET_1 to 4 go
-# in the Environment tab (.env.example next to this file).
+# dind's limits hold all four jobs together to 4 vCPUs, 10 GB of memory and
+# 30 GB of disk (a file-backed filesystem, dind/start.sh). dind talks to the
+# runners only through a unix socket in a shared volume: no TCP port a job
+# could reach to take over dind. The secrets RUNNER_SECRET_1 to 4 go in the
+# Environment tab (.env.example next to this file).
 
 x-runner: &runner
   build: .
@@ -27,11 +28,15 @@ x-runner-env: &runner-env
 
 services:
   dind:
-    image: docker:29.8.2-dind
+    build: ./dind
+    image: sdoc-forgejo-dind:29.8.2
     privileged: true
     restart: unless-stopped
     environment:
       DOCKER_TLS_CERTDIR: ""
+      # Everything jobs pull, build or write; raise it here, then resize
+      # (docs/forgejo.md, section 14).
+      DIND_DISK_SIZE: 30G
     command:
       - dockerd
       - --host=unix:///var/run/dind/docker.sock
@@ -49,7 +54,8 @@ services:
     memswap_limit: 10g
     volumes:
       - dind-socket:/var/run/dind
-      - dind-data:/var/lib/docker
+      # Holds docker.ext4, the file /var/lib/docker lives in.
+      - dind-data:/store
     healthcheck:
       test: ["CMD", "docker", "--host=unix:///var/run/dind/docker.sock", "info"]
       interval: 10s
@@ -96,8 +102,9 @@ services:
       - dind-socket:/var/run/dind
       - runner-4:/data
 
-  # Once a day: what finished jobs leave in dind. Pulled images stay, so
-  # the next job doesn't pull them again (docs/forgejo.md, section 14).
+  # Once a day: what finished jobs leave in dind; pulled images stay, so
+  # the next job doesn't pull them again. Once a week every image no
+  # container uses goes too, so old ones never fill the 30 GB.
   prune:
     image: docker:29.8.2-cli
     restart: unless-stopped
@@ -111,11 +118,14 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        day=0
         while :; do
           docker container prune --force --filter until=6h
           docker network prune --force --filter until=6h
           docker volume prune --force
           docker image prune --force
+          if [ $$((day % 7)) -eq 6 ]; then docker image prune --all --force; fi
+          day=$$((day + 1))
           sleep 86400
         done
 

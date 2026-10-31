@@ -454,8 +454,12 @@ Plan: `docs/superpowers/plans/2026-10-30-git-phase-1-code.md`. Runbook:
   processed twice. Jobs go through `App\Support\Background::dispatch` (after
   the response on the sync queue; the `tasks-queue` worker otherwise).
 - **Reconcile**: `git:reconcile [--connection=] [--allow-removals]`, daily
-  at 01:30. Per connection: recreate the hook, or write its settings and
-  stored secret back (every run: the forge hides secrets),
+  at 01:30. Per connection: recreate a deleted hook; replace (new hook and
+  secret, then delete the old) one missing an event or whose deliveries
+  came with a wrong signature since the last run
+  (`GitWebhookDelivery::badSignatureKey`, three days; Forgejo 15's hook edit
+  writes neither a secret nor the workflow-run events); else PATCH its
+  settings only when they drifted,
   `RepositorySync::reconcile` each repository (by forge id; mark
   unreachable; prune branches; a 404 or transfer only reports it gone),
   then `RepositorySync::unlinkGone` (all or none: only while the bot still
@@ -584,16 +588,25 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
 
 - **Runners**: four Forgejo runners (`forgejo/runner/`, the Dokploy compose
   `git-runners` in project `git`), one job each, registered to the forge
-  organization `sdoc`; every job runs inside one `docker:dind` held to 4
-  vCPUs and 10 GB. Actions are on with `DEFAULT_ACTIONS_URL=github`
+  organization `sdoc`; every job runs inside one dind held to 4 vCPUs, 10 GB
+  and 30 GB of disk (`/var/lib/docker` on a file-backed ext4,
+  `forgejo/runner/dind/start.sh`); no actions cache (it would write outside
+  the cap). Actions are on with `DEFAULT_ACTIONS_URL=github`
   (`forgejo/Dockerfile`), so GitHub workflows run as they are, from
   `.forgejo/workflows` or `.github/workflows`.
 - **Protected main**: `App\Services\Git\MainBranch::RULE` on every linked
   repository's default branch: no pushes for anyone (`apply_to_admins`),
   merges only with one approval and every status check (`*`) passed, so a
-  repository with no tests merges nothing. Written by `CreateRepositoryService`
-  and by every `RepositoryAccess::sync` (so a rule changed on the forge comes
-  back within ten minutes). Forge site administrators can still bypass it.
+  repository with no tests merges nothing. RULE names every field of
+  Forgejo's EditBranchProtectionOption (an edit changes only what it is
+  sent: a loose `unprotected_file_patterns` would let pushes through).
+  `MainBranch::ensure` reads the rule and writes only on drift (each write
+  re-tests every open pull request), creates it when missing (a concurrent
+  create's 403 rereads), and does nothing while the branch doesn't exist
+  (a rule would block the first push). Called by `CreateRepositoryService`
+  and every `RepositoryAccess::sync`. The approval is the real gate: writers
+  can post statuses, and a pull request runs its own workflow. Forge site
+  administrators can still bypass it.
 - **Checks** (`App\Support\Git\Checks`): the forge's commit statuses as
   `passed|failed|running|none` per check and overall (only `success`
   passes; `pending` runs; `error|failure|warning` fail). `CommitChecks::refresh`
@@ -604,9 +617,12 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   repository read from `run.repository`), and `git:commit-checks` every two
   minutes (`withoutOverlapping(10)`): commits the tracker learned of in the
   last two days still unknown or running, `none` again while under ten
-  minutes old, each asked at most every 90 s; 0/401/403/429 stop that
+  minutes old and committed in the last day (not a backfilled one), each asked at most every 90 s; 0/401/403/429 stop that
   connection for the run. `GitIngest::pullRequest` keeps `head_sha` and
-  copies the head commit's checks when the head moves. `MainChecksQuery`
+  copies the head commit's checks when the head moves, and each
+  `git:commit-checks` run corrects open pull requests that missed them
+  (`CommitChecks::catchUpPullRequests`). A check's `url` is kept only on the
+  forge's own host. `MainChecksQuery`
   gives each repository's default-branch checks in one query. Shown through
   `Checks::shape` (null until asked) on commits and pull requests
   (`TaskCodeQuery`, `GitPullRequestResource`, `CodeActivityQuery::commitsOf`),

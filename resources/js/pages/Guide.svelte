@@ -144,7 +144,7 @@
         ],
         [
             'Tests',
-            "Every repository runs its tests on the forge's runners. Add a workflow under .forgejo/workflows (or .github/workflows) that runs on every pull request, with runs-on: ubuntu-latest; a pull request with no tests, or with a test still running or failing, can't be merged. The tick or cross beside each commit and pull request in the Code tab and the task's Code section opens the run on the forge.",
+            "Every repository runs its tests on the forge's runners. Add a workflow under .forgejo/workflows (or .github/workflows) that runs on every pull request, with runs-on: ubuntu-latest; a pull request with no tests, or with a test still running or failing, can't be merged. The tick or cross beside each commit and pull request in the Code tab and the task's Code section opens the run on the forge. Someone other than the author approves (a teammate with write access, the program's manager or an organizational admin), and the approval is what guards main: look at changes to the workflow as closely as at the code.",
         ],
         [
             'Repository access',

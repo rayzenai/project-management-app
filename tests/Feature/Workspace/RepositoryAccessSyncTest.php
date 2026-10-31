@@ -172,7 +172,9 @@ function accForge(array $logins = ['sdoc-bot', 'mira', 'asha', 'Chet', 'contract
     return $stubs + [
         "{$repo}/collaborators?*" => accLogins($logins),
         "{$repo}/collaborators/*" => accCollaboratorWrites(),
-        "{$repo}/branch_protections/main" => Http::response(['rule_name' => 'main', 'branch_name' => 'main', 'enable_push' => true, 'enable_push_whitelist' => true]),
+        // A rule that still lets people push, as a maintainer might leave it.
+        "{$repo}/branch_protections/main" => Http::response(['rule_name' => 'main', 'branch_name' => 'main', ...MainBranch::RULE, 'enable_push' => true]),
+        "{$repo}/branches/*" => Http::response(['name' => 'main']),
     ];
 }
 
@@ -229,7 +231,7 @@ it('makes the manager and program manager admins and keeps each grant\'s permiss
         ->and(accSorted($result['granted']))->toBe(['asha', 'bikash', 'mira', 'pradeep'])
         ->and($this->repo->refresh()->access_synced_at?->equalTo(now()))->toBeTrue()
         ->and($this->repo->protects_main)->toBeTrue();
-    // Every sync writes main's rule.
+    // The forge's rule had drifted: the sync puts the tracker's back.
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && str_ends_with($r->url(), '/branch_protections/main'));
 });
 
@@ -402,7 +404,7 @@ it('stops at once when the forge stops answering a PUT', function () {
 
 // The main rule
 
-it('writes the tracker\'s rule onto main last, on every run, whatever the forge had', function () {
+it('writes the tracker\'s rule onto main last, on every run the forge\'s has drifted', function () {
     // The forge's rule still lets people push: the sync puts the tracker's back.
     Http::fake(accForge());
     $rules = fn (): array => Http::recorded(fn (Request $r) => $r->method() === 'PATCH')
@@ -416,6 +418,80 @@ it('writes the tracker\'s rule onto main last, on every run, whatever the forge 
     expect($rules())->toBe([MainBranch::RULE, MainBranch::RULE])
         ->and(accWrites()[array_key_last(accWrites())])->toBe('PATCH main')
         ->and($this->repo->refresh()->protects_main)->toBeTrue();
+});
+
+it('reads the rule and writes nothing while it is the tracker\'s, so open pull requests are not tested again', function () {
+    Http::fake(accForge(stubs: [
+        // Forgejo gives an empty list as null.
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['rule_name' => 'main', ...MainBranch::RULE, 'push_whitelist_usernames' => null]),
+    ]));
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET' && str_contains($r->url(), '/branch_protections'));
+    expect($this->repo->refresh()->protects_main)->toBeTrue();
+});
+
+it('puts back every field of the rule, the file patterns and approval lists among them', function (string $field, mixed $loosened) {
+    Http::fake(accForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['rule_name' => 'main', ...MainBranch::RULE, $field => $loosened]),
+    ]));
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && str_ends_with($r->url(), '/branch_protections/main') && $r->data() === MainBranch::RULE);
+})->with([
+    // Lets any push that only touches matching files through, admins or not.
+    'unprotected files' => ['unprotected_file_patterns', '**'],
+    'protected files' => ['protected_file_patterns', '**'],
+    'approvals list' => ['enable_approvals_whitelist', true],
+    'merge list' => ['enable_merge_whitelist', true],
+    'push list' => ['push_whitelist_usernames', ['asha']],
+    'checks' => ['status_check_contexts', []],
+    'no approvals' => ['required_approvals', 0],
+    'admins exempt' => ['apply_to_admins', false],
+]);
+
+it("names every field of Forgejo 15's branch protection edit", function () {
+    expect(array_keys(MainBranch::RULE))->toEqualCanonicalizing([
+        'enable_push', 'enable_push_whitelist', 'push_whitelist_usernames', 'push_whitelist_teams', 'push_whitelist_deploy_keys',
+        'enable_merge_whitelist', 'merge_whitelist_usernames', 'merge_whitelist_teams', 'enable_status_check', 'status_check_contexts',
+        'required_approvals', 'enable_approvals_whitelist', 'approvals_whitelist_username', 'approvals_whitelist_teams',
+        'block_on_rejected_reviews', 'block_on_official_review_requests', 'block_on_outdated_branch', 'dismiss_stale_approvals',
+        'ignore_stale_approvals', 'require_signed_commits', 'protected_file_patterns', 'unprotected_file_patterns', 'apply_to_admins',
+    ]);
+});
+
+it('leaves an empty repository alone: a rule on a branch it lacks would stop its first push', function () {
+    Http::fake(accForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+        'git.example/api/v1/repos/sdoc/tp-api/branches/*' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+    ]));
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET' && str_contains($r->url(), '/branch_protections'));
+    expect($this->repo->refresh()->protects_main)->toBeFalse()
+        ->and($this->repo->access_synced_at)->not->toBeNull();
+});
+
+it('keeps the rule another sync made a moment before, instead of failing', function () {
+    $reads = 0;
+    Http::fake(accForge(stubs: [
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => function () use (&$reads) {
+            return ++$reads === 1
+                ? Http::response(['message' => 'The target couldn\'t be found.'], 404)
+                : Http::response(['rule_name' => 'main', ...MainBranch::RULE]);
+        },
+        // Forgejo refuses a second rule for the same branch.
+        'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['message' => 'Branch protection already exist'], 403),
+    ]));
+
+    app(RepositoryAccess::class)->sync($this->repo);
+
+    expect($reads)->toBe(2)
+        ->and($this->repo->refresh()->protects_main)->toBeTrue();
+    Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH' && str_contains($r->url(), '/branch_protections'));
 });
 
 it('puts main\'s rule back when someone deleted it on the forge', function () {

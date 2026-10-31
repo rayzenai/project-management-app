@@ -74,9 +74,10 @@ class RepositoryAccess
      * collaborator the tracker knows who is not wanted: that needs no grant
      * to have worked, and a failure stops the run before anyone gains
      * access. Then it PUTs every wanted login (a 422, no such forge user,
-     * leaves them waiting), and last puts main's rule (MainBranch) back,
-     * whatever anyone changed or removed on the forge; `protects_main` says
-     * whether that worked.
+     * leaves them waiting), and last puts the main branch's rule
+     * (MainBranch) back, whatever anyone changed or removed on the forge;
+     * `protects_main` says whether it is on (not while the repository has
+     * no such branch yet).
      *
      * A PUT the forge refuses otherwise (an account it disabled answers 500,
      * a blocked one 403) holds up nobody else: the others and the rule are
@@ -155,8 +156,7 @@ class RepositoryAccess
         }
 
         try {
-            MainBranch::ensure($client, $owner, $name, $repository->default_branch);
-            $protected = true;
+            $protected = MainBranch::ensure($client, $owner, $name, $repository->default_branch);
         } catch (ForgejoException $e) {
             $protected = false;
             $refused ??= new RepositoryAccessFailed($e, 'patch');

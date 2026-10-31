@@ -10,6 +10,7 @@ use App\Http\Requests\UnlinkRepositoryRequest;
 use App\Http\Resources\GitRepositoryResource;
 use App\Models\GitRepository;
 use App\Models\Project;
+use App\Queries\MainChecksQuery;
 use App\Queries\RepositoryCandidatesQuery;
 use App\Services\Git\ForgejoException;
 use App\Services\Workspace\CreateRepositoryService;
@@ -29,13 +30,18 @@ class ProjectRepositoryController extends Controller
 {
     use RespondsWithServiceResult;
 
-    public function index(Request $request, Project $project): JsonResponse
+    public function index(Request $request, Project $project, MainChecksQuery $mainChecks): JsonResponse
     {
         abort_unless(WorkspaceAccess::canViewProjectCode($request->user(), $project), 403);
 
+        $repositories = $project->repositories()->orderBy('full_name')->get();
+        $checks = $mainChecks->get(array_values(array_map(intval(...), $repositories->modelKeys())));
+
         return response()->json([
             'message' => 'Repositories retrieved.',
-            'data' => GitRepositoryResource::collection($project->repositories()->orderBy('full_name')->get()),
+            'data' => $repositories
+                ->map(fn (GitRepository $repository): array => (new GitRepositoryResource($repository))->withMainChecks($checks[$repository->id] ?? null)->resolve($request))
+                ->all(),
         ]);
     }
 

@@ -18,6 +18,7 @@ use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Connectors\ConnectorInterface;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
@@ -356,6 +357,16 @@ it('answers 403 and changes nothing for a missing or wrong signature', function 
     'a wrong Forgejo signature is not rescued by a right Gitea one' => [['X-Forgejo-Signature' => str_repeat('0', 64)]],
     'empty' => [['X-Forgejo-Signature' => '', 'X-Gitea-Signature' => '']],
 ]);
+
+it('marks the hook for replacing only for a signature that is there and wrong', function () {
+    $key = GitWebhookDelivery::badSignatureKey($this->connection->id);
+
+    hookSend($this->connection, 'push', hookPush([]), ['X-Forgejo-Signature' => null, 'X-Gitea-Signature' => null])->assertForbidden();
+    expect(Cache::has($key))->toBeFalse();
+
+    hookSend($this->connection, 'push', hookPush([]), ['X-Forgejo-Signature' => str_repeat('0', 64)])->assertForbidden();
+    expect(Cache::has($key))->toBeTrue();
+});
 
 it('answers 403 when the connection has no webhook secret', function () {
     $this->connection->forceFill(['webhook_secret' => null])->save();

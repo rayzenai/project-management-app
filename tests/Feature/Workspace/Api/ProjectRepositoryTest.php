@@ -150,6 +150,18 @@ it('lists a project\'s repositories to anyone who can see the project', function
     expect($response->getContent())->not->toContain('bot-token-never-shown')->not->toContain('hook-secret-never-shown');
 })->with(['member', 'manager', 'office admin', 'super-admin']);
 
+it("gives each listed repository its main branch's checks", function () {
+    apiRepoActor('member', $this->project);
+    $repo = apiRepoLinked($this->project, $this->connection);
+    $repo->commits()->create(['sha' => 'aaa', 'message' => 'Work', 'author_name' => 'Asha', 'url' => 'https://git.example/sdoc/app/commit/aaa', 'committed_at' => now()])
+        ->forceFill(['checks_state' => 'passed', 'checks' => [['name' => 'tests (push)', 'state' => 'passed', 'url' => null]]])->save();
+    $repo->branches()->create(['name' => 'main', 'head_sha' => 'aaa']);
+
+    // jsonb keeps no key order: compare by value.
+    expect($this->getJson($this->base)->assertOk()->json('data.0.main_checks'))
+        ->toEqual(['state' => 'passed', 'checks' => [['name' => 'tests (push)', 'state' => 'passed', 'url' => null]]]);
+});
+
 it('keeps the repositories from someone who can\'t see the project', function (string $role) {
     apiRepoLinked($this->project, $this->connection);
     if ($role === 'colleague off the team') {

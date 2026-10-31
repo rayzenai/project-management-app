@@ -15,8 +15,10 @@ use Illuminate\Support\Facades\Log;
  * Asks the forge for the checks of commits the tracker learned of in the
  * last RECENT_DAYS whose checks it hasn't read yet or which still run,
  * newest first; a finished run's webhook normally answers sooner, so this
- * only covers a missed one. A commit with no checks is asked again while it
- * is younger than NONE_AGAIN_MINUTES, in case its run hadn't started. A
+ * only covers a missed one. A just-pushed commit with no checks is asked
+ * again for NONE_AGAIN_MINUTES, in case its run hadn't started (not an old
+ * commit a backfill brought in, which ran nothing). Open pull requests then
+ * take their head commit's checks where they missed them. A
  * commit is asked again no sooner than AGAIN_AFTER_SECONDS. A forge that
  * can't be reached (0) or refuses or throttles (401, 403, 429) is left
  * alone for the rest of the run; any other failure skips only that commit
@@ -42,7 +44,9 @@ class ComputeCommitChecks extends Command
             ->where('created_at', '>=', now()->subDays(self::RECENT_DAYS))
             ->where(fn (Builder $q) => $q->whereNull('checks_state')
                 ->orWhere('checks_state', Checks::RUNNING)
-                ->orWhere(fn (Builder $q) => $q->where('checks_state', Checks::NONE)->where('created_at', '>=', now()->subMinutes(self::NONE_AGAIN_MINUTES))))
+                ->orWhere(fn (Builder $q) => $q->where('checks_state', Checks::NONE)
+                    ->where('created_at', '>=', now()->subMinutes(self::NONE_AGAIN_MINUTES))
+                    ->where('committed_at', '>=', now()->subDay())))
             ->where(fn (Builder $q) => $q->whereNull('checks_checked_at')->orWhere('checks_checked_at', '<', now()->subSeconds(self::AGAIN_AFTER_SECONDS)))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -73,6 +77,8 @@ class ComputeCommitChecks extends Command
                 }
             }
         }
+
+        $checks->catchUpPullRequests();
 
         $this->line("Read the checks of {$asked} commits.");
 

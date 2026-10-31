@@ -721,7 +721,8 @@
                     Lines are added and removed. Code, comment and blank lines
                     are a best guess from each file's language; generated files
                     and merge commits are left out. Pull requests: opened /
-                    merged. Click a person to see their commits, or tick up to {MAX_COMPARED}
+                    merged. Tests: commits whose tests passed / failed. Click a
+                    person to see their commits, or tick up to {MAX_COMPARED}
                     to compare them.
                 </p>
             </section>

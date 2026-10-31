@@ -67,9 +67,7 @@ class CreateRepositoryService
     private function protectMain(ForgejoClient $client, GitConnection $connection, string $name): bool
     {
         try {
-            MainBranch::ensure($client, $connection->owner, $name);
-
-            return true;
+            return MainBranch::ensure($client, $connection->owner, $name);
         } catch (ForgejoException $e) {
             $context = ['repository' => "{$connection->owner}/{$name}", 'status' => $e->status];
 

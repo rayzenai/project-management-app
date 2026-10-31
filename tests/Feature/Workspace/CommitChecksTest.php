@@ -55,7 +55,7 @@ function checksRepository(Project $project, GitConnection $connection, int $forg
     ]);
 }
 
-function checksCommit(GitRepository $repo, string $sha, ?CarbonInterface $learnedAt = null): GitCommit
+function checksCommit(GitRepository $repo, string $sha, ?CarbonInterface $learnedAt = null, ?CarbonInterface $committedAt = null): GitCommit
 {
     $commit = $repo->commits()->create([
         'sha' => $sha,
@@ -63,7 +63,7 @@ function checksCommit(GitRepository $repo, string $sha, ?CarbonInterface $learne
         'author_name' => 'Asha',
         'author_username' => 'asha',
         'url' => "https://git.example/sdoc/app/commit/{$sha}",
-        'committed_at' => now()->subDays(5),
+        'committed_at' => $committedAt ?? now()->subDays(5),
     ]);
 
     if ($learnedAt !== null) {
@@ -119,7 +119,7 @@ function checksFake(string $sha, array $statuses, string $repo = 'app'): void
 // Reading the forge's statuses
 
 it('passes only success, runs pending and fails the rest, sorted by name', function () {
-    $read = Checks::fromCombined(checksCombined('aaa', [
+    $read = Checks::fromCombined(forgeUrl: 'https://git.example', combined: checksCombined('aaa', [
         checksStatus('tests / pest (push)', 'success', 'https://git.example/sdoc/app/actions/runs/4/jobs/0'),
         checksStatus('lint / pint (push)', 'pending'),
         checksStatus('build (push)', 'warning'),
@@ -138,12 +138,30 @@ it('passes only success, runs pending and fails the rest, sorted by name', funct
 });
 
 it('says running while one runs and none failed, passed when all passed, and none for no checks', function () {
-    $state = fn (array $statuses): string => Checks::fromCombined(checksCombined('aaa', $statuses))['state'];
+    $state = fn (array $statuses): string => Checks::fromCombined(forgeUrl: 'https://git.example', combined: checksCombined('aaa', $statuses))['state'];
 
     expect($state([checksStatus('a', 'success'), checksStatus('b', 'pending')]))->toBe(Checks::RUNNING)
         ->and($state([checksStatus('a', 'success'), checksStatus('b', 'success')]))->toBe(Checks::PASSED)
-        ->and(Checks::fromCombined(checksCombined('aaa', [])))->toBe(['state' => Checks::NONE, 'checks' => []])
-        ->and(Checks::fromCombined([]))->toBe(['state' => Checks::NONE, 'checks' => []]);
+        ->and(Checks::fromCombined(forgeUrl: 'https://git.example', combined: checksCombined('aaa', [])))->toBe(['state' => Checks::NONE, 'checks' => []])
+        ->and(Checks::fromCombined([], 'https://git.example'))->toBe(['state' => Checks::NONE, 'checks' => []]);
+});
+
+it("keeps a check's link only when it points at the forge", function () {
+    $read = Checks::fromCombined(checksCombined('aaa', [
+        checksStatus('a (push)', 'success', 'https://git.example/sdoc/app/actions/runs/1/jobs/0'),
+        checksStatus('b (push)', 'success', 'https://phish.example/login'),
+        checksStatus('c (push)', 'success', 'javascript:alert(1)'),
+        checksStatus('d (push)', 'success', 'https://git.example.evil.test/x'),
+        checksStatus('e (push)', 'success', '//git.example/x'),
+    ]), 'https://git.example');
+
+    expect(array_column($read['checks'], 'url', 'name'))->toBe([
+        'a (push)' => 'https://git.example/sdoc/app/actions/runs/1/jobs/0',
+        'b (push)' => null,
+        'c (push)' => null,
+        'd (push)' => null,
+        'e (push)' => null,
+    ]);
 });
 
 it('carries checks to the pages only once the tracker has asked', function () {
@@ -209,14 +227,36 @@ it('asks about recent commits whose checks are unknown or still running, newest 
         ]);
 });
 
-it('asks again about a commit with no checks while it is new, in case its run had not started', function () {
-    $commit = checksCommit($this->repo, 'aaa', now()->subMinutes(3));
+it('asks again about a just-pushed commit with no checks, in case its run had not started, but not an old one a backfill brought', function () {
+    $commit = checksCommit($this->repo, 'aaa', now()->subMinutes(3), now()->subMinutes(4));
     $commit->forceFill(['checks_state' => Checks::NONE, 'checks_checked_at' => now()->subMinutes(2)])->save();
+    $backfilled = checksCommit($this->repo, 'old', now()->subMinutes(3), now()->subDays(40));
+    $backfilled->forceFill(['checks_state' => Checks::NONE, 'checks_checked_at' => now()->subMinutes(2)])->save();
     checksFake('aaa', [checksStatus('tests (push)', 'pending')]);
 
     $this->artisan('git:commit-checks')->expectsOutput('Read the checks of 1 commits.')->assertSuccessful();
 
     expect($commit->refresh()->checks_state)->toBe(Checks::RUNNING);
+    Http::assertSentCount(1);
+});
+
+it("gives open pull requests their head commit's checks where a delivery missed them", function () {
+    $head = checksCommit($this->repo, 'aaa');
+    $head->forceFill(['checks_state' => Checks::FAILED, 'checks' => [['name' => 'tests (pull_request)', 'state' => 'failed', 'url' => null]], 'checks_checked_at' => now()])->save();
+    $missed = checksPullRequest($this->repo, 3, 'aaa');
+    $stale = checksPullRequest($this->repo, 4, 'aaa');
+    $stale->forceFill(['checks_state' => Checks::RUNNING, 'checks' => []])->save();
+    $merged = checksPullRequest($this->repo, 5, 'aaa');
+    $merged->forceFill(['state' => 'merged'])->save();
+    Http::fake();
+
+    $this->artisan('git:commit-checks')->expectsOutput('Read the checks of 0 commits.')->assertSuccessful();
+
+    expect($missed->refresh()->checks_state)->toBe(Checks::FAILED)
+        ->and($missed->checks)->toEqual([['name' => 'tests (pull_request)', 'state' => 'failed', 'url' => null]])
+        ->and($stale->refresh()->checks_state)->toBe(Checks::FAILED)
+        ->and($merged->refresh()->checks_state)->toBeNull();
+    Http::assertNothingSent();
 });
 
 it('stops a connection that answers 401 after one call, and asks the other connection', function () {

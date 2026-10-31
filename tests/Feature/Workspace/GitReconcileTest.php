@@ -299,8 +299,7 @@ it('recreates a missing webhook with a new secret', function () {
         && $r['config']['secret'] === $connection->webhook_secret);
 });
 
-it('writes the stored secret back into a webhook that looks right, quietly, once a run', function () {
-    // The forge never shows a hook's secret, so one changed there can't be seen.
+it('leaves a webhook that looks right alone, quietly', function () {
     Log::spy();
     Http::fake(recForge());
     $hookWrites = fn () => Http::recorded(fn (Request $r) => $r->method() !== 'GET' && str_contains($r->url(), '/hooks'));
@@ -308,19 +307,37 @@ it('writes the stored secret back into a webhook that looks right, quietly, once
     $this->artisan('git:reconcile')
         ->expectsOutputToContain('sdoc at https://git.example: reconciled 1 repository.')
         ->doesntExpectOutputToContain('repaired')
+        ->doesntExpectOutputToContain('replaced')
         ->assertSuccessful();
 
-    expect($hookWrites())->toHaveCount(1)
+    expect($hookWrites())->toHaveCount(0)
         ->and($this->connection->refresh()->webhook_secret)->toBe('secret-sdoc-never-shown');
-    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH'
-        && $r->url() === 'https://git.example/api/v1/orgs/sdoc/hooks/99'
-        && $r['config']['secret'] === 'secret-sdoc-never-shown');
+    Log::shouldNotHaveReceived('warning', fn (string $message) => str_contains($message, 'webhook'));
+});
 
-    $this->artisan('git:reconcile')->assertSuccessful();
+it('replaces the webhook once a delivery came with a wrong signature, as when its secret was changed on the forge', function () {
+    // The forge never shows a hook's secret and its edit can't write one: only a new hook brings them back in step.
+    Log::spy();
+    Http::fake(recForge(stubs: [
+        'git.example/api/v1/orgs/sdoc/hooks/99' => fn (Request $r) => $r->method() === 'DELETE'
+            ? Http::response('', 204)
+            : Http::response(recForgeHook($this->connection)),
+        'git.example/api/v1/orgs/sdoc/hooks' => Http::response(['id' => 123], 201),
+    ]));
+    $this->call('POST', route('git.webhook', $this->connection), [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_FORGEJO_SIGNATURE' => str_repeat('0', 64)], '{}')
+        ->assertForbidden();
 
-    expect($hookWrites())->toHaveCount(2)
-        ->and($hookWrites()->every(fn (array $pair) => $pair[0]->method() === 'PATCH'))->toBeTrue();
-    Log::shouldNotHaveReceived('warning', fn (string $message) => $message === "Put the forge webhook's settings back.");
+    $this->artisan('git:reconcile')->expectsOutputToContain('replaced the webhook')->doesntExpectOutputToContain('never-shown')->assertSuccessful();
+
+    $connection = $this->connection->refresh();
+    expect($connection->webhook_id)->toBe(123)
+        ->and($connection->webhook_secret)->not->toBe('secret-sdoc-never-shown');
+    Http::assertSent(fn (Request $r) => $r->method() === 'DELETE' && $r->url() === 'https://git.example/api/v1/orgs/sdoc/hooks/99');
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message) => $message === 'Replaced the forge webhook, whose deliveries came with a wrong signature.')->once();
+
+    // Once only: the next run finds the new hook as it should be.
+    Http::fake(recForge(stubs: ['git.example/api/v1/orgs/sdoc/hooks/123' => Http::response(recForgeHook($connection, ['id' => 123]))]));
+    $this->artisan('git:reconcile')->doesntExpectOutputToContain('replaced')->assertSuccessful();
 });
 
 it('puts back the settings of a webhook a forge owner changed, with the stored secret', function (string $change) {

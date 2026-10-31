@@ -21,16 +21,23 @@ final class Checks
     public const NONE = 'none';
 
     /**
+     * A check's link is kept only when it is on the forge itself: anyone who
+     * can write to a repository can post a status with any target URL.
+     *
      * @param  array<string, mixed>  $combined  api.CombinedStatus
+     * @param  string  $forgeUrl  the connection's base URL
      * @return array{state: string, checks: list<array{name: string, state: string, url: string|null}>}
      */
-    public static function fromCombined(array $combined): array
+    public static function fromCombined(array $combined, string $forgeUrl): array
     {
+        $forgeHost = strtolower((string) parse_url($forgeUrl, PHP_URL_HOST));
         $checks = [];
 
         foreach ((array) ($combined['statuses'] ?? []) as $status) {
             $status = (array) $status;
             $url = (string) ($status['target_url'] ?? '');
+            $onForge = in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['https', 'http'], true)
+                && strtolower((string) parse_url($url, PHP_URL_HOST)) === $forgeHost;
 
             $checks[] = [
                 'name' => (string) ($status['context'] ?? ''),
@@ -39,7 +46,7 @@ final class Checks
                     'pending' => self::RUNNING,
                     default => self::FAILED,
                 },
-                'url' => $url === '' ? null : $url,
+                'url' => $onForge ? $url : null,
             ];
         }
 

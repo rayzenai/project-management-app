@@ -8,6 +8,7 @@ use App\Models\GitWebhookDelivery;
 use App\Support\Background;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -38,6 +39,12 @@ class GitWebhookController extends Controller
         $signature = $request->headers->get('X-Forgejo-Signature') ?? $request->headers->get('X-Gitea-Signature');
 
         if ($secret === '' || $signature === null || ! hash_equals(hash_hmac('sha256', $body, $secret), $signature)) {
+            // Signed, but not with the stored secret: the nightly reconcile
+            // replaces the hook (anyone could send one, which costs only that).
+            if ($secret !== '' && $signature !== null) {
+                Cache::put(GitWebhookDelivery::badSignatureKey($gitConnection->id), true, now()->addDays(GitWebhookDelivery::BAD_SIGNATURE_DAYS));
+            }
+
             return response()->json(['message' => 'Invalid signature.'], 403);
         }
 

@@ -109,8 +109,9 @@ class ForgejoClient
     }
 
     /**
-     * Puts every setting of the organization webhook back as
-     * createOrganizationHook made it, with $secret.
+     * Puts the organization webhook's settings back as createOrganizationHook
+     * made them. Forgejo 15's hook edit ignores the secret and the
+     * workflow-run events (ReconcileGit replaces a hook for those).
      */
     public function updateOrganizationHook(string $org, int $id, string $url, string $secret): void
     {
@@ -226,6 +227,27 @@ class ForgejoClient
     public function combinedStatus(string $owner, string $name, string $sha): array
     {
         return $this->json($this->send('get', $this->repoPath($owner, $name).'/commits/'.rawurlencode($sha).'/status', query: ['limit' => 50]));
+    }
+
+    /**
+     * The branch protection rule named $rule (api.BranchProtection), or null
+     * when the repository has none by that name (404).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function branchProtection(string $owner, string $name, string $rule): ?array
+    {
+        $response = $this->send('get', $this->repoPath($owner, $name).'/branch_protections/'.rawurlencode($rule), null, [404]);
+
+        return $response->status() === 404 ? null : $this->json($response);
+    }
+
+    /**
+     * Whether the repository has a branch named $branch (404: it hasn't).
+     */
+    public function hasBranch(string $owner, string $name, string $branch): bool
+    {
+        return $this->send('get', $this->repoPath($owner, $name).'/branches/'.rawurlencode($branch), null, [404])->status() !== 404;
     }
 
     /**

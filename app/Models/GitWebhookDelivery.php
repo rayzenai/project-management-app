@@ -26,6 +26,19 @@ class GitWebhookDelivery extends Model
     /** The events the organization webhook subscribes to and the tracker applies. */
     public const EVENTS = ['push', 'create', 'delete', 'pull_request', 'repository', 'action_run_success', 'action_run_failure'];
 
+    /** How long a delivery that failed its signature marks the connection's hook for replacing. */
+    public const BAD_SIGNATURE_DAYS = 3;
+
+    /**
+     * The cache key set when a delivery to the connection came with a wrong
+     * signature: a secret changed on the forge, which the forge never shows
+     * and its hook edit can't write back, so the reconcile replaces the hook.
+     */
+    public static function badSignatureKey(int $connectionId): string
+    {
+        return "git-webhook-bad-signature:{$connectionId}";
+    }
+
     public $timestamps = false;
 
     protected $fillable = [

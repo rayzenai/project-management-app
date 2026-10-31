@@ -411,6 +411,27 @@ it('updates a branch protection', function () {
         && $r->data() === ['push_whitelist_usernames' => ['asha']]);
 });
 
+it('reads a branch protection rule, or null when there is none', function () {
+    Http::fake([
+        FORGE.'/repos/sdoc/egp-api/branch_protections/main' => Http::response(['rule_name' => 'main', 'enable_push' => false]),
+        FORGE.'/repos/sdoc/egp-api/branch_protections/dev' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+    ]);
+
+    expect(forgeClient()->branchProtection('sdoc', 'egp-api', 'main'))->toBe(['rule_name' => 'main', 'enable_push' => false])
+        ->and(forgeClient()->branchProtection('sdoc', 'egp-api', 'dev'))->toBeNull();
+});
+
+it('says whether a branch exists', function () {
+    Http::fake([
+        FORGE.'/repos/sdoc/egp-api/branches/main' => Http::response(['name' => 'main']),
+        FORGE.'/repos/sdoc/egp-api/branches/*' => Http::response(['message' => 'branch not found'], 404),
+    ]);
+
+    expect(forgeClient()->hasBranch('sdoc', 'egp-api', 'main'))->toBeTrue()
+        ->and(forgeClient()->hasBranch('sdoc', 'egp-api', 'release/1.0'))->toBeFalse();
+    Http::assertSent(fn (Request $r) => $r->url() === FORGE.'/repos/sdoc/egp-api/branches/release%2F1.0');
+});
+
 it('reads a commit with its stats and parents', function () {
     Http::fake([FORGE.'/repos/sdoc/egp-api/git/commits/abc123*' => Http::response([
         'sha' => 'abc123',

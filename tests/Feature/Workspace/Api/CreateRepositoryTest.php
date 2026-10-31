@@ -83,6 +83,7 @@ function apiNewRepoFakeForge(array $stubs = []): void
         'git.example/api/v1/orgs/sdoc/repos' => Http::response(apiNewRepoForge(), 201),
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections/main' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
         'git.example/api/v1/repos/sdoc/tp-api/branch_protections' => Http::response(['rule_name' => 'main'], 201),
+        'git.example/api/v1/repos/sdoc/tp-api/branches/main' => Http::response(['name' => 'main']),
         'git.example/api/v1/repos/sdoc/tp-api' => Http::response(apiNewRepoForge()),
         'git.example/api/v1/repos/sdoc/tp-api/collaborators*' => Http::response([]),
     ], $stubs));

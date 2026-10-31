@@ -17,6 +17,7 @@ use App\Services\Git\UnlinksHeldBack;
 use Closure;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -175,13 +176,12 @@ class ReconcileGit extends Command
     /**
      * Puts back the webhook when a forge owner deleted it (a new hook and
      * secret), or changed it: switched it off, pointed it elsewhere, narrowed
-     * its branches or its content type (every setting again, with the stored
-     * secret). A hook missing an event the tracker needs is replaced by a new
-     * one, then deleted: Forgejo 15's hook edit can't switch the workflow-run
-     * events on (editHook in routers/api/v1/utils/hook.go leaves them out).
-     * The forge never shows a hook's secret, so one changed there can't be
-     * seen: every run writes the settings and the stored secret back, and
-     * says so only when a setting it can see was off.
+     * its branches or its content type (those settings again). A hook missing
+     * an event the tracker needs, or whose deliveries came with a wrong
+     * signature since the last run, is replaced by a new one with a new
+     * secret, then deleted: Forgejo 15's hook edit can't switch the
+     * workflow-run events on, and never writes a secret (editHook in
+     * routers/api/v1/utils/hook.go), and the forge never shows one.
      *
      * @return string|null what it did, or null when the hook looked as it should
      */
@@ -192,13 +192,14 @@ class ReconcileGit extends Command
         $id = $connection->webhook_id;
         $hook = $id === null ? null : $client->organizationHook($connection->owner, $id);
 
-        if ($id !== null && $hook !== null && self::hookHasEvents($hook)) {
-            $client->updateOrganizationHook($connection->owner, $id, $url, (string) $connection->webhook_secret);
+        $badSignature = Cache::pull(GitWebhookDelivery::badSignatureKey($connection->id)) !== null;
 
+        if ($id !== null && $hook !== null && self::hookHasEvents($hook) && ! $badSignature) {
             if (self::hookIsIntact($hook, $url)) {
                 return null;
             }
 
+            $client->updateOrganizationHook($connection->owner, $id, $url, (string) $connection->webhook_secret);
             Log::warning("Put the forge webhook's settings back.", ['owner' => $connection->owner, 'url' => $connection->base_url]);
 
             return 'repaired the webhook';
@@ -219,7 +220,9 @@ class ReconcileGit extends Command
             Log::warning("Couldn't delete the forge webhook the tracker replaced; delete it on the forge.", ['owner' => $connection->owner, 'url' => $connection->base_url, 'hook' => $id, 'status' => $e->status]);
         }
 
-        Log::warning('Replaced the forge webhook, which lacked events the tracker needs.', ['owner' => $connection->owner, 'url' => $connection->base_url]);
+        Log::warning($badSignature
+            ? 'Replaced the forge webhook, whose deliveries came with a wrong signature.'
+            : 'Replaced the forge webhook, which lacked events the tracker needs.', ['owner' => $connection->owner, 'url' => $connection->base_url]);
 
         return 'replaced the webhook';
     }

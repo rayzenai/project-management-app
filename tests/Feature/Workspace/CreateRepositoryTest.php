@@ -101,8 +101,8 @@ function newRepoForge(string $name, int $id = 701): array
 }
 
 /**
- * The forge making sdoc/{$name}: it creates it, has no rule on its main yet
- * and accepts the new one, describes it, has no collaborators on it and
+ * The forge making sdoc/{$name}: it creates it with a main branch, has no
+ * rule on it yet and accepts the new one, describes it, has no collaborators on it and
  * takes the link back, except what $stubs replace.
  *
  * @param  array<string, mixed>  $stubs
@@ -113,6 +113,7 @@ function newRepoFakeForge(string $name = 'tp-api', array $stubs = []): void
         'git.example/api/v1/orgs/sdoc/repos' => Http::response(newRepoForge($name), 201),
         "git.example/api/v1/repos/sdoc/{$name}/branch_protections/main" => Http::response(['message' => 'The target couldn\'t be found.'], 404),
         "git.example/api/v1/repos/sdoc/{$name}/branch_protections" => Http::response(['rule_name' => 'main', 'branch_name' => 'main'], 201),
+        "git.example/api/v1/repos/sdoc/{$name}/branches/main" => Http::response(['name' => 'main']),
         "git.example/api/v1/repos/sdoc/{$name}" => Http::response(newRepoForge($name)),
         "git.example/api/v1/repos/sdoc/{$name}/collaborators*" => Http::response([]),
     ], $stubs));
@@ -133,12 +134,24 @@ function newRepoMainRule(): array
         'enable_push_whitelist' => false,
         'push_whitelist_usernames' => [],
         'push_whitelist_teams' => [],
+        'push_whitelist_deploy_keys' => false,
         'enable_merge_whitelist' => false,
+        'merge_whitelist_usernames' => [],
+        'merge_whitelist_teams' => [],
         'enable_status_check' => true,
         'status_check_contexts' => ['*'],
         'required_approvals' => 1,
-        'dismiss_stale_approvals' => true,
+        'enable_approvals_whitelist' => false,
+        'approvals_whitelist_username' => [],
+        'approvals_whitelist_teams' => [],
         'block_on_rejected_reviews' => true,
+        'block_on_official_review_requests' => false,
+        'block_on_outdated_branch' => false,
+        'dismiss_stale_approvals' => true,
+        'ignore_stale_approvals' => false,
+        'require_signed_commits' => false,
+        'protected_file_patterns' => '',
+        'unprotected_file_patterns' => '',
         'apply_to_admins' => true,
     ];
 }
@@ -154,9 +167,10 @@ it('lets a project manager create a repository: private, with a README, main pro
         ->assertSessionHas('workspace_flash', ['success' => true, 'message' => 'Created and linked sdoc/tp-api.']);
 
     $sent = Http::recorded()->map(fn (array $pair): string => $pair[0]->method().' '.$pair[0]->url())->all();
-    expect(array_slice($sent, 0, 4))->toBe([
+    expect(array_slice($sent, 0, 5))->toBe([
         'POST https://git.example/api/v1/orgs/sdoc/repos',
-        'PATCH https://git.example/api/v1/repos/sdoc/tp-api/branch_protections/main',
+        'GET https://git.example/api/v1/repos/sdoc/tp-api/branch_protections/main',
+        'GET https://git.example/api/v1/repos/sdoc/tp-api/branches/main',
         'POST https://git.example/api/v1/repos/sdoc/tp-api/branch_protections',
         'GET https://git.example/api/v1/repos/sdoc/tp-api',
     ]);
