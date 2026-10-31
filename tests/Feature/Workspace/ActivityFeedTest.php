@@ -53,5 +53,5 @@ it('shows observer-written activity in the task peek', function () {
         ->json('data.activity');
 
     expect($activity)->not->toBeEmpty()
-        ->and(collect($activity)->pluck('description')->implode(' '))->toContain('created');
+        ->and(collect($activity)->pluck('description')->implode(' '))->toContain('Created the task');
 });

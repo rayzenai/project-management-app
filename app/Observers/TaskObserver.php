@@ -6,6 +6,7 @@ use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Notifications\TaskStatusChanged;
 use App\Services\ProjectActivityRecorder;
+use App\Support\ActivityText;
 use App\Support\WorkspaceAccess;
 
 class TaskObserver
@@ -27,7 +28,7 @@ class TaskObserver
             taskId: $item->id,
             subject: $item,
             action: ProjectActivity::ACTION_CREATED,
-            description: 'Plan #'.$item->item_number.' — "'.ProjectActivityRecorder::truncate($item->title, 80).'" created',
+            description: 'Created the task',
         );
     }
 
@@ -37,7 +38,7 @@ class TaskObserver
             taskId: $item->id,
             subject: $item,
             action: ProjectActivity::ACTION_RESTORED,
-            description: 'Plan #'.$item->item_number.' — "'.ProjectActivityRecorder::truncate($item->title, 80).'" restored',
+            description: 'Restored the task',
         );
     }
 
@@ -53,7 +54,7 @@ class TaskObserver
                 taskId: $item->id,
                 subject: $item,
                 action: ProjectActivity::ACTION_STATUS_CHANGED,
-                description: 'Status: '.($from ?? '—').' → '.$to,
+                description: ActivityText::status($from, $to),
                 changes: ['from' => $from, 'to' => $to],
             );
 
@@ -78,7 +79,7 @@ class TaskObserver
                     taskId: $item->id,
                     subject: $item,
                     action: ProjectActivity::ACTION_COMPLETED,
-                    description: 'Plan marked complete',
+                    description: 'Marked complete',
                     changes: ['from' => $from, 'to' => $to],
                 );
             } elseif ($from === 100 && $to !== 100) {
@@ -86,7 +87,7 @@ class TaskObserver
                     taskId: $item->id,
                     subject: $item,
                     action: ProjectActivity::ACTION_REOPENED,
-                    description: 'Plan reopened',
+                    description: 'Reopened',
                     changes: ['from' => $from, 'to' => $to],
                 );
             }
@@ -101,14 +102,11 @@ class TaskObserver
             $from = $original[$field] ?? null;
             $to = $item->getAttribute($field);
 
-            $fromDisplay = ProjectActivityRecorder::truncate((string) $from, 100);
-            $toDisplay = ProjectActivityRecorder::truncate((string) $to, 100);
-
             ProjectActivityRecorder::record(
                 taskId: $item->id,
                 subject: $item,
                 action: ProjectActivity::ACTION_UPDATED,
-                description: $label.' updated: '.($fromDisplay === '' ? '—' : $fromDisplay).' → '.($toDisplay === '' ? '—' : $toDisplay),
+                description: ActivityText::change($label, $from, $to),
                 changes: ['field' => $field, 'from' => $from, 'to' => is_scalar($to) ? $to : (string) $to],
             );
         }

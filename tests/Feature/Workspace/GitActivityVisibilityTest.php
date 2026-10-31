@@ -109,7 +109,7 @@ function gitActivityMentionsGit(iterable $rows): bool
 /** Whether the outsider still sees the non-git rows, so an empty list can't pass for hidden. */
 function gitActivityMentionsTask(iterable $rows): bool
 {
-    return str_contains(json_encode($rows, JSON_THROW_ON_ERROR), 'created');
+    return str_contains(json_encode($rows, JSON_THROW_ON_ERROR), 'Created the task');
 }
 
 dataset('code viewers', ['team member', 'manager', 'office admin', 'super-admin']);

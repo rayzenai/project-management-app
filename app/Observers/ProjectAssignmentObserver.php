@@ -6,6 +6,7 @@ use App\Models\ProjectActivity;
 use App\Models\ProjectAssignment;
 use App\Notifications\TaskAssigned;
 use App\Services\ProjectActivityRecorder;
+use App\Support\ActivityText;
 
 class ProjectAssignmentObserver
 {
@@ -39,7 +40,7 @@ class ProjectAssignmentObserver
                 taskId: $assignment->task_id,
                 subject: $assignment,
                 action: ProjectActivity::ACTION_UPDATED,
-                description: 'Priority: '.((string) ($original['priority'] ?? '—')).' → '.((string) ($assignment->priority ?? '—')),
+                description: ActivityText::priority($original['priority'] ?? null, $assignment->priority),
                 changes: ['from' => $original['priority'] ?? null, 'to' => $assignment->priority],
             );
             $emittedSpecific = true;

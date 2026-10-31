@@ -539,7 +539,21 @@ class Task extends Model
      */
     protected function statusLabel(): Attribute
     {
-        return Attribute::get(fn () => config("project-management.statuses.{$this->status}.label", ucfirst((string) $this->status)));
+        return Attribute::get(fn () => self::labelForStatus($this->status));
+    }
+
+    /**
+     * A status as people read it: its label in the workflow config, a key
+     * the config no longer has in words ("on_hold" as "On hold"), nothing as
+     * "none". Never show a status key itself.
+     */
+    public static function labelForStatus(?string $status): string
+    {
+        if ($status === null || $status === '') {
+            return 'none';
+        }
+
+        return (string) config("project-management.statuses.{$status}.label", ucfirst(str_replace('_', ' ', $status)));
     }
 
     /**

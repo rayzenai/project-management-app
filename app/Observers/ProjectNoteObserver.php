@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\ProjectActivity;
 use App\Models\ProjectNote;
 use App\Services\ProjectActivityRecorder;
+use App\Support\ActivityText;
 
 class ProjectNoteObserver
 {
@@ -14,7 +15,7 @@ class ProjectNoteObserver
             taskId: $note->task_id,
             subject: $note,
             action: ProjectActivity::ACTION_CREATED,
-            description: 'Note added: '.$note->type.' — "'.ProjectActivityRecorder::truncate($note->body, 60).'"',
+            description: ActivityText::noteAdded($note->type, (string) $note->body),
         );
     }
 

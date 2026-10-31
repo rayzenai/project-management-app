@@ -798,7 +798,9 @@ unicode glyph icons (Lucide only), no mono-uppercase eyebrow labels.
   PHPStan level 7 runs over `app/` in CI.
 - Svelte 5 runes; reactive collections use `SvelteSet`/`SvelteMap`; no `{@html}`.
 - Slugs in routes, never numeric ids for projects/tasks.
-- Audit trail only via observers + `ProjectActivityRecorder`.
+- Audit trail only via observers + `ProjectActivityRecorder`; a row's words
+  through `App\Support\ActivityText` (status labels via
+  `Task::labelForStatus`, dates, "none"), never a stored key or timestamp.
 - New polymorphic subjects go in the morph map in `AppServiceProvider`.
 - Tests: `tests/Feature/Workspace/**` (web), `tests/Feature/Workspace/Api/**`
   (API), `tests/Unit`. Any change to `WorkspaceAccess` or a service gets happy +

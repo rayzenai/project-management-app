@@ -96,10 +96,6 @@ class ReorderTasksService
 
     private function statusLabel(?string $status): string
     {
-        if (! $status) {
-            return 'none';
-        }
-
-        return config("project-management.statuses.{$status}.label", $status);
+        return Task::labelForStatus($status);
     }
 }
