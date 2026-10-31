@@ -31,6 +31,7 @@ use App\Http\Controllers\Workspace\TaskSearchController;
 use App\Http\Controllers\Workspace\TeamController;
 use App\Http\Controllers\Workspace\TeamMemberController;
 use App\Http\Controllers\Workspace\TeamProgressController;
+use App\Http\Controllers\Workspace\WorkController;
 use App\Http\Controllers\Workspace\WorkspaceNoteController;
 use App\Http\Middleware\EnsureCanSignIn;
 use App\Http\Middleware\EnsureCanUseGit;
@@ -145,6 +146,9 @@ Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
         // (attendance: register, leave and kaaj routes end)
 
         // Work reports: today's work, a person's work, a team's work.
+        Route::get('/work', [WorkController::class, 'day'])->name('work');
+        Route::get('/work/team', [WorkController::class, 'team'])->name('work.team');
+        Route::get('/people/{member}/work', [WorkController::class, 'person'])->whereNumber('member')->name('people.work');
         // (work routes end)
 
         // Every route that acts on a task or a task-child is gated centrally by
