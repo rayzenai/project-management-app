@@ -435,7 +435,7 @@
             </section>
         {/if}
 
-        {#if shared.attendance || shared.office?.attendance || shared.office?.attendance_settings}
+        {#if shared.clock || shared.office?.attendance || shared.office?.attendance_settings}
             <section>
                 <h2 class="section-title mb-3">Attendance</h2>
                 <dl class="border-t border-line">

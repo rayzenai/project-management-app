@@ -41,8 +41,9 @@ use Symfony\Component\HttpFoundation\Response;
  *   on in Settings. Screens hide what is off.
  * - `gitEnabled` — whether the user may use git anywhere (GitAccess), so the
  *   Guide shows its Code section only to them.
- * - `attendance` — the user's day for the top bar's clock button
- *   (MyAttendanceQuery); null when they can't punch.
+ * - `clock` — the user's day for the top bar's clock button
+ *   (MyAttendanceQuery); null when they can't punch. Not `attendance`: the
+ *   work pages carry an `attendance` of their own, which would hide it.
  * - `office` — which office pages (organogram, attendance, leave and kaaj,
  *   work reports) the sidebar offers (OfficeLinks).
  * - `managedProgramIds` / `managedPrograms` — the programs the user manages
@@ -225,7 +226,7 @@ class ShareWorkspaceData
         Inertia::share('gitEnabled', fn (): bool => $request->user() instanceof User && GitAccess::anyFor($request->user()));
 
         // The top bar's clock: today's punches and the next step, or null.
-        Inertia::share('attendance', fn (): ?array => app(MyAttendanceQuery::class)->get($request->user()));
+        Inertia::share('clock', fn (): ?array => app(MyAttendanceQuery::class)->get($request->user()));
 
         // The office pages the sidebar offers.
         Inertia::share('office', fn (): array => OfficeLinks::for($request->user()));

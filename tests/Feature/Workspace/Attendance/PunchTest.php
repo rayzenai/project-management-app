@@ -185,7 +185,7 @@ it('shares the day with every page and follows it through each punch', function 
     $state = function (): array {
         $props = [];
         $this->get('/workspace/my')->assertInertia(function (AssertableInertia $page) use (&$props) {
-            $props = $page->toArray()['props']['attendance'];
+            $props = $page->toArray()['props']['clock'];
         });
 
         return $props;
@@ -224,7 +224,7 @@ it('shares the day with every page and follows it through each punch', function 
 it('shares no clock with someone who cannot punch', function () {
     AttendanceSetting::query()->update(['enabled' => false]);
 
-    $this->get('/workspace/my')->assertInertia(fn (AssertableInertia $page) => $page->where('attendance', null));
+    $this->get('/workspace/my')->assertInertia(fn (AssertableInertia $page) => $page->where('clock', null));
 
     expect(app(MyAttendanceQuery::class)->get(null))->toBeNull();
 });
@@ -235,4 +235,14 @@ it('shows only the user\'s own punches of today', function () {
     AttendancePunch::factory()->for($this->member)->at('in', '2026-11-01 09:30:00')->create();
 
     expect(app(MyAttendanceQuery::class)->get($this->user))->toMatchArray(['punches' => [], 'state' => 'not_in']);
+});
+
+it("keeps the clock on a page that has attendance of its own (a person's week)", function () {
+    punchFrom(PUNCH_OFFICE_IP, ['kind' => 'in']);
+
+    $this->get("/workspace/people/{$this->member->id}/work")->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Work/Person')
+        ->where('clock.state', 'in')
+        ->has('clock.punches', 1)
+        ->has('attendance.days_present'));
 });

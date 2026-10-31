@@ -622,7 +622,7 @@ page for these parts.
   (`canPunch`), decided by whoever `oversees` them (`canDecideLeave`), or
   recorded by them directly (`canRecordLeaveFor`); kaaj is duty, never
   absence. Reads: `MyAttendanceQuery` (the top bar's `ClockButton`, shared
-  as `attendance`), `AttendanceRegisterQuery` (a day: expected = listed
+  as `clock`, never `attendance`, which the work pages use for their own), `AttendanceRegisterQuery` (a day: expected = listed
   non-exempt people on a day that expects work, minus approved leave and
   kaaj unless they clocked in), `AttendanceSummaryQuery` (per person over a
   range, from the day attendance was turned on), `LeaveQuery`,

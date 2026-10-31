@@ -20,7 +20,7 @@
 
     /**
      * The top bar's clock, for everyone who can punch (the shared
-     * `attendance` prop is null otherwise). Before clocking in it is one
+     * `clock` prop is null otherwise). Before clocking in it is one
      * button; afterwards it says where the day stands and opens to the
      * other allowed steps and where the last punch came from. Each press
      * asks the browser for one location reading (nothing in between) and
@@ -31,7 +31,7 @@
     type Reading = { latitude: number; longitude: number; accuracy_m: number };
 
     const day = $derived(
-        ((page.props as Record<string, unknown>).attendance ??
+        ((page.props as Record<string, unknown>).clock ??
             null) as MyAttendance | null,
     );
     const last = $derived(day?.punches.at(-1) ?? null);
@@ -122,7 +122,7 @@
             {
                 preserveScroll: true,
                 preserveState: true,
-                only: ['attendance', 'flash'],
+                only: ['clock', 'flash'],
                 onSuccess: () => {
                     pending = null;
                     note = '';
