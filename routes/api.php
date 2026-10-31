@@ -124,7 +124,9 @@ Route::prefix('v1')->name('api.')->group(function () {
             // (structure routes end)
 
             // Attendance: the clock, the register, leave and kaaj, settings.
-            // (attendance routes end)
+            // (attendance: clock and settings routes end)
+
+            // (attendance: register, leave and kaaj routes end)
 
             // Work reports: today's work, a person's work, a team's work.
             // (work routes end)
