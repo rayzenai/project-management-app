@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ReadsDayRange;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\User;
@@ -9,7 +10,6 @@ use App\Queries\CodeActivityQuery;
 use App\Support\Git\GitAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 
 /**
  * The code activity report's filters, shared by the report and a person's
@@ -22,6 +22,8 @@ use Illuminate\Validation\Validator;
  */
 class CodeActivityRequest extends FormRequest
 {
+    use ReadsDayRange;
+
     public const DEFAULT_DAYS = 30;
 
     public const MAX_DAYS = 366;
@@ -69,30 +71,12 @@ class CodeActivityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'from' => ['nullable', 'date_format:Y-m-d'],
-            'to' => ['nullable', 'date_format:Y-m-d'],
+            ...$this->rangeRules(),
             'project' => ['nullable', 'string'],
             'program' => ['nullable', 'string'],
             'members' => ['nullable', 'array', 'max:'.self::MAX_MEMBERS],
             'members.*' => ['integer', 'min:1'],
         ];
-    }
-
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $validator): void {
-            if ($validator->errors()->hasAny(['from', 'to'])) {
-                return;
-            }
-
-            [$from, $to] = $this->range();
-
-            if ($to->lt($from)) {
-                $validator->errors()->add('to', "The end date can't be before the start date.");
-            } elseif ((int) round($from->diffInDays($to)) + 1 > self::MAX_DAYS) {
-                $validator->errors()->add('to', 'Choose a range of at most '.self::MAX_DAYS.' days.');
-            }
-        });
     }
 
     /**
@@ -129,15 +113,14 @@ class CodeActivityRequest extends FormRequest
         ];
     }
 
-    /**
-     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
-     */
-    private function range(): array
+    protected function defaultFrom(CarbonImmutable $to): CarbonImmutable
     {
-        $to = $this->filled('to') ? CarbonImmutable::parse($this->string('to')->value())->startOfDay() : CarbonImmutable::today();
-        $from = $this->filled('from') ? CarbonImmutable::parse($this->string('from')->value())->startOfDay() : $to->subDays(self::DEFAULT_DAYS - 1);
+        return $to->subDays(self::DEFAULT_DAYS - 1);
+    }
 
-        return [$from, $to];
+    protected function maxRangeDays(): int
+    {
+        return self::MAX_DAYS;
     }
 
     /**

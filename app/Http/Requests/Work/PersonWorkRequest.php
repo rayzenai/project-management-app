@@ -2,18 +2,18 @@
 
 namespace App\Http\Requests\Work;
 
-use App\Http\Requests\Work\Concerns\ReadsWorkRange;
+use App\Http\Requests\Concerns\ReadsDayRange;
 use App\Models\Member;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * One person's work over a range of days (ReadsWorkRange): for the person
+ * One person's work over a range of days (ReadsDayRange): for the person
  * themselves and whoever oversees them (WorkspaceAccess::canViewPersonOf).
  */
 class PersonWorkRequest extends FormRequest
 {
-    use ReadsWorkRange;
+    use ReadsDayRange;
 
     public function authorize(): bool
     {

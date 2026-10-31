@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Database\Factories\AttendanceSettingFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -56,6 +57,17 @@ class AttendanceSetting extends Model
             'seasons' => 'array',
             'grace_minutes' => 'integer',
         ];
+    }
+
+    /**
+     * Settings with attendance on.
+     *
+     * @param  Builder<AttendanceSetting>  $query
+     * @return Builder<AttendanceSetting>
+     */
+    public function scopeEnabled(Builder $query): Builder
+    {
+        return $query->where('enabled', true);
     }
 
     /**

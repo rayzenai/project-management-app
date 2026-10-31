@@ -2,6 +2,7 @@
     import { router, useForm } from '@inertiajs/svelte';
     import { LocateFixed, Plus, TriangleAlert, X } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
+    import OrganizationSelect from '../../components/filters/OrganizationSelect.svelte';
     import { WEEKDAYS } from '../../lib/attendance';
     import type {
         AttendanceSettings,
@@ -11,6 +12,7 @@
         Season,
     } from '../../lib/attendance';
     import { formatDistance } from '../../lib/format';
+    import type { Id, OrganizationOption } from '../../lib/types';
 
     /**
      * One organization's attendance: the switch (super-admins), working
@@ -33,7 +35,7 @@
         networks: OfficeNetwork[];
         holidays: Holiday[];
         canEnable: boolean;
-        organizations: { id: number; name: string }[];
+        organizations: OrganizationOption[];
         yourAddress: string | null;
     } = $props();
 
@@ -57,10 +59,10 @@
         router.put(base, { enabled }, { preserveScroll: true });
     }
 
-    function switchOrganization(e: Event) {
+    function switchOrganization(id: Id) {
         router.get(
             '/workspace/attendance/settings',
-            { organization: (e.currentTarget as HTMLSelectElement).value },
+            { organization: id },
             { preserveScroll: false },
         );
     }
@@ -272,18 +274,11 @@
             <span class="hidden text-fg-faint sm:inline">/</span>
             <span class="truncate font-medium">Settings</span>
         </div>
-        {#if organizations.length > 0}
-            <select
-                aria-label="Organization"
-                class="input h-7 w-auto max-w-44 py-0"
-                value={organization.id}
-                onchange={switchOrganization}
-            >
-                {#each organizations as option (option.id)}
-                    <option value={option.id}>{option.name}</option>
-                {/each}
-            </select>
-        {/if}
+        <OrganizationSelect
+            options={organizations}
+            value={organization.id}
+            onchange={switchOrganization}
+        />
     {/snippet}
 
     <div class="max-w-3xl space-y-10">

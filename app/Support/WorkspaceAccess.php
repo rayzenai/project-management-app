@@ -880,14 +880,14 @@ class WorkspaceAccess
 
         return self::$attendanceMemo[(int) $organizationId] ??= AttendanceSetting::query()
             ->where('organization_id', $organizationId)
-            ->where('enabled', true)
+            ->enabled()
             ->exists();
     }
 
     /** Whether any organization has attendance on (a super-admin's menu). */
     public static function attendanceEnabledAnywhere(): bool
     {
-        return AttendanceSetting::query()->where('enabled', true)->exists();
+        return AttendanceSetting::query()->enabled()->exists();
     }
 
     /** Turn an organization's attendance on or off: super-admins only. */

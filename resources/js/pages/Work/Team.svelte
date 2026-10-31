@@ -3,9 +3,9 @@
     import { ArrowDown, ArrowUp, ListChecks } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import ScopeSelects from '../../components/filters/ScopeSelects.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import RangePicker from '../../components/work/RangePicker.svelte';
-    import ScopeSelects from '../../components/work/ScopeSelects.svelte';
     import { dayRange, hoursLabel } from '../../lib/dates';
     import { plural } from '../../lib/format';
     import type { Id } from '../../lib/types';
@@ -184,6 +184,7 @@
                     {options}
                     organization={organization_id}
                     {under}
+                    label="Whose work"
                     onchange={(change: {
                         organization?: Id;
                         under: Id | null;

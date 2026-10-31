@@ -3,6 +3,7 @@
 namespace App\Queries\Work;
 
 use App\Models\Member;
+use App\Queries\Structure\PersonRef;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -11,7 +12,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * what is overdue for them now, their commits and merged pull requests.
  * The caller's FormRequest checks WorkspaceAccess::canViewPersonOf first.
  * `attendance` is their attendance totals over the range, or null while
- * their organization's attendance is off.
+ * their organization's attendance is off or they are exempt from it.
  *
  * @phpstan-import-type WorkTask from WorkActivityQuery
  * @phpstan-import-type OverdueTask from WorkActivityQuery
@@ -42,12 +43,12 @@ final class PersonWorkQuery
 
         return [
             'member' => [
-                ...WorkPerson::of($member),
+                ...PersonRef::of($member),
                 'organization_id' => $member->organization_id,
                 'reports_to' => $boss === null ? null : ['id' => (int) $boss->getKey(), 'name' => $boss->name],
             ],
             'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
-            'attendance' => $member->organization_id === null || $member->attendance_exempt
+            'attendance' => $member->organization_id === null
                 ? null
                 : ($this->attendance->range((int) $member->organization_id, [(int) $member->getKey()], $from, $to)[(int) $member->getKey()] ?? null),
             'tasks' => [

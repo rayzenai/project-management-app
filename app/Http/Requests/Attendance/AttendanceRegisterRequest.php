@@ -2,22 +2,27 @@
 
 namespace App\Http\Requests\Attendance;
 
-use App\Http\Requests\Attendance\Concerns\ResolvesAttendanceScope;
-use App\Queries\Attendance\AttendanceRegisterQuery;
-use Carbon\CarbonImmutable;
+use App\Http\Requests\Concerns\ReadsDay;
+use App\Http\Requests\Concerns\ReadsReportScope;
+use App\Queries\Structure\OrganizationChoicesQuery;
+use App\Queries\Structure\PeopleInViewQuery;
+use App\Support\WorkspaceAccess;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * One day of the attendance register (`?date=`, today unless given), for
- * an organization or `?under=` someone in it (ResolvesAttendanceScope).
+ * One day of the attendance register (ReadsDay), for an organization or
+ * someone's team in it (ReadsReportScope): whoever may open its register
+ * (WorkspaceAccess::canViewAttendanceRegister).
  */
 class AttendanceRegisterRequest extends FormRequest
 {
-    use ResolvesAttendanceScope;
+    use ReadsDay;
+    use ReadsReportScope;
 
-    public function authorize(AttendanceRegisterQuery $query): bool
+    public function authorize(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
     {
-        return $this->authorizeScope($query);
+        return $this->authorizeScope($organizations, $people);
     }
 
     /**
@@ -25,18 +30,7 @@ class AttendanceRegisterRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'date' => ['nullable', 'date_format:Y-m-d'],
-            'under' => ['nullable', 'integer', 'min:1'],
-            'organization' => ['nullable', 'integer', 'min:1'],
-        ];
-    }
-
-    public function day(): CarbonImmutable
-    {
-        return $this->filled('date')
-            ? CarbonImmutable::parse($this->string('date')->value())->startOfDay()
-            : CarbonImmutable::today();
+        return [...$this->scopeRules(), ...$this->dayRules()];
     }
 
     /**
@@ -51,5 +45,15 @@ class AttendanceRegisterRequest extends FormRequest
             'under' => $this->under()?->id,
             'organization' => $this->organizationId(),
         ];
+    }
+
+    protected function maySeeOrganization(Authenticatable $user, int $organizationId): bool
+    {
+        return WorkspaceAccess::canViewAttendanceRegister($user, $organizationId);
+    }
+
+    protected function aboutAttendance(): bool
+    {
+        return true;
     }
 }

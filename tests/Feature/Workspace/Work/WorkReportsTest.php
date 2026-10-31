@@ -215,8 +215,8 @@ it("shows an organization's admin everyone in it, by name", function () {
     expect(collect($page['people'])->pluck('member.name')->all())
         ->toBe(['Anil Gurung', 'Asha Admin', 'Dipak Director', 'Ek ED', 'Pema Peer', 'Suman Karki'])
         ->and($page['options']['teams'])->toBe([
-            ['id' => W::member($this->w->director)->id, 'name' => 'Dipak Director'],
-            ['id' => W::member($this->w->ed)->id, 'name' => 'Ek ED'],
+            ['id' => W::member($this->w->director)->id, 'name' => 'Dipak Director', 'designation' => null],
+            ['id' => W::member($this->w->ed)->id, 'name' => 'Ek ED', 'designation' => null],
         ])
         ->and($page['options']['organizations'])->toBe([]);
 });

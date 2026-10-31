@@ -211,8 +211,8 @@ it('offers the teams of people in view as the person filter', function () {
     $admin = registerPage($this->actingAs($this->admin->user)->get('/workspace/attendance'));
     $director = registerPage($this->actingAs($this->director->user)->get('/workspace/attendance'));
 
-    expect(collect($admin['teams'])->pluck('name')->all())->toBe(['Anil', 'Director', 'Executive Director'])
-        ->and(collect($director['teams'])->pluck('name')->all())->toBe(['Anil']);
+    expect(collect($admin['options']['teams'])->pluck('name')->all())->toBe(['Anil', 'Director', 'Executive Director'])
+        ->and(collect($director['options']['teams'])->pluck('name')->all())->toBe(['Anil']);
 });
 
 it('narrows to someone and everyone below them', function () {
@@ -220,7 +220,7 @@ it('narrows to someone and everyone below them', function () {
 
     expect(array_keys(registerRows($register)))->toEqualCanonicalizing(['Anil', 'Intern'])
         ->and($register['filters']['under'])->toBe($this->anil->id)
-        ->and($register['teams'])->toHaveCount(1);
+        ->and($register['options']['teams'])->toHaveCount(1);
 });
 
 it('refuses `under` someone not below the viewer, in another organization, or unknown', function () {
@@ -263,14 +263,14 @@ it('opens a super-admin on the first organization with attendance on, and lists 
     $register = registerPage($this->actingAs($this->boss)->get('/workspace/attendance'));
 
     expect($register['filters']['organization'])->toBe($this->mof->id)
-        ->and($register['organizations'])->toBe([
+        ->and($register['options']['organizations'])->toBe([
             ['id' => $this->mof->id, 'name' => 'MoF'],
             ['id' => $this->sdoc->id, 'name' => 'SDOC'],
         ]);
 
     $director = registerPage($this->actingAs($this->director->user)->get('/workspace/attendance'));
 
-    expect($director['organizations'])->toBe([]);
+    expect($director['options']['organizations'])->toBe([]);
 });
 
 it('rejects a malformed date', function () {

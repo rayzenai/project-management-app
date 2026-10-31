@@ -25,7 +25,7 @@ class AttendanceSettingsController extends Controller
 
     public function show(ShowAttendanceSettingsRequest $request, Organization $organization, AttendanceSettingsQuery $query): JsonResponse
     {
-        return response()->json(['data' => $query->get($request->organization())]);
+        return response()->json(['data' => $query->get((int) $organization->getKey())]);
     }
 
     public function enable(EnableAttendanceRequest $request, Organization $organization, EnableAttendanceService $service): JsonResponse

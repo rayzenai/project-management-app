@@ -18,11 +18,11 @@
     import { SvelteSet } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import ScopeSelects from '../../components/filters/ScopeSelects.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import type {
         DaySchedule,
         RegisterFilters,
-        RegisterPerson,
         RegisterRow,
         RegisterState,
         RegisterSummary,
@@ -35,7 +35,7 @@
         shiftDay,
     } from '../../lib/dates';
     import { formatDistance } from '../../lib/format';
-    import type { OrganizationOption, SharedProps } from '../../lib/types';
+    import type { Id, ReportOptions, SharedProps } from '../../lib/types';
 
     /**
      * The register: on one day, how many of those expected are in, then
@@ -45,23 +45,24 @@
      */
     let {
         schedule,
+        under,
         summary,
         people,
-        teams,
+        options,
         filters,
-        organizations,
     }: {
         schedule: DaySchedule;
+        under: { id: Id; name: string } | null;
         summary: RegisterSummary;
         people: RegisterRow[];
-        teams: RegisterPerson[];
+        options: ReportOptions;
         filters: RegisterFilters;
-        organizations: OrganizationOption[];
     } = $props();
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
     const organizationName = $derived(
-        organizations.find((o) => o.id === filters.organization)?.name ??
+        options.organizations.find((o) => o.id === filters.organization)
+            ?.name ??
             shared.organization?.name ??
             '',
     );
@@ -81,7 +82,7 @@
             {
                 date: next.date,
                 ...(next.under ? { under: next.under } : {}),
-                ...(organizations.length > 0
+                ...(options.organizations.length > 0
                     ? { organization: next.organization }
                     : {}),
             },
@@ -135,13 +136,6 @@
             }))
             .filter((group) => group.rows.length > 0);
     });
-
-    const underChoice = $derived(
-        filters.under === null ? '' : String(filters.under),
-    );
-    const underKnown = $derived(
-        filters.under === null || teams.some((t) => t.id === filters.under),
-    );
 
     /** Designation, the clock-in's note, and lunch, under the name. */
     function detail(row: RegisterRow): string {
@@ -264,49 +258,13 @@
                         onclick={() => visit({ date: today })}>Today</button
                     >
                 {/if}
-                {#if organizations.length > 1}
-                    <select
-                        class="input h-7 w-auto max-w-56 py-0"
-                        aria-label="Organization"
-                        value={String(filters.organization)}
-                        onchange={(e) =>
-                            visit({
-                                organization: Number(e.currentTarget.value),
-                                under: null,
-                            })}
-                    >
-                        {#each organizations as organization (organization.id)}
-                            <option value={String(organization.id)}
-                                >{organization.name}</option
-                            >
-                        {/each}
-                    </select>
-                {/if}
-                {#if teams.length > 0 || filters.under !== null}
-                    <select
-                        class="input h-7 w-auto max-w-56 py-0"
-                        aria-label="Whose attendance"
-                        value={underChoice}
-                        onchange={(e) =>
-                            visit({
-                                under: e.currentTarget.value
-                                    ? Number(e.currentTarget.value)
-                                    : null,
-                            })}
-                    >
-                        <option value="">Everyone</option>
-                        {#if !underKnown}
-                            <option value={underChoice}
-                                >One person's team</option
-                            >
-                        {/if}
-                        {#each teams as team (team.id)}
-                            <option value={String(team.id)}
-                                >{team.name}'s team</option
-                            >
-                        {/each}
-                    </select>
-                {/if}
+                <ScopeSelects
+                    {options}
+                    organization={filters.organization}
+                    {under}
+                    label="Whose attendance"
+                    onchange={(change) => visit(change)}
+                />
                 {#if loading}
                     <Spinner size={14} />
                 {/if}

@@ -1,17 +1,17 @@
 <?php
 
-namespace App\Queries\Work;
+namespace App\Queries\Structure;
 
 use App\Models\Member;
 
 /**
- * How the work reports name a person: id, name and designation (from the
+ * How every report names a person: id, name and designation (from the
  * loaded `designation` relation; never queried here).
  */
-final class WorkPerson
+final class PersonRef
 {
     /**
-     * @return array{id: int, name: string, designation: ?string}
+     * @return array{id: int, name: string, designation: string|null}
      */
     public static function of(Member $member): array
     {

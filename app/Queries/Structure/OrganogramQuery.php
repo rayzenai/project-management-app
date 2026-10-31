@@ -75,23 +75,4 @@ final class OrganogramQuery
             'can_manage' => WorkspaceAccess::canManageStructure($viewer, $organizationId),
         ];
     }
-
-    /**
-     * The organizations a viewer may pick between: every one for a
-     * super-admin, none for anyone else (they see their own).
-     *
-     * @return list<array{id: int, name: string}>
-     */
-    public function organizationOptions(Authenticatable $viewer): array
-    {
-        if (! WorkspaceAccess::isSuperAdmin($viewer)) {
-            return [];
-        }
-
-        return array_values(Organization::query()
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (Organization $organization): array => ['id' => (int) $organization->id, 'name' => $organization->name])
-            ->all());
-    }
 }

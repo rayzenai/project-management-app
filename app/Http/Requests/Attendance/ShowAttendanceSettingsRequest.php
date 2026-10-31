@@ -3,29 +3,32 @@
 namespace App\Http\Requests\Attendance;
 
 use App\Models\Organization;
-use App\Queries\Attendance\AttendanceSettingsQuery;
+use App\Queries\Structure\OrganizationChoicesQuery;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * An organization's attendance settings: whoever administers it. The API
  * names the organization in the route; the web page takes `?organization=`
- * (a super-admin's switcher) and otherwise opens the viewer's own.
+ * (a super-admin's switcher) and otherwise opens OrganizationChoicesQuery's
+ * default.
  */
 class ShowAttendanceSettingsRequest extends FormRequest
 {
-    private ?Organization $organization = null;
+    private ?int $organizationId = null;
 
-    public function authorize(AttendanceSettingsQuery $query): bool
+    public function authorize(OrganizationChoicesQuery $organizations): bool
     {
         $routed = $this->route('organization');
 
-        $this->organization = $routed instanceof Organization
-            ? $routed
-            : $query->organizationFor($this->user(), $this->integer('organization') ?: null);
+        $this->organizationId = match (true) {
+            $routed instanceof Organization => (int) $routed->getKey(),
+            $this->integer('organization') > 0 => $this->integer('organization'),
+            default => $organizations->defaultId($this->user()),
+        };
 
-        return $this->organization !== null
-            && WorkspaceAccess::canManageAttendance($this->user(), $this->organization->id);
+        return $this->organizationId !== null
+            && WorkspaceAccess::canManageAttendance($this->user(), $this->organizationId);
     }
 
     /**
@@ -36,8 +39,8 @@ class ShowAttendanceSettingsRequest extends FormRequest
         return [];
     }
 
-    public function organization(): Organization
+    public function organizationId(): int
     {
-        return $this->organization ?? abort(403);
+        return (int) $this->organizationId;
     }
 }

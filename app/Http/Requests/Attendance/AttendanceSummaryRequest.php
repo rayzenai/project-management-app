@@ -2,28 +2,28 @@
 
 namespace App\Http\Requests\Attendance;
 
-use App\Http\Requests\Attendance\Concerns\ResolvesAttendanceScope;
-use App\Queries\Attendance\AttendanceRegisterQuery;
+use App\Http\Requests\Concerns\ReadsDayRange;
+use App\Http\Requests\Concerns\ReadsReportScope;
+use App\Queries\Structure\OrganizationChoicesQuery;
+use App\Queries\Structure\PeopleInViewQuery;
+use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 
 /**
- * Attendance totals over whole days (the last 7 ending today unless
- * given, at most 92), for an organization or `?under=` someone in it
- * (ResolvesAttendanceScope).
+ * Attendance totals over whole days (ReadsDayRange; the last 7 ending today
+ * unless given), for an organization or someone's team in it
+ * (ReadsReportScope): whoever may open its register.
  */
 class AttendanceSummaryRequest extends FormRequest
 {
-    use ResolvesAttendanceScope;
+    use ReadsDayRange;
+    use ReadsReportScope;
 
-    public const DEFAULT_DAYS = 7;
-
-    public const MAX_DAYS = 92;
-
-    public function authorize(AttendanceRegisterQuery $query): bool
+    public function authorize(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
     {
-        return $this->authorizeScope($query);
+        return $this->authorizeScope($organizations, $people);
     }
 
     /**
@@ -31,42 +31,12 @@ class AttendanceSummaryRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'from' => ['nullable', 'date_format:Y-m-d'],
-            'to' => ['nullable', 'date_format:Y-m-d'],
-            'under' => ['nullable', 'integer', 'min:1'],
-        ];
-    }
-
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $validator): void {
-            if ($validator->errors()->hasAny(['from', 'to'])) {
-                return;
-            }
-
-            [$from, $to] = $this->range();
-
-            if ($to->lt($from)) {
-                $validator->errors()->add('to', "The end date can't be before the start date.");
-            } elseif ((int) round($from->diffInDays($to)) + 1 > self::MAX_DAYS) {
-                $validator->errors()->add('to', 'Choose a range of at most '.self::MAX_DAYS.' days.');
-            }
-        });
+        return [...$this->scopeRules(), ...$this->rangeRules()];
     }
 
     /**
-     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
-     */
-    public function range(): array
-    {
-        $to = $this->filled('to') ? CarbonImmutable::parse($this->string('to')->value())->startOfDay() : CarbonImmutable::today();
-        $from = $this->filled('from') ? CarbonImmutable::parse($this->string('from')->value())->startOfDay() : $to->subDays(self::DEFAULT_DAYS - 1);
-
-        return [$from, $to];
-    }
-
-    /**
+     * The filters as applied, for the page to show and send back.
+     *
      * @return array{from: string, to: string, under: int|null, organization: int}
      */
     public function appliedFilters(): array
@@ -79,5 +49,20 @@ class AttendanceSummaryRequest extends FormRequest
             'under' => $this->under()?->id,
             'organization' => $this->organizationId(),
         ];
+    }
+
+    protected function maySeeOrganization(Authenticatable $user, int $organizationId): bool
+    {
+        return WorkspaceAccess::canViewAttendanceRegister($user, $organizationId);
+    }
+
+    protected function aboutAttendance(): bool
+    {
+        return true;
+    }
+
+    protected function defaultFrom(CarbonImmutable $to): CarbonImmutable
+    {
+        return $to->subDays(6);
     }
 }

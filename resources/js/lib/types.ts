@@ -224,6 +224,23 @@ export interface OrganizationOption {
     name: string;
 }
 
+/** How every report names a person (PersonRef on the server). */
+export interface PersonRef {
+    id: Id;
+    name: string;
+    designation: string | null;
+}
+
+/**
+ * A list report's filter choices (ReportOptionsQuery): the organizations a
+ * super-admin may switch between (empty for anyone else) and the teams to
+ * narrow to, "{name}'s team".
+ */
+export interface ReportOptions {
+    organizations: OrganizationOption[];
+    teams: PersonRef[];
+}
+
 export interface Organization extends OrganizationOption {
     slug: string;
     members_count?: number;

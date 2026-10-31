@@ -14,14 +14,16 @@ use Illuminate\Database\Eloquent\Collection;
  * everyone; anyone else the people below them. With `$under`, that person
  * and everyone below them (the caller's FormRequest checks
  * `WorkspaceAccess::canViewPersonOf($viewer, $under)` first). Active people
- * only, by name, with their designation loaded. Every such list starts here.
+ * only, by name, with their designation loaded; with `$attending`, only
+ * those attendance expects (Member::scopeAttending). Every such list starts
+ * here.
  */
 final class PeopleInViewQuery
 {
     /**
      * @return Collection<int, Member>
      */
-    public function run(Authenticatable $viewer, int $organizationId, ?Member $under = null): Collection
+    public function run(Authenticatable $viewer, int $organizationId, ?Member $under = null, bool $attending = false): Collection
     {
         $ids = $under !== null
             ? [(int) $under->getKey(), ...OrgChart::descendantIds($under)]
@@ -31,8 +33,18 @@ final class PeopleInViewQuery
             ->where('organization_id', $organizationId)
             ->active()
             ->when($ids !== null, fn ($query) => $query->whereIn('id', $ids ?? []))
+            ->when($attending, fn ($query) => $query->attending())
             ->with('designation:id,name,rank')
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * Someone of the organization by id, for a report's `under` filter, or
+     * null. Whether the viewer may see them is the caller's check.
+     */
+    public function find(int $organizationId, int $id): ?Member
+    {
+        return Member::query()->where('organization_id', $organizationId)->find($id);
     }
 }

@@ -2,11 +2,12 @@
 
 namespace App\Queries\Attendance;
 
-use App\Models\AttendanceSetting;
 use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Models\Organization;
+use App\Queries\Structure\OrganizationChoicesQuery;
 use App\Queries\Structure\PeopleInViewQuery;
+use App\Queries\Structure\PersonRef;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -24,7 +25,10 @@ final class LeaveQuery
     /** How far back "my requests" reach, in days (upcoming ones always show). */
     public const MINE_DAYS = 60;
 
-    public function __construct(private readonly PeopleInViewQuery $people) {}
+    public function __construct(
+        private readonly PeopleInViewQuery $people,
+        private readonly OrganizationChoicesQuery $organizations,
+    ) {}
 
     /**
      * @return array{can_ask: bool, mine: Collection<int, LeaveRequest>, to_decide: Collection<int, LeaveRequest>, can_record_for: list<array{id: int, name: string, designation: string|null, organization: string}>}
@@ -105,21 +109,18 @@ final class LeaveQuery
      */
     private function canRecordFor(Authenticatable $user, ?Member $self): array
     {
-        if (WorkspaceAccess::isSuperAdmin($user)) {
-            $organizations = Organization::query()
-                ->whereIn('id', AttendanceSetting::query()->where('enabled', true)->select('organization_id'));
-        } elseif ($self !== null && $self->is_active && WorkspaceAccess::attendanceEnabled($self->organization_id)) {
-            $organizations = Organization::query()->whereKey($self->organization_id);
-        } else {
-            return [];
-        }
+        $organizations = match (true) {
+            WorkspaceAccess::isSuperAdmin($user) => $this->organizations->options($user, withAttendance: true),
+            $self?->organization !== null && $self->is_active && WorkspaceAccess::attendanceEnabled($self->organization_id) => [['id' => (int) $self->organization_id, 'name' => $self->organization->name]],
+            default => [],
+        };
 
         $people = [];
 
-        foreach ($organizations->orderBy('name')->pluck('name', 'id') as $organizationId => $organization) {
-            foreach ($this->people->run($user, (int) $organizationId) as $member) {
+        foreach ($organizations as $organization) {
+            foreach ($this->people->run($user, $organization['id']) as $member) {
                 if ($self === null || ! $member->is($self)) {
-                    $people[] = [...AttendanceRegisterQuery::person($member), 'organization' => (string) $organization];
+                    $people[] = [...PersonRef::of($member), 'organization' => $organization['name']];
                 }
             }
         }

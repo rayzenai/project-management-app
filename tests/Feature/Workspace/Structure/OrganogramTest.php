@@ -76,12 +76,12 @@ it('ignores another organization picked by anyone but a super-admin', function (
         ->assertInertia(fn (AssertableInertia $page) => $page->where('organogram.organization.id', $this->org->id));
 });
 
-it('lets a super-admin pick an organization, and offers the choice first', function () {
+it('opens a super-admin on the first organization by name, and lets them pick another', function () {
     $this->actingAs($this->boss)
         ->get('/workspace/organogram')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('organogram', null)
+            ->where('organogram.organization.id', $this->otherOrg->id)
             ->where('organizations', [['id' => $this->otherOrg->id, 'name' => 'MoF'], ['id' => $this->org->id, 'name' => 'SDOC']]));
 
     $this->actingAs($this->boss)

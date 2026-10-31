@@ -4,6 +4,8 @@ namespace App\Queries\Work;
 
 use App\Models\Member;
 use App\Queries\Structure\PeopleInViewQuery;
+use App\Queries\Structure\PersonRef;
+use App\Queries\Structure\ReportOptionsQuery;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -15,7 +17,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * range, or null while the organization's attendance is off (or for
  * someone exempt).
  *
- * @phpstan-import-type Options from WorkFiltersQuery
+ * @phpstan-import-type Options from ReportOptionsQuery
  * @phpstan-import-type Totals from \App\Queries\Attendance\AttendanceSummaryQuery
  *
  * @phpstan-type TeamRow array{member: array{id: int, name: string, designation: ?string}, attendance: Totals|null, tasks_closed: int, tasks_started: int, overdue: int, commits: int, code_added: int, code_removed: int, pull_requests_merged: int}
@@ -26,7 +28,7 @@ final class TeamWorkQuery
     public function __construct(
         private readonly PeopleInViewQuery $people,
         private readonly WorkActivityQuery $activity,
-        private readonly WorkFiltersQuery $filters,
+        private readonly ReportOptionsQuery $options,
         private readonly WorkAttendanceQuery $attendance,
     ) {}
 
@@ -38,7 +40,7 @@ final class TeamWorkQuery
         $inView = $this->people->run($viewer, $organizationId);
         $people = $under === null ? $inView : $this->people->run($viewer, $organizationId, $under);
         $activity = $this->activity->forMembers($viewer, $people, $from, $to, withOverdue: true);
-        $attendance = $this->attendance->range($organizationId, array_values(array_map(intval(...), $people->reject(fn (Member $member): bool => $member->attendance_exempt)->modelKeys())), $from, $to);
+        $attendance = $this->attendance->range($organizationId, array_values(array_map(intval(...), $people->modelKeys())), $from, $to);
 
         $rows = [];
 
@@ -46,7 +48,7 @@ final class TeamWorkQuery
             $work = $activity[(int) $member->getKey()];
 
             $rows[] = [
-                'member' => WorkPerson::of($member),
+                'member' => PersonRef::of($member),
                 'attendance' => $attendance[(int) $member->getKey()] ?? null,
                 'tasks_closed' => count($work['tasks_closed']) + $work['hidden_closed'],
                 'tasks_started' => count($work['tasks_started']) + $work['hidden_started'],
@@ -63,7 +65,7 @@ final class TeamWorkQuery
             'organization_id' => $organizationId,
             'under' => $under === null ? null : ['id' => (int) $under->getKey(), 'name' => $under->name],
             'people' => $rows,
-            'options' => $this->filters->options($viewer, $organizationId, $inView),
+            'options' => $this->options->run($viewer, $inView),
         ];
     }
 }

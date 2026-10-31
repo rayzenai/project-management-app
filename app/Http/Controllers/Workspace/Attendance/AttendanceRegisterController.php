@@ -19,7 +19,6 @@ class AttendanceRegisterController extends Controller
         return Inertia::render('Attendance/Register', [
             ...$query->run($request->user(), $request->organizationId(), $request->day(), $request->under()),
             'filters' => $request->appliedFilters(),
-            'organizations' => $query->organizationOptions($request->user()),
         ]);
     }
 }

@@ -1,20 +1,12 @@
-import { clockTime  } from './dates';
-import type {DayRange} from './dates';
-import type { Id } from './types';
+import { clockTime } from './dates';
+import type { DayRange } from './dates';
+import type { Id, PersonRef, ReportOptions } from './types';
 
 /**
  * The work reports' shapes (App\Queries\Work) and their small helpers:
  * today's work (Work/Day), a team's week (Work/Team), one person's week
  * (Work/Person). The API twins answer the same shapes under `data`.
  */
-
-/** A person as the work reports name them. */
-export interface WorkMember {
-    id: Id;
-    name: string;
-    /** Their designation in the organization's list, if they have one. */
-    designation: string | null;
-}
 
 /** A task someone finished or started, at its latest change in the range. */
 export interface WorkTask {
@@ -65,13 +57,6 @@ export interface WorkPullRequest {
     merged_at: string;
 }
 
-export interface WorkOptions {
-    /** Every organization, for a super-admin only; empty for anyone else. */
-    organizations: { id: Id; name: string }[];
-    /** People in view someone else in view reports to: "{name}'s team". */
-    teams: { id: Id; name: string }[];
-}
-
 /**
  * One person's attendance on a day, from AttendanceRegisterQuery. Null when
  * the organization's attendance is off.
@@ -106,7 +91,7 @@ export interface WorkAttendanceSummary {
 // ---- Today's work ----
 
 export interface WorkDayRow {
-    member: WorkMember;
+    member: PersonRef;
     attendance: WorkAttendanceDay | null;
     closed: WorkTask[];
     hidden_closed: number;
@@ -141,14 +126,14 @@ export interface WorkDayProps {
     under: { id: Id; name: string } | null;
     summary: WorkDaySummary;
     people: WorkDayRow[];
-    options: WorkOptions;
+    options: ReportOptions;
     filters: WorkDayFilters;
 }
 
 // ---- A team's week ----
 
 export interface WorkTeamRow {
-    member: WorkMember;
+    member: PersonRef;
     attendance: WorkAttendanceSummary | null;
     tasks_closed: number;
     tasks_started: number;
@@ -172,14 +157,14 @@ export interface WorkTeamProps {
     organization_id: Id;
     under: { id: Id; name: string } | null;
     people: WorkTeamRow[];
-    options: WorkOptions;
+    options: ReportOptions;
     filters: WorkTeamFilters;
 }
 
 // ---- One person's week ----
 
 export interface WorkPersonProps {
-    member: WorkMember & {
+    member: PersonRef & {
         organization_id: Id | null;
         reports_to: { id: Id; name: string } | null;
     };

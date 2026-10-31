@@ -9,6 +9,7 @@ use App\Http\Requests\Attendance\UpdateAttendanceSettingsRequest;
 use App\Models\Organization;
 use App\Models\User;
 use App\Queries\Attendance\AttendanceSettingsQuery;
+use App\Queries\Structure\OrganizationChoicesQuery;
 use App\Services\Attendance\EnableAttendanceService;
 use App\Services\Attendance\UpdateAttendanceSettingsService;
 use App\Support\WorkspaceAccess;
@@ -25,13 +26,13 @@ class AttendanceSettingsController extends Controller
 {
     use RedirectsWithServiceResult;
 
-    public function show(ShowAttendanceSettingsRequest $request, AttendanceSettingsQuery $query): Response
+    public function show(ShowAttendanceSettingsRequest $request, AttendanceSettingsQuery $query, OrganizationChoicesQuery $organizations): Response
     {
-        $canEnable = WorkspaceAccess::canEnableAttendance($request->user());
+        $settings = $query->get($request->organizationId()) ?? abort(404);
 
-        return Inertia::render('Attendance/Settings', $query->get($request->organization()) + [
-            'canEnable' => $canEnable,
-            'organizations' => $canEnable ? $query->organizations() : [],
+        return Inertia::render('Attendance/Settings', $settings + [
+            'canEnable' => WorkspaceAccess::canEnableAttendance($request->user()),
+            'organizations' => $organizations->options($request->user()),
             // The address this request came from, for adding the office's range.
             'yourAddress' => $request->ip(),
         ]);

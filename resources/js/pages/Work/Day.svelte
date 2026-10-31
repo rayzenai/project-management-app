@@ -3,9 +3,9 @@
     import { CalendarDays, ChevronLeft, ChevronRight } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import ScopeSelects from '../../components/filters/ScopeSelects.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import StatusGlyph from '../../components/StatusGlyph.svelte';
-    import ScopeSelects from '../../components/work/ScopeSelects.svelte';
     import { isoDay, longDay, shiftDay } from '../../lib/dates';
     import { plural } from '../../lib/format';
     import type { Id } from '../../lib/types';
@@ -165,6 +165,7 @@
                     {options}
                     organization={organization_id}
                     {under}
+                    label="Whose work"
                     onchange={setScope}
                 />
                 <div class="flex items-center gap-1">

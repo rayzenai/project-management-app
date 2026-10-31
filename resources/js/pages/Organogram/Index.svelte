@@ -12,6 +12,7 @@
     import { SvelteSet } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import OrganizationSelect from '../../components/filters/OrganizationSelect.svelte';
     import Popover from '../../components/Popover.svelte';
     import { buildOrgTree, idsBelow, peopleCount } from '../../lib/structure';
     import type {
@@ -20,7 +21,7 @@
         OrgNode,
         OrgPerson,
     } from '../../lib/structure';
-    import type { OrganizationOption } from '../../lib/types';
+    import type { Id, OrganizationOption } from '../../lib/types';
 
     /**
      * The organogram: an outline to fold, unfold and rearrange (drag a row
@@ -77,11 +78,8 @@
         }
     }
 
-    function pickOrganization(value: string) {
-        router.get(
-            '/workspace/organogram',
-            value ? { organization: value } : {},
-        );
+    function pickOrganization(id: Id) {
+        router.get('/workspace/organogram', { organization: id });
     }
 
     function printChart() {
@@ -485,20 +483,12 @@
             <span class="truncate font-medium">Organogram</span>
         </div>
         <div class="flex items-center gap-1.5">
-            {#if organizations.length > 0}
-                <select
-                    class="input h-7 w-auto max-w-40 py-0 sm:max-w-56"
-                    aria-label="Organization"
-                    value={organogram?.organization.id ?? ''}
-                    onchange={(e) => pickOrganization(e.currentTarget.value)}
-                >
-                    <option value="" disabled>Organization</option>
-                    {#each organizations as organization (organization.id)}
-                        <option value={organization.id}
-                            >{organization.name}</option
-                        >
-                    {/each}
-                </select>
+            {#if organogram}
+                <OrganizationSelect
+                    options={organizations}
+                    value={organogram.organization.id}
+                    onchange={pickOrganization}
+                />
             {/if}
             {#if organogram}
                 <div class="flex items-center" role="group" aria-label="View">
@@ -537,30 +527,9 @@
     {/snippet}
 
     {#if !organogram}
-        <div class="px-5 py-6 lg:px-8 lg:py-8">
-            <div class="panel max-w-md p-4">
-                <h2 class="section-title mb-1">Choose an organization</h2>
-                <p class="mb-3 text-xs text-fg-muted">
-                    Its people, designations and reporting lines.
-                </p>
-                {#if organizations.length === 0}
-                    <p class="text-xs text-fg-muted">
-                        There are no organizations yet.
-                    </p>
-                {/if}
-                <div class="flex flex-col">
-                    {#each organizations as organization (organization.id)}
-                        <button
-                            type="button"
-                            class="menu-item"
-                            onclick={() =>
-                                pickOrganization(String(organization.id))}
-                            >{organization.name}</button
-                        >
-                    {/each}
-                </div>
-            </div>
-        </div>
+        <p class="px-5 py-6 text-xs text-fg-muted lg:px-8 lg:py-8">
+            There are no organizations yet.
+        </p>
     {:else if view === 'chart'}
         <div class="px-5 py-6 lg:px-8 lg:py-8">
             {#if tree.length === 0}

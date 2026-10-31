@@ -4,6 +4,8 @@ namespace App\Queries\Work;
 
 use App\Models\Member;
 use App\Queries\Structure\PeopleInViewQuery;
+use App\Queries\Structure\PersonRef;
+use App\Queries\Structure\ReportOptionsQuery;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -19,7 +21,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
  * @phpstan-import-type WorkTask from WorkActivityQuery
  * @phpstan-import-type Code from WorkActivityQuery
  * @phpstan-import-type PullRequest from WorkActivityQuery
- * @phpstan-import-type Options from WorkFiltersQuery
+ * @phpstan-import-type Options from ReportOptionsQuery
  * @phpstan-import-type DayAttendance from WorkAttendanceQuery
  *
  * @phpstan-type DayRow array{member: array{id: int, name: string, designation: ?string}, attendance: DayAttendance|null, closed: list<WorkTask>, hidden_closed: int, started: list<WorkTask>, hidden_started: int, commits: Code, pull_requests_merged: list<PullRequest>, hidden_pull_requests: int, nothing_recorded: bool}
@@ -31,7 +33,7 @@ final class WorkDayQuery
     public function __construct(
         private readonly PeopleInViewQuery $people,
         private readonly WorkActivityQuery $activity,
-        private readonly WorkFiltersQuery $filters,
+        private readonly ReportOptionsQuery $options,
         private readonly WorkAttendanceQuery $attendance,
     ) {}
 
@@ -63,7 +65,7 @@ final class WorkDayQuery
             $summary['nothing_recorded'] += $nothing ? 1 : 0;
 
             $rows[] = [
-                'member' => WorkPerson::of($member),
+                'member' => PersonRef::of($member),
                 'attendance' => $attendance[(int) $member->getKey()] ?? null,
                 'closed' => $work['tasks_closed'],
                 'hidden_closed' => $work['hidden_closed'],
@@ -82,7 +84,7 @@ final class WorkDayQuery
             'under' => $under === null ? null : ['id' => (int) $under->getKey(), 'name' => $under->name],
             'summary' => $summary,
             'people' => $rows,
-            'options' => $this->filters->options($viewer, $organizationId, $inView),
+            'options' => $this->options->run($viewer, $inView),
         ];
     }
 }

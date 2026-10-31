@@ -1,3 +1,5 @@
+import type { PersonRef } from './types';
+
 /**
  * The attendance register, leave and kaaj: the shapes the server sends
  * (AttendanceRegisterQuery, AttendanceSummaryQuery, LeaveQuery) and the
@@ -13,12 +15,6 @@ export type PunchPlace =
 export type LeaveKind = 'leave' | 'kaaj';
 
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
-
-export interface RegisterPerson {
-    id: number;
-    name: string;
-    designation: string | null;
-}
 
 export interface DaySchedule {
     date: string;
@@ -43,7 +39,7 @@ export interface RegisterSummary {
 }
 
 export interface RegisterRow {
-    member: RegisterPerson;
+    member: PersonRef;
     state: RegisterState;
     in_at: string | null;
     lunch_start_at: string | null;
@@ -68,7 +64,7 @@ export interface RegisterFilters {
 }
 
 export interface AttendanceSummaryRow {
-    member: RegisterPerson;
+    member: PersonRef;
     days_expected: number;
     days_present: number;
     days_late: number;
@@ -90,14 +86,14 @@ export interface LeaveItem {
     place: string | null;
     status: LeaveStatus;
     can_cancel: boolean;
-    member?: RegisterPerson | null;
+    member?: PersonRef | null;
     decided_by?: { id: number; name: string } | null;
     decided_at: string | null;
     decision_note: string | null;
     created_at: string | null;
 }
 
-export interface RecordablePerson extends RegisterPerson {
+export interface RecordablePerson extends PersonRef {
     organization: string;
 }
 

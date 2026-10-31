@@ -189,6 +189,17 @@ class Member extends Model
     }
 
     /**
+     * People attendance expects: everyone not exempt from it.
+     *
+     * @param  Builder<Member>  $query
+     * @return Builder<Member>
+     */
+    public function scopeAttending(Builder $query): Builder
+    {
+        return $query->where('attendance_exempt', false);
+    }
+
+    /**
      * Who can be assigned within a project as things stand: the union of
      * the project's teams' members, or, for a public project with no teams,
      * every active member of its organization (a private project with no

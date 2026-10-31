@@ -123,13 +123,13 @@ it('takes the median clock-in as the usual time', function () {
     expect(summaryWeek($this->query, $this->asha)['usual_in'])->toBe('10:00');
 });
 
-it('expects nothing of an exempt person, and nothing before attendance was turned on', function () {
+it('gives an exempt person no totals, and expects nothing before attendance was turned on', function () {
     $exempt = Member::factory()->create(['organization_id' => $this->org->id, 'attendance_exempt' => true, 'created_at' => '2026-09-01 09:00:00']);
     AttendanceSetting::query()->where('organization_id', $this->org->id)->update(['enabled_at' => '2026-11-04 15:00:00']);
 
     $rows = $this->query->forMembers([$exempt->id, $this->asha->id], CarbonImmutable::parse('2026-11-02'), CarbonImmutable::parse('2026-11-08'));
 
-    expect($rows[$exempt->id]['days_expected'])->toBe(0)
+    expect($rows)->not->toHaveKey($exempt->id)
         ->and($rows[$this->asha->id]['days_expected'])->toBe(3); // Wed, Thu, Fri
 });
 
@@ -148,9 +148,9 @@ it('expects nothing while attendance is off', function () {
 it('returns a row of zeros for people with nothing, and nothing for nobody', function () {
     $rows = $this->query->forMembers([$this->asha->id, 999999], CarbonImmutable::parse('2026-11-07'), CarbonImmutable::parse('2026-11-08'));
 
-    expect($rows)->toHaveKeys([$this->asha->id, 999999])
-        ->and($rows[999999])->toBe($rows[$this->asha->id])
-        ->and($rows[999999]['usual_in'])->toBeNull()
+    expect(array_keys($rows))->toBe([$this->asha->id])
+        ->and($rows[$this->asha->id]['days_expected'])->toBe(0)
+        ->and($rows[$this->asha->id]['usual_in'])->toBeNull()
         ->and($this->query->forMembers([], CarbonImmutable::parse('2026-11-02'), CarbonImmutable::parse('2026-11-08')))->toBe([]);
 });
 

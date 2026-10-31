@@ -7,6 +7,7 @@ use App\Models\AttendanceSetting;
 use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Queries\Structure\PeopleInViewQuery;
+use App\Queries\Structure\PersonRef;
 use App\Support\Attendance\AttendanceCalendar;
 use App\Support\Attendance\DaySchedule;
 use Carbon\CarbonImmutable;
@@ -20,11 +21,13 @@ use Illuminate\Support\Collection;
  * queries in all (the people, each organization's calendar, the punches,
  * the leave), never one per person or per day.
  *
- * Only days up to today count. A working day counts while the person's
- * organization has attendance on (from the day it was turned on):
+ * Only people attendance expects have totals (Member::scopeAttending), and
+ * only days up to today count. A working day counts while the person's
+ * organization has attendance on (from the day it was turned on), and not
+ * before the person was added:
  *
- * - expected: a working day the person isn't exempt, unless approved leave
- *   or kaaj covers it and they didn't clock in (someone who comes in
+ * - expected: a working day, unless approved leave or kaaj covers it and
+ *   they didn't clock in (someone who comes in
  *   despite their leave is expected and present, as on the register);
  * - present, late: working days with a clock-in (after `lateAfter`);
  * - leave, kaaj: working days under approved leave or kaaj without a
@@ -44,30 +47,34 @@ final class AttendanceSummaryQuery
     public function __construct(private readonly PeopleInViewQuery $people) {}
 
     /**
-     * One row per person the viewer sees (PeopleInViewQuery, exempt people
-     * left out, as on the register), or one person and everyone below them.
+     * One row per person the viewer sees whom attendance expects
+     * (PeopleInViewQuery, as on the register), or one person and everyone
+     * below them.
      *
      * @return list<array{member: array{id: int, name: string, designation: string|null}, days_expected: int, days_present: int, days_late: int, minutes_worked: int, no_clock_out_days: int, outside_punches: int, leave_days: int, kaaj_days: int, usual_in: string|null}>
      */
     public function run(Authenticatable $viewer, int $organizationId, CarbonImmutable $from, CarbonImmutable $to, ?Member $under = null): array
     {
-        $people = $this->people->run($viewer, $organizationId, $under)
-            ->reject(fn (Member $member): bool => $member->attendance_exempt)
-            ->values();
+        $people = $this->people->run($viewer, $organizationId, $under, attending: true);
         $totals = $this->forMembers(array_values(array_map(intval(...), $people->modelKeys())), $from, $to);
 
         return array_values($people
-            ->map(fn (Member $member): array => ['member' => AttendanceRegisterQuery::person($member), ...$totals[(int) $member->id]])
+            ->map(fn (Member $member): array => ['member' => PersonRef::of($member), ...$totals[(int) $member->id]])
             ->all());
     }
 
     /**
+     * Totals by member id; people exempt from attendance get none.
+     *
      * @param  list<int>  $memberIds
      * @return array<int, Totals>
      */
     public function forMembers(array $memberIds, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $ids = array_values(array_unique(array_map(intval(...), $memberIds)));
+        $members = $memberIds === []
+            ? new EloquentCollection
+            : Member::withTrashed()->whereIn('id', array_unique($memberIds))->attending()->get(['id', 'organization_id', 'created_at']);
+        $ids = array_map(intval(...), $members->modelKeys());
         $totals = array_fill_keys($ids, self::empty());
         $now = CarbonImmutable::now();
         $last = $to->min($now->startOfDay())->startOfDay();
@@ -76,8 +83,6 @@ final class AttendanceSummaryQuery
         if ($ids === [] || $last->lt($from)) {
             return $totals;
         }
-
-        $members = Member::withTrashed()->whereIn('id', $ids)->get(['id', 'organization_id', 'attendance_exempt', 'created_at']);
 
         /** @var array<int, list<DaySchedule>> $days */
         $days = [];
@@ -155,7 +160,7 @@ final class AttendanceSummaryQuery
             if ($in === null) {
                 if ($workday && $covering !== null) {
                     $totals[$covering->kind === LeaveRequest::KIND_KAAJ ? 'kaaj_days' : 'leave_days']++;
-                } elseif ($workday && ! $member->attendance_exempt) {
+                } elseif ($workday) {
                     $totals['days_expected']++;
                 }
 
@@ -163,7 +168,7 @@ final class AttendanceSummaryQuery
             }
 
             if ($workday) {
-                $totals['days_expected'] += $member->attendance_exempt ? 0 : 1;
+                $totals['days_expected']++;
                 $totals['days_present']++;
                 $totals['days_late'] += $in->punched_at->gt($day->lateAfter) ? 1 : 0;
             }

@@ -2,22 +2,26 @@
 
 namespace App\Http\Requests\Work;
 
-use App\Http\Requests\Work\Concerns\ReadsWorkScope;
-use App\Queries\Work\WorkFiltersQuery;
-use Carbon\CarbonImmutable;
+use App\Http\Requests\Concerns\ReadsDay;
+use App\Http\Requests\Concerns\ReadsReportScope;
+use App\Queries\Structure\OrganizationChoicesQuery;
+use App\Queries\Structure\PeopleInViewQuery;
+use App\Support\WorkspaceAccess;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Today's work: an organization (and optionally someone's team, see
- * ReadsWorkScope) on one day, `date` (YYYY-MM-DD, today unless given).
+ * Today's work, or any day's (ReadsDay), for an organization or someone's
+ * team in it (ReadsReportScope): WorkspaceAccess::canViewTeamWork.
  */
 class WorkDayRequest extends FormRequest
 {
-    use ReadsWorkScope;
+    use ReadsDay;
+    use ReadsReportScope;
 
-    public function authorize(WorkFiltersQuery $filters): bool
+    public function authorize(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
     {
-        return $this->authorizeWorkScope($filters);
+        return $this->authorizeScope($organizations, $people);
     }
 
     /**
@@ -25,15 +29,7 @@ class WorkDayRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            ...$this->scopeRules(),
-            'date' => ['nullable', 'date_format:Y-m-d'],
-        ];
-    }
-
-    public function day(): CarbonImmutable
-    {
-        return $this->filled('date') ? CarbonImmutable::parse($this->string('date')->value())->startOfDay() : CarbonImmutable::today();
+        return [...$this->scopeRules(), ...$this->dayRules()];
     }
 
     /**
@@ -48,5 +44,10 @@ class WorkDayRequest extends FormRequest
             'date' => $this->day()->toDateString(),
             'under' => $this->under()?->id,
         ];
+    }
+
+    protected function maySeeOrganization(Authenticatable $user, int $organizationId): bool
+    {
+        return WorkspaceAccess::canViewTeamWork($user, $organizationId);
     }
 }

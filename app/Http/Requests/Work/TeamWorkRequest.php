@@ -2,23 +2,27 @@
 
 namespace App\Http\Requests\Work;
 
-use App\Http\Requests\Work\Concerns\ReadsWorkRange;
-use App\Http\Requests\Work\Concerns\ReadsWorkScope;
-use App\Queries\Work\WorkFiltersQuery;
+use App\Http\Requests\Concerns\ReadsDayRange;
+use App\Http\Requests\Concerns\ReadsReportScope;
+use App\Queries\Structure\OrganizationChoicesQuery;
+use App\Queries\Structure\PeopleInViewQuery;
+use App\Support\WorkspaceAccess;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * A team's work: an organization (and optionally someone's team, see
- * ReadsWorkScope) over a range of days (ReadsWorkRange).
+ * A team's work over a range of days (ReadsDayRange), for an organization
+ * or someone's team in it (ReadsReportScope):
+ * WorkspaceAccess::canViewTeamWork.
  */
 class TeamWorkRequest extends FormRequest
 {
-    use ReadsWorkRange;
-    use ReadsWorkScope;
+    use ReadsDayRange;
+    use ReadsReportScope;
 
-    public function authorize(WorkFiltersQuery $filters): bool
+    public function authorize(OrganizationChoicesQuery $organizations, PeopleInViewQuery $people): bool
     {
-        return $this->authorizeWorkScope($filters);
+        return $this->authorizeScope($organizations, $people);
     }
 
     /**
@@ -44,5 +48,10 @@ class TeamWorkRequest extends FormRequest
             'to' => $to->toDateString(),
             'under' => $this->under()?->id,
         ];
+    }
+
+    protected function maySeeOrganization(Authenticatable $user, int $organizationId): bool
+    {
+        return WorkspaceAccess::canViewTeamWork($user, $organizationId);
     }
 }
