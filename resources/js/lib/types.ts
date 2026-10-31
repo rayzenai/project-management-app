@@ -17,7 +17,7 @@ export interface Member {
     is_active?: boolean;
     team_ids?: Id[];
     led_team_ids?: Id[];
-    /** Null only for a super-admin's own member. */
+    /** Null only for a super-admin's own member outside every organization. */
     organization_id?: Id | null;
     organization?: string | null;
     is_office_admin?: boolean;

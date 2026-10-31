@@ -300,7 +300,7 @@ the project's organization or is on its team.
 To whom: an organizational admin or a super-admin gives access to any
 active person of the project's organization or anyone on its team; the
 manager and the program manager only to people on its team. Never to
-someone inactive, a super-admin's own member or a maintainer. The same
+someone inactive, someone with no organization or a maintainer. The same
 rule decides who may change a grant; removing one needs only the right to
 manage access.
 

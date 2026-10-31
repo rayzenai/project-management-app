@@ -103,7 +103,8 @@ Office roles (senior dev, QA, ...) are not modeled: a person's free-text
 `title` carries them. Five tiers:
 
 1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
-   Belongs to no organization. Manages organizations and everything in them;
+   Belongs to no organization unless given one (their own member can join
+   one, like SDOC's Executive Director). Manages organizations and everything in them;
    the only one who can open a project's team to other organizations or make
    a person an organizational admin (`is_office_admin`).
 2. **Organizational admin**: a member with `is_office_admin` (and `is_active`). Full
@@ -158,7 +159,7 @@ role fields: whoever administers the organization), `canViewProject` (twin of
 `canManageRepositoryAccess` (give, change and remove a repository's grants:
 whoever passes `canManageProjectRepositories`),
 `canGrantRepositoryAccessTo` (who may be given access: never a maintainer,
-an inactive or deleted person or a super-admin's own member; an
+an inactive or deleted person or someone with no organization; an
 organizational admin gives it to their organization's people and the team,
 a manager or program manager only to the team; twin of
 `RepositoryAccessCandidatesQuery`, keep them in step),
@@ -278,7 +279,7 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   what it waits for in its column, dotted lines join them, and dropping a
   card onto another links them.
 - **Subtask** — personal (`user_id`). **Member** — a person in one organization
-  (none only for a super-admin's own member), `is_office_admin`; optionally linked to
+  (a super-admin's own member may have none), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
   `scopeAssignableFor(Project)` is who is assignable as things stand;
   `Assignees::joiners` is the whole rule (it adds whom whoever runs the

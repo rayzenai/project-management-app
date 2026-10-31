@@ -114,7 +114,7 @@ it('undoes the whole save when the higher authority is refused', function () {
 });
 
 it('drops the fields silently for someone who may not change the structure', function () {
-    // A super-admin's own member belongs to no organization, so it has no
+    // A super-admin's own member outside every organization has no
     // structure for anyone to change.
     $own = Member::factory()->linkedTo($this->boss)->create(['organization_id' => null]);
 
@@ -141,6 +141,34 @@ it('keeps a designation of the new organization given in the same move', functio
 
     expect($this->engineer->fresh()->only(['organization_id', 'designation_id', 'reports_to_id']))
         ->toEqual(['organization_id' => $this->otherOrg->id, 'designation_id' => $this->foreignTitle->id, 'reports_to_id' => $this->outsider->id]);
+});
+
+it('lets a super-admin put their own member in an organization, with a designation, in one save', function () {
+    $own = Member::factory()->linkedTo($this->boss)->create(['organization_id' => null]);
+    $edTitle = Designation::factory()->create(['organization_id' => $this->org->id, 'name' => 'Executive Director']);
+
+    $this->actingAs($this->boss)
+        ->patch("/workspace/members/{$own->id}", [
+            'organization_id' => $this->org->id,
+            'designation_id' => $edTitle->id,
+            'attendance_exempt' => true,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($own->fresh()->only(['organization_id', 'designation_id', 'attendance_exempt']))
+        ->toEqual(['organization_id' => $this->org->id, 'designation_id' => $edTitle->id, 'attendance_exempt' => true]);
+
+    // Its people may now report to them, but its admin still cannot touch
+    // a super-admin's member.
+    $this->actingAs($this->admin->user)
+        ->patch("/workspace/members/{$this->ed->id}", ['reports_to_id' => $own->id])
+        ->assertSessionHasNoErrors();
+
+    expect($this->ed->fresh()->reports_to_id)->toBe($own->id);
+
+    $this->actingAs($this->admin->user)
+        ->patch("/workspace/members/{$own->id}", ['title' => 'Someone else'])
+        ->assertForbidden();
 });
 
 it('shows designations and the fields on the People page to whoever may change the structure', function () {

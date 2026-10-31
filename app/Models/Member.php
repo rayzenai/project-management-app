@@ -20,7 +20,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * optionally links to a User (`user_id`, one member per user) but
  * never needs one — unlinked members are managed people who don't log in.
  *
- * Every member belongs to an organization except a super-admin's own member.
+ * Every member belongs to an organization; a super-admin's own member may
+ * belong to none (a super-admin can give it one).
  * `is_office_admin` makes them the administrator of that organization.
  *
  * @property int $id

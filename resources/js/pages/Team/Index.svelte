@@ -163,7 +163,7 @@
 
     /** The organization whose roles the edit form lists, after any move. */
     function editOrganizationId(member: Member): Id | null {
-        return isSuperAdmin && member.organization_id
+        return isSuperAdmin
             ? memberEditForm.organization_id
             : (member.organization_id ?? null);
     }
@@ -239,26 +239,26 @@
                 };
 
                 // Organization and office-admin status are a super-admin's
-                // call, and a super-admin's own member has no organization.
+                // call. Someone with no organization (a super-admin's own
+                // member) has no roles or structure until one is chosen.
+                const organizationId = editOrganizationId(member);
+
                 return {
                     ...base,
-                    ...(isSuperAdmin && member.organization_id
+                    ...(isSuperAdmin && data.organization_id !== null
                         ? {
                               organization_id: data.organization_id,
                               is_office_admin: data.is_office_admin,
                           }
                         : {}),
-                    ...(canSetRoles && member.organization_id
+                    ...(canSetRoles && organizationId !== null
                         ? rolesToSend(
                               data,
-                              roleOptionsFor(
-                                  roleOptions,
-                                  editOrganizationId(member),
-                              ),
+                              roleOptionsFor(roleOptions, organizationId),
                               member,
                           )
                         : {}),
-                    ...(canSetStructure && member.organization_id
+                    ...(canSetStructure && organizationId !== null
                         ? structureToSend(data, member)
                         : {}),
                 };
@@ -479,9 +479,11 @@
 
     <div class="space-y-8">
         {#if canCreateMember && addingMember}
-            <form onsubmit={addMember} class="panel max-w-2xl space-y-3 p-4">
+            <form onsubmit={addMember} class="panel space-y-3 p-4">
                 <h2 class="section-title">Add person</h2>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div
+                    class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                >
                     <div class="flex flex-col gap-1">
                         <label class="label" for="member-name">Name</label>
                         <input
@@ -692,7 +694,7 @@
                         {#if editingMemberId === member.id}
                             <div class="min-w-0 flex-1 space-y-3 py-1.5">
                                 <div
-                                    class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                                    class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
                                 >
                                     <div class="flex flex-col gap-1">
                                         <label
@@ -763,7 +765,7 @@
                                             </p>
                                         {/if}
                                     </div>
-                                    {#if isSuperAdmin && member.organization_id}
+                                    {#if isSuperAdmin}
                                         <div class="flex flex-col gap-1">
                                             <label
                                                 class="label"
@@ -804,7 +806,7 @@
                                             </p>
                                         </div>
                                     {/if}
-                                    {#if canSetStructure && member.organization_id}
+                                    {#if canSetStructure && editOrganizationId(member) !== null}
                                         {@render structureFields(
                                             `member-${member.id}`,
                                             memberEditForm,
@@ -814,7 +816,7 @@
                                         )}
                                     {/if}
                                 </div>
-                                {#if canSetRoles && member.organization_id}
+                                {#if canSetRoles && editOrganizationId(member) !== null}
                                     <MemberRoleFields
                                         options={roleOptionsFor(
                                             roleOptions,

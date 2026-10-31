@@ -539,8 +539,8 @@ class WorkspaceAccess
     /**
      * Whether the user may give this person access to the project's
      * repositories: only whoever passes canManageProjectRepositories, and
-     * never to someone inactive or deleted, a super-admin's own member (no
-     * organization) or a maintainer, whose access follows the role.
+     * never to someone inactive or deleted, someone with no organization
+     * (a super-admin's own member may have none) or a maintainer, whose access follows the role.
      * Whoever administers the project's organization gives it to its people
      * and to anyone on the project's team; its manager and its program's
      * manager only to people on its team (a cross-organization team's
