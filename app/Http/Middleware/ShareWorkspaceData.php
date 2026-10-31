@@ -11,6 +11,7 @@ use App\Models\ProjectNote;
 use App\Models\User;
 use App\Models\WorkspaceNote;
 use App\Queries\Attendance\MyAttendanceQuery;
+use App\Queries\Structure\OrganizationChoicesQuery;
 use App\Queries\Structure\PersonRef;
 use App\Services\ResolveThemeTokens;
 use App\Support\Git\GitAccess;
@@ -232,6 +233,9 @@ class ShareWorkspaceData
 
         // The office pages the sidebar offers.
         Inertia::share('office', fn (): array => OfficeLinks::for($request->user()));
+
+        // A super-admin's one organization switch (WorkspaceOrganization).
+        Inertia::share('organizationSwitch', fn (): ?array => app(OrganizationChoicesQuery::class)->switcher($request->user()));
 
         Inertia::share('organization', function () use ($request): ?array {
             $organization = WorkspaceAccess::memberFor($request->user())?->organization;

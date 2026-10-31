@@ -11,6 +11,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\Team;
 use App\Support\WorkspaceAccess;
+use App\Support\WorkspaceOrganization;
 use Illuminate\Http\Request;
 
 /**
@@ -32,7 +33,7 @@ class TeamIndexQuery
     {
         $user = $request->user();
         $isSuperAdmin = WorkspaceAccess::isSuperAdmin($user);
-        $organizationFilter = $isSuperAdmin ? ($request->integer('organization') ?: null) : null;
+        $organizationFilter = $isSuperAdmin ? $this->organizationFilter($request) : null;
 
         $teams = Team::query()
             ->visibleTo($user)
@@ -168,5 +169,25 @@ class TeamIndexQuery
             ]);
 
         return ['programs' => $programs->values()->all(), 'projects' => $projects->values()->all()];
+    }
+
+    /**
+     * A super-admin's People: the organization picked on the page (`all`
+     * for everyone's), else the one their workspace is switched to (none:
+     * everyone's).
+     */
+    private function organizationFilter(Request $request): ?int
+    {
+        $picked = $request->query('organization');
+
+        if ($picked === 'all') {
+            return null;
+        }
+
+        if (is_string($picked) && ctype_digit($picked) && (int) $picked > 0) {
+            return (int) $picked;
+        }
+
+        return WorkspaceOrganization::chosen($request->user());
     }
 }

@@ -62,10 +62,13 @@
             (organizations.length === 1 ? organizations[0].id : null),
     );
 
+    // "All organizations" is a choice too: it switches the workspace to all.
     function filterByOrganization(value: string) {
-        router.get('/workspace/team', value ? { organization: value } : {}, {
-            preserveScroll: true,
-        });
+        router.get(
+            '/workspace/team',
+            { organization: value || 'all' },
+            { preserveScroll: true },
+        );
     }
 
     // ---- People ----

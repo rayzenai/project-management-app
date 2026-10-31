@@ -21,6 +21,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $password
  * @property string|null $remember_token
  * @property string|null $git_username
+ * @property int|null $workspace_organization_id the organization a super-admin's workspace is switched to (WorkspaceOrganization); null is all
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -106,6 +107,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'workspace_organization_id' => 'integer',
         ];
     }
 }

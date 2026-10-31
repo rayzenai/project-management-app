@@ -24,6 +24,7 @@ use App\Http\Controllers\Workspace\NoteController;
 use App\Http\Controllers\Workspace\NotificationController;
 use App\Http\Controllers\Workspace\OrganizationController;
 use App\Http\Controllers\Workspace\OrganizationGitController;
+use App\Http\Controllers\Workspace\OrganizationSwitchController;
 use App\Http\Controllers\Workspace\OrganogramController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\Workspace\WorkspaceNoteController;
 use App\Http\Middleware\EnsureCanSignIn;
 use App\Http\Middleware\EnsureCanUseGit;
 use App\Http\Middleware\EnsureProjectVisible;
+use App\Http\Middleware\RemembersOrganizationChoice;
 use App\Http\Middleware\ShareWorkspaceData;
 use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
@@ -86,11 +88,12 @@ Route::middleware('guest')
         Route::post('/login', [AuthController::class, 'store'])->name('login.store');
     });
 
-Route::middleware(['auth', EnsureCanSignIn::class, ShareWorkspaceData::class])
+Route::middleware(['auth', EnsureCanSignIn::class, RemembersOrganizationChoice::class, ShareWorkspaceData::class])
     ->prefix('workspace')
     ->name('workspace.')
     ->group(function () {
         Route::get('/', HomeController::class)->name('home');
+        Route::put('/organization', OrganizationSwitchController::class)->name('organization.switch');
 
         Route::get('/my', MyWorkspaceController::class)->name('my');
         Route::post('/quick-add', QuickAddController::class)->name('quick-add');

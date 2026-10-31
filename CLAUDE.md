@@ -347,7 +347,8 @@ the organizational admin switch and the program and project manager pickers.
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
   `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`, the sidebar's
-  Programs group). Add cross-cutting web context there.
+  Programs group), `organizationSwitch` (a super-admin's, see Structure).
+  Add cross-cutting web context there.
 - **API** (`routes/api.php`, prefix `api/v1`, names `api.*`): `POST login`
   → token; `Api\AuthController::userPayload` is the token-auth twin of
   `ShareWorkspaceData` (`is_super_admin`, `is_office_admin`, `led_team_ids`,
@@ -670,9 +671,19 @@ Shared building blocks (reach for these before writing anything new):
   list shows; `attending:` for attendance; `find` for a report's `under`),
   `OrganizationChoicesQuery` (which organization a page opens on and which
   a super-admin may switch between; `withAttendance:` for attendance
-  pages), `ReportOptionsQuery` (a list report's `options`: organizations
+  pages; `switcher` for the sidebar), `ReportOptionsQuery` (a list report's `options`: organizations
   and teams), `PersonRef` (how every report and person picker names a
   person: `{id, name, designation}`).
+- **The organization switch** (`App\Support\WorkspaceOrganization`,
+  `users.workspace_organization_id`, null = all, everyone's start): a
+  super-admin's one switch for the sidebar's projects and the organization
+  every page above opens on (`OrganizationChoicesQuery::defaultId` uses it
+  when the page offers it, before the viewer's own organization). Set from
+  the sidebar (`PUT /workspace/organization`, `organization` an id or `all`,
+  back to the page without its `organization` and `under`) and by any
+  page's own pick (`RemembersOrganizationChoice`: a super-admin's GET with
+  `?organization=`, People's `all`), so they never disagree. Ignored for
+  anyone else; an explicit `?organization=` still wins on its page.
 - `app/Http/Requests/Concerns/`: `ReadsReportScope` (organization and
   `under` for a list report; the report supplies `maySeeOrganization`),
   `ReadsDay` (`?date=`), `ReadsDayRange` (`?from=`/`?to=`, overridable

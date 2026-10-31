@@ -1,6 +1,9 @@
 <script lang="ts">
     import { inertia, router } from '@inertiajs/svelte';
     import {
+        Building2,
+        Check,
+        ChevronsUpDown,
         Folder,
         FolderTree,
         PanelLeft,
@@ -9,13 +12,17 @@
         X,
     } from '@lucide/svelte';
     import type { NavArea, NavLink } from '../../lib/navigation';
+    import type { Id, OrganizationSwitch } from '../../lib/types';
+    import Popover from '../Popover.svelte';
 
     /**
      * The panel beside the rail: the shown area's title, New task and
      * Search in the same place for every area, then the area. Work lists
      * your pages, the programs you manage and every project, filterable
      * once there are many; the other areas list their pages, each with a
-     * line on what it is for.
+     * line on what it is for. A super-admin's organization switch sits under
+     * the title: it picks whose projects are listed and which organization
+     * the office pages open on.
      */
     let {
         area,
@@ -23,6 +30,7 @@
         path,
         projects,
         programs,
+        organizationSwitch = null,
         mobile,
         floating,
         onnewtask,
@@ -41,6 +49,7 @@
             program?: string | null;
         }[];
         programs: { slug: string; name: string }[];
+        organizationSwitch?: OrganizationSwitch | null;
         /** In the phone drawer: a close button instead of hide. */
         mobile: boolean;
         /** Over the content while the panel is hidden: its button keeps it. */
@@ -56,6 +65,35 @@
     const FILTER_FROM = 9;
 
     let query = $state('');
+    let switchOpen = $state(false);
+
+    const switchChoices = $derived(
+        organizationSwitch
+            ? [
+                  { id: null as Id | null, name: 'All organizations' },
+                  ...organizationSwitch.organizations,
+              ]
+            : [],
+    );
+    const switchedName = $derived(
+        organizationSwitch?.organizations.find(
+            (organization) => organization.id === organizationSwitch.current,
+        )?.name ?? 'All organizations',
+    );
+
+    function switchTo(id: Id | null) {
+        switchOpen = false;
+
+        if (id === (organizationSwitch?.current ?? null)) {
+            return;
+        }
+
+        router.put(
+            '/workspace/organization',
+            { organization: id ?? 'all' },
+            { preserveScroll: true },
+        );
+    }
 
     /**
      * Forgiving, as a filter should be: the projects holding what was typed
@@ -168,6 +206,53 @@
             </button>
         {/if}
     </div>
+
+    {#if organizationSwitch}
+        <div class="mt-2">
+            <Popover
+                bind:open={switchOpen}
+                role="listbox"
+                triggerLabel={`Organization: ${switchedName}`}
+                wrapperClass="w-full"
+                triggerClass="flex h-8 w-full items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-[13px] text-fg transition hover:bg-hover"
+                panelClass="w-52"
+            >
+                {#snippet trigger()}
+                    <Building2
+                        class="h-[15px] w-[15px] shrink-0 text-fg-faint"
+                    />
+                    <span class="min-w-0 flex-1 truncate text-left"
+                        >{switchedName}</span
+                    >
+                    <ChevronsUpDown
+                        class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                    />
+                {/snippet}
+                <div class="py-1">
+                    {#each switchChoices as choice (choice.id ?? 'all')}
+                        {@const selected =
+                            choice.id === (organizationSwitch.current ?? null)}
+                        <button
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            class={`menu-item ${selected ? 'text-fg' : ''}`}
+                            onclick={() => switchTo(choice.id)}
+                        >
+                            <span class="min-w-0 flex-1 truncate"
+                                >{choice.name}</span
+                            >
+                            {#if selected}
+                                <Check
+                                    class="h-3.5 w-3.5 shrink-0 text-accent"
+                                />
+                            {/if}
+                        </button>
+                    {/each}
+                </div>
+            </Popover>
+        </div>
+    {/if}
 
     <div class="mt-3 flex gap-1.5">
         <button

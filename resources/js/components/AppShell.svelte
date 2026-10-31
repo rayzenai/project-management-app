@@ -50,6 +50,16 @@
         (shared.appearance ?? null) as AppearanceProps | null,
     );
     const projects = $derived(shared.quickAddContext?.projects ?? []);
+    const organizationSwitch = $derived(shared.organizationSwitch ?? null);
+    // The sidebar lists the switched-to organization's projects (every one
+    // while switched to all); quick add still offers them all.
+    const sidebarProjects = $derived(
+        organizationSwitch?.current == null
+            ? projects
+            : projects.filter(
+                  (p) => p.organization_id === organizationSwitch.current,
+              ),
+    );
     const programs = $derived(shared.managedPrograms ?? []);
     const noteCount = $derived(shared.workspaceNotes?.length ?? 0);
 
@@ -348,8 +358,9 @@
                     area={panelArea}
                     {current}
                     {path}
-                    {projects}
+                    projects={sidebarProjects}
                     {programs}
+                    {organizationSwitch}
                     mobile={mobileOpen}
                     {floating}
                     onnewtask={openQuickAdd}

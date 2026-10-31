@@ -255,6 +255,13 @@ export interface OrganizationOption {
     name: string;
 }
 
+/** A super-admin's one organization switch (WorkspaceOrganization). */
+export interface OrganizationSwitch {
+    organizations: OrganizationOption[];
+    /** The organization the workspace is switched to; null is all. */
+    current: Id | null;
+}
+
 /** How every report names a person (PersonRef on the server). */
 export interface PersonRef {
     id: Id;
@@ -810,6 +817,8 @@ export interface SharedProps {
     gitEnabled?: boolean;
     /** The office pages the user may open (OfficeLinks). */
     office?: OfficeLinks;
+    /** A super-admin's organization switch; null for everyone else. */
+    organizationSwitch?: OrganizationSwitch | null;
     [key: string]: unknown;
 }
 

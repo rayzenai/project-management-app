@@ -8,6 +8,7 @@
         triggerClass = '',
         triggerLabel,
         panelClass = '',
+        wrapperClass = '',
         trigger,
         children,
     }: {
@@ -17,6 +18,8 @@
         triggerClass?: string;
         triggerLabel?: string;
         panelClass?: string;
+        /** Added to the wrapper (`w-full` for a trigger that fills its row). */
+        wrapperClass?: string;
         trigger: Snippet<[{ open: boolean }]>;
         children: Snippet;
     } = $props();
@@ -172,7 +175,7 @@
     }
 </script>
 
-<span bind:this={wrapper} class="relative inline-flex">
+<span bind:this={wrapper} class={`relative inline-flex ${wrapperClass}`}>
     <button
         bind:this={triggerEl}
         type="button"

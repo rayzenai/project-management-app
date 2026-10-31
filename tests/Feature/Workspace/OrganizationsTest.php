@@ -105,6 +105,9 @@ it('moves existing data into one organization named after the app, leaving super
     // The stable-key migration indexes organization_id, so it steps aside while the column goes.
     $keys = require database_path('migrations/2026_10_30_000001_give_projects_a_stable_key.php');
     $keys->down();
+    // So does the workspace switch, whose column on users points at organizations.
+    $switch = require database_path('migrations/2026_10_31_210000_add_workspace_organization_to_users.php');
+    $switch->down();
     $migration = require database_path('migrations/2026_10_28_100000_create_organizations_table.php');
     $migration->down();
 
@@ -121,6 +124,7 @@ it('moves existing data into one organization named after the app, leaving super
 
     $migration->up();
     $keys->up();
+    $switch->up();
 
     $organization = Organization::query()->sole();
 
