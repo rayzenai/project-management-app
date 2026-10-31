@@ -1,34 +1,10 @@
 <script lang="ts">
-    import { inertia, page, router } from '@inertiajs/svelte';
-    import {
-        Bell,
-        BookOpen,
-        CalendarDays,
-        CalendarRange,
-        Clock,
-        Building2,
-        Folder,
-        FolderTree,
-        GitCommitHorizontal,
-        LayoutGrid,
-        ListChecks,
-        LogOut,
-        Menu,
-        Network,
-        PanelLeft,
-        Plus,
-        Search,
-        Settings,
-        SlidersHorizontal,
-        Stethoscope,
-        StickyNote,
-        Table2,
-        UserRound,
-        Users,
-        X,
-    } from '@lucide/svelte';
+    import { page, router } from '@inertiajs/svelte';
+    import { Menu, X } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import type { AppearanceProps } from '../lib/appearance';
+    import { areaOf, currentHref, navAreas } from '../lib/navigation';
+    import type { AreaKey } from '../lib/navigation';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { palette } from '../lib/palette.svelte';
     import { peek } from '../lib/peek.svelte';
@@ -37,19 +13,21 @@
     import type { SharedProps } from '../lib/types';
     import AppearanceConfig from './AppearanceConfig.svelte';
     import ClockButton from './attendance/ClockButton.svelte';
-    import Avatar from './Avatar.svelte';
     import CommandPalette from './CommandPalette.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
+    import NavPanel from './shell/NavPanel.svelte';
+    import NavRail from './shell/NavRail.svelte';
     import TaskPeek from './TaskPeek.svelte';
     import ThemeToggle from './ThemeToggle.svelte';
     import Toasts from './Toasts.svelte';
     import WorkspaceNotesBoard from './WorkspaceNotesBoard.svelte';
 
     /**
-     * The app frame: a 232px sidebar and a bordered content panel. Pages
-     * provide the panel's 44px top bar through the `bar` snippet (breadcrumb
-     * on the left, actions on the right); `flush` drops the content padding
-     * for full-bleed registers and boards.
+     * The app frame: the sidebar (a rail of areas and the panel of the one
+     * shown, see shell/) and a bordered content panel. Pages provide the
+     * panel's 44px top bar through the `bar` snippet (breadcrumb on the
+     * left, actions on the right); `flush` drops the content padding for
+     * full-bleed registers and boards.
      */
     let {
         children,
@@ -93,15 +71,9 @@
 
     let collapsed = $state(initialCollapsed());
 
-    /**
-     * The rail is a desktop affordance. On small screens the sidebar is a
-     * slide-over drawer, and a drawer of bare icons helps nobody — so whenever
-     * the drawer is open it renders in full regardless of the setting.
-     */
-    const rail = $derived(collapsed && !mobileOpen);
-
     function toggleCollapsed(): void {
         collapsed = !collapsed;
+        peeking = false;
 
         try {
             window.localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
@@ -152,10 +124,13 @@
         return () => clearInterval(id);
     });
 
-    // Close the mobile drawer on navigation.
+    // Navigation closes the drawer and a floating panel, and shows the
+    // page's own area.
     $effect(() => {
         void path;
+        shownArea = pageArea;
         mobileOpen = false;
+        peeking = false;
     });
 
     const office = $derived(
@@ -171,139 +146,48 @@
         },
     );
 
-    /** `count`, when above zero, shows as a badge (a dot on the rail). */
-    const nav = $derived<
-        { label: string; href: string; icon: typeof Bell; count?: number }[]
-    >([
-        { label: 'Home', href: '/workspace', icon: LayoutGrid },
-        { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
-        {
-            label: 'Notifications',
-            href: '/workspace/notifications',
-            icon: Bell,
-            count: unreadNotifications,
-        },
-        { label: 'People', href: '/workspace/team', icon: Users },
-        ...(office.organogram
-            ? [
-                  {
-                      label: 'Organogram',
-                      href: '/workspace/organogram',
-                      icon: Network,
-                  },
-              ]
-            : []),
-        ...(office.attendance
-            ? [
-                  {
-                      label: 'Attendance',
-                      href: '/workspace/attendance',
-                      icon: Clock,
-                  },
-              ]
-            : []),
-        ...(office.leave
-            ? [
-                  {
-                      label: 'Leave and kaaj',
-                      href: '/workspace/leave',
-                      icon: CalendarDays,
-                  },
-              ]
-            : []),
-        ...(office.team_work
-            ? [
-                  {
-                      label: "Today's work",
-                      href: '/workspace/work',
-                      icon: ListChecks,
-                  },
-                  {
-                      label: "Team's work",
-                      href: '/workspace/work/team',
-                      icon: Table2,
-                  },
-              ]
-            : []),
-        ...(office.my_work_member_id
-            ? [
-                  {
-                      label: 'My week',
-                      href: `/workspace/people/${office.my_work_member_id}/work`,
-                      icon: CalendarRange,
-                  },
-              ]
-            : []),
-        ...(shared.gitEnabled
-            ? [
-                  {
-                      label: 'Code activity',
-                      href: '/workspace/reports/code',
-                      icon: GitCommitHorizontal,
-                  },
-              ]
-            : []),
-        ...(office.attendance_settings
-            ? [
-                  {
-                      label: 'Attendance settings',
-                      href: '/workspace/attendance/settings',
-                      icon: SlidersHorizontal,
-                  },
-              ]
-            : []),
-        ...(office.maintenance
-            ? [
-                  {
-                      label: 'Maintenance',
-                      href: '/workspace/maintenance',
-                      icon: Stethoscope,
-                      count: office.maintenance_count,
-                  },
-              ]
-            : []),
-        ...(shared.isSuperAdmin
-            ? [
-                  {
-                      label: 'Organizations',
-                      href: '/workspace/organizations',
-                      icon: Building2,
-                  },
-              ]
-            : []),
-        { label: 'Guide', href: '/workspace/guide', icon: BookOpen },
-    ]);
+    const areas = $derived(
+        navAreas(office, {
+            gitEnabled: Boolean(shared.gitEnabled),
+            isSuperAdmin: Boolean(shared.isSuperAdmin),
+        }),
+    );
+    const current = $derived(currentHref(path, areas));
+    const pageArea = $derived(areaOf(path, areas));
 
-    function matches(href: string) {
-        // A filtered page (/workspace/reports/code?from=...) is still that page.
-        const bare = path.split('?')[0];
+    /**
+     * The area whose panel is shown: the page's, until the rail picks
+     * another to look at. With the panel hidden, picking one floats its
+     * panel over the content (`peeking`) until you choose or click away.
+     * On phones the drawer always shows the rail and the panel.
+     */
+    let shownArea = $state<AreaKey>('work');
+    let peeking = $state(false);
 
-        return (
-            bare === href ||
-            (href !== '/workspace' && bare.startsWith(href + '/'))
-        );
-    }
-
-    // The longest matching link wins, so Team's work (/workspace/work/team)
-    // doesn't also light up Today's work (/workspace/work).
-    const activeHref = $derived(
-        nav
-            .map((item) => item.href)
-            .filter(matches)
-            .sort((a, b) => b.length - a.length)[0] ?? null,
+    const panelVisible = $derived(mobileOpen || !collapsed || peeking);
+    const floating = $derived(!mobileOpen && collapsed && peeking);
+    const panelArea = $derived(
+        areas.find((a) => a.key === shownArea) ?? areas[0],
     );
 
-    function isActive(href: string) {
-        return href === activeHref;
+    function pick(area: AreaKey): void {
+        if (floating && shownArea === area) {
+            peeking = false;
+
+            return;
+        }
+
+        shownArea = area;
+        peeking = !mobileOpen && collapsed;
     }
 
-    function projectActive(slug: string) {
-        return path.startsWith(`/workspace/projects/${slug}`);
-    }
-
-    function programActive(slug: string) {
-        return path.startsWith(`/workspace/programs/${slug}`);
-    }
+    const role = $derived(
+        shared.isSuperAdmin
+            ? 'Super admin'
+            : shared.isOfficeAdmin
+              ? `Organizational admin · ${shared.organization?.name ?? ''}`
+              : (shared.organization?.name ?? user?.email ?? ''),
+    );
 
     function logout() {
         router.post('/workspace/logout');
@@ -352,7 +236,14 @@
         }
 
         if (e.key === 'Escape') {
-            if (palette.isOpen) {
+            if (peeking) {
+                e.preventDefault();
+                peeking = false;
+            } else if (shownArea !== pageArea && !overlayOpen) {
+                // Back to the page's own area after looking at another.
+                e.preventDefault();
+                shownArea = pageArea;
+            } else if (palette.isOpen) {
                 e.preventDefault();
                 palette.close();
             } else if (quickAdd.isOpen) {
@@ -415,309 +306,59 @@
             class="fixed inset-0 z-30 bg-black/40 lg:hidden"
             onclick={() => (mobileOpen = false)}
         ></button>
+    {:else if floating}
+        <!-- A click beside the floating panel puts it away. -->
+        <button
+            type="button"
+            aria-label="Close the panel"
+            class="fixed inset-0 z-30 cursor-default"
+            onclick={() => (peeking = false)}
+        ></button>
     {/if}
 
     <aside
-        class={`fixed inset-y-0 left-0 z-40 flex -translate-x-full flex-col bg-bg pt-3 pb-3 transition-[width,transform] lg:sticky lg:top-0 lg:bottom-auto lg:h-screen lg:translate-x-0 lg:self-start ${
-            rail ? 'w-[248px] px-3 lg:w-[60px] lg:px-2' : 'w-[248px] px-3'
-        }`}
+        class="fixed inset-y-0 left-0 z-40 flex -translate-x-full bg-bg transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start"
         class:translate-x-0={mobileOpen}
     >
-        <!-- Brand + the collapse control. -->
-        <div
-            class={`flex h-8 items-center gap-2 ${rail ? 'justify-center px-0' : 'px-1'}`}
-        >
-            {#if !rail}
-                <svg
-                    class="h-5 w-5 shrink-0"
-                    viewBox="0 0 32 32"
-                    role="img"
-                    aria-label="Workspace"
-                >
-                    <rect width="32" height="32" rx="8" class="fill-accent" />
-                    <circle
-                        cx="16"
-                        cy="16"
-                        r="9"
-                        fill="none"
-                        stroke="#fff"
-                        stroke-width="2.4"
-                    />
-                    <path d="M16 16V7a9 9 0 1 1-7.28 14.29z" fill="#fff" />
-                </svg>
-                <span class="truncate font-semibold">Workspace</span>
-            {/if}
-            <span class={rail ? '' : 'ml-auto'}>
-                <button
-                    type="button"
-                    class="btn-icon hidden h-7 w-7 lg:inline-flex"
-                    title={`${collapsed ? 'Expand' : 'Collapse'} sidebar ([)`}
-                    aria-label={collapsed
-                        ? 'Expand sidebar'
-                        : 'Collapse sidebar'}
-                    aria-expanded={!collapsed}
-                    onclick={toggleCollapsed}
-                >
-                    <PanelLeft class="h-[15px] w-[15px]" />
-                </button>
-                <button
-                    type="button"
-                    aria-label="Close sidebar"
-                    class="btn-icon h-7 w-7 lg:hidden"
-                    onclick={() => (mobileOpen = false)}
-                >
-                    <X class="h-[15px] w-[15px]" />
-                </button>
-            </span>
-        </div>
-
-        <!-- The two things you reach for most, as real buttons rather than
-             icons tucked into the brand row. -->
-        {#if rail}
-            <div class="mt-3 flex flex-col items-center gap-1">
-                <button
-                    type="button"
-                    class="btn-primary h-8 w-8 justify-center px-0"
-                    title="New task (N)"
-                    aria-label="New task"
-                    onclick={openQuickAdd}
-                >
-                    <Plus class="h-4 w-4" />
-                </button>
-                <button
-                    type="button"
-                    class="btn-icon h-8 w-8"
-                    title="Search (⌘K)"
-                    aria-label="Search"
-                    onclick={() => palette.open()}
-                >
-                    <Search class="h-[15px] w-[15px]" />
-                </button>
-            </div>
-        {:else}
-            <div class="mt-3 flex flex-col gap-1.5">
-                <button
-                    type="button"
-                    class="btn-primary h-9 w-full justify-center"
-                    onclick={openQuickAdd}
-                >
-                    <Plus class="h-4 w-4" />
-                    New task
-                    <kbd
-                        class="kbd ml-auto border-white/30 bg-transparent text-white/80"
-                        >N</kbd
-                    >
-                </button>
-                <button
-                    type="button"
-                    class="flex h-8 w-full items-center gap-2.5 rounded-md border border-line bg-surface px-2.5 text-fg-muted transition hover:bg-hover hover:text-fg"
-                    onclick={() => palette.open()}
-                >
-                    <Search class="h-[15px] w-[15px] shrink-0 text-fg-faint" />
-                    Search
-                    <kbd class="kbd ml-auto">⌘K</kbd>
-                </button>
-            </div>
-        {/if}
-
-        <div class="my-3 border-t border-line"></div>
-
-        <nav class="flex flex-col gap-0.5">
-            {#each nav as item (item.href)}
-                {@const active = isActive(item.href)}
-                {@const Icon = item.icon}
-                <a
-                    href={item.href}
-                    use:inertia
-                    aria-current={active ? 'page' : undefined}
-                    title={rail ? item.label : undefined}
-                    class={`relative flex items-center gap-2.5 rounded-md py-2 font-medium transition ${
-                        rail ? 'justify-center px-0' : 'px-2.5'
-                    } ${
-                        active
-                            ? 'bg-accent-soft text-accent'
-                            : 'text-fg-muted hover:bg-hover hover:text-fg'
-                    }`}
-                >
-                    <Icon
-                        class={`h-[15px] w-[15px] shrink-0 ${active ? 'text-accent' : 'text-fg-faint'}`}
-                    />
-                    {#if !rail}
-                        <span class="truncate">{item.label}</span>
-                    {/if}
-                    {#if (item.count ?? 0) > 0}
-                        {@const count = item.count ?? 0}
-                        {#if rail}
-                            <!-- No room for a count on the rail; a dot still says there is one. -->
-                            <span
-                                class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-accent"
-                                aria-hidden="true"
-                            ></span>
-                        {:else}
-                            <span
-                                class="ml-auto rounded-full bg-accent px-1.5 text-[11px] leading-4 font-medium text-white tabular-nums"
-                                >{count > 99 ? '99+' : count}</span
-                            >
-                        {/if}
-                    {/if}
-                </a>
-            {/each}
-        </nav>
-
-        <div class="my-3 border-t border-line"></div>
-
-        {#if programs.length > 0}
-            <!-- The programs this person manages, above their projects. -->
-            {#if !rail}
-                <div
-                    class="mb-1 flex h-6 items-center gap-2 px-2.5 text-xs font-medium text-fg-faint"
-                >
-                    <span>Programs</span>
-                    <span class="tabular-nums">{programs.length}</span>
-                </div>
-            {/if}
-            <nav class="mb-3 flex flex-col gap-0.5">
-                {#each programs as program (program.slug)}
-                    {@const active = programActive(program.slug)}
-                    <a
-                        href={`/workspace/programs/${program.slug}`}
-                        use:inertia
-                        aria-current={active ? 'page' : undefined}
-                        title={rail ? program.name : undefined}
-                        class={`flex items-center gap-2.5 rounded-md py-2 transition ${
-                            rail ? 'justify-center px-0' : 'px-2.5'
-                        } ${
-                            active
-                                ? 'bg-accent-soft text-accent'
-                                : 'text-fg-muted hover:bg-hover hover:text-fg'
-                        }`}
-                    >
-                        <FolderTree
-                            class={`h-[15px] w-[15px] shrink-0 ${active ? 'text-accent' : 'text-fg-faint'}`}
-                        />
-                        {#if !rail}
-                            <span class="truncate">{program.name}</span>
-                        {/if}
-                    </a>
-                {/each}
-            </nav>
-        {/if}
-
-        {#if !rail}
+        <NavRail
+            {areas}
+            selected={panelVisible ? shownArea : pageArea}
+            here={pageArea}
+            panelHidden={!panelVisible}
+            {path}
+            unread={unreadNotifications}
+            {noteCount}
+            notesOpen={notesBoard.open}
+            {user}
+            {role}
+            onpick={pick}
+            onnewtask={openQuickAdd}
+            onsearch={() => palette.open()}
+            onnotes={() => notesBoard.toggle()}
+            onsettings={() => (settingsOpen = true)}
+            onlogout={logout}
+        />
+        {#if panelVisible}
             <div
-                class="mb-1 flex items-center gap-2 px-2.5 text-xs font-medium text-fg-faint"
+                class={floating
+                    ? 'popover fixed top-2 bottom-2 left-[60px] z-40 py-0'
+                    : 'h-full'}
             >
-                <a href="/workspace/projects" use:inertia class="hover:text-fg"
-                    >Projects</a
-                >
-                <span class="tabular-nums">{projects.length}</span>
-                <a
-                    href="/workspace/projects?new=1"
-                    use:inertia
-                    class="btn-icon ml-auto h-6 w-6"
-                    title="New project"
-                    aria-label="New project"
-                >
-                    <Plus class="h-3.5 w-3.5" />
-                </a>
+                <NavPanel
+                    area={panelArea}
+                    {current}
+                    {path}
+                    {projects}
+                    {programs}
+                    mobile={mobileOpen}
+                    {floating}
+                    onnewtask={openQuickAdd}
+                    onsearch={() => palette.open()}
+                    ontoggle={toggleCollapsed}
+                    onclose={() => (mobileOpen = false)}
+                />
             </div>
         {/if}
-        <nav class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-            {#each projects as project (project.id)}
-                {@const active = projectActive(project.slug)}
-                <a
-                    href={`/workspace/projects/${project.slug}`}
-                    use:inertia
-                    aria-current={active ? 'page' : undefined}
-                    title={rail ? project.title : undefined}
-                    class={`flex items-center gap-2.5 rounded-md py-2 transition ${
-                        rail ? 'justify-center px-0' : 'px-2.5'
-                    } ${
-                        active
-                            ? 'bg-accent-soft text-accent'
-                            : 'text-fg-muted hover:bg-hover hover:text-fg'
-                    }`}
-                >
-                    <Folder
-                        class={`h-[15px] w-[15px] shrink-0 ${active ? 'text-accent' : 'text-fg-faint'}`}
-                    />
-                    {#if !rail}
-                        <span class="truncate">{project.title}</span>
-                    {/if}
-                </a>
-            {:else}
-                {#if !rail}
-                    <span class="px-2.5 py-1 text-xs text-fg-faint"
-                        >No projects yet</span
-                    >
-                {/if}
-            {/each}
-        </nav>
-
-        <div class="mt-3 border-t border-line pt-3">
-            <button
-                type="button"
-                onclick={() => notesBoard.toggle()}
-                aria-expanded={notesBoard.open}
-                title={rail ? 'Sticky notes' : undefined}
-                class={`flex w-full items-center gap-2.5 rounded-md py-2 font-medium text-fg-muted transition hover:bg-hover hover:text-fg ${
-                    rail ? 'justify-center px-0' : 'px-2.5'
-                }`}
-            >
-                <StickyNote class="h-[15px] w-[15px] shrink-0 text-fg-faint" />
-                {#if !rail}
-                    <span class="truncate">Sticky notes</span>
-                    {#if noteCount > 0}
-                        <span class="ml-auto text-xs text-fg-faint tabular-nums"
-                            >{noteCount}</span
-                        >
-                    {/if}
-                {/if}
-            </button>
-
-            {#if user}
-                <div
-                    class={`mt-2 flex rounded-md ${
-                        rail
-                            ? 'flex-col items-center gap-1.5'
-                            : 'items-center gap-2.5 border border-line bg-surface px-2.5 py-2'
-                    }`}
-                >
-                    <Avatar name={user.name} size="lg" />
-                    {#if !rail}
-                        <div class="min-w-0 flex-1 leading-tight">
-                            <div class="truncate font-medium">{user.name}</div>
-                            <div class="truncate text-xs text-fg-muted">
-                                {shared.isSuperAdmin
-                                    ? 'Super admin'
-                                    : shared.isOfficeAdmin
-                                      ? `Organizational admin · ${shared.organization?.name ?? ''}`
-                                      : (shared.organization?.name ??
-                                        user.email)}
-                            </div>
-                        </div>
-                    {/if}
-                    <button
-                        type="button"
-                        class="btn-icon h-7 w-7"
-                        title={rail ? `Settings — ${user.name}` : 'Settings'}
-                        aria-label="Settings"
-                        onclick={() => (settingsOpen = true)}
-                    >
-                        <Settings class="h-[15px] w-[15px]" />
-                    </button>
-                    <button
-                        type="button"
-                        class="btn-icon h-7 w-7"
-                        title="Sign out"
-                        aria-label="Sign out"
-                        onclick={logout}
-                    >
-                        <LogOut class="h-[15px] w-[15px]" />
-                    </button>
-                </div>
-            {/if}
-        </div>
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col lg:p-2 lg:pl-0">

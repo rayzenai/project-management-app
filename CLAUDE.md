@@ -681,7 +681,13 @@ Shared building blocks (reach for these before writing anything new):
   `WorkAttendanceQuery` for attendance (null while it is off). People are
   listed by name, never ranked by a figure.
 - **Sidebar**: `OfficeLinks` (shared as `office`, on the API's `/user`)
-  says which office pages the user may open; the pages check again.
+  says which office pages the user may open; the pages check again. The
+  sidebar is a rail of areas (Work, Office, Reports, Admin) and the panel
+  of the one shown: `lib/navigation.ts` says which page belongs to which
+  area (a new page is one entry there), `components/shell/` draws it
+  (`NavRail`, `NavPanel`, `Logo`) and `AppShell` holds its state (the
+  shown area follows the page; `[` hides the panel, and a hidden panel
+  floats over the content when an area is picked).
 - **Maintenance**: `MaintenanceQuery` (`app/Queries/Maintenance/`, page
   `Maintenance/Index`, `canViewMaintenance` = `administers`) lists what
   needs looking at in an organization: active projects with no active

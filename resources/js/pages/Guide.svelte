@@ -65,7 +65,7 @@
                 "Give a task to anyone in your organization from the task form (press N): if they are not on the project's team, they join it. With no project yet, choose General there and it is made for you to manage.",
                 "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team. Make member there leaves the project with no manager until you choose one.',
-                'Open Maintenance now and then: it lists what needs fixing in your organization, such as projects with no manager or nobody on the team, open tasks nobody holds, people on no project or with no designation, each with a link to where you fix it.',
+                'Open Maintenance, under Admin, now and then (the number on Admin says how much is waiting): it lists what needs fixing in your organization, such as projects with no manager or nobody on the team, open tasks nobody holds, people on no project or with no designation, each with a link to where you fix it.',
                 'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
                 'Watch everything from the Projects page: projects in a program sit under it and the rest under their manager, with how much is done, what is overdue and the next deadline.',
                 "On the Organogram page, give each person a designation and the person they report to (the menu at the end of each row). That draws your office's organogram and decides who sees whose attendance and work.",
@@ -75,7 +75,7 @@
             key: 'program',
             title: 'Program manager',
             steps: [
-                'Open your program page every week, from Programs in the sidebar: how far each project has got, what is overdue and who is working on what.',
+                'Open your program page every week, from Programs under Work in the sidebar: how far each project has got, what is overdue and who is working on what.',
                 "Manage each project's team and tasks as its manager would: add people on its People tab, break the work into tasks and keep them moving.",
                 "Create projects in your program with New project on its page, and choose or replace each project's manager. A new program comes with a General project to start from: add a task and assign someone straight away.",
                 'Ask an organizational admin to move a project into your program or take one out.',
@@ -164,7 +164,7 @@
         ],
         [
             'Code activity',
-            "Code activity, in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
+            "Code activity, under Reports in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
         ],
         [
             'Your git email',
@@ -240,7 +240,8 @@
     const shortcuts = [
         ['N or Q', 'Add a task, from anywhere'],
         ['Ctrl K or /', 'Search tasks and projects (Cmd K on a Mac)'],
-        ['[', 'Fold the sidebar away'],
+        ['[', 'Hide the panel beside the rail, or bring it back'],
+        ['Esc', "Back to your page's own area after looking at another"],
     ];
 
     const tokens = [
