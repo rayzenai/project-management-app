@@ -1554,8 +1554,8 @@ its own, carved from `ubuntu-vg` (the VM's 500 GB disk less `/boot`): a
 runaway job fills its volume, and the tracker's database, Dokploy and the
 VM keep running. Sizes as set on 2026-11-01 (`sudo lvs`): they use the
 whole disk, so growing one now means a bigger disk from NITC first
-(then `sudo growpart /dev/xvda 3 && sudo pvresize /dev/xvda3`), or taking
-from `rustfs` while it is empty.
+(then `sudo growpart /dev/xvda 3 && sudo pvresize /dev/xvda3`). `rustfs`
+holds the SDOC portal's files now, so it can no longer give space away.
 
 | Logical volume | Size | Mounted over (the Docker volume's `_data`) | Holds |
 | --- | --- | --- | --- |
@@ -1563,7 +1563,7 @@ from `rustfs` while it is empty.
 | `runner-jobs` | 50 GB | `compose-program-redundant-application-k85b3j_dind-data` | dind's `docker.ext4` (46 GB): everything jobs pull, build and write |
 | `forge-data` | 70 GB | `git-forgejo-data` | repositories, LFS, finished job logs, artifacts |
 | `forge-db` | 28 GB | `git-postgres-gy325l-data` | the forge's Postgres, which also holds a running job's log |
-| `rustfs` | 150 GB | nothing yet | kept for an S3-compatible object store (RustFS); no filesystem until it is set up |
+| `rustfs` | 150 GB | `/srv/rustfs` (XFS; RustFS's data in `/srv/rustfs/data`) | the RustFS object store (Dokploy project `storage`): every file the SDOC portal keeps. Set up and run from the `sdoc` repository's `docs/deployment.md` |
 
 Each is an ext4 line in `/etc/fstab` (`nofail`, so a missing volume never
 stops the VM from booting; the file before the change is
