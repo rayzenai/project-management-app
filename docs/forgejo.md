@@ -1588,14 +1588,19 @@ database and Redis among it).
   leaves dind through it.
 - [`forgejo/runner/host/sdoc-runner-firewall`](../forgejo/runner/host/sdoc-runner-firewall),
   run at boot before Docker by `sdoc-runner-firewall.service`, adds two
-  chains for IPv4 and IPv6: `SDOC-RUNNERS-INPUT` (from `INPUT`: from the
-  bridge to the VM itself, replies only) and `SDOC-RUNNERS-PUBLISHED` (from
-  `DOCKER-USER`: of the ports Docker publishes, only 80, 443 and 2222).
-  Traffic to the VM's own address goes through `INPUT`, not `FORWARD`, so
-  `DOCKER-USER` alone can't stop it; the published ports are DNAT'd to their
-  containers and go through `FORWARD`, so `INPUT` alone can't limit them.
-  dockerd keeps `DOCKER-USER`'s rules when it restarts; a reboot runs the
-  unit again.
+  chains for IPv4 and IPv6, each letting through only 80, 443 and 2222
+  (and replies): `SDOC-RUNNERS-INPUT` from `INPUT` and
+  `SDOC-RUNNERS-PUBLISHED` from `DOCKER-USER`. Docker skips NAT for
+  traffic from its own bridges (`-i <bridge> -j RETURN` in nat `DOCKER`),
+  so a job reaches a published port on the VM's address through
+  `docker-proxy`, a process on the VM: that is `INPUT`, the same path as
+  SSH and Swarm. `DOCKER-USER` would only see it if the userland proxy
+  were turned off and the ports DNAT'd instead. dockerd keeps
+  `DOCKER-USER`'s rules when it restarts; a reboot runs the unit again.
+- Checked on 2026-11-01 from a container on a dind network, as a job runs:
+  a scan of every TCP port found only 80, 443 and 2222 open on the VM's
+  address and on the bridge's gateway; 22, 2377 and 7946 were refused; the
+  forge, GitHub and npm answered.
 - Anything refused answers at once (`Connection refused`), so a job that
   needs something new fails fast rather than timing out.
 

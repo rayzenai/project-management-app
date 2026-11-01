@@ -5,10 +5,16 @@
 # reach"). Safe to run again: it rebuilds its own chains.
 #
 # Jobs run in the runners compose's dind, on the bridge sdoc-runners
-# (forgejo/runner/compose.yml). From that bridge nothing new reaches the VM
-# itself (sshd, Docker Swarm's 2377, 7946 and 4789), and of the ports Docker
+# (forgejo/runner/compose.yml). From that bridge, of the ports Docker
 # publishes only 80 and 443 (the forge through Traefik) and 2222 (the
-# forge's ssh). The internet stays open.
+# forge's ssh) answer; nothing else on the VM does (sshd, Docker Swarm's
+# 2377, 7946 and 4789, Dokploy's 3000). The internet stays open.
+#
+# Docker skips NAT for traffic from its own bridges (nat DOCKER's
+# "-i <bridge> -j RETURN"), so a container reaches a published port on the
+# VM's address through docker-proxy, a process on the VM: INPUT. Without
+# the userland proxy it would be DNAT'd instead and go through FORWARD
+# (DOCKER-USER). Both paths get the same three ports.
 set -eu
 
 BRIDGE=sdoc-runners
@@ -19,13 +25,17 @@ chain() { "$1" -N "$2" 2>/dev/null || "$1" -F "$2"; }
 jump() { "$1" -C "$2" -i "$BRIDGE" -j "$3" 2>/dev/null || "$1" -I "$2" 1 -i "$BRIDGE" -j "$3"; }
 
 for ipt in iptables ip6tables; do
-  # To the VM itself: replies only.
+  # To the VM itself (docker-proxy): the three ports, and replies.
   chain "$ipt" SDOC-RUNNERS-INPUT
   "$ipt" -A SDOC-RUNNERS-INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+  for port in 80 443 2222; do
+    "$ipt" -A SDOC-RUNNERS-INPUT -p tcp --dport "$port" -j RETURN
+  done
+  "$ipt" -A SDOC-RUNNERS-INPUT -p udp --dport 443 -j RETURN
   "$ipt" -A SDOC-RUNNERS-INPUT -j REJECT
   jump "$ipt" INPUT SDOC-RUNNERS-INPUT
 
-  # Through a port Docker publishes (DNAT): 80, 443 and 2222 only. dockerd
+  # Through a published port when it is DNAT'd: the same three. dockerd
   # makes DOCKER-USER only when it's missing and keeps the rules it finds.
   "$ipt" -N DOCKER-USER 2>/dev/null || true
   chain "$ipt" SDOC-RUNNERS-PUBLISHED
