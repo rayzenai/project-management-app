@@ -39,7 +39,7 @@ command does it: [Try it locally](#try-it-locally).
 | Git over SSH | Forgejo's built-in SSH server on host port **2222** (the host's sshd keeps 22). The gateway forwards only 80 and 443, so 2222 is reachable only at `10.5.23.138`: from the VPN, whose resolver returns that address, and from office machines only if their resolver returns it too. HTTPS works wherever the web does |
 | Sign-in | Only "Sign in with sdoc-tasks", the tracker as OpenID Connect provider, then the forge's own second factor, which every person must enrol ([section 2](#2-public-behind-two-factor-sign-in)). No password sign-in anywhere: no password form and no password over HTTP basic auth. Access tokens and SSH keys work. No sign-up form, no OpenID 2.0, no anonymous browsing |
 | Tracker | `tasks.sdoc.gov.np` (Dokploy project `tasks`): the OIDC provider, the side that calls the forge's API with the `sdoc-bot` token, and the receiver of the forge's webhook (`/git/webhooks/{id}`, [section 12](#12-webhook-and-nightly-reconcile)). `tasks-scheduler` also runs `git:reconcile` nightly, `git:sync-access` every ten minutes, `git:commit-stats` every five ([section 13](#13-repositories-access-and-code-activity)) and `git:commit-checks` every two ([section 14](#14-runners-and-test-results)) |
-| Runners | Dokploy compose `git-runners` in project `git` (from `forgejo/runner/`): four Forgejo runners, one job each, registered to `sdoc`, every job inside one `docker:dind` held to 4 vCPUs, 10 GB of memory and 30 GB of disk ([section 14](#14-runners-and-test-results)) |
+| Runners | Dokploy compose `git-runners` in project `git` (from `forgejo/runner/`): four Forgejo runners, one job each, registered to `sdoc`, every job inside one `docker:dind` held to 4 vCPUs, 10 GB of memory and 46 GB of disk ([section 14](#14-runners-and-test-results)) |
 
 ## 1. DNS at NITC
 
@@ -1375,9 +1375,9 @@ Every pull request runs its repository's tests on the forge's own runners,
   `13.2.0` (`sdoc-runner-1` to `4`), one job each, registered to the forge
   organization `sdoc` (its repositories only, not personal ones). Every job
   runs in a container of the compose's dind service, never on the VM's
-  Docker, and dind is held to **4 vCPUs, 10 GB of memory and 30 GB of disk**
+  Docker, and dind is held to **4 vCPUs, 10 GB of memory and 46 GB of disk**
   for all four jobs together: its `/var/lib/docker` is an ext4 filesystem in
-  a 30 GB file on its volume (`forgejo/runner/dind/start.sh`), and that
+  a 46 GB file on its volume (`forgejo/runner/dind/start.sh`), and that
   volume is a logical volume of its own (see [Disk volumes](#disk-volumes)),
   so a job that fills its disk fills only that file, never the disk the
   tracker's database lives on. What jobs send the forge (logs, artifacts)
@@ -1536,29 +1536,32 @@ the tracker never touches them, and while they are down pull requests wait
   in the compose), deploy. Running jobs are cancelled; re-run them on the
   forge.
 - **Disk**: `sudo docker exec $(sudo docker ps -qf name=k85b3j-dind) df -h /var/lib/docker`
-  shows how much of the 30 GB is used, and `docker --host=unix:///var/run/dind/docker.sock system df`
+  shows how much of the 46 GB is used, and `docker --host=unix:///var/run/dind/docker.sock system df`
   (same `docker exec`) what fills it. To drop every unused image at once, run
   the same with `image prune --all --force` (the next job pulls what it
   needs). The file never shrinks back; it grows to the cap at most, on the
-  `runner-jobs` logical volume (34 GB). **More disk**: stop the compose, then
+  `runner-jobs` logical volume (50 GB). **More disk**: stop the compose, then
   on the VM, with `V` the `dind-data` volume's directory (`sudo docker
   volume inspect` shows it), grow the logical volume first and the file
   after:
-  `sudo lvextend -r -L +20G ubuntu-vg/runner-jobs && sudo truncate -s 50G $V/docker.ext4 && sudo e2fsck -f $V/docker.ext4 && sudo resize2fs $V/docker.ext4`,
+  `sudo lvextend -r -L +20G ubuntu-vg/runner-jobs && sudo truncate -s 66G $V/docker.ext4 && sudo e2fsck -f $V/docker.ext4 && sudo resize2fs $V/docker.ext4`,
   set `DIND_DISK_SIZE` to match in the compose, deploy.
 
 ### Disk volumes
 
 Since 2026-10-31 everything a job can make grow sits on a logical volume of
-its own, carved from `ubuntu-vg` (500 GB, of which the VM's root filesystem,
-`ubuntu-lv`, has 100 GB): a runaway job fills its volume, and the tracker's
-database, Dokploy and the VM keep running.
+its own, carved from `ubuntu-vg` (the VM's 500 GB disk less `/boot`): a
+runaway job fills its volume, and the tracker's database, Dokploy and the
+VM keep running. Sizes as set on 2026-11-01; `sudo lvs` shows them, and
+`sudo vgs` what is left (16 GB) for growing any of them.
 
 | Logical volume | Size | Mounted over (the Docker volume's `_data`) | Holds |
 | --- | --- | --- | --- |
-| `runner-jobs` | 34 GB | `compose-program-redundant-application-k85b3j_dind-data` | dind's `docker.ext4` (30 GB): everything jobs pull, build and write |
-| `forge-data` | 40 GB | `git-forgejo-data` | repositories, LFS, finished job logs, artifacts |
-| `forge-db` | 20 GB | `git-postgres-gy325l-data` | the forge's Postgres, which also holds a running job's log |
+| `ubuntu-lv` | 200 GB | `/` | the VM: Docker, Dokploy, the tracker and its Postgres and Redis |
+| `runner-jobs` | 50 GB | `compose-program-redundant-application-k85b3j_dind-data` | dind's `docker.ext4` (46 GB): everything jobs pull, build and write |
+| `forge-data` | 70 GB | `git-forgejo-data` | repositories, LFS, finished job logs, artifacts |
+| `forge-db` | 28 GB | `git-postgres-gy325l-data` | the forge's Postgres, which also holds a running job's log |
+| `rustfs` | 150 GB | nothing yet | kept for an S3-compatible object store (RustFS); no filesystem until it is set up |
 
 Each is an ext4 line in `/etc/fstab` (`nofail`, so a missing volume never
 stops the VM from booting; the file before the change is
@@ -1624,7 +1627,7 @@ jobs unfiltered: the rules match the name only.
 | --- | --- |
 | A pull request says checks are waiting and nothing runs | No runner is idle (Settings → Actions → Runners), or the repository has no workflow on `pull_request`. |
 | A runner shows offline | Its container restarts: its log says why (`sdoc-runner: …` for a missing or wrong secret, or dind not healthy yet). |
-| Jobs fail with `no space left on device` | dind's 30 GB is full: prune its images (Operating it, Disk), or give it more. |
+| Jobs fail with `no space left on device` | dind's 46 GB is full: prune its images (Operating it, Disk), or give it more. |
 | Uploads or the forge itself fail, `df` shows `forge-data` or `forge-db` full | A job flooded its log or artifacts: delete the run on the forge, or grow the volume ([Disk volumes](#disk-volumes)). |
 | A job gets `Connection refused` from the VM's address on a port other than 80, 443 or 2222 | The firewall, on purpose ([What jobs can reach](#what-jobs-can-reach)). |
 | Jobs can't clone (`Could not resolve host` or a timeout) | dind's DNS: it must use the VM's resolvers, which answer `git.sdoc.gov.np` with `10.5.23.138` ([section 4](#tracker-and-forge-reach-each-other-on-the-vm)). |

@@ -5,7 +5,7 @@
 # Four runners, one job each, registered to the forge organization sdoc.
 # Every job runs inside the dind service, never on the VM's own Docker, so
 # dind's limits hold all four jobs together to 4 vCPUs, 10 GB of memory and
-# 30 GB of disk (a file-backed filesystem, dind/start.sh). dind talks to the
+# 46 GB of disk (a file-backed filesystem, dind/start.sh). dind talks to the
 # runners only through a unix socket in a shared volume: no TCP port a job
 # could reach to take over dind. The secrets RUNNER_SECRET_1 to 4 go in the
 # Environment tab (.env.example next to this file). The VM's own part,
@@ -37,7 +37,7 @@ services:
       DOCKER_TLS_CERTDIR: ""
       # Everything jobs pull, build or write; raise it here, then resize
       # (docs/forgejo.md, section 14).
-      DIND_DISK_SIZE: 30G
+      DIND_DISK_SIZE: 46G
     command:
       - dockerd
       - --host=unix:///var/run/dind/docker.sock
@@ -105,7 +105,7 @@ services:
 
   # Once a day: what finished jobs leave in dind; pulled images stay, so
   # the next job doesn't pull them again. Once a week every image no
-  # container uses goes too, so old ones never fill the 30 GB.
+  # container uses goes too, so old ones never fill the 46 GB.
   prune:
     image: docker:29.8.2-cli
     restart: unless-stopped

@@ -600,7 +600,7 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
 - **Runners**: four Forgejo runners (`forgejo/runner/`, the Dokploy compose
   `git-runners` in project `git`), one job each, registered to the forge
   organization `sdoc`; every job runs inside one dind held to 4 vCPUs, 10 GB
-  and 30 GB of disk (`/var/lib/docker` on a file-backed ext4,
+  and 46 GB of disk (`/var/lib/docker` on a file-backed ext4,
   `forgejo/runner/dind/start.sh`); no actions cache (it would write outside
   the cap). On the VM, dind's volume, the forge's data and the forge's
   Postgres (where a running job's log goes) are each a logical volume of
