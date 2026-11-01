@@ -1,0 +1,12 @@
+# /etc/systemd/system/sdoc-backup.timer: hourly 08:00 to 18:00 and at 01:00, Nepal time (12 a day).
+[Unit]
+Description=SDOC VM backups, 12 a day
+
+[Timer]
+OnCalendar=*-*-* 08..18:00:00 Asia/Kathmandu
+OnCalendar=*-*-* 01:00:00 Asia/Kathmandu
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

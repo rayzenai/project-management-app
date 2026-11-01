@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Backs up the SDOC VM to /srv/backups, the backup-vg volume on the second disk (docs/backups.md).
+# Installed as /usr/local/sbin/sdoc-backup; sdoc-backup.timer runs it hourly from 08:00 to 18:00
+# and at 01:00, Nepal time: 12 backups a day.
+#
+# Every run: a dump of each database (tracker, portal, forge, Dokploy) and the RustFS data (the
+# portal's files): a full copy in the first run of each week (Sunday, 01:00), then only what changed.
+# At 01:00 (or with --nightly): also each database's roles, the forge's repositories, Dokploy's
+# settings and this VM's own configuration.
+#
+# Everything is encrypted with age to /etc/sdoc-backup/recipient.txt. The private key is not on the
+# VM, so the VM cannot read its own backups; restoring needs the key (sdoc checkout, backup-key.txt).
+set -euo pipefail
+umask 077
+
+DEST=/srv/backups
+RECIPIENT=/etc/sdoc-backup/recipient.txt
+NOW=$(TZ=Asia/Kathmandu date +%F_%H%M)
+NIGHTLY=0
+[ "$(TZ=Asia/Kathmandu date +%H)" = 01 ] && NIGHTLY=1
+[ "${1:-}" = --nightly ] && NIGHTLY=1
+
+exec 9>/run/sdoc-backup.lock
+flock -n 9 || { echo "Another backup is running." >&2; exit 1; }
+mountpoint -q "$DEST" || { echo "$DEST is not mounted: refusing to write to the root disk." >&2; exit 1; }
+[ -s "$RECIPIENT" ] || { echo "No recipient in $RECIPIENT." >&2; exit 1; }
+
+enc() { age -R "$RECIPIENT"; }
+failed=0
+step() { if "$@"; then echo "ok: $*"; else echo "FAILED: $*" >&2; failed=1; fi; }
+
+# db <label> <container name pattern>: the database, plus its roles at night.
+db() {
+  local c u d out
+  c=$(docker ps --format '{{.Names}}' | grep -E "$2" | head -1 || true)
+  [ -n "$c" ] || { echo "$1: no running container matches $2" >&2; return 1; }
+  u=$(docker exec "$c" printenv POSTGRES_USER) || return 1
+  d=$(docker exec "$c" printenv POSTGRES_DB 2>/dev/null || echo "$u")
+  mkdir -p "$DEST/db/$1"
+  out="$DEST/db/$1/$NOW.dump.age"
+  docker exec "$c" pg_dump -U "$u" -Fc "$d" | enc > "$out.tmp" && mv "$out.tmp" "$out" \
+    || { rm -f "$out.tmp"; return 1; }
+  [ "$NIGHTLY" = 1 ] || return 0
+  out="$DEST/db/$1/$NOW.roles.sql.age"
+  docker exec "$c" pg_dumpall -U "$u" --roles-only | enc > "$out.tmp" && mv "$out.tmp" "$out" \
+    || { rm -f "$out.tmp"; return 1; }
+}
+
+# tarball <out> <tar args...>: tar exits 1 when a file changed while it was read (RustFS and the
+# forge keep writing); that copy is still good, anything above 1 is not.
+tarball() {
+  local out=$1 st; shift
+  mkdir -p "$(dirname "$out")"
+  tar --create --file=- --warning=no-file-changed --warning=no-file-removed "$@" | enc > "$out.tmp"
+  st=("${PIPESTATUS[@]}")
+  if [ "${st[0]}" -le 1 ] && [ "${st[1]}" -eq 0 ]; then mv "$out.tmp" "$out"; else rm -f "$out.tmp"; return 1; fi
+}
+
+# The RustFS data directory, in weekly chains: a full copy, then each run adds what changed since
+# the run before (GNU tar's listed-incremental state lives with the chain).
+files() {
+  local week dir snar kind
+  week=$(TZ=Asia/Kathmandu date -d "-$(( $(TZ=Asia/Kathmandu date +%u) % 7 )) days" +%F)
+  dir="$DEST/files/$week"; snar="$dir/state.snar"; mkdir -p "$dir"
+  if [ -s "$snar" ]; then kind=inc; cp -p "$snar" "$snar.new"; else kind=full; rm -f "$snar.new"; fi
+  tarball "$dir/$NOW-$kind.tar.age" --listed-incremental="$snar.new" \
+    --exclude=data/.rustfs.sys/tmp -C /srv/rustfs data \
+    && mv "$snar.new" "$snar" || { rm -f "$snar.new"; return 1; }
+}
+
+step db tracker '^tasks-postgres-'
+step db portal  '^sdoc-postgres-'
+step db forge   '^git-postgres-'
+step db dokploy '^dokploy-postgres\.'
+step files
+if [ "$NIGHTLY" = 1 ]; then
+  step tarball "$DEST/forge/$NOW.tar.age" -C /var/lib/docker/volumes/git-forgejo-data _data
+  step tarball "$DEST/dokploy/$NOW.tar.age" --exclude=dokploy/applications --exclude=dokploy/logs -C /etc dokploy
+  step tarball "$DEST/vm/$NOW.tar.age" -C / etc/fstab etc/systemd/system etc/sdoc-backup \
+    usr/local/sbin var/spool/cron/crontabs
+fi
+
+# Databases: every backup for 7 days, the 01:00 ones for a year. Files: the last five weekly
+# chains. Forge, Dokploy and VM settings: 30 nights.
+find "$DEST/db" -type f -name '*.age' -mtime +7 ! -name '*_0100.*' -delete
+find "$DEST/db" -type f -name '*.age' -mtime +365 -delete
+find "$DEST/files" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5 | xargs -r rm -rf
+find "$DEST/forge" "$DEST/dokploy" "$DEST/vm" -type f -name '*.age' -mtime +30 -delete 2>/dev/null || true
+find "$DEST" -name '*.tmp' -mmin +180 -delete
+
+use=$(df --output=pcent "$DEST" | tail -1 | tr -dc 0-9)
+[ "$use" -lt 80 ] || echo "WARNING: $DEST is ${use}% full." >&2
+printf '%s %s\n' "$(date -Is)" "$([ "$failed" = 0 ] && echo ok || echo FAILED)" > "$DEST/last-run"
+exit "$failed"

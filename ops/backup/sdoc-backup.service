@@ -1,0 +1,13 @@
+# /etc/systemd/system/sdoc-backup.service (docs/backups.md)
+[Unit]
+Description=Back up the SDOC VM's databases and files to /srv/backups
+Wants=docker.service
+After=docker.service
+RequiresMountsFor=/srv/backups /srv/rustfs
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sdoc-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

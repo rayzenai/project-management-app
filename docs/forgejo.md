@@ -769,9 +769,10 @@ forge organization by that name.
 
 ## 10. Backups
 
-From day one: a nightly database dump and a copy of the data volume, on the
-VM. Copies off the VM and a restore drill come with a new backup VM (the
-owner's answer, 2026-10-29).
+Since 2026-11-01 the forge is part of the VM's backups ([backups.md](backups.md)):
+its database 12 times a day and its data volume every night, encrypted, on
+the VM's second disk. Copies off the VM and a regular restore drill come with
+a new backup VM (the owner's answer, 2026-10-29).
 
 **Go-live gate:** nobody pushes real code until a deactivation can't leave
 forge access open: met by the tracker removing the person from every
@@ -787,32 +788,13 @@ runs on. The nightly dumps undo a bad upgrade or a deleted repository, not the
 loss of the VM. If its disk, the VM or its host is lost before the backup VM
 exists, the forge's issues, pull requests, reviews, wikis, accounts and
 settings are gone for good, and the code survives only in the branches
-developers happen to have cloned. Once the backup VM exists, copy `$DEST` to
-it nightly (the script's last comment) and run the restore drill.
+developers happen to have cloned. Once the backup VM exists, copy
+`/srv/backups` to it nightly and run the restore drill.
 
-`/usr/local/sbin/forgejo-backup` (root, mode 700):
-
-```sh
-#!/usr/bin/env bash
-set -euo pipefail
-DEST=/var/backups/forgejo
-STAMP=$(date +%F)
-FJDB=$(docker ps --format '{{.Names}}' | grep -E '^git-postgres-[a-z0-9]+\.' | head -1)
-DATA=git-forgejo-data
-[ -n "$FJDB" ] || { echo "git-postgres is not running" >&2; exit 1; }
-mkdir -p "$DEST" && chmod 700 "$DEST"
-docker exec "$FJDB" pg_dump -U forgejo -Fc forgejo > "$DEST/forgejo-db-$STAMP.dump"
-docker run --rm -v "$DATA":/data:ro -v "$DEST":/backup alpine \
-  tar czf "/backup/forgejo-data-$STAMP.tar.gz" -C /data .
-find "$DEST" -name 'forgejo-*' -mtime +14 -delete
-# then copy $DEST off the VM, e.g. rsync to the backup host once it exists
-```
-
-Run it nightly from root's crontab (`sudo crontab -e`):
-
-```
-30 1 * * * /usr/local/sbin/forgejo-backup >> /var/log/forgejo-backup.log 2>&1
-```
+The forge's part of each backup: `db/forge/<date>_<HHMM>.dump.age` (every
+run) and `forge/<date>_0100.tar.age` (the data volume, nightly). The nightly
+`forgejo-backup` script that wrote unencrypted copies to `/var/backups/forgejo`
+on the root disk was retired on 2026-11-01.
 
 The data volume holds the repositories, attachments, SSH host keys and
 `app.ini` with its secrets: keep the copies as private as the Dokploy
@@ -849,10 +831,12 @@ On a scratch copy, never on top of production:
    RS=<git-restore's app name>
    RDB=$(sudo docker ps --format '{{.Names}}' | grep -E '^git-restore-postgres-[a-z0-9]+\.' | head -1)
    sudo docker service scale "$RS=0"
+   # forgejo.dump and forgejo-data.tar decrypted from the night's backup with the key
+   # (backups.md, Restoring); delete them when done.
    sudo docker exec -i "$RDB" pg_restore -U forgejo -d forgejo --clean --if-exists \
-     < forgejo-db-YYYY-MM-DD.dump
+     < forgejo.dump
    sudo docker run --rm -v git-restore-data:/data -v "$PWD":/backup alpine \
-     sh -c 'find /data -mindepth 1 -delete && tar xzf /backup/forgejo-data-YYYY-MM-DD.tar.gz -C /data'
+     sh -c 'find /data -mindepth 1 -delete && tar xf /backup/forgejo-data.tar --strip-components=1 -C /data'
    sudo docker service scale "$RS=1"
    R=$(sudo docker ps --format '{{.Names}}' | grep -E "^$RS\." | head -1)
    sudo docker exec -u git "$R" forgejo doctor check --all

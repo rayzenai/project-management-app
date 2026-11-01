@@ -241,3 +241,6 @@ git push origin main     # Dokploy builds origin/main, not this checkout
 ./dump_tasks.sh          # production DB → dumps/tasks-<timestamp>.dump (gitignored)
 ./dump_tasks.sh --restore-latest   # replace the local .env database with the last dump
 ```
+
+The VM backs up every database (this tracker's included) and the RustFS files
+12 times a day, encrypted, to its second disk: [`docs/backups.md`](docs/backups.md).
