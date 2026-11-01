@@ -1552,8 +1552,10 @@ the tracker never touches them, and while they are down pull requests wait
 Since 2026-10-31 everything a job can make grow sits on a logical volume of
 its own, carved from `ubuntu-vg` (the VM's 500 GB disk less `/boot`): a
 runaway job fills its volume, and the tracker's database, Dokploy and the
-VM keep running. Sizes as set on 2026-11-01; `sudo lvs` shows them, and
-`sudo vgs` what is left (16 GB) for growing any of them.
+VM keep running. Sizes as set on 2026-11-01 (`sudo lvs`): they use the
+whole disk, so growing one now means a bigger disk from NITC first
+(then `sudo growpart /dev/xvda 3 && sudo pvresize /dev/xvda3`), or taking
+from `rustfs` while it is empty.
 
 | Logical volume | Size | Mounted over (the Docker volume's `_data`) | Holds |
 | --- | --- | --- | --- |
