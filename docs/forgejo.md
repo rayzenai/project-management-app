@@ -1387,12 +1387,9 @@ Every pull request runs its repository's tests on the forge's own runners,
   TCP port a job could reach. dind is privileged (Docker inside Docker needs
   it), so a job that broke out of its container through a container-runtime
   or kernel bug would be root on the VM: keep the runners to SDOC's own
-  repositories. Jobs can reach the internet and, checked on 2026-10-31,
-  every port the VM itself listens on: 80, 443 and 2222, but also SSH (22,
-  which takes passwords) and Docker Swarm's 2377 and 7946 (and 4789/udp;
-  `dokploy-network` is not encrypted). Nothing filters them yet (`ufw` is off,
-  `DOCKER-USER` is empty). Dokploy's 3000 and the office router did not
-  answer a job.
+  repositories. Jobs reach the internet, and on the VM only the forge (80,
+  443, 2222): never its SSH, Docker Swarm or Dokploy (see
+  [What jobs can reach](#what-jobs-can-reach)).
 - **Images**: `runs-on: ubuntu-latest` (or `ubuntu-24.04`) runs
   `ghcr.io/catthehacker/ubuntu:act-24.04`, `ubuntu-22.04` its 22.04
   sibling: GitHub's runner image as act publishes it, with apt, sudo and
@@ -1519,6 +1516,8 @@ build it again, on the forge first:
    ```
 
    shows dind (healthy), four runners and prune.
+5. On the VM, the firewall that keeps jobs off the VM itself
+   ([What jobs can reach](#what-jobs-can-reach)).
 
 The runners deploy, restart and fail on their own: a deploy of the forge or
 the tracker never touches them, and while they are down pull requests wait
@@ -1566,14 +1565,53 @@ stops the VM from booting; the file before the change is
 `/etc/fstab.pre-lv`). Under each mount, the volume's own `_data` directory is
 empty and immutable (`chattr +i`): if a logical volume ever fails to mount,
 its service fails to start instead of quietly writing to the root disk (and
-Postgres never initialises an empty database there). The data as it was
-before the move is in `_data.pre-lv` next to each; delete those once you are
-sure (`sudo rm -rf …/_data.pre-lv`). `df -h | grep ubuntu--vg` shows how full
+Postgres never initialises an empty database there). The copies from before
+the move were deleted on 2026-11-01, after a backup from the new volumes
+read back. `df -h | grep ubuntu--vg` shows how full
 each is. To grow one, with no downtime: `sudo lvextend -r -L +10G
 ubuntu-vg/forge-data`. Neither Forgejo nor the runner caps a job's log, and
 the forge's quota only refuses uploads once an owner is already over it, so
 these volumes are the cap; a full `forge-db` stops the forge until it is
 grown or old runs' logs are deleted.
+
+### What jobs can reach
+
+A job is someone's code running on the VM, so since 2026-11-01 the VM's
+firewall holds it to what it needs: the internet (packages, GitHub actions,
+images) and, on the VM, the forge only. Before that, a job could reach the
+VM's SSH (which takes passwords) and Docker Swarm's ports (2377, 7946,
+4789/udp, which carry the unencrypted `dokploy-network`, the tracker's
+database and Redis among it).
+
+- The runners compose names its network's bridge `sdoc-runners`
+  (`com.docker.network.bridge.name` in the compose). Everything jobs send
+  leaves dind through it.
+- [`forgejo/runner/host/sdoc-runner-firewall`](../forgejo/runner/host/sdoc-runner-firewall),
+  run at boot before Docker by `sdoc-runner-firewall.service`, adds two
+  chains for IPv4 and IPv6: `SDOC-RUNNERS-INPUT` (from `INPUT`: from the
+  bridge to the VM itself, replies only) and `SDOC-RUNNERS-PUBLISHED` (from
+  `DOCKER-USER`: of the ports Docker publishes, only 80, 443 and 2222).
+  Traffic to the VM's own address goes through `INPUT`, not `FORWARD`, so
+  `DOCKER-USER` alone can't stop it; the published ports are DNAT'd to their
+  containers and go through `FORWARD`, so `INPUT` alone can't limit them.
+  dockerd keeps `DOCKER-USER`'s rules when it restarts; a reboot runs the
+  unit again.
+- Anything refused answers at once (`Connection refused`), so a job that
+  needs something new fails fast rather than timing out.
+
+Install or update it on the VM, from a checkout:
+
+```sh
+sudo install -m 755 forgejo/runner/host/sdoc-runner-firewall /usr/local/sbin/
+sudo install -m 644 forgejo/runner/host/sdoc-runner-firewall.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable sdoc-runner-firewall
+sudo /usr/local/sbin/sdoc-runner-firewall      # applies it now; safe to rerun
+sudo iptables -S SDOC-RUNNERS-INPUT; sudo iptables -S SDOC-RUNNERS-PUBLISHED
+```
+
+To let jobs reach another port on the VM, add it to the script's port list
+and rerun it. Renaming the bridge, or a compose without the name, leaves
+jobs unfiltered: the rules match the name only.
 
 ### When something is off
 
@@ -1583,6 +1621,7 @@ grown or old runs' logs are deleted.
 | A runner shows offline | Its container restarts: its log says why (`sdoc-runner: …` for a missing or wrong secret, or dind not healthy yet). |
 | Jobs fail with `no space left on device` | dind's 30 GB is full: prune its images (Operating it, Disk), or give it more. |
 | Uploads or the forge itself fail, `df` shows `forge-data` or `forge-db` full | A job flooded its log or artifacts: delete the run on the forge, or grow the volume ([Disk volumes](#disk-volumes)). |
+| A job gets `Connection refused` from the VM's address on a port other than 80, 443 or 2222 | The firewall, on purpose ([What jobs can reach](#what-jobs-can-reach)). |
 | Jobs can't clone (`Could not resolve host` or a timeout) | dind's DNS: it must use the VM's resolvers, which answer `git.sdoc.gov.np` with `10.5.23.138` ([section 4](#tracker-and-forge-reach-each-other-on-the-vm)). |
 | The tracker shows no tick or cross | The webhook's events lack the workflow-run ones (the reconcile puts them back), or the forge refused the tracker: look for "Reading a commit's checks failed." and run `git:commit-checks`. |
 | Maintenance lists a repository as not protected | The bot can't write the rule (it lost ownership, or its token lacks `write:repository`); `git:sync-access` shows the forge's answer. |

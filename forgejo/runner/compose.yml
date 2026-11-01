@@ -8,7 +8,8 @@
 # 30 GB of disk (a file-backed filesystem, dind/start.sh). dind talks to the
 # runners only through a unix socket in a shared volume: no TCP port a job
 # could reach to take over dind. The secrets RUNNER_SECRET_1 to 4 go in the
-# Environment tab (.env.example next to this file).
+# Environment tab (.env.example next to this file). The VM's own part,
+# host/sdoc-runner-firewall, limits what jobs reach on the VM.
 
 x-runner: &runner
   build: .
@@ -128,6 +129,13 @@ services:
           day=$$((day + 1))
           sleep 86400
         done
+
+networks:
+  default:
+    driver_opts:
+      # The VM's firewall keys on this name (host/sdoc-runner-firewall):
+      # jobs reach the VM only on 80, 443 and 2222, the internet freely.
+      com.docker.network.bridge.name: sdoc-runners
 
 volumes:
   dind-socket:

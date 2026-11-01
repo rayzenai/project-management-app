@@ -606,6 +606,9 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   Postgres (where a running job's log goes) are each a logical volume of
   their own (`runner-jobs`, `forge-data`, `forge-db`; docs/forgejo.md "Disk
   volumes"), so no job can fill the disk the tracker's database is on.
+  The VM's firewall (`forgejo/runner/host/sdoc-runner-firewall`, keyed on
+  the compose's bridge name `sdoc-runners`) lets jobs reach the internet
+  and, on the VM, only the forge's 80, 443 and 2222.
   Actions are on with `DEFAULT_ACTIONS_URL=github`
   (`forgejo/Dockerfile`), so GitHub workflows run as they are, from
   `.forgejo/workflows` or `.github/workflows`.

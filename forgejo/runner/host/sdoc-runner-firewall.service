@@ -1,0 +1,13 @@
+# /etc/systemd/system/sdoc-runner-firewall.service (docs/forgejo.md, section 14)
+[Unit]
+Description=What Forgejo runner jobs may reach on this VM
+# Before Docker starts the runners; dockerd keeps the rules it finds.
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/sdoc-runner-firewall
+
+[Install]
+WantedBy=multi-user.target

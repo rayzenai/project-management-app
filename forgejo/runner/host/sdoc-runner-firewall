@@ -1,0 +1,39 @@
+#!/bin/sh
+# What Forgejo runner jobs may reach on the VM. Installed as
+# /usr/local/sbin/sdoc-runner-firewall and run at boot, before Docker, by
+# sdoc-runner-firewall.service (docs/forgejo.md, section 14, "What jobs can
+# reach"). Safe to run again: it rebuilds its own chains.
+#
+# Jobs run in the runners compose's dind, on the bridge sdoc-runners
+# (forgejo/runner/compose.yml). From that bridge nothing new reaches the VM
+# itself (sshd, Docker Swarm's 2377, 7946 and 4789), and of the ports Docker
+# publishes only 80 and 443 (the forge through Traefik) and 2222 (the
+# forge's ssh). The internet stays open.
+set -eu
+
+BRIDGE=sdoc-runners
+
+# chain <iptables> <name>: create it, or empty it.
+chain() { "$1" -N "$2" 2>/dev/null || "$1" -F "$2"; }
+# jump <iptables> <from> <to>: once, at the top.
+jump() { "$1" -C "$2" -i "$BRIDGE" -j "$3" 2>/dev/null || "$1" -I "$2" 1 -i "$BRIDGE" -j "$3"; }
+
+for ipt in iptables ip6tables; do
+  # To the VM itself: replies only.
+  chain "$ipt" SDOC-RUNNERS-INPUT
+  "$ipt" -A SDOC-RUNNERS-INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+  "$ipt" -A SDOC-RUNNERS-INPUT -j REJECT
+  jump "$ipt" INPUT SDOC-RUNNERS-INPUT
+
+  # Through a port Docker publishes (DNAT): 80, 443 and 2222 only. dockerd
+  # makes DOCKER-USER only when it's missing and keeps the rules it finds.
+  "$ipt" -N DOCKER-USER 2>/dev/null || true
+  chain "$ipt" SDOC-RUNNERS-PUBLISHED
+  "$ipt" -A SDOC-RUNNERS-PUBLISHED -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+  for port in 80 443 2222; do
+    "$ipt" -A SDOC-RUNNERS-PUBLISHED -p tcp -m conntrack --ctstate DNAT --ctorigdstport "$port" -j RETURN
+  done
+  "$ipt" -A SDOC-RUNNERS-PUBLISHED -p udp -m conntrack --ctstate DNAT --ctorigdstport 443 -j RETURN
+  "$ipt" -A SDOC-RUNNERS-PUBLISHED -m conntrack --ctstate DNAT -j REJECT
+  jump "$ipt" DOCKER-USER SDOC-RUNNERS-PUBLISHED
+done
