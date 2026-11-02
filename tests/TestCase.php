@@ -20,16 +20,19 @@ abstract class TestCase extends BaseTestCase
     /**
      * A test's session lives across its requests, but in production another
      * person only signs in on a fresh session (logout ends it; the login
-     * routes are for guests). So acting as someone never keeps the password
-     * hash AuthenticateSession stored for the previous person, which it
-     * would read as a changed password and sign them out.
+     * routes are for guests). So acting as someone else never keeps the
+     * password hash AuthenticateSession stored for the previous person,
+     * which it would read as a changed password and sign them out. Acting as
+     * the same person again keeps it, so a changed password still signs out.
      *
      * @param  string|null  $guard
      * @return $this
      */
     public function be(Authenticatable $user, $guard = null)
     {
-        $this->app['session']->forget('password_hash_web');
+        if (auth()->id() !== $user->getAuthIdentifier()) {
+            $this->app['session']->forget('password_hash_web');
+        }
 
         return parent::be($user, $guard);
     }

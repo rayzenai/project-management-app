@@ -34,6 +34,8 @@ class PasswordController extends Controller
         );
 
         if ($result->failed()) {
+            $request->countRefusal();
+
             return $this->respondWithResult($result);
         }
 

@@ -58,6 +58,8 @@ class PasswordController extends Controller
         );
 
         if ($result->failed()) {
+            $request->countRefusal();
+
             return $this->redirectWithResult($result);
         }
 
@@ -76,10 +78,13 @@ class PasswordController extends Controller
      */
     private function page(Request $request, string $kind, string $token): Response
     {
+        // Shown on the page and sent back: only ever an email address.
+        $email = $request->query('email');
+
         return Inertia::render('Auth/SetPassword', [
             'kind' => $kind,
             'token' => $token,
-            'email' => (string) $request->query('email', ''),
+            'email' => is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false ? $email : '',
             'status' => $request->session()->get('status'),
             'passwordRules' => SetPasswordRequest::describeRules(),
         ]);

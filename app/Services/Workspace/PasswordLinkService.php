@@ -74,8 +74,9 @@ final class PasswordLinkService
     /**
      * Sets the password of whoever the link was for. A wrong, used, expired or
      * other-kind link, and a deactivated person's, all get LINK_REFUSED.
-     * Rotates the remember token, so no "remember me" cookie outlives the old
-     * password; web sessions end through AuthenticateSession. API tokens stay.
+     * Ends both kinds of pending link and rotates the remember token, so no
+     * "remember me" cookie outlives the old password; web sessions end
+     * through AuthenticateSession. API tokens stay.
      *
      * @param  'reset'|'invite'  $kind
      */
@@ -97,7 +98,7 @@ final class PasswordLinkService
                     'remember_token' => Str::random(60),
                 ])->save();
 
-                $broker->deleteToken($user);
+                $this->forgetLinks($user);
 
                 return $user;
             });
@@ -110,6 +111,17 @@ final class PasswordLinkService
 
             return ServiceResult::success($user, 'Your password is set.');
         }, self::REFUSAL_MICROSECONDS);
+    }
+
+    /**
+     * Ends every pending link of the person, reset and invite alike: once a
+     * password is set, by a link or by an admin, no older link may set
+     * another.
+     */
+    public function forgetLinks(User $user): void
+    {
+        self::broker('reset')->deleteToken($user);
+        self::broker('invite')->deleteToken($user);
     }
 
     private function deliverReset(string $email): void

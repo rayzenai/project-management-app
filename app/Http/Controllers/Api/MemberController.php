@@ -10,6 +10,7 @@ use App\Jobs\SyncForgeOwners;
 use App\Models\Member;
 use App\Models\User;
 use App\Services\Structure\SetReportsToService;
+use App\Services\Workspace\PasswordLinkService;
 use App\Services\Workspace\RemoveFromForgeService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Services\Workspace\SendLoginDetailsService;
@@ -89,7 +90,7 @@ class MemberController extends Controller
         ], 201);
     }
 
-    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles, SetReportsToService $reportsTo): JsonResponse
+    public function update(UpdateMemberRequest $request, Member $member, RemoveFromForgeService $forge, UpdateMemberRolesService $roles, SetReportsToService $reportsTo, PasswordLinkService $links): JsonResponse
     {
         if (! $member->user_id && $request->filled('password') && ! ($request->validated('email') ?? $member->email)) {
             return response()->json([
@@ -101,7 +102,7 @@ class MemberController extends Controller
         $deactivated = false;
         $ownersChanged = [];
 
-        DB::transaction(function () use ($request, $member, $roles, $reportsTo, &$deactivated, &$ownersChanged): void {
+        DB::transaction(function () use ($request, $member, $roles, $reportsTo, $links, &$deactivated, &$ownersChanged): void {
             $member->update([
                 ...$request->safe()->except(['team_ids', 'managed_program_ids', 'managed_project_ids', 'password', 'designation_id', 'reports_to_id', 'attendance_exempt']),
                 ...$request->designation(),
@@ -140,6 +141,10 @@ class MemberController extends Controller
                 }
                 if ($request->filled('password')) {
                     $user->password = Hash::make($request->validated('password'));
+                    // Every "remember me" sign-in and pending link ends with
+                    // the old password.
+                    $user->remember_token = Str::random(60);
+                    $links->forgetLinks($user);
                 }
                 $user->save();
             }

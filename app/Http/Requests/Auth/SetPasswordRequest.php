@@ -10,9 +10,11 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Sets a password from an emailed link (web and API). Whether the link
- * still works is PasswordLinkService::setPassword's to say. Ten tries a
- * minute per address, counted before anything is checked: a refused link
- * is held to a fixed answer time, which must not tie up the server.
+ * still works is PasswordLinkService::setPassword's to say. Ten refused
+ * links a minute per address, checked before anything else: a refused link
+ * is held to a fixed answer time, which must not tie up the server. A
+ * password that breaks the rules is no refusal (an office shares one
+ * address, and typos are common).
  */
 class SetPasswordRequest extends FormRequest
 {
@@ -69,16 +71,25 @@ class SetPasswordRequest extends FormRequest
     }
 
     /**
+     * Counts a link the service refused toward this address's limit.
+     */
+    public function countRefusal(): void
+    {
+        RateLimiter::hit($this->throttleKey(), self::DECAY_SECONDS);
+    }
+
+    /**
      * @throws ValidationException 429 on `password` once the address used up its tries
      */
     protected function prepareForValidation(): void
     {
-        $key = 'set-password:ip:'.$this->ip();
-
-        if (RateLimiter::tooManyAttempts($key, self::MAX_ATTEMPTS)) {
+        if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
             throw ValidationException::withMessages(['password' => self::THROTTLED])->status(429);
         }
+    }
 
-        RateLimiter::hit($key, self::DECAY_SECONDS);
+    private function throttleKey(): string
+    {
+        return 'set-password:ip:'.$this->ip();
     }
 }

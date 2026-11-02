@@ -351,6 +351,95 @@ it('sends the eleventh set-password try in a minute from one address away, befor
     forgotPasswordSet('reset', 'sita@example.com', $token)->assertRedirect(route('workspace.my'));
 });
 
+it('counts only refused links toward the set-password limit, never a password that breaks the rules', function () {
+    forgotPasswordPerson();
+    $this->post('/workspace/forgot-password', ['email' => 'sita@example.com']);
+    $token = forgotPasswordToken(forgotPasswordLinkTo('sita@example.com'));
+
+    foreach (range(1, 15) as $i) {
+        $this->from('/workspace/login')->post('/workspace/set-password', [
+            'kind' => 'reset',
+            'email' => 'sita@example.com',
+            'token' => $token,
+            'password' => 'new-password-1',
+            'password_confirmation' => "typo-{$i}",
+        ])->assertSessionHasErrors('password')->assertSessionDoesntHaveErrors(['password' => SetPasswordRequest::THROTTLED]);
+    }
+
+    forgotPasswordSet('reset', 'sita@example.com', $token)->assertRedirect(route('workspace.my'));
+});
+
+it('ends the other kind\'s pending link once a password is set', function () {
+    $user = forgotPasswordPerson();
+    $inviteToken = forgotPasswordInviteToken($user);
+    $resetToken = Password::broker('users')->createToken($user);
+
+    forgotPasswordSet('reset', 'sita@example.com', $resetToken)->assertRedirect(route('workspace.my'));
+    Auth::logout();
+
+    expect(DB::table('invite_tokens')->count())->toBe(0);
+    forgotPasswordSet('invite', 'sita@example.com', $inviteToken)
+        ->assertSessionHasErrors(['token' => PasswordLinkService::LINK_REFUSED]);
+
+    $inviteToken = Password::broker('invites')->createToken($user);
+    $resetToken = Password::broker('users')->createToken($user);
+
+    forgotPasswordSet('invite', 'sita@example.com', $inviteToken)->assertRedirect(route('workspace.my'));
+    Auth::logout();
+
+    expect(DB::table('password_reset_tokens')->count())->toBe(0);
+    forgotPasswordSet('reset', 'sita@example.com', $resetToken)
+        ->assertSessionHasErrors(['token' => PasswordLinkService::LINK_REFUSED]);
+});
+
+it('ends both pending links and every remember-me sign-in when an admin sets a password on the person form', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = forgotPasswordPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    $recaller = [Auth::guard('web')->getRecallerName() => "{$person->id}|{$person->remember_token}|{$person->password}"];
+    Password::broker('users')->createToken($person);
+    Password::broker('invites')->createToken($person);
+
+    // The remember-me cookie signs them in, as it would on their phone.
+    $this->withCookies($recaller)->get('/workspace/my')->assertOk();
+    $this->assertAuthenticatedAs($person);
+
+    $this->actingAs($admin)->from('/workspace/team')
+        ->patch("/workspace/members/{$member->id}", ['password' => 'given-password-1'])
+        ->assertSessionHasNoErrors();
+
+    expect(DB::table('password_reset_tokens')->count())->toBe(0)
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+
+    // A new visit with only that cookie: it no longer signs anyone in.
+    Auth::forgetGuards();
+    $this->app['session']->flush();
+    $this->withCookies($recaller)->get('/workspace/my')->assertRedirect('/workspace/login');
+    $this->assertGuest();
+});
+
+it('still signs out a changed password when a test acts as the same person again', function () {
+    $user = forgotPasswordPerson();
+    $this->post('/workspace/login', ['email' => 'sita@example.com', 'password' => 'old-password'])->assertRedirect();
+    $this->get('/workspace/my')->assertOk();
+
+    $token = Password::broker('users')->createToken($user);
+    app(PasswordLinkService::class)->setPassword('reset', 'sita@example.com', $token, 'new-password-1');
+
+    $this->actingAs($user->fresh())->get('/workspace/my')->assertRedirect('/workspace/login');
+});
+
+it('shows the link\'s email on the page only when it is an email', function () {
+    $page = fn (string $query) => $this->get('/workspace/reset-password/abc?'.$query)->assertOk();
+
+    $page('email=sita%40example.com')->assertInertia(fn (AssertableInertia $p) => $p->where('email', 'sita@example.com'));
+    $page('email=not-an-email')->assertInertia(fn (AssertableInertia $p) => $p->where('email', ''));
+    $page('email=%3Cscript%3E%40x')->assertInertia(fn (AssertableInertia $p) => $p->where('email', ''));
+    $page('email[]=sita%40example.com')->assertInertia(fn (AssertableInertia $p) => $p->where('email', ''));
+    $page('')->assertInertia(fn (AssertableInertia $p) => $p->where('email', ''));
+});
+
 it('describes the password rules the server checks, in plain words, before anyone fails them', function () {
     $page = fn () => $this->get(route('workspace.password.reset', ['token' => 'abc', 'email' => 'sita@example.com']))
         ->assertOk();
@@ -393,10 +482,11 @@ it('keeps the session of an admin who changes their own password on the person f
     $this->assertAuthenticatedAs($user);
 });
 
-it('sends the sixth request from one address in 15 minutes away, known email or not', function () {
+it('sends the thirty-first request from one address in 15 minutes away, known email or not', function () {
     forgotPasswordPerson();
 
-    foreach (range(1, 5) as $i) {
+    // A ministry's staff sit behind one office address.
+    foreach (range(1, 30) as $i) {
         $this->from('/workspace/forgot-password')
             ->post('/workspace/forgot-password', ['email' => "nobody{$i}@example.com"])
             ->assertSessionHasNoErrors();
@@ -409,6 +499,21 @@ it('sends the sixth request from one address in 15 minutes away, known email or 
     Mail::assertNothingSent();
 
     $this->travel(16)->minutes();
+
+    $this->from('/workspace/forgot-password')
+        ->post('/workspace/forgot-password', ['email' => 'sita@example.com'])
+        ->assertSessionHasNoErrors();
+    forgotPasswordLinkTo('sita@example.com');
+});
+
+it('does not count a mistyped email toward the address\'s limit', function () {
+    forgotPasswordPerson();
+
+    foreach (range(1, 35) as $i) {
+        $this->from('/workspace/forgot-password')
+            ->post('/workspace/forgot-password', ['email' => "not-an-email-{$i}"])
+            ->assertSessionHasErrors('email');
+    }
 
     $this->from('/workspace/forgot-password')
         ->post('/workspace/forgot-password', ['email' => 'sita@example.com'])

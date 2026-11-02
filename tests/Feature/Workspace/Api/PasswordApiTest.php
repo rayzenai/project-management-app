@@ -9,7 +9,9 @@ use App\Services\Workspace\PasswordLinkService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Sleep;
+use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
     Mail::fake();
@@ -115,10 +117,10 @@ it('validates what it is sent', function () {
         ->assertUnprocessable()->assertJsonValidationErrors(['kind', 'email', 'token', 'password']);
 });
 
-it('answers the sixth request from one address in 15 minutes with 429, known email or not', function () {
+it('answers the thirty-first request from one address in 15 minutes with 429, known email or not', function () {
     passwordApiPerson();
 
-    foreach (range(1, 5) as $i) {
+    foreach (range(1, 30) as $i) {
         $this->postJson('/api/v1/forgot-password', ['email' => "nobody{$i}@example.com"])->assertOk();
     }
 
@@ -154,4 +156,33 @@ it('answers the eleventh set-password try in a minute from one address with 429'
 
     // Another address is not held back.
     $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.7'])->postJson('/api/v1/set-password', $payload)->assertStatus(422);
+});
+
+it('ends both pending links and remember-me sign-ins when an admin sets a password through the API', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = passwordApiPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    $remember = $person->remember_token;
+    Password::broker('users')->createToken($person);
+    Password::broker('invites')->createToken($person);
+    Sanctum::actingAs($admin, ['*']);
+
+    $this->patchJson("/api/v1/workspace/members/{$member->id}", ['password' => 'given-password-1'])->assertOk();
+
+    expect($person->fresh()->remember_token)->not->toBe($remember)
+        ->and(DB::table('password_reset_tokens')->count())->toBe(0)
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+});
+
+it('counts only refused links toward the set-password limit', function () {
+    $payload = ['kind' => 'reset', 'email' => 'nobody@example.com', 'token' => str_repeat('a', 64), 'password' => 'new-password-1'];
+
+    foreach (range(1, 15) as $i) {
+        $this->postJson('/api/v1/set-password', [...$payload, 'password_confirmation' => "typo-{$i}"])
+            ->assertStatus(422)->assertJsonValidationErrors('password');
+    }
+
+    $this->postJson('/api/v1/set-password', [...$payload, 'password_confirmation' => 'new-password-1'])
+        ->assertStatus(422)->assertJsonPath('errors.token', PasswordLinkService::LINK_REFUSED);
 });
