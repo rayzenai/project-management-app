@@ -41,7 +41,7 @@ trait BuildsWorkspaceNotification
     protected function taskUrl(?Task $task): string
     {
         return $task === null
-            ? '/workspace'
+            ? '/workspace/my'
             : "/workspace/projects/{$task->project?->slug}/tasks/{$task->slug}";
     }
 }

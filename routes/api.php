@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\MemberDesignationController;
+use App\Http\Controllers\Api\MyWorkController;
 use App\Http\Controllers\Api\MyWorkspaceController;
 use App\Http\Controllers\Api\NoteController;
 use App\Http\Controllers\Api\NotificationController;
@@ -74,6 +75,7 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/home', HomeController::class)->name('home');
             Route::get('/dashboard', DashboardController::class)->name('dashboard');
             Route::get('/my', MyWorkspaceController::class)->name('my');
+            Route::get('/my-work', MyWorkController::class)->name('my-work');
             Route::get('/plan-tracker', PlanTrackerController::class)->name('plan-tracker');
             Route::get('/search', TaskSearchController::class)->name('search');
             Route::post('/quick-add', QuickAddController::class)->name('quick-add');

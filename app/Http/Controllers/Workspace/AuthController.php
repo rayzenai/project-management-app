@@ -29,7 +29,7 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
-        $redirect = redirect()->intended('/workspace');
+        $redirect = redirect()->intended(route('workspace.my'));
 
         // Signing in on the way to the forge: a full page visit, so the
         // browser (not the SPA's XHR) follows /oauth/authorize off to the forge.

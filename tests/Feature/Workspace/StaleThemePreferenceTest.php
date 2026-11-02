@@ -6,7 +6,7 @@ it('falls back to the system theme when a saved theme no longer exists', functio
     $user = User::factory()->create();
     $user->preferences()->create(['theme' => 'terminal-noir']);
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.theme', 'system')
             ->where('appearance.mode', null)

@@ -31,7 +31,7 @@ class OrganizationSwitchController extends Controller
         $path = (string) parse_url($previous, PHP_URL_PATH);
 
         if (! str_starts_with($path, '/workspace')) {
-            return route('workspace.home');
+            return route('workspace.my');
         }
 
         parse_str((string) parse_url($previous, PHP_URL_QUERY), $query);

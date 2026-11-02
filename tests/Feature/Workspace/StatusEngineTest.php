@@ -49,7 +49,7 @@ it('reads status label and color from the package config, not government config'
 it('shares ordered statuses with completion flags on every workspace page', function () {
     $this->actingAs(User::factory()->create());
 
-    $this->get('/workspace')->assertInertia(fn (AssertableInertia $page) => $page
+    $this->get('/workspace/my')->assertInertia(fn (AssertableInertia $page) => $page
         ->has('statuses', 5)
         ->where('statuses.0.value', 'not_started')
         ->where('statuses.0.is_complete', false)

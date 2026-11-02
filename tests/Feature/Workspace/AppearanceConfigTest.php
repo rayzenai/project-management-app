@@ -5,7 +5,7 @@ use App\Models\User;
 it('shares configured false for a fresh user and true after saving via the web route', function () {
     $user = User::factory()->create();
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page->where('appearance.configured', false));
 
     $this->actingAs($user)->patch('/workspace/preferences', [
@@ -13,7 +13,7 @@ it('shares configured false for a fresh user and true after saving via the web r
         'email_notifications' => false,
     ])->assertRedirect();
 
-    $this->actingAs($user->fresh())->get('/workspace')
+    $this->actingAs($user->fresh())->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.configured', true)
             ->where('appearance.theme', 'light')
@@ -27,7 +27,7 @@ it('saves only the theme when the top-bar toggle sends just the theme', function
     $this->actingAs($user)->patch('/workspace/preferences', ['theme' => 'dark'])
         ->assertRedirect();
 
-    $this->actingAs($user->fresh())->get('/workspace')
+    $this->actingAs($user->fresh())->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.theme', 'dark')
             ->where('appearance.mode', 'dark')
@@ -48,6 +48,6 @@ it('shares the current font_override on workspace pages', function () {
         'font_override' => ['display' => null, 'body' => 'Geist', 'mono' => null],
     ]);
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page->where('appearance.font_override.body', 'Geist'));
 });

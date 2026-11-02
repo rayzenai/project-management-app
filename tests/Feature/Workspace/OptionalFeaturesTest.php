@@ -9,7 +9,7 @@ use Inertia\Testing\AssertableInertia;
 
 it('keeps task notes and contacts off for a new user', function () {
     $this->actingAs(User::factory()->create())
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('features.task_notes', false)
             ->where('features.contacts', false));
@@ -24,7 +24,7 @@ it('turns task notes and contacts on from settings', function () {
     ])->assertRedirect();
 
     $this->actingAs($user->fresh())
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('features.task_notes', true)
             ->where('features.contacts', true));
@@ -38,7 +38,7 @@ it('keeps the other settings when one feature is switched', function () {
         ->assertRedirect();
 
     $this->actingAs($user->fresh())
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('appearance.theme', 'dark')
             ->where('features.contacts', true)
@@ -57,7 +57,7 @@ it('shares no task notes while task notes are off', function () {
     ProjectNote::create(['task_id' => $task->id, 'user_id' => $user->id, 'type' => 'general', 'body' => 'Mine']);
 
     $this->actingAs($user)
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('taskNotes', fn (Collection $notes): bool => $notes->isEmpty()));
 });
@@ -69,7 +69,7 @@ it('shares the task notes once task notes are on', function () {
     ProjectNote::create(['task_id' => $task->id, 'user_id' => $user->id, 'type' => 'general', 'body' => 'Mine']);
 
     $this->actingAs($user)
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('taskNotes', fn (Collection $notes): bool => $notes->pluck('body')->all() === ['Mine']));
 });

@@ -796,7 +796,7 @@ it('tells both surfaces whether the person may use git anywhere', function () {
     $boss = gitBoss();
     $gitEnabled = function (User $user): array {
         $web = null;
-        test()->actingAs($user)->get('/workspace')->assertInertia(function (AssertableInertia $page) use (&$web) {
+        test()->actingAs($user)->get('/workspace/my')->assertInertia(function (AssertableInertia $page) use (&$web) {
             $web = $page->toArray()['props']['gitEnabled'];
         });
         Sanctum::actingAs($user);

@@ -30,7 +30,7 @@ it('omits archived projects from the projects index by default and lists them un
             ->where('projects', fn ($projects) => collect($projects)->pluck('title')->all() === ['Archived One']));
 });
 
-it('drops archived projects from the My Workspace picker and dormant-tasks from assignments', function () {
+it("drops archived projects from the app's My Workspace picker and dormant-tasks from assignments", function () {
     $active = Project::factory()->create();
     $archived = Project::factory()->create();
 
@@ -41,13 +41,13 @@ it('drops archived projects from the My Workspace picker and dormant-tasks from 
 
     $archived->archive();
 
-    $this->get('/workspace/my')
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('projects', fn ($projects) => collect($projects)->pluck('id')->all() === [$active->id])
-            ->where('assignments', fn ($assignments) => collect($assignments)->count() === 1));
+    $my = $this->actingAs($this->user, 'sanctum')->getJson('/api/v1/workspace/my')->assertOk()->json();
+
+    expect(collect($my['projects'])->pluck('id')->all())->toBe([$active->id])
+        ->and($my['assignments'])->toHaveCount(1);
 });
 
-it('excludes archived-project snoozed assignments and todos from My Workspace', function () {
+it("excludes archived-project snoozed assignments and todos from the app's My Workspace", function () {
     $archived = Project::factory()->create();
     $task = Task::factory()->for($archived)->create(['status' => 'in_progress']);
 
@@ -66,10 +66,10 @@ it('excludes archived-project snoozed assignments and todos from My Workspace', 
 
     $archived->archive();
 
-    $this->get('/workspace/my')
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('snoozedCount', 0)
-            ->where('openTodos', fn ($todos) => collect($todos)->count() === 0));
+    $my = $this->actingAs($this->user, 'sanctum')->getJson('/api/v1/workspace/my')->assertOk()->json();
+
+    expect($my['snoozedCount'])->toBe(0)
+        ->and($my['openTodos'])->toBe([]);
 });
 
 it('excludes archived projects from search results', function () {

@@ -6,7 +6,7 @@ it('shares the users appearance on workspace pages', function () {
     $user = User::factory()->create();
     $user->preferences()->create(['theme' => 'light']);
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.theme', 'light')
             ->where('appearance.mode', 'light')
@@ -18,7 +18,7 @@ it('shares the users appearance on workspace pages', function () {
 it('marks appearance unconfigured for a user without saved preferences', function () {
     $user = User::factory()->create();
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.configured', false));
 });
@@ -26,7 +26,7 @@ it('marks appearance unconfigured for a user without saved preferences', functio
 it('shares the theme catalogue so the appearance UI renders without an API fetch', function () {
     $user = User::factory()->create();
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->has('themeCatalogue.themes', 3)
             ->has('themeCatalogue.themes.dark')
@@ -40,7 +40,7 @@ it('resolves system appearance to light and dark token sets', function () {
     $user = User::factory()->create();
     $user->preferences()->create(['theme' => 'system']);
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.theme', 'system')
             ->where('appearance.mode', null)

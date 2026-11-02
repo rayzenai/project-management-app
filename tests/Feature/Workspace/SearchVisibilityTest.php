@@ -28,7 +28,7 @@ it('excludes invisible projects from the quick-add picker', function () {
     $foreign = Project::factory()->create(['is_public' => false]);
     $foreign->teams()->attach(Team::factory()->create()->id);
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $p) => $p
             ->where('quickAddContext.projects', fn (Collection $rows): bool => ! $rows->pluck('id')->contains($foreign->id)));
 });

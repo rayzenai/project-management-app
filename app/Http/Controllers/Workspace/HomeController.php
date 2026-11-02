@@ -2,17 +2,20 @@
 
 namespace App\Http\Controllers\Workspace;
 
-use App\Queries\HomeQuery;
-use App\Support\WorkspaceOrganization;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Inertia\Inertia;
-use Inertia\Response;
 
+/**
+ * `/workspace` opens My work, keeping the query string. The app's Home feed
+ * (Api\HomeController) stays as it is.
+ */
 class HomeController extends Controller
 {
-    public function __invoke(Request $request, HomeQuery $query): Response
+    public function __invoke(Request $request): RedirectResponse
     {
-        return Inertia::render('Home', $query->get($request, WorkspaceOrganization::chosen($request->user())));
+        $query = $request->getQueryString();
+
+        return redirect()->to(route('workspace.my').($query === null ? '' : '?'.$query));
     }
 }

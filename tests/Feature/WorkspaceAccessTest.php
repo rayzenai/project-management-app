@@ -5,16 +5,18 @@ use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
+use Inertia\Testing\AssertableInertia;
 
 it('redirects guests to the workspace login', function (string $uri) {
     $this->get($uri)->assertRedirect('/workspace/login');
 })->with(['/workspace', '/workspace/my']);
 
-it('renders the workspace for an authenticated user', function (string $uri) {
+it('sends a signed-in user from /workspace to My work, which renders', function () {
     $this->actingAs(User::factory()->create());
 
-    $this->get($uri)->assertSuccessful();
-})->with(['/workspace', '/workspace/my']);
+    $this->get('/workspace')->assertRedirect('/workspace/my');
+    $this->get('/workspace/my')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('MyWork'));
+});
 
 it('resolves roles through WorkspaceAccess', function () {
     config(['project-management.super_admins' => ['boss@example.com']]);

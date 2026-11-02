@@ -35,14 +35,14 @@ function switchProps(TestResponse $response): array
 }
 
 it('offers a super-admin the switch, starting on all organizations, and nobody else', function () {
-    expect(switchProps($this->actingAs($this->boss)->get('/workspace'))['organizationSwitch'])->toBe([
+    expect(switchProps($this->actingAs($this->boss)->get('/workspace/my'))['organizationSwitch'])->toBe([
         'organizations' => [
             ['id' => $this->mof->id, 'name' => 'MoF'],
             ['id' => $this->opmcm->id, 'name' => 'OPMCM'],
             ['id' => $this->sdoc->id, 'name' => 'SDOC'],
         ],
         'current' => null,
-    ])->and(switchProps($this->actingAs($this->admin->user)->get('/workspace'))['organizationSwitch'])->toBeNull();
+    ])->and(switchProps($this->actingAs($this->admin->user)->get('/workspace/my'))['organizationSwitch'])->toBeNull();
 });
 
 it('switches, then opens the page it was used on again without the organization it named', function () {
@@ -52,7 +52,7 @@ it('switches, then opens the page it was used on again without the organization 
         ->assertRedirect('/workspace/attendance?date=2026-10-01');
 
     expect($this->boss->refresh()->workspace_organization_id)->toBe($this->mof->id)
-        ->and(switchProps($this->actingAs($this->boss)->get('/workspace'))['organizationSwitch']['current'])->toBe($this->mof->id);
+        ->and(switchProps($this->actingAs($this->boss)->get('/workspace/my'))['organizationSwitch']['current'])->toBe($this->mof->id);
 
     $this->actingAs($this->boss)->from('/workspace/team')->put('/workspace/organization', ['organization' => 'all'])->assertRedirect('/workspace/team');
 
@@ -62,7 +62,7 @@ it('switches, then opens the page it was used on again without the organization 
 it('sends the switch back only to a workspace page', function () {
     $this->actingAs($this->boss)->from('https://elsewhere.example/steal')
         ->put('/workspace/organization', ['organization' => $this->mof->id])
-        ->assertRedirect(route('workspace.home'));
+        ->assertRedirect(route('workspace.my'));
 });
 
 it('lets only a super-admin switch, and only to an organization that exists', function () {
@@ -145,7 +145,7 @@ it('writes the choice only when it changes', function () {
     expect($this->boss->refresh()->updated_at->equalTo($stamp))->toBeTrue();
 });
 
-it('keeps Home, Projects, My Workspace and the activity feed to the switched organization, and the app to everything', function () {
+it('keeps My work, Projects and the activity feed to the switched organization, and the app to everything', function () {
     $me = Member::forUser($this->boss);
     $projects = [];
     foreach ([$this->sdoc, $this->mof] as $organization) {
@@ -165,23 +165,19 @@ it('keeps Home, Projects, My Workspace and the activity feed to the switched org
     $projects[0]->forceFill(['archived_at' => null])->save();
     WorkspaceOrganization::choose($this->boss, $this->mof->id);
 
-    $home = switchProps($this->actingAs($this->boss)->get('/workspace'));
-    expect(array_column($home['projects'], 'title'))->toBe(['MoF work'])
-        ->and(collect($home['buckets'])->flatMap(fn (array $bucket) => $titles($bucket['tasks']))->all())->toBe(['Task of MoF'])
-        ->and($home['stats']['open'])->toBe(1);
+    $mine = switchProps($this->actingAs($this->boss)->get('/workspace/my'));
+    expect(collect($mine['groups'])->flatMap(fn (array $group) => $titles(array_column($group['rows'], 'task')))->all())->toBe(['Task of MoF']);
 
     $list = switchProps($this->actingAs($this->boss)->get('/workspace/projects'));
     expect(array_column($list['projects'], 'title'))->toBe(['MoF work'])
         ->and($list['archivedCount'])->toBe(0);
 
-    $mine = switchProps($this->actingAs($this->boss)->get('/workspace/my'));
-    expect(collect($mine['assignments'])->pluck('task.title')->all())->toBe(['Task of MoF'])
-        ->and(array_column($mine['projects'], 'title'))->toBe(['MoF work']);
-
     $feed = switchProps($this->actingAs($this->boss)->get('/workspace/notifications?tab=activity'));
     expect(collect($feed['activity']['data'])->pluck('project_title')->unique()->values()->all())->toBe(['MoF work']);
 
-    // The app has no switch: its Home keeps every organization.
+    // The app has no switch: its Home and My work keep every organization.
     $app = $this->actingAs($this->boss, 'sanctum')->getJson('/api/v1/workspace/home')->assertOk()->json();
-    expect(array_column($app['projects'], 'title'))->toBe(['MoF work', 'SDOC work']);
+    $appWork = $this->getJson('/api/v1/workspace/my-work')->assertOk()->json();
+    expect(array_column($app['projects'], 'title'))->toBe(['MoF work', 'SDOC work'])
+        ->and(collect($appWork['groups'])->flatMap(fn (array $group) => $titles(array_column($group['rows'], 'task')))->sort()->values()->all())->toBe(['Task of MoF', 'Task of SDOC']);
 });

@@ -4,7 +4,6 @@ use App\Http\Resources\TaskResource;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
-use Inertia\Testing\AssertableInertia as Assert;
 
 it('builds a short code from the words in the title', function (string $title, string $expected) {
     expect((new Project(['title' => $title]))->code)->toBe($expected);
@@ -50,10 +49,11 @@ it('never guesses the code of a saved project loaded without its key', function 
         ->and(fn () => Project::query()->select(['id', 'title'])->findOrFail($project->id)->code)->toThrow(TypeError::class);
 });
 
-it('gives the code on the projects of My Workspace', function () {
+it("gives the code on the projects of the app's My Workspace", function () {
     $user = User::factory()->withMember()->create();
     Project::factory()->public()->create(['title' => 'Digital Nepal Rollout', 'key' => 'EGP']);
 
-    $this->actingAs($user)->get('/workspace/my')
-        ->assertInertia(fn (Assert $page) => $page->where('projects.0.code', 'EGP'));
+    $this->actingAs($user, 'sanctum')->getJson('/api/v1/workspace/my')
+        ->assertOk()
+        ->assertJsonPath('projects.0.code', 'EGP');
 });

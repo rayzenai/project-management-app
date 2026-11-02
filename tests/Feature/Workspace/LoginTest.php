@@ -20,7 +20,7 @@ it('logs in with valid credentials and redirects into the workspace', function (
         'password' => 'secret-pass',
     ]);
 
-    $response->assertRedirect('/workspace');
+    $response->assertRedirect('/workspace/my');
     $this->assertAuthenticatedAs($user);
 });
 
@@ -103,7 +103,7 @@ it('lets a super-admin sign in even when their own member is deactivated', funct
     $this->post('/workspace/login', [
         'email' => 'boss@example.com',
         'password' => 'secret-pass',
-    ])->assertRedirect('/workspace');
+    ])->assertRedirect('/workspace/my');
 
     $this->assertAuthenticatedAs($user);
 });

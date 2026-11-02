@@ -29,15 +29,15 @@ class WorkspaceSetupTest extends TestCase
             ->assertInertia(fn (Assert $page): Assert => $page->component('Auth/Login'));
     }
 
-    public function test_authenticated_user_can_open_the_workspace_home(): void
+    public function test_authenticated_user_can_open_my_work(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user)
-            ->get(route('workspace.home'))
+            ->get(route('workspace.my'))
             ->assertOk()
             ->assertInertia(fn (Assert $page): Assert => $page
-                ->component('Home')
+                ->component('MyWork')
                 ->has('statuses')
                 ->has('themeCatalogue'));
     }

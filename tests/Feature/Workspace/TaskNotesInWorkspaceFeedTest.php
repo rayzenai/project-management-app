@@ -26,7 +26,7 @@ it('surfaces the user task notes in the shared taskNotes prop with task context'
     ]);
 
     $this->actingAs($this->user)
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('taskNotes', fn (Collection $notes): bool => $notes->contains(
                 fn (array $n): bool => $n['id'] === $note->id
@@ -55,7 +55,7 @@ it('scopes shared taskNotes to the authenticated author', function () {
     ]);
 
     $this->actingAs($this->user)
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('taskNotes', function (Collection $notes) use ($ownNote, $otherNote): bool {
                 $ids = $notes->pluck('id');
@@ -80,7 +80,7 @@ it('surfaces task notes on tasks assigned to me even when authored by someone el
     ]);
 
     $this->actingAs($this->user)
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('taskNotes', fn (Collection $notes): bool => $notes->contains(
                 fn (array $n): bool => $n['id'] === $note->id
@@ -100,7 +100,7 @@ it('excludes task notes on tasks not assigned to me and not authored by me', fun
     ]);
 
     $this->actingAs($this->user)
-        ->get('/workspace')
+        ->get('/workspace/my')
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('taskNotes', fn (Collection $notes): bool => ! $notes->pluck('id')->contains($note->id)));
 });

@@ -8,7 +8,7 @@ it('shares the unread notification count on workspace pages', function () {
     $user = User::factory()->create();
     $user->notify(new TaskAssigned(Task::factory()->create(), 'Kiran'));
 
-    $this->actingAs($user)->get('/workspace')
+    $this->actingAs($user)->get('/workspace/my')
         ->assertInertia(fn ($page) => $page->where('unreadNotifications', 1));
 });
 

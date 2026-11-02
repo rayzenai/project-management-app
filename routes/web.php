@@ -19,7 +19,7 @@ use App\Http\Controllers\Workspace\HomeController;
 use App\Http\Controllers\Workspace\MaintenanceController;
 use App\Http\Controllers\Workspace\MemberController;
 use App\Http\Controllers\Workspace\MemberDesignationController;
-use App\Http\Controllers\Workspace\MyWorkspaceController;
+use App\Http\Controllers\Workspace\MyWorkController;
 use App\Http\Controllers\Workspace\NoteController;
 use App\Http\Controllers\Workspace\NotificationController;
 use App\Http\Controllers\Workspace\OrganizationController;
@@ -96,7 +96,7 @@ Route::middleware(['auth', EnsureCanSignIn::class, TouchLastSeen::class, Remembe
         Route::get('/', HomeController::class)->name('home');
         Route::put('/organization', OrganizationSwitchController::class)->name('organization.switch');
 
-        Route::get('/my', MyWorkspaceController::class)->name('my');
+        Route::get('/my', MyWorkController::class)->name('my');
         Route::post('/quick-add', QuickAddController::class)->name('quick-add');
         Route::get('/search', TaskSearchController::class)->name('search');
 

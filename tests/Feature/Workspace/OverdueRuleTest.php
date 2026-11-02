@@ -45,7 +45,7 @@ it('marks only open work past its deadline as overdue', function () {
         ->and(Task::query()->overdue()->pluck('id')->all())->toBe([$this->late->id]);
 });
 
-it('counts the same overdue work on the project page, the projects list and home', function () {
+it('counts the same overdue work on the project page, the projects list and My work', function () {
     $this->actingAs(User::factory()->create(['email' => 'boss@example.com']));
 
     $this->get("/workspace/projects/{$this->project->slug}")
@@ -55,8 +55,10 @@ it('counts the same overdue work on the project page, the projects list and home
     $this->get('/workspace/projects')
         ->assertInertia(fn (AssertableInertia $page) => $page->where('projects.0.overdue_tasks_count', 1));
 
-    $this->actingAs($this->user)->get('/workspace?scope=mine')
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('stats.overdue', 1)
-            ->where('stats.open', 2));
+    // My work lists the open work only, and calls only the overdue one late.
+    $rows = collect($this->actingAs($this->user)->get('/workspace/my')->assertOk()->viewData('page')['props']['groups'])
+        ->flatMap(fn (array $group): array => $group['rows']);
+
+    expect($rows->pluck('task.id')->sort()->values()->all())->toBe([$this->late->id, $this->upcoming->id])
+        ->and($rows->where('days_late', '>', 0)->pluck('task.id')->all())->toBe([$this->late->id]);
 });
