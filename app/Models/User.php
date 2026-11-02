@@ -44,13 +44,12 @@ class User extends Authenticatable
     }
 
     /**
-     * @return array{theme: string, font_override: array<string, string|null>|null, email_notifications: bool}
+     * @return array{theme: string, font_override: array<string, string|null>|null}
      */
     public function appearance(): array
     {
         $preferences = $this->preferences()->firstOrNew([], [
             'theme' => config('themes.default', 'system'),
-            'email_notifications' => true,
         ]);
 
         // A theme or font saved under an earlier catalogue no longer resolves;
@@ -79,7 +78,23 @@ class User extends Authenticatable
         return [
             'theme' => $theme,
             'font_override' => $fontOverride,
-            'email_notifications' => $preferences->email_notifications,
+        ];
+    }
+
+    /**
+     * Which emails this user gets: right away (`email_notifications`), the
+     * morning email and the weekly brief. All on until they turn one off.
+     *
+     * @return array{now: bool, morning: bool, weekly: bool}
+     */
+    public function emailPreferences(): array
+    {
+        $preferences = $this->preferences;
+
+        return [
+            'now' => $preferences === null || $preferences->email_notifications,
+            'morning' => $preferences === null || $preferences->email_morning,
+            'weekly' => $preferences === null || $preferences->email_weekly,
         ];
     }
 

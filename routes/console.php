@@ -8,6 +8,9 @@ Schedule::command('workspace:send-deadline-reminders')
     ->dailyAt((string) config('project-management.reminders.run_at', '08:00'))
     ->withoutOverlapping();
 
+// Right-away email: what was given to people in the last few minutes, grouped.
+Schedule::command('workspace:send-email-updates')->everyMinute()->withoutOverlapping(5);
+
 // Spent and revoked OAuth tokens from forge sign-ins (Passport).
 Schedule::command('passport:purge')->daily()->withoutOverlapping();
 

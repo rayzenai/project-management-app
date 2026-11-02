@@ -196,7 +196,6 @@ class ShareWorkspaceData
                 'mode' => $themes[$theme]['mode'] ?? null,
                 'tokens' => app(ResolveThemeTokens::class)->resolved($theme, $fontOverride),
                 'font_override' => $fontOverride,
-                'email_notifications' => $request->user()?->appearance()['email_notifications'] ?? true,
                 'configured' => $request->user()?->preferences()->exists() ?? false,
             ];
         });

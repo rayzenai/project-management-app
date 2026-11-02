@@ -7,9 +7,10 @@
     import type { SharedProps } from '../lib/types';
 
     /**
-     * Settings: theme (system / light / dark), email notifications and the
-     * optional task features. Selecting a theme previews it instantly; Save
-     * persists it, and closing without saving puts the previous theme back.
+     * Settings: theme (system / light / dark) and the optional task
+     * features (emails have their own page, Settings/Emails). Selecting a
+     * theme previews it instantly; Save persists it, and closing without
+     * saving puts the previous theme back.
      */
     let {
         appearance,
@@ -25,14 +26,12 @@
     const catalogue = $derived(shared.themeCatalogue?.themes ?? {});
 
     const initialTheme = untrack(() => appearance.theme);
-    const initialEmail = untrack(() => appearance.email_notifications);
     const initialTaskNotes = untrack(
         () => shared.features?.task_notes ?? false,
     );
     const initialContacts = untrack(() => shared.features?.contacts ?? false);
 
     let selectedKey = $state(initialTheme);
-    let emailNotifications = $state(initialEmail);
     let taskNotes = $state(initialTaskNotes);
     let contacts = $state(initialContacts);
     let saving = $state(false);
@@ -40,7 +39,6 @@
 
     const dirty = $derived(
         selectedKey !== initialTheme ||
-            emailNotifications !== initialEmail ||
             taskNotes !== initialTaskNotes ||
             contacts !== initialContacts,
     );
@@ -105,7 +103,6 @@
             {
                 theme: selectedKey,
                 font_override: { display: null, body: null, mono: null },
-                email_notifications: emailNotifications,
                 task_notes_enabled: taskNotes,
                 contacts_enabled: contacts,
             },
@@ -239,24 +236,6 @@
                     </span>
                 </button>
             {/each}
-        </div>
-    </section>
-
-    <section class="border-t border-line px-6 py-5">
-        <div class="flex items-start justify-between gap-4">
-            <div>
-                <div id="pref-email-label" class="text-sm font-medium text-fg">
-                    Email notifications
-                </div>
-                <p class="mt-1 text-[13px] text-fg-muted">
-                    Assignments, mentions and deadline reminders by email.
-                </p>
-            </div>
-            {@render toggle(
-                emailNotifications,
-                'pref-email-label',
-                () => (emailNotifications = !emailNotifications),
-            )}
         </div>
     </section>
 

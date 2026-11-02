@@ -36,6 +36,28 @@ it('updates email_notifications', function () {
         ->assertStatus(422);
 });
 
+it('returns and updates the morning and weekly email settings', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user, 'sanctum')->getJson('/api/v1/user/preferences')
+        ->assertJsonPath('data.email_morning', true)
+        ->assertJsonPath('data.email_weekly', true);
+
+    $this->actingAs($user, 'sanctum')->patchJson('/api/v1/user/preferences', ['email_morning' => false])
+        ->assertSuccessful()
+        ->assertJsonPath('data.email_morning', false)
+        ->assertJsonPath('data.email_weekly', true)
+        ->assertJsonPath('data.email_notifications', true);
+
+    $this->actingAs($user, 'sanctum')->patchJson('/api/v1/user/preferences', ['email_weekly' => false])
+        ->assertSuccessful()
+        ->assertJsonPath('data.email_morning', false)
+        ->assertJsonPath('data.email_weekly', false);
+
+    $this->actingAs($user, 'sanctum')->patchJson('/api/v1/user/preferences', ['email_weekly' => 'notbool'])
+        ->assertStatus(422);
+});
+
 it('reports configured false for a fresh user and true after a patch', function () {
     $user = User::factory()->create();
 

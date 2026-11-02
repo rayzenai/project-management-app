@@ -95,6 +95,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Email
+    |--------------------------------------------------------------------------
+    |
+    | Right-away email (SendEmailUpdates) waits until nothing new has come
+    | for a person for `updates_quiet_minutes`, or until the oldest waiting
+    | item is `updates_max_wait_minutes` old, so a burst arrives as one
+    | email. `morning_at` is when the morning email goes out on working days.
+    |
+    */
+
+    'emails' => [
+        'updates_quiet_minutes' => 2,
+        'updates_max_wait_minutes' => 5,
+        'morning_at' => env('PM_MORNING_EMAIL_AT', '09:00'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Git forge
     |--------------------------------------------------------------------------
     |

@@ -23,10 +23,11 @@ class ProjectAssignmentObserver
         );
 
         $user = $assignment->member?->user;
+        $actor = auth()->user();
 
-        if ($user !== null) {
-            $actor = auth()->user()->name ?? 'Someone';
-            $user->notify(new TaskAssigned($assignment->task, $actor));
+        // Nobody is told (or emailed) about a task they gave themselves.
+        if ($user !== null && ! $user->is($actor)) {
+            $user->notify(new TaskAssigned($assignment->task, $actor->name ?? 'Someone'));
         }
     }
 

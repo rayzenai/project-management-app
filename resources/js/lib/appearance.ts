@@ -35,7 +35,6 @@ export type AppearanceProps = {
     mode: 'light' | 'dark' | null;
     tokens: ThemeTokens | { light: ThemeTokens; dark: ThemeTokens };
     font_override: Partial<FontOverride> | null;
-    email_notifications: boolean;
     configured: boolean;
 };
 

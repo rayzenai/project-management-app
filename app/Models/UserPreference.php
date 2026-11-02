@@ -11,11 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $user_id
  * @property string $theme
  * @property array<string, string|null>|null $font_override
- * @property bool $email_notifications
+ * @property bool $email_notifications right-away email (SendEmailUpdates)
+ * @property bool $email_morning the morning email
+ * @property bool $email_weekly the weekly brief
  * @property bool $task_notes_enabled
  * @property bool $contacts_enabled
  */
-#[Fillable(['user_id', 'theme', 'font_override', 'email_notifications', 'task_notes_enabled', 'contacts_enabled'])]
+#[Fillable(['user_id', 'theme', 'font_override', 'email_notifications', 'email_morning', 'email_weekly', 'task_notes_enabled', 'contacts_enabled'])]
 class UserPreference extends Model
 {
     /**
@@ -34,6 +36,8 @@ class UserPreference extends Model
         return [
             'font_override' => 'array',
             'email_notifications' => 'boolean',
+            'email_morning' => 'boolean',
+            'email_weekly' => 'boolean',
             'task_notes_enabled' => 'boolean',
             'contacts_enabled' => 'boolean',
         ];

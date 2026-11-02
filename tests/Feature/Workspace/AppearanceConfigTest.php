@@ -16,8 +16,9 @@ it('shares configured false for a fresh user and true after saving via the web r
     $this->actingAs($user->fresh())->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.configured', true)
-            ->where('appearance.theme', 'light')
-            ->where('appearance.email_notifications', false));
+            ->where('appearance.theme', 'light'));
+
+    expect($user->fresh()->emailPreferences()['now'])->toBeFalse();
 });
 
 it('saves only the theme when the top-bar toggle sends just the theme', function () {
@@ -30,8 +31,9 @@ it('saves only the theme when the top-bar toggle sends just the theme', function
     $this->actingAs($user->fresh())->get('/workspace/my')
         ->assertInertia(fn ($page) => $page
             ->where('appearance.theme', 'dark')
-            ->where('appearance.mode', 'dark')
-            ->where('appearance.email_notifications', false));
+            ->where('appearance.mode', 'dark'));
+
+    expect($user->fresh()->emailPreferences()['now'])->toBeFalse();
 });
 
 it('validates the theme on the web preferences route', function () {

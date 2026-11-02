@@ -13,6 +13,7 @@ use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\DesignationController;
+use App\Http\Controllers\Workspace\EmailSettingsController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\GuideController;
 use App\Http\Controllers\Workspace\HomeController;
@@ -264,6 +265,7 @@ Route::middleware(['auth', EnsureCanSignIn::class, TouchLastSeen::class, Remembe
         Route::get('/100-point-tracker', PlanTrackerController::class)->name('plan-tracker');
 
         Route::patch('/preferences', [PreferenceController::class, 'update'])->name('preferences.update');
+        Route::get('/settings/emails', EmailSettingsController::class)->name('settings.emails');
 
         Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
     });

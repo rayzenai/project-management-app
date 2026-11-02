@@ -15,7 +15,7 @@ it('persists a preference row and reads it back', function () {
     expect($user->fresh()->appearance()['theme'])->toBe('dark');
 });
 
-it('defaults email_notifications to true with no row', function () {
+it('defaults every email setting to on with no row', function () {
     $user = User::factory()->create();
-    expect($user->appearance()['email_notifications'])->toBeTrue();
+    expect($user->emailPreferences())->toBe(['now' => true, 'morning' => true, 'weekly' => true]);
 });

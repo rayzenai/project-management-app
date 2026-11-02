@@ -40,13 +40,16 @@ class PreferenceController extends Controller
     private function payload(User $user, ResolveThemeTokens $resolver): JsonResponse
     {
         $appearance = $user->appearance();
+        $emails = $user->emailPreferences();
 
         return response()->json([
             'message' => 'ok',
             'data' => [
                 'theme' => $appearance['theme'],
                 'font_override' => $appearance['font_override'],
-                'email_notifications' => $appearance['email_notifications'],
+                'email_notifications' => $emails['now'],
+                'email_morning' => $emails['morning'],
+                'email_weekly' => $emails['weekly'],
                 'task_notes_enabled' => $user->features()['task_notes'],
                 'contacts_enabled' => $user->features()['contacts'],
                 'configured' => $user->preferences()->exists(),
