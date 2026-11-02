@@ -34,7 +34,7 @@
 
 <!-- One grid cell per column, in the order `.task-cols` declares. Cells stay
      in place whether or not they hold anything, so the register reads down as
-     well as across; `TaskRegisterHead` renders the matching header. -->
+     well as across. -->
 <div
     role="button"
     tabindex="0"

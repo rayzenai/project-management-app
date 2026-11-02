@@ -837,3 +837,70 @@ export interface OfficeLinks {
     /** What the maintenance page lists (cached a few minutes); 0 without it. */
     maintenance_count: number;
 }
+
+/** A group of My work (MyWorkQuery::GROUPS), in the order the page shows them. */
+export type MyWorkGroupKey =
+    | 'today'
+    | 'tomorrow'
+    | 'coming_up'
+    | 'later'
+    | 'asked_others'
+    | 'no_date'
+    | 'snoozed'
+    | 'done';
+
+/** One row of My work: a task, or one of your own dated to-dos (a subtask) on one. */
+export interface MyWorkRow {
+    kind: 'task' | 'subtask';
+    /** "task-12", "subtask-7": unique on the page. */
+    key: string;
+    /** Your own assignment on the task; null for "You asked others" and to-dos. */
+    assignment: {
+        id: Id;
+        is_focused: boolean;
+        snoozed_until: string | null;
+        personal_due_at: string | null;
+    } | null;
+    /** The task; a to-do's parent. */
+    task: {
+        id: Id;
+        slug: string;
+        number: number;
+        code: string;
+        title: string;
+        status: string;
+        priority: string;
+        deadline_at: string | null;
+        completed_at: string | null;
+        project: {
+            id: Id;
+            slug: string;
+            title: string;
+            code: string;
+            /** "General (Revenue)": the project with its program. */
+            label: string;
+        };
+    };
+    subtask: { id: Id; body: string; due_at: string; is_done: boolean } | null;
+    /** The date that placed the row: your own date, else the task's (Y-m-d). */
+    due: string | null;
+    /** Whole days past the task's own deadline; 0 when it is not late. */
+    days_late: number;
+    /** The task's active people; may be empty. */
+    people: { id: Id; name: string }[];
+    /** The newest update of the last 7 days; `author` is '' for a deleted login. */
+    latest_update: { author: string; body: string; at: string | null } | null;
+}
+
+export interface MyWorkGroup {
+    key: MyWorkGroupKey;
+    label: string;
+    rows: MyWorkRow[];
+}
+
+/** The My work page (MyWorkQuery::get). Empty groups are left out. */
+export interface MyWorkPayload {
+    /** The office's today: Y-m-d, "Monday, 2 November" and its Bikram Sambat date. */
+    today: { date: string; label: string; bs: string | null };
+    groups: MyWorkGroup[];
+}

@@ -2,7 +2,7 @@
     import { page, router } from '@inertiajs/svelte';
     import {
         Folder,
-        LayoutGrid,
+        ListChecks,
         Plus,
         Search,
         StickyNote,
@@ -107,8 +107,7 @@
     };
 
     const NAV: { label: string; href: string; icon: Icon }[] = [
-        { label: 'Overview', href: '/workspace', icon: LayoutGrid },
-        { label: 'My Workspace', href: '/workspace/my', icon: UserRound },
+        { label: 'My work', href: '/workspace/my', icon: ListChecks },
         { label: 'Projects', href: '/workspace/projects', icon: Folder },
     ];
 

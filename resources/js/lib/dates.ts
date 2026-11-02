@@ -43,6 +43,32 @@ export function longDay(iso: string): string {
     });
 }
 
+/**
+ * A due day beside today: "Today", "Tomorrow", the weekday for the rest of
+ * the coming week ("Thu", always the next one), else "Thu 12 Nov".
+ */
+export function dueLabel(iso: string, today: string): string {
+    if (iso === today) {
+        return 'Today';
+    }
+
+    if (iso === shiftDay(today, 1)) {
+        return 'Tomorrow';
+    }
+
+    const date = localDay(iso);
+
+    if (iso > today && iso <= shiftDay(today, 6)) {
+        return date.toLocaleDateString('en-GB', { weekday: 'short' });
+    }
+
+    return date.toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+    });
+}
+
 /** "2 Nov", "2 to 4 Nov", "30 Oct to 2 Nov". */
 export function dayRange(from: string, to: string): string {
     const short = (iso: string, month: boolean) =>

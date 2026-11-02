@@ -739,9 +739,7 @@
 
         <section class="text-[13px] text-fg-muted">
             Start from
-            <a href="/workspace/my" use:inertia class="text-accent"
-                >My Workspace</a
-            >,
+            <a href="/workspace/my" use:inertia class="text-accent">My work</a>,
             <a href="/workspace/projects" use:inertia class="text-accent"
                 >Projects</a
             >

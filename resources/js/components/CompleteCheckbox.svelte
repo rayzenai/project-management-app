@@ -8,10 +8,13 @@
         task,
         projectSlug,
         onCompleted,
+        round = false,
     }: {
         task: Pick<Task, 'id' | 'slug' | 'status' | 'title' | 'short_title'>;
         projectSlug: string;
         onCompleted?: (previousStatus: string) => void;
+        /** My work's circle: 24px on a phone, 18px from `sm`, 44px to tap. */
+        round?: boolean;
     } = $props();
 
     let optimistic = $state<string | null>(null);
@@ -83,7 +86,11 @@
     role="checkbox"
     aria-checked={isComplete}
     aria-label={isComplete ? 'Mark not complete' : 'Mark complete'}
-    class={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-[1.5px] transition ${
+    class={`flex shrink-0 items-center justify-center border-[1.5px] transition ${
+        round
+            ? "relative size-[24px] rounded-full before:absolute before:-inset-[10px] before:content-[''] sm:size-[18px] sm:before:-inset-[13px]"
+            : 'h-4 w-4 rounded-sm'
+    } ${
         isComplete
             ? 'border-success bg-success text-white'
             : 'border-fg-faint bg-transparent text-transparent hover:border-success hover:text-success'
@@ -91,5 +98,8 @@
     onclick={toggle}
     onkeydown={(e) => e.stopPropagation()}
 >
-    <Check class="h-3 w-3" strokeWidth={3} />
+    <Check
+        class={round ? 'size-[14px] sm:size-[11px]' : 'h-3 w-3'}
+        strokeWidth={3}
+    />
 </button>
