@@ -48,6 +48,7 @@
         mentionCandidates = [],
         dependencyCandidates = [],
         code = null,
+        canDelete = false,
     }: {
         project: Project;
         task: Task;
@@ -63,6 +64,8 @@
         dependencyCandidates?: TaskRef[];
         /** The Code section; null when the organization has no git. */
         code?: TaskCode | null;
+        /** Whoever runs the project, or the task's creator. */
+        canDelete?: boolean;
         statuses: { value: string; label: string }[];
     } = $props();
 
@@ -257,7 +260,7 @@
     }
 
     function deleteTask() {
-        if (!confirm('Delete this task? This cannot be undone.')) {
+        if (!confirm('Delete this task? You can undo it right after.')) {
             return;
         }
 
@@ -347,14 +350,16 @@
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
             <AutosaveStatus {saving} {savedAt} {dirty} error={saveError} />
-            <button
-                type="button"
-                onclick={deleteTask}
-                class="btn-ghost hover:text-danger"
-            >
-                <Trash2 class="h-3.5 w-3.5" />
-                Delete
-            </button>
+            {#if canDelete}
+                <button
+                    type="button"
+                    onclick={deleteTask}
+                    class="btn-ghost hover:text-danger"
+                >
+                    <Trash2 class="h-3.5 w-3.5" />
+                    Delete
+                </button>
+            {/if}
         </div>
     {/snippet}
 

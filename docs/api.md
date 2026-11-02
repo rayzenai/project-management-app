@@ -119,11 +119,11 @@ super-admin, its program's manager).
 | --- | --- | --- |
 | POST | `/workspace/projects/{slug}/tasks` | create |
 | POST | `/workspace/projects/{slug}/tasks/reorder` | persist board ordering |
-| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`). `team` is who can be given the task; `joinCandidates` (`[{ id, name, title }]`) is who else the caller may give it to, people of the project's organization who join its team when assigned (only for whoever runs the team, else `[]`); `mentionCandidates` (`[{ id, name }]`) is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
+| GET | `/workspace/projects/{slug}/tasks/{taskSlug}` | task hub (incl. `comments`, and `canDelete`: whether the caller may delete the task). `team` is who can be given the task; `joinCandidates` (`[{ id, name, title }]`) is who else the caller may give it to, people of the project's organization who join its team when assigned (only for whoever runs the team, else `[]`); `mentionCandidates` (`[{ id, name }]`) is who the comment box offers: the team plus, on a program project, the program's manager (they can see the task, so a mention notifies them) |
 | PATCH | `/workspace/projects/{slug}/tasks/{taskSlug}` | update (status, fields) |
-| DELETE | `/workspace/projects/{slug}/tasks/{taskSlug}` | soft-delete |
-| POST | `/workspace/projects/{slug}/tasks/{taskSlug}/restore` | undo delete |
-| GET | `/workspace/tasks/{task}/preview` | lightweight peek (incl. `comments_count`, `dependency_candidates`: the project's other tasks, and `join_candidates`: the task hub's `joinCandidates`) |
+| DELETE | `/workspace/projects/{slug}/tasks/{taskSlug}` | soft-delete: whoever runs the project (its manager, its program's manager, organizational admin, super-admin) or the person who created the task while they can see the project; 403 for anyone else |
+| POST | `/workspace/projects/{slug}/tasks/{taskSlug}/restore` | undo delete; the same people as delete |
+| GET | `/workspace/tasks/{task}/preview` | lightweight peek (incl. `comments_count`, `dependency_candidates`: the project's other tasks, `join_candidates`: the task hub's `joinCandidates`, and `can_delete`: the task hub's `canDelete`) |
 
 Task statuses come from `config/project-management.php` (`not_started`,
 `unclear`, `in_progress`, `done`, `failed`); `done` is the only complete status.

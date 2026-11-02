@@ -534,6 +534,8 @@ export interface TaskPreview {
     dependency_candidates?: TaskRef[];
     /** The Code section; null when the organization has no git. */
     code?: TaskCode | null;
+    /** Whoever runs the project, or the task's creator, may delete it. */
+    can_delete?: boolean;
 }
 
 /** A task in a dependency list or picker (TaskResource::reference). */

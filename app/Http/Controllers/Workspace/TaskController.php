@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Workspace;
 
 use App\Http\Controllers\Workspace\Concerns\RedirectsWithServiceResult;
+use App\Http\Requests\DeleteTaskRequest;
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Models\Project;
@@ -58,17 +59,19 @@ class TaskController extends Controller
         return $this->redirectWithResult($result);
     }
 
-    public function destroy(Request $request, Project $project, Task $task, DeleteTaskService $service): RedirectResponse
+    public function destroy(DeleteTaskRequest $request, Project $project, Task $task, DeleteTaskService $service): RedirectResponse
     {
-        abort_unless(WorkspaceAccess::canViewProject($request->user(), $project), 403);
-
         abort_unless($task->project_id === $project->id, 404);
 
         $result = $service->execute($task);
 
         if ($result->success) {
-            return redirect()
-                ->route('workspace.projects.show', ['project' => $project->slug])
+            // Back to the page it was deleted from (a list, the board, a
+            // slide-over), unless that was the task's own page, now gone.
+            $fromTaskPage = parse_url(url()->previous(), PHP_URL_PATH)
+                === parse_url(route('workspace.tasks.show', [$project, $task]), PHP_URL_PATH);
+
+            return ($fromTaskPage ? redirect()->route('workspace.projects.show', ['project' => $project->slug]) : back())
                 ->with('workspace_flash', [
                     'success' => true,
                     'message' => $result->message,
@@ -82,10 +85,8 @@ class TaskController extends Controller
         return $this->redirectWithResult($result);
     }
 
-    public function restore(Request $request, Project $project, Task $task, RestoreWorkspaceModel $service): RedirectResponse
+    public function restore(DeleteTaskRequest $request, Project $project, Task $task, RestoreWorkspaceModel $service): RedirectResponse
     {
-        abort_unless(WorkspaceAccess::canViewProject($request->user(), $project), 403);
-
         abort_unless($task->project_id === $project->id, 404);
 
         $service->execute($task);

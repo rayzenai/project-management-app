@@ -36,6 +36,7 @@ use Illuminate\Support\Str;
  * @property int $progress
  * @property array<string, mixed>|null $metadata
  * @property int $sort_order
+ * @property int|null $created_by the user who created it (WorkspaceAccess::canDeleteTask); null for the system's
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -86,6 +87,7 @@ class Task extends Model
             'status_updated_at' => 'datetime',
             'completed_at' => 'datetime',
             'progress' => 'integer',
+            'created_by' => 'integer',
             'source_links' => 'array',
             'metadata' => 'array',
         ];
@@ -99,6 +101,12 @@ class Task extends Model
         // project row (the create services already hold it); the unique
         // index is the last guard.
         static::creating(function (Task $item) {
+            // Whoever is signed in made it, as its activity row says; never
+            // fillable, so no request can name someone else.
+            if ($item->getAttribute('created_by') === null && auth()->id() !== null) {
+                $item->created_by = (int) auth()->id();
+            }
+
             if ($item->getAttribute('number') === null) {
                 $item->number = DB::transaction(function () use ($item): int {
                     DB::table('projects')->where('id', $item->project_id)->increment('last_task_number');

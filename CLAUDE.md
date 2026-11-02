@@ -150,7 +150,11 @@ it first: whoever passes `canManageRosterOf`, for an active person of the
 project's own organization who passes `canJoinTeam`; list twin
 `Assignees::joinCandidates`), `canStartGeneralProject` (an organizational
 admin whose organization has no active project),
-`canViewTeamProgress`, `canViewProjectProgress`,
+`canViewTeamProgress`, `canViewProjectProgress`, `canDeleteTask` (delete
+a task and restore it: whoever passes `canManageProjectAccess`, or its
+creator, `tasks.created_by`, set once from the signed-in user and never
+fillable, while they pass `canViewProject`; shown as the task hub's
+`canDelete` and the preview's `can_delete`),
 `canCreateMember`, `canManageMember`, `canSetRolesIn` (the person form's
 role fields: whoever administers the organization), `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canCreateProjectInProgram`

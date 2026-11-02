@@ -37,7 +37,8 @@ class TaskShowQuery
      *     joinCandidates: array<int, array{id: int, name: string, designation: string|null}>,
      *     mentionCandidates: array<int, array{id: int, name: string}>,
      *     dependencyCandidates: array<int, array<string, mixed>>,
-     *     code: array<string, mixed>|null
+     *     code: array<string, mixed>|null,
+     *     canDelete: bool
      * }
      */
     public function data(Project $project, Task $task, int $userId): array
@@ -84,6 +85,8 @@ class TaskShowQuery
                 ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
             // The Code section: null when the organization has no git.
             'code' => WorkspaceAccess::canViewProjectCode($viewer, $project) ? $this->code->data($task, $viewer) : null,
+            // Whoever runs the project, or the task's creator.
+            'canDelete' => WorkspaceAccess::canDeleteTask($viewer, $task, $project),
         ];
     }
 

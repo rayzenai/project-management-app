@@ -107,6 +107,7 @@
                 'My Workspace lists everything given to you, soonest first.',
                 'Keep your tasks current: move the card on the board, set your progress and write a status note when something changes. A task saves itself as you leave each field.',
                 'Comment on a task and type @ and a name to bring someone in.',
+                "Added a task by mistake? Delete it with the bin at the top of the task, and Undo brings it back. You can delete the tasks you added; your project's manager can delete any. Work that is finished or dropped is better marked Done or Failed, which keeps its history.",
                 'Notifications tell you about new tasks, mentions, deadlines and teams you join.',
                 'Want a log of meetings and decisions, or outside contacts, on your tasks? Turn on Task notes or Contacts in Settings.',
             ],

@@ -8,6 +8,7 @@
         LoaderCircle,
         MessageSquare,
         Plus,
+        Trash2,
         X,
     } from '@lucide/svelte';
     import { untrack } from 'svelte';
@@ -244,6 +245,21 @@
                 },
             },
         );
+    }
+
+    // Closes first, so the page it returns to has no ?task= to reopen.
+    function deleteTask() {
+        if (
+            !task ||
+            !confirm('Delete this task? You can undo it right after.')
+        ) {
+            return;
+        }
+
+        const url = `/workspace/projects/${projectSlug}/tasks/${task.slug}`;
+        cache.delete(task.id);
+        peek.close();
+        router.delete(url, { preserveScroll: true });
     }
 
     function applyLocal(patch: Partial<TaskPreview['task']>) {
@@ -534,6 +550,17 @@
                     <ExternalLink class="h-3.5 w-3.5" />
                     Open full page
                 </a>
+                {#if preview?.can_delete}
+                    <button
+                        type="button"
+                        aria-label="Delete task"
+                        title="Delete task"
+                        class="btn-icon hover:text-danger"
+                        onclick={deleteTask}
+                    >
+                        <Trash2 class="h-4 w-4" />
+                    </button>
+                {/if}
             {/if}
             <button
                 type="button"

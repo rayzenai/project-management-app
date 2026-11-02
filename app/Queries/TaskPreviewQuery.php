@@ -35,7 +35,8 @@ class TaskPreviewQuery
      *     join_candidates: array<int, array{id: int, name: string, designation: string|null}>,
      *     comments_count: int,
      *     dependency_candidates: array<int, array<string, mixed>>,
-     *     code: array<string, mixed>|null
+     *     code: array<string, mixed>|null,
+     *     can_delete: bool
      * }
      */
     public function data(Task $task): array
@@ -84,6 +85,8 @@ class TaskPreviewQuery
                 ->map(fn (Task $t): array => TaskResource::reference($t))->values()->all(),
             // The Code section: null when the organization has no git.
             'code' => WorkspaceAccess::canViewProjectCode($viewer, $task->project) ? $this->code->data($task, $viewer) : null,
+            // Whoever runs the project, or the task's creator.
+            'can_delete' => WorkspaceAccess::canDeleteTask($viewer, $task, $task->project),
         ];
     }
 }

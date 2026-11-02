@@ -9,6 +9,7 @@ use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\Team;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Gate;
@@ -472,6 +473,24 @@ class WorkspaceAccess
     public static function canArchiveProject(?Authenticatable $user, Project $project): bool
     {
         return self::canManageProjectAccess($user, $project);
+    }
+
+    /**
+     * Delete a task (to the trash, where it can be restored until it is
+     * purged) and restore it: whoever runs its project (canManageProjectAccess),
+     * or the person who created it while they can still see the project.
+     * Never a teammate's or a viewer's task.
+     */
+    public static function canDeleteTask(?Authenticatable $user, Task $task, Project $project): bool
+    {
+        if (self::canManageProjectAccess($user, $project)) {
+            return true;
+        }
+
+        return $user !== null
+            && $task->created_by !== null
+            && $task->created_by === (int) $user->getAuthIdentifier()
+            && self::canViewProject($user, $project);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\RespondsWithServiceResult;
+use App\Http\Requests\DeleteTaskRequest;
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Http\Resources\TaskResource;
@@ -63,10 +64,8 @@ class TaskController extends Controller
         );
     }
 
-    public function destroy(Request $request, Project $project, Task $task, DeleteTaskService $service): JsonResponse
+    public function destroy(DeleteTaskRequest $request, Project $project, Task $task, DeleteTaskService $service): JsonResponse
     {
-        abort_unless(WorkspaceAccess::canViewProject($request->user(), $project), 403);
-
         abort_unless($task->project_id === $project->id, 404);
 
         $result = $service->execute($task);
@@ -74,10 +73,8 @@ class TaskController extends Controller
         return $this->respondWithResult($result);
     }
 
-    public function restore(Request $request, Project $project, Task $task, RestoreWorkspaceModel $service): JsonResponse
+    public function restore(DeleteTaskRequest $request, Project $project, Task $task, RestoreWorkspaceModel $service): JsonResponse
     {
-        abort_unless(WorkspaceAccess::canViewProject($request->user(), $project), 403);
-
         abort_unless($task->project_id === $project->id, 404);
 
         $result = $service->execute($task);
