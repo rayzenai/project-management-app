@@ -158,7 +158,14 @@ project's organization.
 `StoreProjectRequest` requires program-only creators to pick one of their own
 programs (`Choose one of your programs.`), derives its organization and drops
 `key`/`is_public`; a super-admin may also derive the organization from a posted
-program. `ProjectResource.can_choose_manager` and each roster member's
+program. Optional `member_ids` accepts up to 500 distinct, existing, non-deleted
+people; each must be active and pass `canJoinTeam` against an unsaved team with
+the new project's organization and allowed cross-organization flag. Only a
+super-admin's `is_cross_organization` is honored; others become false. Invalid
+membership refuses creation. `CreateProjectService` sets the team's flag,
+appoints the manager, then adds the chosen people through `AddTeamMemberService`
+in the same transaction; a selected manager keeps their leader role.
+`ProjectResource.can_choose_manager` and each roster member's
 `can_make_manager` expose the appointment capabilities.
 
 ## People roles and task assignment

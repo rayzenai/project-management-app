@@ -92,6 +92,12 @@ ColumnComposer}`. `ProjectCreateForm` is shared by Projects/Index and Programs/S
 program managers must choose their own program (auto-selected when only one),
 with themselves as default manager on the index. A program page fixes program
 and organization and defaults to its active manager, including for super-admins.
+Its People picker reuses `AssigneePicker` to send initial `member_ids`, excluding
+the selected manager. Candidates are the project's organization people; a
+super-admin on the index may open the team to other organizations and pick
+from all candidates. Submit filters out picks no longer eligible after changing
+organization, manager or the cross-organization tick; `member_ids` errors show
+by the picker. The cross-organization tick is absent on a program page.
 `ProjectEditForm` gates publication with `project.can_publish` and key editing
 with `project.can_change_key` (organizational admins and super-admins); old keys remain
 searchable aliases. Cross-organization access remains super-admin-only.
