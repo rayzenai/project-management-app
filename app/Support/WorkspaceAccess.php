@@ -9,6 +9,7 @@ use App\Models\LeaveRequest;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\ProjectAssignment;
 use App\Models\Task;
 use App\Models\Team;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -491,6 +492,31 @@ class WorkspaceAccess
             && $task->created_by !== null
             && $task->created_by === (int) $user->getAuthIdentifier()
             && self::canViewProject($user, $project);
+    }
+
+    /**
+     * Change an assignment's role or priority: whoever can see its task's
+     * project. The personal fields (star, snooze, own dates) also need
+     * ownsAssignment; the update request asks both.
+     */
+    public static function canUpdateAssignment(?Authenticatable $user, ProjectAssignment $assignment): bool
+    {
+        $project = $assignment->task?->project;
+
+        return $project !== null && self::canViewProject($user, $project);
+    }
+
+    /**
+     * The assignment is the user's own: its member is active and linked to
+     * them. Not even a super-admin owns someone else's.
+     */
+    public static function ownsAssignment(?Authenticatable $user, ProjectAssignment $assignment): bool
+    {
+        $member = self::memberFor($user);
+
+        return $member !== null
+            && $member->is_active
+            && (int) $assignment->member_id === (int) $member->getKey();
     }
 
     /**

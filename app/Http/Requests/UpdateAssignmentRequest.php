@@ -2,13 +2,25 @@
 
 namespace App\Http\Requests;
 
+use App\Models\ProjectAssignment;
+use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateAssignmentRequest extends FormRequest
 {
+    /** What only the person on the assignment changes. */
+    public const PERSONAL_FIELDS = ['is_focused', 'snoozed_until', 'personal_progress', 'personal_due_at', 'personal_status_note'];
+
     public function authorize(): bool
     {
-        return (bool) $this->user();
+        $assignment = $this->route('assignment');
+
+        if (! $assignment instanceof ProjectAssignment || ! WorkspaceAccess::canUpdateAssignment($this->user(), $assignment)) {
+            return false;
+        }
+
+        return ! $this->hasAny(self::PERSONAL_FIELDS)
+            || WorkspaceAccess::ownsAssignment($this->user(), $assignment);
     }
 
     /**
