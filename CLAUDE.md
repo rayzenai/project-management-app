@@ -211,7 +211,11 @@ Privilege-escalation protections — do not regress:
   undoes the whole save (the member controllers throw inside their
   transaction). `manager_id`, `is_cross_organization` and `is_public` on a project are
   silently dropped for anyone not allowed to set them. Read them through the FormRequest's `validated()`, not
-  `safe()`, which bypasses those overrides.
+  `safe()`, which bypasses those overrides. A new project's `member_ids`
+  (`StoreProjectRequest`) pass `canJoinTeam`, asked of the unsaved team
+  (its organization and the super-admin's cross-organization tick), and
+  must be active; `CreateProjectService` adds them through
+  `AddTeamMemberService` after appointing the manager.
 - Mentions only notify people who can view the task's project. The comment
   box offers `TaskShowQuery`'s `mentionCandidates` (the team plus the
   program's manager, `{id, name}` only: no email or login of someone the

@@ -11,11 +11,15 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * Creates a project together with its team, led by its manager.
+ * Creates a project together with its team, led by its manager, with the
+ * people chosen to start on it (StoreProjectRequest checked who may join).
  */
 class CreateProjectService
 {
-    public function __construct(private AppointProjectManagerService $appoint) {}
+    public function __construct(
+        private AppointProjectManagerService $appoint,
+        private AddTeamMemberService $addMember,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -42,10 +46,22 @@ class CreateProjectService
                 ]);
 
                 $team = $project->ensureTeam();
+
+                if ((bool) ($attributes['is_cross_organization'] ?? false)) {
+                    $team->forceFill(['is_cross_organization' => true])->save();
+                }
+
                 $manager = Member::query()->find((int) ($attributes['manager_id'] ?? 0));
 
                 if ($manager !== null) {
                     $this->appoint->execute($team, $manager);
+                }
+
+                // The manager among them stays the leader.
+                $people = Member::query()->whereKey((array) ($attributes['member_ids'] ?? []))->orderBy('id')->get();
+
+                foreach ($people as $person) {
+                    $this->addMember->execute($team, $person);
                 }
 
                 return $project;

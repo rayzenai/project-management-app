@@ -28,7 +28,10 @@
         program = null,
         onsaved,
     }: {
-        /** Who may manage a new project: active people of its organization. */
+        /**
+         * Who may manage a new project: active people of its organization (a
+         * super-admin's, of every organization). Also who may start on its team.
+         */
         managerCandidates?: ManagerCandidate[];
         /** A program manager creates only in their programs: one is required. */
         programRequired?: boolean;
@@ -62,7 +65,10 @@
             title_np: '',
             description: '',
             is_public: false,
+            is_cross_organization: false,
             manager_id: null as number | null,
+            /** Who else starts on the team, as members. */
+            member_ids: [] as number[],
             // With a single program to choose from there is nothing to choose.
             program_id:
                 program?.id ??
@@ -99,6 +105,16 @@
             : managerCandidates,
     );
 
+    // Who may start on the team: the organization's people, or everyone's
+    // on a cross-organization team (a super-admin's list has them all). The
+    // manager is on it already. Someone picked who drops off the list (the
+    // tick taken off, another organization) is left out of the create.
+    const formPeople = $derived(
+        (form.is_cross_organization ? managerCandidates : formManagers).filter(
+            (m) => m.id !== managerIds[0],
+        ),
+    );
+
     // Those of the organization it lands in.
     const formPrograms = $derived(
         isSuperAdmin
@@ -115,6 +131,7 @@
         Object.entries(form.errors).flatMap(([field, message]) => {
             const shownAbove =
                 field === 'manager_id' ||
+                field === 'member_ids' ||
                 (field === 'organization_id' && isSuperAdmin && !program) ||
                 (field === 'program_id' && !program && formPrograms.length > 0);
 
@@ -127,6 +144,9 @@
         form.transform((data) => ({
             ...data,
             manager_id: managerIds[0] ?? null,
+            member_ids: data.member_ids.filter((id) =>
+                formPeople.some((m) => m.id === id),
+            ),
         })).post('/workspace/projects', {
             preserveScroll: true,
             onSuccess: () => {
@@ -235,12 +255,30 @@
                 <p class="mt-1 text-xs text-fg-muted">
                     In a ministry, usually an Under Secretary.
                 </p>
-                <p class="mt-1 text-xs text-fg-muted">
-                    The project gets its own team, led by its manager, who then
-                    adds the people.
-                </p>
                 {#if form.errors.manager_id}<p class="mt-1 text-xs text-danger">
                         {form.errors.manager_id}
+                    </p>{/if}
+            </div>
+            <div>
+                <span class="label mb-1 block">People</span>
+                {#if isSuperAdmin && !program && form.organization_id === null}
+                    <p class="text-xs text-fg-muted">
+                        Choose an organization first.
+                    </p>
+                {:else}
+                    <AssigneePicker
+                        team={formPeople}
+                        bind:selectedIds={form.member_ids}
+                        max={Infinity}
+                        placeholder="Search or choose who works on it"
+                    />
+                {/if}
+                <p class="mt-1 text-xs text-fg-muted">
+                    The project gets its own team, led by its manager. Add its
+                    people now, or the manager adds them later.
+                </p>
+                {#if form.errors.member_ids}<p class="mt-1 text-xs text-danger">
+                        {form.errors.member_ids}
                     </p>{/if}
             </div>
             {#if !program && formPrograms.length > 0}
@@ -283,6 +321,15 @@
                 <label class="flex items-center gap-2 text-fg-muted">
                     <input type="checkbox" bind:checked={form.is_public} /> Public
                     (everyone in its organization can see it)
+                </label>
+            {/if}
+            {#if isSuperAdmin && !program}
+                <label class="flex items-center gap-2 text-fg-muted">
+                    <input
+                        type="checkbox"
+                        bind:checked={form.is_cross_organization}
+                    />
+                    Its team can take people from other organizations
                 </label>
             {/if}
         </div>

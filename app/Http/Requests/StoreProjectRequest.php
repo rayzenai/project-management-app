@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Member;
 use App\Models\Program;
+use App\Models\Team;
 use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,6 +18,11 @@ use Illuminate\Validation\Validator;
  * created with its team, led by the manager chosen here: an active person
  * of that organization. A program manager creates in their own programs
  * only, and without the administrators' fields (key, public).
+ *
+ * The team may start with more people (`member_ids`), each passing the
+ * People tab's rule (WorkspaceAccess::canJoinTeam) for the team about to be
+ * made: an active person of the project's organization, or anyone active on
+ * a cross-organization team, which only a super-admin opens.
  */
 class StoreProjectRequest extends FormRequest
 {
@@ -49,6 +55,9 @@ class StoreProjectRequest extends FormRequest
                 Rule::requiredIf(fn (): bool => WorkspaceAccess::createsProjectsOnlyInPrograms($this->user())),
                 'nullable', 'integer', Rule::exists('programs', 'id'),
             ],
+            'is_cross_organization' => ['nullable', 'boolean'],
+            'member_ids' => ['nullable', 'array', 'max:500'],
+            'member_ids.*' => ['integer', 'distinct', Rule::exists('members', 'id')->whereNull('deleted_at')],
         ];
     }
 
@@ -101,7 +110,42 @@ class StoreProjectRequest extends FormRequest
             if ($manager === null || ! $manager->is_active || (int) $manager->organization_id !== $this->organizationId()) {
                 $validator->errors()->add('manager_id', "The manager must be an active person of the project's organization.");
             }
+
+            if (! $this->membersMayJoin()) {
+                $validator->errors()->add('member_ids', $this->crossOrganization()
+                    ? 'Only active people can join the team.'
+                    : "Only active people of the project's organization can join its team.");
+            }
         });
+    }
+
+    /**
+     * Whether everyone in `member_ids` may join the team about to be made,
+     * asked of an unsaved team so the rule stays canJoinTeam's.
+     */
+    private function membersMayJoin(): bool
+    {
+        $ids = array_map(intval(...), (array) $this->input('member_ids', []));
+
+        if ($ids === []) {
+            return true;
+        }
+
+        $team = (new Team)->forceFill([
+            'organization_id' => $this->organizationId(),
+            'is_cross_organization' => $this->crossOrganization(),
+        ]);
+
+        $members = Member::query()->with('user')->whereKey($ids)->get();
+
+        return $members->count() === count($ids)
+            && $members->every(fn (Member $member): bool => $member->is_active && WorkspaceAccess::canJoinTeam($member, $team));
+    }
+
+    /** Opening the team to other organizations is a super-admin's call. */
+    private function crossOrganization(): bool
+    {
+        return WorkspaceAccess::isSuperAdmin($this->user()) && $this->boolean('is_cross_organization');
     }
 
     public function organizationId(): ?int
@@ -150,6 +194,8 @@ class StoreProjectRequest extends FormRequest
         if (! WorkspaceAccess::administers($this->user(), $this->organizationId())) {
             unset($data['key']);
         }
+
+        $data['is_cross_organization'] = $this->crossOrganization();
 
         return data_get($data, $key, $default);
     }
