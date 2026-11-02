@@ -64,20 +64,29 @@ final class WorkingDays
         return CarbonImmutable::parse($after->toDateString())->addDay();
     }
 
-    /** The latest date on or before `$date` that is the week's first working day. */
+    /**
+     * The latest date on or before `$date` that falls on the week's first
+     * weekday. The week is read Sunday first and starts on the first weekday
+     * that is a workday (the organization's configured workdays with
+     * attendance on, else Sunday to Friday). Holidays never move it.
+     */
     public function weekStart(CarbonInterface $date): CarbonImmutable
     {
-        $day = CarbonImmutable::parse($date->toDateString());
-        $sunday = $day->subDays($day->dayOfWeekIso % 7);
+        $workdays = $this->organizationId !== null && WorkspaceAccess::attendanceEnabled($this->organizationId)
+            ? array_map('intval', ($this->calendar ??= AttendanceCalendar::for($this->organizationId))->settings->workdays)
+            : self::DEFAULT_WORKDAYS;
 
-        foreach (self::WEEK_ORDER as $offset => $weekday) {
-            $candidate = $sunday->addDays($offset);
+        $first = 7;
 
-            if ($candidate->dayOfWeekIso === $weekday && $this->isWorkingDay($candidate)) {
-                return $candidate->greaterThan($day) ? $sunday : $candidate;
+        foreach (self::WEEK_ORDER as $weekday) {
+            if (in_array($weekday, $workdays, true)) {
+                $first = $weekday;
+                break;
             }
         }
 
-        return $sunday;
+        $day = CarbonImmutable::parse($date->toDateString());
+
+        return $day->subDays(($day->dayOfWeekIso - $first + 7) % 7);
     }
 }
