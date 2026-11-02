@@ -10,6 +10,7 @@ use App\Models\Task;
 use App\Models\TaskComment;
 use App\Models\User;
 use App\Support\BikramSambat;
+use App\Support\MentionParser;
 use App\Support\WorkingDays;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
@@ -24,8 +25,8 @@ use Illuminate\Support\Str;
  *
  * On it: open tasks the person is on (an assignment of their member), open
  * tasks they created that are on others and not on them ("You asked
- * others"), and their own open to-dos (subtasks) that have a date, all in
- * active projects they may see (and, on the web, of the switched
+ * others"), and their own open to-dos (subtasks) that have a date on open
+ * tasks, all in active projects they may see (and, on the web, of the switched
  * organization). A row's group follows its date: the person's own date on
  * the assignment when set, else the task's (a subtask's own date); a late
  * task (the one overdue rule, by the task's own deadline) is always Today;
@@ -95,7 +96,7 @@ final class MyWorkQuery
             ->where('user_id', $user->id)
             ->where('is_done', false)
             ->whereNotNull('due_at')
-            ->whereHas('task', fn (Builder $q) => $q->whereIn('project_id', $projectIds))
+            ->whereIn('task_id', Task::query()->whereIn('project_id', $projectIds)->notClosed()->select('id'))
             ->get();
 
         // Every task on the page once, so its project, people and latest
@@ -273,12 +274,12 @@ final class MyWorkQuery
     }
 
     /**
-     * Whole days past the task's own deadline, only while it is overdue
-     * (the one rule, Task::is_overdue).
+     * Whole days past the task's own deadline, only while it is overdue on
+     * `$today` (the one rule, Task::isOverdueOn).
      */
     private function daysLate(Task $task, CarbonImmutable $today): int
     {
-        if (! $task->is_overdue || $task->deadline_at === null) {
+        if (! $task->isOverdueOn($today) || $task->deadline_at === null) {
             return 0;
         }
 
@@ -311,7 +312,7 @@ final class MyWorkQuery
 
         return [
             'author' => (string) $comment->user?->name,
-            'body' => Str::limit(Str::squish($comment->body), self::UPDATE_LENGTH, '…'),
+            'body' => Str::limit(Str::squish(MentionParser::toDisplayText($comment->body)), self::UPDATE_LENGTH, '…'),
             'at' => $comment->created_at?->toIso8601String(),
         ];
     }

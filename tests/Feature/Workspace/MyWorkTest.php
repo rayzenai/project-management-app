@@ -170,6 +170,17 @@ it('uses the personal date to place a row but the task date to call it late', fu
         ->and(array_column($groups['later'], 'key'))->toBe(["task-{$later->id}"]);
 });
 
+it('counts lateness against the day it is asked for', function () {
+    $task = myTask(['deadline_at' => '2026-11-05']);
+
+    $payload = app(MyWorkQuery::class)->get($this->user, today: CarbonImmutable::parse('2026-11-06'));
+    $row = myGroups($payload)['today'][0];
+
+    expect($payload['today']['date'])->toBe('2026-11-06')
+        ->and($row['key'])->toBe("task-{$task->id}")
+        ->and($row['days_late'])->toBe(1);
+});
+
 it('keeps snoozed tasks only in Snoozed', function () {
     $snoozedLate = myTask(['deadline_at' => '2026-11-01'], ['snoozed_until' => '2026-11-06']);
     $snoozedUndated = myTask([], ['snoozed_until' => '2026-12-01']);
@@ -247,6 +258,22 @@ it('shows the newest update of the last 7 days, one line', function () {
         ->and($rows["task-{$stale->id}"]['latest_update'])->toBeNull();
 });
 
+it('shows mentions in an update as names, never cut inside one', function () {
+    $short = myTask(['deadline_at' => '2026-11-04']);
+    $long = myTask(['deadline_at' => '2026-11-04']);
+    TaskComment::factory()->create(['task_id' => $short->id, 'body' => '@[Asha Rai](member:12) please call back.', 'created_at' => '2026-11-03 09:00:00']);
+    TaskComment::factory()->create(['task_id' => $long->id, 'body' => str_repeat('word ', 26).'@[Asha Rai](member:12) needs to send the district data today.', 'created_at' => '2026-11-03 09:00:00']);
+
+    $rows = collect(myGroups(myWorkPage())['today'])->keyBy('key');
+    $longBody = $rows["task-{$long->id}"]['latest_update']['body'];
+
+    expect($rows["task-{$short->id}"]['latest_update']['body'])->toBe('@Asha Rai please call back.')
+        // The raw token would have been cut at "@[Asha Ra"; the name stays whole.
+        ->and($longBody)->toEndWith('@Asha Rai…')
+        ->and($longBody)->not->toContain('member:')
+        ->and($longBody)->not->toContain('@[');
+});
+
 it('reads the list in the same number of queries however many tasks there are', function () {
     $author = User::factory()->create();
     $colleague = Member::factory()->create(['organization_id' => $this->project->organization_id]);
@@ -306,6 +333,9 @@ it('places dated subtasks by their date', function () {
     Subtask::create(['task_id' => $task->id, 'user_id' => User::factory()->create()->id, 'body' => 'Not mine', 'due_at' => '2026-11-05']);
     $archived = Project::factory()->create(['organization_id' => $this->project->organization_id, 'archived_at' => now()]);
     Subtask::create(['task_id' => myTask(['project_id' => $archived->id], null)->id, 'user_id' => $this->user->id, 'body' => 'Archived', 'due_at' => '2026-11-05']);
+    // Work on a closed task has stopped: its to-dos leave the list too.
+    Subtask::create(['task_id' => myTask(['status' => 'done'])->id, 'user_id' => $this->user->id, 'body' => 'On a done task', 'due_at' => '2026-11-05']);
+    Subtask::create(['task_id' => myTask(['status' => 'failed'], null)->id, 'user_id' => $this->user->id, 'body' => 'On a failed task', 'due_at' => '2026-11-05']);
 
     $payload = myWorkPage();
     $row = myGroups($payload)['tomorrow'][0];

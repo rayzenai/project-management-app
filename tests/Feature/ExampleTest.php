@@ -9,10 +9,10 @@ class ExampleTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_root_redirects_to_the_workspace(): void
+    public function test_root_redirects_to_my_work(): void
     {
         $response = $this->get(route('home'));
 
-        $response->assertRedirect('/workspace');
+        $response->assertRedirect('/workspace/my');
     }
 }

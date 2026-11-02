@@ -45,6 +45,16 @@ it('marks only open work past its deadline as overdue', function () {
         ->and(Task::query()->overdue()->pluck('id')->all())->toBe([$this->late->id]);
 });
 
+it('asks the same rule of another day', function () {
+    $friday = CarbonImmutable::parse('2026-11-06');
+
+    expect($this->upcoming->fresh()->isOverdueOn($friday))->toBeTrue()
+        ->and($this->upcoming->fresh()->isOverdueOn(CarbonImmutable::parse('2026-11-05')))->toBeFalse()
+        ->and($this->late->fresh()->isOverdueOn($friday))->toBeTrue()
+        ->and($this->failed->fresh()->isOverdueOn($friday))->toBeFalse()
+        ->and($this->doneLate->fresh()->isOverdueOn($friday))->toBeFalse();
+});
+
 it('counts the same overdue work on the project page, the projects list and My work', function () {
     $this->actingAs(User::factory()->create(['email' => 'boss@example.com']));
 

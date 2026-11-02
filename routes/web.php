@@ -57,7 +57,7 @@ use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Laravel\Passport\Http\Controllers\AuthorizationController;
 
-Route::redirect('/', '/workspace')->name('home');
+Route::redirect('/', '/workspace/my')->name('home');
 
 // The forge's OpenID Connect sign-in. Passport's own routes are off; the
 // openid package adds discovery (/.well-known/openid-configuration) and the

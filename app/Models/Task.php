@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -662,17 +663,27 @@ class Task extends Model
     }
 
     /**
-     * Overdue: still being worked on (not finished, not failed) and past its
-     * deadline. Lateness (`is_late`) also covers finished-late and failed work;
-     * overdue is what still needs chasing. Twin of {@see self::scopeOverdue()}.
+     * Overdue today ({@see self::isOverdueOn()}). Lateness (`is_late`) also
+     * covers finished-late and failed work; overdue is what still needs
+     * chasing.
      *
      * @return Attribute<bool, never>
      */
     protected function isOverdue(): Attribute
     {
-        return Attribute::get(fn (): bool => ! $this->isClosed()
+        return Attribute::get(fn (): bool => $this->isOverdueOn(Carbon::today()));
+    }
+
+    /**
+     * The one overdue rule, asked of a day: still being worked on (not
+     * finished, not failed) and its deadline before that day. Twin of
+     * {@see self::scopeOverdue()}.
+     */
+    public function isOverdueOn(CarbonInterface $day): bool
+    {
+        return ! $this->isClosed()
             && $this->deadline_at !== null
-            && $this->deadline_at->startOfDay()->lt(Carbon::today()));
+            && $this->deadline_at->startOfDay()->lt($day->toImmutable()->startOfDay());
     }
 
     /**
