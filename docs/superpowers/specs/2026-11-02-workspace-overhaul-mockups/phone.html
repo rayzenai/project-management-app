@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Final: On a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Mukta:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.np{font-family:Mukta,Geist,ui-sans-serif,sans-serif}
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.p-phone{position:relative;flex:none;width:390px;height:844px;box-sizing:border-box;overflow:hidden;border:1px solid #d9dce3;border-radius:44px;background:#ffffff;box-shadow:0 2px 6px rgba(20,23,31,0.05),0 24px 60px rgba(20,23,31,0.12)}
+.p-status{display:flex;align-items:center;height:48px;padding:0 30px;font-size:15px;font-weight:600}
+.p-row{display:flex;align-items:flex-start;gap:14px;padding:12px 20px;border-bottom:1px solid #f0f1f4}
+.p-check{flex:none;width:24px;height:24px;margin-top:1px;border:1.75px solid #b4bac6;border-radius:999px;background:#ffffff}
+.p-doing{border-color:#2f62d8;background:linear-gradient(90deg,#2f62d8 50%,#ffffff 50%)}
+.p-t{display:block;font-size:16px;line-height:22px;color:#14171f}
+.p-m{display:block;margin-top:3px;font-size:13.5px;line-height:19px;color:#636a78}
+.p-group{display:flex;align-items:baseline;gap:8px;padding:18px 20px 6px;font-size:15px;font-weight:600}
+.p-group span{font-size:13.5px;font-weight:400;color:#636a78}
+.p-tabs{position:absolute;left:0;right:0;bottom:0;display:flex;height:84px;padding:8px 8px 0;box-sizing:border-box;border-top:1px solid #eceef2;background:#ffffff}
+.p-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px;border:0;background:transparent;color:#636a78;font-family:inherit;font-size:11.5px;font-weight:500}
+.p-tab.on{color:#2f62d8}
+.p-btn{display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border:1px solid #dfe2e8;border-radius:12px;background:#ffffff;color:#14171f;font-family:inherit;font-size:16px;font-weight:600}
+.p-primary{border-color:#2f62d8;background:#2f62d8;color:#ffffff}
+</style>
+</helmet>
+<div style="position: relative; width: 960px; height: 940px; box-sizing: border-box; padding: 40px 50px; overflow: hidden; display: flex; gap: 80px; background: #eef0f4; color: #14171f; font-family: Geist, ui-sans-serif, system-ui, sans-serif;">
+
+<section class="p-phone" aria-label="My work on a phone">
+<div class="p-status">9:41</div>
+<div style="padding: 6px 20px 0;">
+<h1 style="margin: 0; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em;">My work</h1>
+<p style="margin: 4px 0 0; font-size: 14.5px; color: #636a78;">Monday, 2 November · <span class="np">कार्तिक १६</span></p>
+<div style="display: flex; align-items: center; gap: 10px; height: 48px; margin-top: 16px; padding: 0 14px; border: 1px solid #dfe2e8; border-radius: 12px; color: #8a909c; font-size: 16px;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="color: #2f62d8;"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Add a task</div>
+</div>
+<div class="p-group">Today<span>3</span></div>
+<div class="p-row"><span class="p-check"></span><span style="flex: 1; min-width: 0;"><span class="p-t">Collect revenue and expense data</span><span class="p-m"><span style="color: #c2372d; font-weight: 500;">2 days late</span> · Resources</span><span class="p-m" style="color: #2f62d8;">Rabin asked for an update</span></span></div>
+<div class="p-row"><span class="p-check"></span><span style="flex: 1; min-width: 0;"><span class="p-t">Server room checklist</span><span class="p-m">Tech committee</span></span></div>
+<div class="p-row"><span class="p-check p-doing"></span><span style="flex: 1; min-width: 0;"><span class="p-t">Node.js issue</span><span class="p-m">System readiness · Doing</span></span></div>
+<div class="p-group">Coming up<span>2</span></div>
+<div class="p-row"><span class="p-check"></span><span style="flex: 1; min-width: 0;"><span class="p-t">Call center staff list</span><span class="p-m">Thu 5 Nov · from Mina</span></span></div>
+<div class="p-row" style="border-bottom: 0;"><span class="p-check"></span><span style="flex: 1; min-width: 0;"><span class="p-t">Backup policy draft</span><span class="p-m">Fri 6 Nov · Tech committee</span></span></div>
+<nav class="p-tabs" aria-label="Main">
+<button type="button" class="p-tab on" aria-current="page"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg>My work</button>
+<button type="button" class="p-tab"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>Projects</button>
+<button type="button" class="p-tab"><span style="position: relative; display: inline-flex;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><span style="position: absolute; top: -4px; right: -8px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: #2f62d8; color: #ffffff; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center;">2</span></span>Updates</button>
+<button type="button" class="p-tab"><span style="display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; background: #e8ecf4; color: #2a3344; font-size: 9.5px; font-weight: 600;">BJ</span>Me</button>
+</nav>
+</section>
+
+<section class="p-phone" aria-label="A task opened from an email">
+<div class="p-status">9:42</div>
+<div style="display: flex; align-items: center; gap: 6px; padding: 2px 12px 0; color: #2f62d8; font-size: 16px;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>My work</div>
+<div style="padding: 14px 20px 0;">
+<p style="margin: 0; font-size: 13.5px; color: #636a78;">Resources</p>
+<h1 style="margin: 4px 0 0; font-size: 24px; line-height: 30px; font-weight: 600; letter-spacing: -0.01em;">Collect revenue and expense data</h1>
+<p style="margin: 8px 0 0; font-size: 14.5px; color: #3a404c;"><span style="color: #c2372d; font-weight: 500;">2 days late</span> · for Bibek Joshi</p>
+</div>
+<div style="margin: 18px 20px 0; padding: 14px; border: 1px solid #c9d6f6; border-radius: 14px; background: #f3f6fd;">
+<p style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14.5px; font-weight: 600;"><span style="display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 99px; background: #e8ecf4; color: #2a3344; font-size: 10px; font-weight: 600;">RG</span>Rabin asked for an update</p>
+<div style="min-height: 84px; margin-top: 12px; padding: 12px; box-sizing: border-box; border: 1.5px solid #2f62d8; border-radius: 10px; background: #ffffff; font-size: 16px; line-height: 23px; color: #14171f;">Two districts sent their data today. Waiting for Dolakha; will finish Wednesday.<span style="display: inline-block; width: 1.5px; height: 18px; margin-left: 1px; vertical-align: -3px; background: #14171f;"></span></div>
+<div style="display: flex; gap: 8px; margin-top: 10px;"><span style="display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border: 1px solid #dfe2e8; border-radius: 99px; background: #ffffff; font-size: 14px;">New date: Wed 4 Nov</span></div>
+<button type="button" class="p-btn p-primary" style="width: 100%; margin-top: 12px;">Post update</button>
+</div>
+<div style="padding: 18px 20px 0;">
+<p style="margin: 0 0 8px; font-size: 15px; font-weight: 600;">Earlier</p>
+<p style="margin: 0; font-size: 15px; line-height: 22px; color: #14171f;">Three districts have not sent their data yet.</p>
+<p style="margin: 3px 0 0; font-size: 13px; color: #7a808c;">You · Friday</p>
+</div>
+<div style="position: absolute; left: 20px; right: 20px; bottom: 30px;"><button type="button" class="p-btn" style="width: 100%;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="color: #1f8a4c;"><path d="M20 6 9 17l-5-5"></path></svg>Mark done</button></div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

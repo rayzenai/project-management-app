@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Final: A task for devs and QA</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Mukta:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2f62d8;text-decoration:none}a:hover{color:#244fb3}
+.np{font-family:Mukta,Geist,ui-sans-serif,sans-serif}
+.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.a-nav{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#3a404c;font-family:inherit;font-size:14px;font-weight:500;text-align:left;cursor:pointer}
+.a-nav:hover{background:#eceef2}
+.a-nav.on{background:#e7edfc;color:#2f62d8}
+.a-sub{display:flex;align-items:center;width:100%;height:32px;padding:0 10px 0 36px;border:0;border-radius:8px;background:transparent;color:#4a5160;font-family:inherit;font-size:13.5px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.a-sub:hover{background:#eceef2}
+.a-sub.on{background:#eceef2;color:#14171f;font-weight:500}
+.a-av{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border-radius:999px;background:#e8ecf4;color:#2a3344;font-size:10px;font-weight:600}
+.a-btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border:1px solid #e1e4ea;border-radius:8px;background:#ffffff;color:#3a404c;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
+.a-btn:hover{background:#f4f5f8}
+.a-primary{border-color:#2f62d8;background:#2f62d8;color:#ffffff}
+.a-primary:hover{background:#244fb3;border-color:#244fb3}
+.t-chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border:1px solid #e6e8ee;border-radius:8px;background:#ffffff;font-size:13.5px;color:#3a404c}
+.t-ev{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-top:1px solid #f0f1f4;font-size:14px;line-height:21px;color:#3a404c}
+.t-time{font-size:12.5px;color:#7a808c}
+.t-panel{border:1px solid #eceef2;border-radius:12px;padding:16px 18px}
+.t-opt{display:flex;align-items:center;gap:10px;width:100%;height:40px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#14171f;font-family:inherit;font-size:14px;text-align:left;cursor:pointer}
+.t-opt:hover{background:#f4f5f8}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #ffffff; color: #14171f; font-family: Geist, ui-sans-serif, system-ui, sans-serif;">
+
+<aside style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; background: #f6f7f9; border-right: 1px solid #eceef2;">
+<button type="button" class="a-nav" style="height: 40px; margin-bottom: 8px; color: #14171f;"><span style="display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #2f62d8; color: #ffffff; font-size: 12px; font-weight: 700;">M</span><span style="flex: 1; font-size: 14.5px; font-weight: 600;">MoLCFAGA</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="color: #8a909c;"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button type="button" class="a-nav" style="color: #636a78; font-weight: 400;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><span style="flex: 1;">Search</span><span style="padding: 1px 6px; border: 1px solid #dfe2e8; border-radius: 5px; font-size: 11px; color: #636a78;">/</span></button>
+<button type="button" class="a-nav"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg><span style="flex: 1;">My work</span><span style="font-size: 12.5px;">5</span></button>
+<button type="button" class="a-nav"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg><span style="flex: 1;">Projects</span></button>
+<button type="button" class="a-sub on">Local land services</button>
+<button type="button" class="a-sub">System readiness</button>
+<button type="button" class="a-sub">Tech committee</button>
+<button type="button" class="a-nav"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span style="flex: 1;">People</span></button>
+<div style="flex: 1; min-height: 24px;"></div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 6px 2px 10px; border-top: 1px solid #e8eaef;">
+<span class="a-av" style="width: 28px; height: 28px; font-size: 11px;">SL</span>
+<span style="flex: 1; min-width: 0; line-height: 1.25;"><span style="display: block; font-size: 13.5px; font-weight: 500;">Sujan Lama</span><span style="display: block; font-size: 12px; color: #636a78;">Computer Engineer</span></span>
+</div>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px 32px 40px;">
+<div style="max-width: 1040px; margin: 0 auto;">
+
+<p style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13.5px; color: #636a78;"><a href="#">Local land services</a><span>/</span><a href="#">Digitalization</a><span class="mono" style="margin-left: 6px; font-size: 12.5px;">LLS-42</span></p>
+
+<div style="position: relative; display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+<h1 style="flex: 1; min-width: 260px; margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em;">Source code review</h1>
+<button type="button" class="a-btn" aria-haspopup="dialog" aria-expanded="true" style="border-color: #2f62d8; color: #2f62d8;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>Send for checking</button>
+<button type="button" class="a-btn a-primary"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Mark done</button>
+
+<div role="dialog" aria-label="Send for checking" style="position: absolute; top: 46px; right: 118px; z-index: 3; width: 320px; padding: 14px; background: #ffffff; border: 1px solid #e1e4ea; border-radius: 12px; box-shadow: 0 2px 4px rgba(20, 23, 31, 0.05), 0 16px 40px rgba(20, 23, 31, 0.14);">
+<p style="margin: 0 0 8px; font-size: 14px; font-weight: 600;">Who checks it?</p>
+<button type="button" class="t-opt" aria-pressed="true" style="background: #e7edfc;"><span class="a-av">AS</span><span style="flex: 1;">Anisha Shrestha</span><span style="font-size: 12.5px; color: #636a78;">QA</span></button>
+<button type="button" class="t-opt"><span class="a-av">BJ</span><span style="flex: 1;">Bibek Joshi</span><span style="font-size: 12.5px; color: #636a78;">IT Officer</span></button>
+<div style="margin-top: 10px; min-height: 58px; padding: 9px 11px; border: 1px solid #dfe2e8; border-radius: 8px; font-size: 13.5px; line-height: 20px; color: #3a404c;">Upload a 25 MB file. It should be refused with a clear message.</div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;"><button type="button" class="a-btn" style="height: 32px; border-color: transparent;">Cancel</button><button type="button" class="a-btn a-primary" style="height: 32px;">Send to Anisha</button></div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
+<span class="t-chip"><span style="width: 12px; height: 12px; border: 1.5px solid #2f62d8; border-radius: 99px; background: linear-gradient(90deg,#2f62d8 50%,#ffffff 50%);"></span>Doing<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; color: #8a909c;"><path d="m6 9 6 6 6-6"></path></svg></span>
+<span class="t-chip"><span class="a-av" style="width: 20px; height: 20px;">SL</span>Sujan Lama</span>
+<span class="t-chip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px; color: #636a78;"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>Fri 6 Nov<span class="np" style="color: #636a78;">कार्तिक २०</span></span>
+<span class="t-chip" style="border-color: transparent; color: #636a78;">Asked by Rabin Ghimire</span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; margin-top: 28px;">
+
+<div style="flex: 1 1 520px; min-width: 0;">
+<p style="margin: 0; max-width: 640px; font-size: 15px; line-height: 24px; color: #2a2f3a;">Review the land records portal before handover: sign-in, uploads and reports. Note anything that would block the security audit.</p>
+
+<h2 style="margin: 30px 0 4px; font-size: 15px; font-weight: 600;">Updates</h2>
+<div class="t-ev"><span class="a-av">RG</span><span style="flex: 1;">Rabin Ghimire asked for an update.<br><span class="t-time">Yesterday, 4:10 PM</span></span></div>
+<div class="t-ev"><span class="a-av">SL</span><span style="flex: 1;"><span style="font-weight: 600; color: #14171f;">Sujan Lama</span> <span class="t-time">Today, 10:20 AM</span><br><span style="color: #14171f;">Sign-in and reports are fine. The upload size check lets 25 MB files through; fixing it in #18 today.</span></span></div>
+<div class="t-ev"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 22px; color: #636a78;"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M13 6h3a2 2 0 0 1 2 2v7"></path><path d="M6 9v12"></path></svg><span style="flex: 1;">Sujan opened pull request <a href="#">#18 Fix upload size check</a><br><span class="t-time">Today, 11:02 AM</span></span></div>
+<div class="t-ev"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 22px; color: #1f8a4c;"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span style="flex: 1;">Tests passed on #18<br><span class="t-time">Today, 11:09 AM</span></span></div>
+
+<div style="margin-top: 10px; border: 1px solid #dfe2e8; border-radius: 10px;">
+<div style="min-height: 64px; padding: 12px 14px; font-size: 14.5px; color: #8a909c;">Post an update. Type @ to mention someone.</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid #f0f1f4;"><span style="flex: 1; font-size: 12.5px; color: #7a808c;">Rabin and the people on this task will see it.</span><button type="button" class="a-btn a-primary" style="height: 32px;">Post</button></div>
+</div>
+</div>
+
+<div style="flex: 0 1 340px; min-width: 280px; display: flex; flex-direction: column; gap: 16px;">
+<section class="t-panel">
+<h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 600;">Code</h2>
+<p style="margin: 0 0 6px; font-size: 12.5px; color: #636a78;">Branch name</p>
+<div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 10px; border: 1px solid #e6e8ee; border-radius: 8px; background: #f8f9fb;"><span class="mono" style="flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">LLS-42-source-code-review</span><button type="button" class="a-btn" aria-label="Copy branch name" style="width: 28px; height: 28px; padding: 0; justify-content: center; border-color: transparent; background: transparent;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px;"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button></div>
+<div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f1f4;">
+<a href="#" style="display: block; font-size: 14px; font-weight: 500;">#18 Fix upload size check</a>
+<p style="display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 13px; color: #3a404c;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px; color: #1f8a4c;"><path d="M20 6 9 17l-5-5"></path></svg>Tests passed<span style="color: #b4bac6;">·</span><span style="color: #636a78;">needs 1 approval</span></p>
+</div>
+</section>
+<section class="t-panel">
+<h2 style="margin: 0 0 10px; font-size: 15px; font-weight: 600;">People on it</h2>
+<p style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px;"><span class="a-av">SL</span>Sujan Lama<span style="margin-left: auto; font-size: 12.5px; color: #636a78;">doing it</span></p>
+<p style="display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px;"><span class="a-av">RG</span>Rabin Ghimire<span style="margin-left: auto; font-size: 12.5px; color: #636a78;">asked for it</span></p>
+</section>
+</div>
+
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

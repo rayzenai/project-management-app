@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Final: Inviting people</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+body{margin:0}
+.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.v-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 16px;border:1px solid #e1e4ea;border-radius:8px;background:#ffffff;color:#3a404c;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
+.v-primary{border-color:#2f62d8;background:#2f62d8;color:#ffffff}
+.v-av{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;border-radius:999px;background:#e8ecf4;color:#2a3344;font-size:10.5px;font-weight:600}
+.v-row{display:grid;grid-template-columns:26px minmax(0,1fr) 150px 110px;align-items:center;gap:12px;min-height:52px;padding:0 4px;border-bottom:1px solid #f0f1f4;font-size:14px}
+.v-n{display:block;color:#14171f;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v-e{display:block;font-size:12.5px;color:#636a78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v-sel{display:flex;align-items:center;justify-content:space-between;height:32px;padding:0 8px 0 10px;border:1px solid #e1e4ea;border-radius:8px;font-size:13px;color:#3a404c}
+</style>
+</helmet>
+<div style="position: relative; width: 960px; height: 680px; box-sizing: border-box; overflow: hidden; display: grid; place-items: center; background: rgba(20, 23, 31, 0.32); color: #14171f; font-family: Geist, ui-sans-serif, system-ui, sans-serif;">
+
+<section role="dialog" aria-label="Invite people" style="display: flex; flex-direction: column; width: 680px; max-height: 620px; box-sizing: border-box; background: #ffffff; border: 1px solid #e1e4ea; border-radius: 14px; box-shadow: 0 24px 60px rgba(20, 23, 31, 0.24);">
+
+<div style="padding: 22px 24px 0;">
+<h2 style="margin: 0; font-size: 19px; font-weight: 600;">Invite people to MoLCFAGA</h2>
+<p style="margin: 6px 0 0; font-size: 14px; line-height: 21px; color: #3a404c;">Paste names and emails, one person a line. Each gets an email with a link to set a password.</p>
+<div class="mono" style="margin-top: 14px; padding: 10px 12px; border: 1px solid #dfe2e8; border-radius: 10px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; line-height: 21px; color: #3a404c;">Deepak Karki, deepak.karki@molcfaga.gov.np<br>Sunita Rai, sunita.rai@molcfaga.gov.np<br>Prakash Thapa<br>Mina Thapa, mina.thapa@molcfaga.gov.np</div>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 14px; padding: 0 20px;">
+<div class="v-row"><span class="v-av">DK</span><span style="min-width: 0;"><span class="v-n">Deepak Karki</span><span class="v-e">deepak.karki@molcfaga.gov.np</span></span><span class="v-sel">Under Secretary<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; color: #8a909c;"><path d="m6 9 6 6 6-6"></path></svg></span><span style="font-size: 13px; color: #3a404c;">Ready</span></div>
+<div class="v-row"><span class="v-av">SR</span><span style="min-width: 0;"><span class="v-n">Sunita Rai</span><span class="v-e">sunita.rai@molcfaga.gov.np</span></span><span class="v-sel">Section Officer<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; color: #8a909c;"><path d="m6 9 6 6 6-6"></path></svg></span><span style="font-size: 13px; color: #3a404c;">Ready</span></div>
+<div class="v-row"><span class="v-av">PT</span><span style="min-width: 0;"><span class="v-n">Prakash Thapa</span><span class="v-e" style="color: #c2372d;">Needs an email</span></span><span class="v-sel" style="color: #8a909c;">Designation<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; color: #8a909c;"><path d="m6 9 6 6 6-6"></path></svg></span><span style="font-size: 13px; color: #c2372d;">Skipped</span></div>
+<div class="v-row" style="border-bottom: 0;"><span class="v-av">MT</span><span style="min-width: 0;"><span class="v-n">Mina Thapa</span><span class="v-e">mina.thapa@molcfaga.gov.np</span></span><span style="font-size: 13px; color: #636a78;">Computer Officer</span><span style="font-size: 13px; color: #636a78;">Already here</span></div>
+</div>
+
+<label style="display: flex; align-items: flex-start; gap: 10px; margin: 6px 24px 0; padding: 12px 14px; border-radius: 10px; background: #f6f7f9; font-size: 14px; line-height: 20px; color: #14171f; cursor: pointer;"><span style="flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px; background: #2f62d8; color: #ffffff;"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width: 13px; height: 13px; stroke-width: 2.5;"><path d="M20 6 9 17l-5-5"></path></svg></span><span>Also invite the 23 people in the organogram who have never signed in</span></label>
+
+<div style="display: flex; align-items: center; gap: 8px; padding: 16px 24px 20px;">
+<span style="flex: 1; font-size: 13px; color: #636a78;">Links work for 7 days.</span>
+<button type="button" class="v-btn" style="border-color: transparent;">Cancel</button>
+<button type="button" class="v-btn v-primary">Send 25 invites</button>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":680}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
