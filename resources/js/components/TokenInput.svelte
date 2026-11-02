@@ -12,7 +12,7 @@
         value: string;
         placeholder?: string;
         disabled?: boolean;
-        /** `lg` matches the command palette's 48px row; `xl` is the new-task dialog. */
+        /** `lg` is the add field on My work; `xl` is the new-task dialog. */
         size?: 'md' | 'lg' | 'xl';
         oninput?: () => void;
         onsubmit?: () => void;
@@ -28,7 +28,8 @@
         size === 'xl'
             ? 'h-16 px-5 font-sans text-[17px] leading-[64px] whitespace-pre'
             : size === 'lg'
-              ? 'h-12 px-4 font-sans text-[15px] leading-[48px] whitespace-pre'
+              ? // 16px below lg: iOS zooms into a smaller field.
+                'h-[48px] px-0 font-sans text-[16px] leading-[48px] whitespace-pre lg:text-[15px]'
               : 'h-8 px-2.5 font-sans text-[13.5px] leading-8 whitespace-pre',
     );
 
@@ -74,7 +75,9 @@
         }}
         onscroll={syncScroll}
         onkeydown={(e) => {
-            if (e.key === 'Enter') {
+            // Enter that confirms an input method's composition (Nepali
+            // typed through an IME) is not a submit.
+            if (e.key === 'Enter' && !(e.isComposing || e.keyCode === 229)) {
                 e.preventDefault();
                 onsubmit?.();
             }

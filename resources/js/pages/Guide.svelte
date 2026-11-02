@@ -337,6 +337,10 @@
         ['@name', 'who does it'],
         ['!high', 'how urgent: !low, !medium, !high or !urgent'],
         ['today, fri, jun 20', 'when it is due'],
+        [
+            'भोलि, शुक्रबार',
+            'the same in Nepali: आज, भोलि, पर्सि, आइतबार to शनिबार',
+        ],
     ];
 </script>
 

@@ -768,6 +768,8 @@ export interface QuickAddContext {
     organizationPeople?: PersonRef[];
     /** The viewer is an organizational admin whose organization has no project yet: offer "General". */
     startGeneral?: boolean;
+    /** The project of the newest task the viewer created, among `projects`; the add field starts there. */
+    lastProjectId: number | null;
 }
 
 export interface Flash {

@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectNote;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceNote;
 use App\Queries\Attendance\MyAttendanceQuery;
@@ -129,6 +130,13 @@ class ShareWorkspaceData
                         ->all()
                     : [],
                 'startGeneral' => $startGeneral,
+                // The add field starts where the person last added a task,
+                // among the projects it offers them.
+                'lastProjectId' => Task::query()
+                    ->where('created_by', $user->getAuthIdentifier())
+                    ->whereIn('project_id', $projects->pluck('id'))
+                    ->latest()->latest('id')
+                    ->value('project_id'),
                 'team' => Member::query()->visibleTo($request->user())->active()->orderBy('name')
                     ->get(['id', 'name', 'email', 'user_id'])
                     ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])

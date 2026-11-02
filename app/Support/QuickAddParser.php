@@ -10,6 +10,7 @@ use Carbon\Carbon;
  *
  *   #project-token   @assignee-token   !low|!medium|!high|!urgent|!p1..!p4
  *   today · tomorrow · weekday names · YYYY-MM-DD · "jun 20" · "20 jun"
+ *   आज · भोलि · पर्सि · आइतबार to शनिबार (Nepali, read as the English ones)
  *
  * `parse()` is pure tokenization — it never touches the database. The caller
  * resolves project/assignee tokens and then calls `strip()` with only the
@@ -33,6 +34,20 @@ class QuickAddParser
         'sun' => Carbon::SUNDAY,
     ];
 
+    /** Days from today, by their Nepali word. */
+    private const NEPALI_DAYS = ['आज' => 0, 'भोलि' => 1, 'पर्सि' => 2, 'पर्सी' => 2];
+
+    private const NEPALI_WEEKDAYS = [
+        'आइतबार' => Carbon::SUNDAY,
+        'सोमबार' => Carbon::MONDAY,
+        'मंगलबार' => Carbon::TUESDAY,
+        'बुधबार' => Carbon::WEDNESDAY,
+        'बिहिबार' => Carbon::THURSDAY,
+        'बिहीबार' => Carbon::THURSDAY,
+        'शुक्रबार' => Carbon::FRIDAY,
+        'शनिबार' => Carbon::SATURDAY,
+    ];
+
     private const MONTHS = [
         'jan' => 1, 'feb' => 2, 'mar' => 3, 'apr' => 4, 'may' => 5, 'jun' => 6,
         'jul' => 7, 'aug' => 8, 'sep' => 9, 'oct' => 10, 'nov' => 11, 'dec' => 12,
@@ -47,11 +62,15 @@ class QuickAddParser
      */
     public static function parse(string $input): array
     {
+        // Literal words: a Devanagari vowel sign is \p{M}, not \w, so a
+        // character class would cut a word short.
+        $nepali = implode('|', [...array_keys(self::NEPALI_DAYS), ...array_keys(self::NEPALI_WEEKDAYS)]);
+
         $rules = [
             'project' => '/(^|\s)(#[\w\-]+)/u',
             'assignee' => '/(^|\s)(@[\w\-]+)/u',
             'priority' => '/(^|\s)(!(?:low|medium|high|urgent|p[1-4]))(?=\s|$)/iu',
-            'date' => '/(^|\s)(today|tomorrow|'.self::WEEKDAY_RE.'|\d{4}-\d{2}-\d{2}|(?:'.self::MONTH_RE.')\s+\d{1,2}|\d{1,2}\s+(?:'.self::MONTH_RE.'))(?=\s|$)/iu',
+            'date' => '/(^|\s)(today|tomorrow|'.self::WEEKDAY_RE.'|'.$nepali.'|\d{4}-\d{2}-\d{2}|(?:'.self::MONTH_RE.')\s+\d{1,2}|\d{1,2}\s+(?:'.self::MONTH_RE.'))(?=\s|$)/iu',
         ];
 
         $tokens = [];
@@ -135,15 +154,21 @@ class QuickAddParser
             return $today->copy()->addDay()->toDateString();
         }
 
+        if (isset(self::NEPALI_DAYS[$word])) {
+            return $today->copy()->addDays(self::NEPALI_DAYS[$word])->toDateString();
+        }
+
+        if (isset(self::NEPALI_WEEKDAYS[$word])) {
+            return self::weekday(self::NEPALI_WEEKDAYS[$word], $today);
+        }
+
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $word)) {
             return $word;
         }
 
         $prefix = substr($word, 0, 3);
         if (isset(self::WEEKDAYS[$prefix]) && ! preg_match('/\d/', $word)) {
-            $diff = (self::WEEKDAYS[$prefix] - $today->dayOfWeek + 7) % 7;
-
-            return $today->copy()->addDays($diff)->toDateString();
+            return self::weekday(self::WEEKDAYS[$prefix], $today);
         }
 
         if (preg_match('/^([a-z]+)\s+(\d{1,2})$/', $word, $m)) {
@@ -155,6 +180,12 @@ class QuickAddParser
         }
 
         return null;
+    }
+
+    /** The next such weekday; today when it is one. */
+    private static function weekday(int $dayOfWeek, Carbon $today): string
+    {
+        return $today->copy()->addDays(($dayOfWeek - $today->dayOfWeek + 7) % 7)->toDateString();
     }
 
     private static function monthDay(string $monthWord, int $day, Carbon $today): ?string

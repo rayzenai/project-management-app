@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Member, ProjectSummary } from '../lib/types';
+    import type { Member, QuickAddProject } from '../lib/types';
     import QuickAddForm from './QuickAddForm.svelte';
 
     let {
@@ -7,20 +7,22 @@
         team,
         currentMemberId,
         defaultProjectId = null,
+        today,
     }: {
-        projects: ProjectSummary[];
+        projects: QuickAddProject[];
         team: Member[];
         currentMemberId: number | null;
         defaultProjectId?: number | null;
+        /** The office's today, Y-m-d. */
+        today?: string;
     } = $props();
 </script>
 
-<div class="panel px-3 py-2">
-    <QuickAddForm
-        {projects}
-        {team}
-        {currentMemberId}
-        {defaultProjectId}
-        variant="inline"
-    />
-</div>
+<QuickAddForm
+    {projects}
+    {team}
+    {currentMemberId}
+    {defaultProjectId}
+    {today}
+    variant="inline"
+/>

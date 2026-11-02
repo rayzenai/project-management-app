@@ -10,6 +10,7 @@
         placeholder = 'Assign...',
         max = 1,
         flow = false,
+        listOnly = false,
     }: {
         team: Member[];
         /** People not on the team who join it when picked; listed after it. */
@@ -19,6 +20,8 @@
         max?: number;
         /** Render the dropdown in-flow (expands the container) instead of as a clipped absolute popover. Use inside modals. */
         flow?: boolean;
+        /** Only the search and the list, always shown: for a caller that opens it in a popover of its own (the add field's Who). */
+        listOnly?: boolean;
     } = $props();
 
     let open = $state(false);
@@ -124,47 +127,51 @@
         }
     }}
 >
-    <div
-        bind:this={triggerEl}
-        role="button"
-        tabindex="0"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        class="flex min-h-[30px] w-full flex-wrap items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-left text-[13px] transition hover:bg-hover"
-        onclick={() => (open = !open)}
-        onkeydown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                open = !open;
-            }
-        }}
-    >
-        {#if selected.length === 0}
-            <span class="text-fg-faint">{placeholder}</span>
-        {/if}
-        {#each selected as user (user.id)}
-            <span class="chip chip-accent gap-1 pr-1">
-                {user.name}
-                <button
-                    type="button"
-                    aria-label="Remove"
-                    class="inline-flex h-4 w-4 items-center justify-center rounded-sm text-accent hover:bg-accent-soft"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        remove(user.id);
-                    }}
-                >
-                    <X class="h-3 w-3" />
-                </button>
-            </span>
-        {/each}
-    </div>
-
-    {#if open}
+    {#if !listOnly}
         <div
-            class={flow
-                ? 'popover mt-1 max-h-72 overflow-auto px-1'
-                : 'popover absolute right-0 left-0 z-30 mt-1 max-h-72 overflow-auto px-1'}
+            bind:this={triggerEl}
+            role="button"
+            tabindex="0"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            class="flex min-h-[30px] w-full flex-wrap items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-left text-[13px] transition hover:bg-hover"
+            onclick={() => (open = !open)}
+            onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    open = !open;
+                }
+            }}
+        >
+            {#if selected.length === 0}
+                <span class="text-fg-faint">{placeholder}</span>
+            {/if}
+            {#each selected as user (user.id)}
+                <span class="chip chip-accent gap-1 pr-1">
+                    {user.name}
+                    <button
+                        type="button"
+                        aria-label="Remove"
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-sm text-accent hover:bg-accent-soft"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            remove(user.id);
+                        }}
+                    >
+                        <X class="h-3 w-3" />
+                    </button>
+                </span>
+            {/each}
+        </div>
+    {/if}
+
+    {#if open || listOnly}
+        <div
+            class={listOnly
+                ? ''
+                : flow
+                  ? 'popover mt-1 max-h-72 overflow-auto px-1'
+                  : 'popover absolute right-0 left-0 z-30 mt-1 max-h-72 overflow-auto px-1'}
         >
             <div class="px-1 pt-1 pb-1.5">
                 <input

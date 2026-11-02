@@ -261,7 +261,8 @@
     function onTitleKeydown(
         e: KeyboardEvent & { currentTarget: HTMLTextAreaElement },
     ) {
-        if (e.key === 'Enter') {
+        // Enter that confirms an input method's composition is not a save.
+        if (e.key === 'Enter' && !(e.isComposing || e.keyCode === 229)) {
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();
         }

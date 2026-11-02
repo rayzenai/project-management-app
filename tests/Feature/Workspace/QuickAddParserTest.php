@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Workspace\QuickAddDispatcher;
 use App\Support\QuickAddParser;
 use Carbon\Carbon;
 
@@ -39,6 +40,58 @@ it('parses relative and month dates against today', function () {
         ->and($value('x jun 20'))->toBe('2026-06-20')
         ->and($value('x 20 jun'))->toBe('2026-06-20')
         ->and($value('x jan 5'))->toBe('2027-01-05'); // already past → next year
+
+    Carbon::setTestNow();
+});
+
+it('reads the Nepali date words as it reads the English ones', function (string $input, string $date) {
+    Carbon::setTestNow('2026-11-04'); // a Wednesday
+
+    $tokens = QuickAddParser::parse($input);
+
+    expect($tokens)->toHaveCount(1)
+        ->and($tokens[0]['type'])->toBe('date')
+        ->and($tokens[0]['value'])->toBe($date)
+        ->and(QuickAddParser::strip($input, $tokens))->toBe('Report');
+
+    Carbon::setTestNow();
+})->with([
+    'आज, today' => ['Report आज', '2026-11-04'],
+    'भोलि, tomorrow' => ['Report भोलि', '2026-11-05'],
+    'पर्सि, the day after tomorrow' => ['Report पर्सि', '2026-11-06'],
+    'पर्सी, spelt long' => ['Report पर्सी', '2026-11-06'],
+    'आइतबार, Sunday' => ['Report आइतबार', '2026-11-08'],
+    'सोमबार, Monday' => ['Report सोमबार', '2026-11-09'],
+    'मंगलबार, Tuesday' => ['Report मंगलबार', '2026-11-10'],
+    'बुधबार, Wednesday is today' => ['Report बुधबार', '2026-11-04'],
+    'बिहिबार, Thursday' => ['Report बिहिबार', '2026-11-05'],
+    'बिहीबार, spelt long' => ['Report बिहीबार', '2026-11-05'],
+    'शुक्रबार, Friday' => ['Report शुक्रबार', '2026-11-06'],
+    'शनिबार, Saturday' => ['Report शनिबार', '2026-11-07'],
+    'first word' => ['भोलि Report', '2026-11-05'],
+]);
+
+it('never reads a Nepali date word inside another word', function () {
+    expect(QuickAddParser::parse('आजको बैठक'))->toBe([])
+        ->and(QuickAddParser::parse('भोलिपल्ट Report'))->toBe([])
+        ->and(QuickAddParser::parse('Reportआज'))->toBe([]);
+});
+
+it('dates a task by a Nepali word through the dispatcher', function () {
+    Carbon::setTestNow('2026-11-04');
+    $user = User::factory()->withMember()->create();
+    $sita = Member::factory()->create(['name' => 'Sita Sharma']);
+    $project = Project::factory()->public()->create();
+    $this->actingAs($user);
+
+    $result = app(QuickAddDispatcher::class)->dispatch('Call the district भोलि @sita', $project->id, [], null, null, $user);
+
+    $task = Task::query()->where('project_id', $project->id)->sole();
+
+    expect($result->success)->toBeTrue()
+        ->and($task->title)->toBe('Call the district')
+        ->and($task->deadline_at->toDateString())->toBe('2026-11-05')
+        ->and($task->assignments()->pluck('member_id')->all())->toBe([$sita->id]);
 
     Carbon::setTestNow();
 });

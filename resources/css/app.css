@@ -203,10 +203,10 @@
     }
 
     /* ---- Inputs ------------------------------------------------------- */
-    /* 40px and 16px text on a phone (iOS zooms into anything smaller);
-       from md the height of a button, so they line up in a toolbar. */
+    /* 40px and 16px text on a phone or an iPad (iOS zooms into anything
+       smaller); from lg the height of a button, so they line up in a toolbar. */
     .input {
-        @apply min-h-[40px] w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[16px] text-fg placeholder:text-fg-faint focus:border-accent focus:outline-none md:min-h-[36px] md:text-[14px];
+        @apply min-h-[40px] w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[16px] text-fg placeholder:text-fg-faint focus:border-accent focus:outline-none lg:min-h-[36px] lg:text-[14px];
     }
     .label {
         @apply text-xs font-medium text-fg-muted;

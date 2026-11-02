@@ -133,6 +133,7 @@
                 projects={context?.projects ?? []}
                 team={context?.team ?? []}
                 currentMemberId={context?.currentMemberId ?? null}
+                today={today.date}
             />
         </div>
 

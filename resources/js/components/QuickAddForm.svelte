@@ -1,9 +1,17 @@
 <script lang="ts">
     import { useForm } from '@inertiajs/svelte';
     import { page } from '@inertiajs/svelte';
-    import { Plus } from '@lucide/svelte';
+    import {
+        CalendarDays,
+        ChevronDown,
+        Folder,
+        Plus,
+        UserPlus,
+    } from '@lucide/svelte';
     import { untrack } from 'svelte';
+    import { isoDay, shiftDay, shortDay } from '../lib/dates';
     import { projectLabel } from '../lib/projectLabel';
+    import { tokenDate } from '../lib/quickAddTokens';
     import type {
         Member,
         Priority,
@@ -14,6 +22,7 @@
     import AssigneePicker from './AssigneePicker.svelte';
     import DependsOnPicker from './DependsOnPicker.svelte';
     import PillGroup from './PillGroup.svelte';
+    import Popover from './Popover.svelte';
     import StatusGlyph from './StatusGlyph.svelte';
     import TokenInput from './TokenInput.svelte';
 
@@ -25,6 +34,7 @@
         lockProject = false,
         prefill = '',
         variant = 'inline',
+        today = isoDay(new Date()),
         onSuccess,
         onCancel,
     }: {
@@ -35,6 +45,8 @@
         lockProject?: boolean;
         prefill?: string;
         variant?: 'inline' | 'overlay';
+        /** The office's today, Y-m-d: what Today, Tomorrow and a typed date count from. */
+        today?: string;
         onSuccess?: () => void;
         onCancel?: () => void;
     } = $props();
@@ -61,9 +73,11 @@
     );
     const organizationId = $derived(shared.organization?.id ?? null);
 
+    // The project being viewed, else where the person last added a task.
     const initialProject = untrack(
         (): ProjectChoice =>
             defaultProjectId ??
+            shared.quickAddContext?.lastProjectId ??
             (startGeneral ? GENERAL : (projects[0]?.id ?? null)),
     );
 
@@ -203,6 +217,7 @@
         // drop it so the token wins; an explicit pick of anyone else is always kept.
         if (
             titleHasAssigneeToken &&
+            selfAutoSeeded &&
             assignees.length === 1 &&
             assignees[0] === currentMemberId
         ) {
@@ -283,6 +298,45 @@
         joiners.filter((m) => form.assignee_member_ids.includes(m.id)),
     );
 
+    // The dialog fills you in; the add field leaves Who empty, and the
+    // server gives the task to you when nobody is named.
+    const seedsSelf = $derived(variant === 'overlay');
+
+    /**
+     * What the add field's chips show. A picked date or person wins over a
+     * typed one, as on the server; a typed `#project` wins over the picked
+     * project (tokenProject). Display only: the server stays the authority.
+     */
+    const shownDate = $derived(
+        form.deadline_at || tokenDate(form.title, today),
+    );
+    const whoNames = $derived(
+        form.assignee_member_ids.length > 0
+            ? [...projectTeam, ...joiners]
+                  .filter((m) => form.assignee_member_ids.includes(m.id))
+                  .map((m) => m.name)
+            : tokenAssignees.map((m) => m.name),
+    );
+    const projectChip = $derived(
+        selectedProject
+            ? projectLabel(selectedProject)
+            : isGeneral
+              ? 'General (new)'
+              : 'Project',
+    );
+
+    let dateOpen = $state(false);
+
+    function pickDate(day: string): void {
+        form.deadline_at = day;
+        dateOpen = false;
+        tokenInput?.focus();
+    }
+
+    const CHIP =
+        'inline-flex h-[34px] max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-[14px] font-medium text-fg transition hover:bg-hover sm:h-[28px] sm:text-[13px]';
+    const EMPTY_CHIP = 'border-dashed text-fg-muted';
+
     // When the project changes (and on mount), drop assignees who aren't on the new
     // project, then default to self when self is on that project.
     let seededProjectId = $state<ProjectChoice | undefined>(undefined);
@@ -302,6 +356,7 @@
             );
 
             if (
+                seedsSelf &&
                 form.assignee_member_ids.length === 0 &&
                 selfEligible &&
                 currentMemberId !== null &&
@@ -352,7 +407,6 @@
         });
     });
 
-    let advanced = $state(false);
     /** Tasks the new one waits for (same project). */
     let dependsOn = $state<TaskOption[]>([]);
     let selfAutoSeeded = $state(false);
@@ -373,7 +427,9 @@
 
     function submit() {
         // Add task is disabled, and says "Pick a project.", in either case.
-        if (!form.title.trim() || !hasProject) {
+        // The add field stays enabled while adding (a disabled field loses
+        // its focus), so a second Enter waits here.
+        if (form.processing || !form.title.trim() || !hasProject) {
             return;
         }
 
@@ -394,12 +450,13 @@
 
                 form.reset('title', 'deadline_at', 'description');
                 dependsOn = [];
-                // Re-seed the default assignee (self when eligible) for the next task.
+                // Re-seed the default assignee (self when eligible) for the
+                // next task; the add field keeps only its project.
                 form.assignee_member_ids =
-                    selfEligible && currentMemberId !== null
+                    seedsSelf && selfEligible && currentMemberId !== null
                         ? [currentMemberId]
                         : [];
-                selfAutoSeeded = selfEligible && currentMemberId !== null;
+                selfAutoSeeded = form.assignee_member_ids.length > 0;
                 form.priority = '';
                 form.status = defaultStatus;
                 tokenInput?.focus();
@@ -585,41 +642,6 @@
     </div>
 {/snippet}
 
-{#snippet projectPicker()}
-    {#if lockProject}
-        {#if lockedProjectName}
-            <span class="flex items-center gap-1.5 text-xs text-fg-muted">
-                Project
-                <span class="font-medium text-fg">{lockedProjectName}</span>
-                {#if lockedProgramName}
-                    <span class="text-fg-faint">{lockedProgramName}</span>
-                {/if}
-            </span>
-        {/if}
-    {:else if tokenProject}
-        <span class="flex items-center gap-1.5 text-xs text-fg-muted">
-            Project
-            <span class="font-medium text-fg">{tokenProject.title}</span>
-            {#if tokenProject.program}
-                <span class="text-fg-faint">{tokenProject.program}</span>
-            {/if}
-            <span class="text-fg-faint">from your #tag</span>
-        </span>
-    {:else}
-        <label
-            class="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-muted sm:flex-none"
-        >
-            Project
-            <select
-                bind:value={form.project_id}
-                class="input h-7 w-auto min-w-0 flex-1 py-0 sm:flex-none"
-            >
-                {@render projectOptions()}
-            </select>
-        </label>
-    {/if}
-{/snippet}
-
 {#snippet missingProject()}
     {#if !hasProject}
         <span id={`${uid}-why`} class="text-xs text-fg-muted"
@@ -635,26 +657,138 @@
     }}
 >
     {#if variant === 'inline'}
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+        <div
+            class="rounded-lg border border-line bg-surface transition focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-soft"
+        >
+            <div class="flex items-center gap-3 px-3.5">
                 <Plus class="h-4 w-4 shrink-0 text-accent" />
                 <div class="min-w-0 flex-1">
                     <TokenInput
                         bind:this={tokenInput}
                         bind:value={form.title}
-                        placeholder="What needs to happen? (press N anywhere)"
-                        disabled={form.processing}
+                        placeholder="Add a task"
+                        size="lg"
                         onsubmit={submit}
                     />
                 </div>
             </div>
-            <div class="flex items-center gap-1.5">
-                {@render projectPicker()}
-                <button
-                    type="button"
-                    class="btn-ghost"
-                    onclick={() => (advanced = !advanced)}
-                    >{advanced ? 'Less' : 'More'}</button
+
+            <div
+                class="flex flex-wrap items-center gap-2 px-3.5 pb-3 sm:pl-[42px]"
+            >
+                <Popover
+                    bind:open={dateOpen}
+                    role="dialog"
+                    triggerLabel={shownDate
+                        ? `Date ${shortDay(shownDate)}`
+                        : 'Date'}
+                    triggerClass={`${CHIP} ${shownDate ? '' : EMPTY_CHIP}`}
+                    panelClass="w-60"
+                >
+                    {#snippet trigger()}
+                        <CalendarDays
+                            class="h-3.5 w-3.5 shrink-0 text-fg-muted"
+                        />
+                        {shownDate ? shortDay(shownDate) : 'Date'}
+                    {/snippet}
+                    <button
+                        type="button"
+                        data-popover-item
+                        class="menu-item"
+                        onclick={() => pickDate(today)}
+                    >
+                        Today
+                        <span class="ml-auto text-xs text-fg-faint"
+                            >{shortDay(today)}</span
+                        >
+                    </button>
+                    <button
+                        type="button"
+                        data-popover-item
+                        class="menu-item"
+                        onclick={() => pickDate(shiftDay(today, 1))}
+                    >
+                        Tomorrow
+                        <span class="ml-auto text-xs text-fg-faint"
+                            >{shortDay(shiftDay(today, 1))}</span
+                        >
+                    </button>
+                    <div class="px-1 py-1">
+                        <input
+                            type="date"
+                            aria-label="Pick a date"
+                            bind:value={form.deadline_at}
+                            class="input"
+                        />
+                    </div>
+                    {#if form.deadline_at}
+                        <button
+                            type="button"
+                            data-popover-item
+                            class="menu-item"
+                            onclick={() => pickDate('')}>No date</button
+                        >
+                    {/if}
+                </Popover>
+
+                {#if tokenProject}
+                    <span class={CHIP} title="From your #tag">
+                        <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                        <span class="truncate">{projectChip}</span>
+                    </span>
+                {:else}
+                    <label
+                        class={`${CHIP} relative cursor-pointer focus-within:border-accent ${hasProject ? '' : EMPTY_CHIP}`}
+                    >
+                        <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                        <span class="max-w-[16rem] truncate">{projectChip}</span
+                        >
+                        <ChevronDown
+                            class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                        />
+                        <!-- The native list (a phone's own picker), laid
+                             invisibly over the chip; 16px so iOS doesn't zoom. -->
+                        <select
+                            aria-label="Project"
+                            bind:value={form.project_id}
+                            class="absolute inset-0 cursor-pointer appearance-none opacity-0 text-[16px]"
+                        >
+                            {@render projectOptions()}
+                        </select>
+                    </label>
+                {/if}
+
+                <Popover
+                    role="dialog"
+                    triggerLabel={whoNames.length > 0
+                        ? `Who: ${whoNames.join(', ')}`
+                        : 'Who'}
+                    triggerClass={`${CHIP} ${whoNames.length > 0 ? '' : EMPTY_CHIP}`}
+                    panelClass="w-[300px]"
+                >
+                    {#snippet trigger()}
+                        <UserPlus class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                        <span class="max-w-[12rem] truncate"
+                            >{whoNames.length === 0
+                                ? 'Who'
+                                : whoNames.length === 1
+                                  ? whoNames[0]
+                                  : `${whoNames[0]} +${whoNames.length - 1}`}</span
+                        >
+                    {/snippet}
+                    <AssigneePicker
+                        listOnly
+                        team={projectTeam}
+                        others={joiners}
+                        bind:selectedIds={form.assignee_member_ids}
+                        max={5}
+                    />
+                </Popover>
+
+                <!-- A touch screen (a phone, an iPad) gets a button. -->
+                <span
+                    class="ml-auto hidden items-center gap-1.5 text-[12.5px] text-fg-muted lg:inline-flex"
+                    ><kbd class="kbd">Enter</kbd> to add</span
                 >
                 <button
                     type="submit"
@@ -662,34 +796,27 @@
                         !form.title.trim() ||
                         !hasProject}
                     aria-describedby={hasProject ? undefined : `${uid}-why`}
-                    title={hasProject ? undefined : 'Pick a project.'}
-                    class="btn-primary">Add</button
+                    class="btn-primary ml-auto lg:hidden">Add</button
                 >
             </div>
-        </div>
 
-        {#if !hasProject || isGeneral}
-            <div class="mt-1.5 flex justify-end gap-3">
-                {@render missingProject()}
-                {@render generalNote()}
-            </div>
-        {/if}
-
-        {#if advanced}
-            <div
-                class="mt-3 grid grid-cols-1 gap-3 border-t border-line pt-3 sm:grid-cols-3"
-            >
-                {@render fields()}
-                {@render priorityPicker()}
-                <div class="sm:col-span-3">{@render statusPicker()}</div>
-                <div class="sm:col-span-3">
-                    <DependsOnPicker
-                        projectSlug={selectedProject?.slug ?? null}
-                        bind:selected={dependsOn}
-                    />
+            {#if !hasProject || isGeneral || pickedJoiners.length > 0}
+                <div class="flex flex-col gap-1 px-3.5 pb-3 sm:pl-[42px]">
+                    {@render missingProject()}
+                    {@render generalNote()}
+                    {#if pickedJoiners.length > 0}
+                        <p class="text-xs text-fg-muted">
+                            <span class="font-medium text-fg"
+                                >{pickedJoiners
+                                    .map((m) => m.name)
+                                    .join(', ')}</span
+                            >
+                            {pickedJoiners.length === 1 ? 'joins' : 'join'} the team.
+                        </p>
+                    {/if}
                 </div>
-            </div>
-        {/if}
+            {/if}
+        </div>
     {:else}
         <div class="border-b border-line px-5 pt-3">
             <span class="label">Title</span>
