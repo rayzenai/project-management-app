@@ -224,7 +224,7 @@ Production runs on the SDOC VM's own Dokploy (private
 No queue worker yet, so `QUEUE_CONNECTION=sync`: git phase 1's webhook
 processing and backfills then run after each response. Add `tasks-queue`
 before turning git on ([`docs/forgejo.md`](docs/forgejo.md#queue-worker)). Mail uses
-SDOC's SMTP account (`no-reply@sdoc.gov.np`). The production env is in Dokploy
+SDOC's SMTP account (`no-reply@sdoc.gov.np`); the scheduler container sends all email (right-away and morning, `PM_MORNING_EMAIL_AT`), so no queue worker is needed for it. The production env is in Dokploy
 and in the gitignored, owner-only `.env.sdoc`, which also holds the seeded
 super-admin password. The app always runs on Nepal time (`Asia/Kathmandu`,
 fixed in `config/app.php` and the pgsql connection), so the reminders fire at

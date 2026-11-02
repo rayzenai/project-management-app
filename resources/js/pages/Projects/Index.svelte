@@ -66,7 +66,7 @@
     function archive(project: Project) {
         if (
             !confirm(
-                `Archive "${project.title}"? It will disappear from My Workspace, the dashboard, and quick-add until restored.`,
+                `Archive "${project.title}"? It will disappear from My work, the dashboard, and quick-add until restored.`,
             )
         ) {
             return;

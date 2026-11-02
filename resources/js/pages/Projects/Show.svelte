@@ -279,7 +279,7 @@
             class="flex items-center justify-between gap-3 border-b border-line bg-warn-soft px-4 py-2 text-warn"
         >
             <span
-                >This project is archived. It is hidden from My Workspace, the
+                >This project is archived. It is hidden from My work, the
                 dashboard and quick-add.</span
             >
             {#if project.can_archive}

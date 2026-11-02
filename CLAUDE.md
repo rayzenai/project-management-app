@@ -27,6 +27,8 @@ php artisan db:seed --class=SdocProjectsSeeder  # SDOC + its projects, fresh dat
 php artisan workspace:api-token bot@example.com --name=crm-sync   # token for an external system
 php artisan workspace:prune-trashed --pretend
 php artisan workspace:send-deadline-reminders --pretend
+php artisan workspace:send-email-updates --pretend    # right-away email: who would get what (claims and sends nothing)
+php artisan workspace:send-morning-emails --pretend   # the morning email, same
 php artisan passport:keys                         # local OIDC signing keys (storage/oauth-*.key)
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback   # the forge's OIDC client
 php artisan git:reconcile [--connection=1]        # the nightly forge repair, by hand
@@ -256,6 +258,45 @@ Privilege-escalation protections — do not regress:
   (`canAppointAsProjectManager`), and never removes a manager
   (`canRemoveManager` is `canEditTeam`).
 
+- **Assignments**: `canUpdateAssignment` (role and priority: whoever can
+  view the task's project) is not enough for the personal fields (star,
+  snooze, own dates `snoozed_until`/`personal_due_at`): those also need
+  `ownsAssignment` (the assignment's member is the active, linked
+  caller; not even a super-admin owns another's), asked by
+  `UpdateAssignmentRequest`.
+- **Invites** (`POST /workspace/invites[/preview]`, web and API): the plan
+  is rebuilt on every request by `App\Support\InvitePlan` (statuses
+  `ready`, `resend`, `invited_recently`, `needs_email`, `needs_name`,
+  `already_here`, `deactivated`, `not_allowed`; at most `MAX_PEOPLE` 200;
+  emails compared and stored lowercase), never trusting a client status. The
+  request asks `canCreateMember`, an organizational admin's people join
+  their own organization only (another's is a 403), a super-admin names the
+  organization, and each existing person passes `canManageMember`.
+  `already_here` is the answer for any email that is a login or another
+  organization's person, so the response never names an outsider.
+  `InvitePeopleService` saves under locks and re-checks; `SendInvite` (queued
+  after commit through `Background::dispatch`) re-checks the inviter and
+  sends. The preview creates nothing. `UniqueLoginEmail` makes the person
+  form's email unique in any case; a changed or deleted person's pending
+  links end (`PasswordLinkService::forgetLinks`).
+- **Password links** (`PasswordLinkService`, the only place that mails one):
+  two Laravel brokers in `config/auth.php`, `users` (forgotten password, 60
+  minutes, `password_reset_tokens`) and `invites` (7 days, `invite_tokens`),
+  so one kind never works as the other. Opening a link only shows a page
+  (mail scanners open links); the password is set by `POST set-password`
+  (web and API; 422 `token` for any bad, used, expired or other-kind link, a
+  deactivated person's too, in constant time via `Timebox`). `forgot-password`
+  answers the same for any email and mails after the response; it is
+  throttled per email and per address. Setting a password deletes both
+  brokers' tokens for the person, rotates `remember_token` and, because the
+  signed-in web routes carry Sanctum's `AuthenticateSession`, ends their
+  other web sessions (API tokens stay). An admin setting a password on the
+  person form does the same. Sign-in stays refused for a deactivated person
+  (`EnsureCanSignIn`).
+- `last_seen_at` (`TouchLastSeen`, on the signed-in web and API routes) is
+  written at most once an hour; `InvitePlan` reads it to tell `resend` from
+  `already_here` (a person who has signed in is never invited again).
+
 Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
 
 ## Domain model (`app/Models`)
@@ -331,6 +372,63 @@ manager → the team notifications, never to the person who did it), the
 comment service (mentions) and the reminders command. The team ones carry
 `task: null` and a `project {slug, title}`; `MadeProgramManager` (a new program
 manager, from `ProgramObserver`) carries a `program {slug, name}` instead.
+The assignment observer sends no `TaskAssigned` when the assigner is the
+assignee (quick add's default-to-self included).
+
+**Email** goes beside the notifications, never from a web request (only the
+forgotten-password mail is sent in one). The notifications stay `database`
+only; scheduled commands read them:
+
+- `SendEmailUpdates` (`workspace:send-email-updates`, every minute,
+  `withoutOverlapping(5)`): the unread, unhandled notifications of its
+  `KINDS` (`TaskAssigned`, `MentionedInComment`, `AddedToProjectTeam`,
+  `MadeProjectManager`, `MadeProgramManager`; a new kind is one entry plus
+  `SendEmailUpdates::item`) from the last 24 hours, grouped per person into
+  one `UpdatesMail`. A person is ready when their newest pending row is
+  `emails.updates_quiet_minutes` old (2) or their oldest
+  `emails.updates_max_wait_minutes` (5), so a burst is one mail. Each row is
+  claimed with `notifications.email_handled_at` by a single-row
+  `UPDATE ... WHERE email_handled_at IS NULL AND read_at IS NULL`, so a row
+  read in the app first, or taken by an overlapping run, is never sent; the
+  claim is the "handled" mark even when nothing is sent (right away off, or
+  `canSignIn` false). Delivery is at most once; a thrown send releases the
+  claimed rows for the next run, and a failure is reported once per run. The
+  migration marked every earlier notification handled.
+- `SendMorningEmails` (`workspace:send-morning-emails`, daily at
+  `emails.morning_at`, `PM_MORNING_EMAIL_AT`, default 09:00): for each person
+  who has it on, may sign in and has a working day today
+  (`WorkingDays::forUser`), `MorningEmailQuery::for` builds `late`, `today`
+  (from `MyWorkQuery`'s Today group, split by lateness) and `new` (tasks
+  assigned since their last digest and still on their list); it sends one
+  `MorningMail` only when one list is not empty and records
+  `email_digests (user_id, kind, sent_on)`, unique, so a rerun sends nothing
+  twice.
+- Preferences: `user_preferences.email_notifications` (right away),
+  `email_morning`, `email_weekly` (not sent yet), all default on, through
+  `User::emailPreferences()`; the web page `/workspace/settings/emails`
+  (`Settings/Emails`) and `PATCH /workspace/preferences` or
+  `/api/v1/user/preferences`. Mail views share `emails/layout.blade.php`
+  (tables and inline styles) and carry one link into the app; no link
+  changes anything. The sender is `MAIL_FROM_*`.
+- `SendEmailUpdates` prints only when something happened (or with
+  `--pretend`), so the scheduler's log is not written every minute. Check
+  SMTP from the VM before telling people.
+
+## Calendar
+
+`App\Support\BikramSambat` (`fromGregorian`, `short`, `digits`) is the
+Bikram Sambat date, 2070 to 2100, null outside; the UI shows it beside the
+Gregorian date (`font-np`). `App\Support\WorkingDays`
+(`forOrganization`, `forUser`, `isWorkingDay`, `nextWorkingDay`,
+`weekStart`) is the one answer to "is this a working day" for My work's
+Tomorrow, the morning email and the week start: an organization with
+attendance on uses its configured workdays and holidays, and a person with
+no organization, or an organization with attendance off, falls back to
+Sunday to Friday. `weekStart` looks at the workday weekdays only, never
+holidays, so the week's shape does not move with one. The app timezone is
+`Asia/Kathmandu`. `Task::isOverdueOn($day)` is the overdue rule asked of a
+day (twin of `scopeOverdue`); My work's "N days late" counts only from the
+task's own deadline.
 
 The sidebar's **Guide** (`pages/Guide.svelte`, `/workspace/guide`) explains
 to users the model (Organization, Program, Project, Team, Tasks), each role's
@@ -356,13 +454,28 @@ the organizational admin switch and the program and project manager pickers.
   `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`, the sidebar's
   Programs group), `organizationSwitch` (a super-admin's, see Structure).
-  Add cross-cutting web context there.
+  Add cross-cutting web context there. `/` and `/workspace` redirect to
+  **My work** (`GET /workspace/my`, `MyWorkQuery`, page `MyWork`), the
+  signed-in landing page: Today, Tomorrow, Coming up, Later, You asked others,
+  No date, Snoozed and, with `?done=1`, Done, as one list of the caller's tasks
+  and open to-dos; the caller's own date (`personal_due_at`) places a row
+  before the task's, a snoozed task sits only in Snoozed, and rows act through
+  `PATCH /workspace/assignments/{id}` (star, snooze, own date) and the
+  existing task routes. A web mutation answers with a success flash toast; a
+  caller that already shows its own sends the `X-Workspace-Quiet` header
+  (`lib/toast.svelte.ts`'s `QUIET`) to skip it (errors always flash). The
+  organization switch's, notifications' and old links' fallbacks all land
+  there.
 - **API** (`routes/api.php`, prefix `api/v1`, names `api.*`): `POST login`
   → token; `Api\AuthController::userPayload` is the token-auth twin of
   `ShareWorkspaceData` (`is_super_admin`, `is_office_admin`, `led_team_ids`,
   `managed_program_ids`, `features`, `git_enabled`, ...). External systems
   get tokens via `workspace:api-token`.
-  Add cross-cutting API context to `userPayload`.
+  Add cross-cutting API context to `userPayload`. My work is
+  `GET /api/v1/workspace/my-work` (same `MyWorkQuery`, every organization);
+  `/workspace/home` and `/workspace/my` keep answering from the older
+  `HomeQuery` and `MyWorkspaceQuery`, which only those two endpoints use now.
+  `POST forgot-password` and `POST set-password` are unauthenticated.
 
 ## Git (Forgejo), phase 0
 
@@ -695,8 +808,8 @@ Shared building blocks (reach for these before writing anything new):
   page's own pick (`RemembersOrganizationChoice`: a super-admin's GET with
   `?organization=`, People's `all`), so they never disagree. Ignored for
   anyone else; an explicit `?organization=` still wins on its page. The
-  web's lists follow it too: Home (`HomeQuery`), Projects
-  (`ProjectIndexQuery`), My Workspace (`MyWorkspaceQuery`), the activity
+  web's lists follow it too: My work (`MyWorkQuery`), Projects
+  (`ProjectIndexQuery`), the activity
   feed (`ActivityFeedQuery`), each through `Project::inOrganization`, and
   Code activity (`CodeActivityQuery` narrows a super-admin's `all` scope
   to the organization, as its admins see it). Their web controllers pass
@@ -785,13 +898,18 @@ Shared building blocks (reach for these before writing anything new):
   `WorkAttendanceQuery` for attendance (null while it is off). People are
   listed by name, never ranked by a figure.
 - **Sidebar**: `OfficeLinks` (shared as `office`, on the API's `/user`)
-  says which office pages the user may open; the pages check again. The
-  sidebar is a rail of areas (Work, Office, Reports, Admin) and the panel
-  of the one shown: `lib/navigation.ts` says which page belongs to which
-  area (a new page is one entry there), `components/shell/` draws it
-  (`NavRail`, `NavPanel`, `Logo`) and `AppShell` holds its state (the
-  shown area follows the page; `[` hides the panel, and a hidden panel
-  floats over the content when an area is picked).
+  says which office pages the user may open; the pages check again. One
+  sidebar: `lib/navigation.ts` has `mainLinks` (My work,
+  Projects, People; Search is a button) and `accountGroups` (You:
+  Notifications, Emails, Guide; Office; Reports; Admin; a group with no
+  link is dropped), so a new page is one entry in one of them.
+  `components/shell/` draws it: `Sidebar` (from `md`: logo, New task,
+  Search, the main links, Programs, the project list, and the account
+  button), `AccountMenu` (the account groups plus Appearance and Sign out;
+  a popover on a desktop, a bottom sheet on a phone, where it also leads
+  with Search and People and holds a super-admin's organization switch),
+  `PhoneTabs` (below `md`: My work, Projects, Updates, Me) and `AppShell`
+  (top bar, content, the shortcuts; `[` hides the sidebar).
 - **Maintenance**: `MaintenanceQuery` (`app/Queries/Maintenance/`, page
   `Maintenance/Index`, `canViewMaintenance` = `administers`) lists what
   needs looking at in an organization: active projects with no active

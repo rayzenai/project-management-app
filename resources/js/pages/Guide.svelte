@@ -62,6 +62,29 @@
         },
     ];
 
+    const around = [
+        [
+            'My work',
+            'Your page. It lists what is given to you under Today, Tomorrow, Coming up, Later and No date, and what you asked others to do. Type in the box at the top to add a task. The three dots on a row star it, snooze it until another day or give it your own date. Show done adds what you finished this week.',
+        ],
+        [
+            'The sidebar',
+            'My work, Projects and People, then your projects. Your name at the bottom opens a menu with Notifications, Emails, this Guide, Settings and, where they apply to you, the office and report pages such as Needs attention and Attendance.',
+        ],
+        [
+            'On a phone',
+            'A bar at the bottom has My work, Projects, Updates and Me. Me opens the same menu as your name does on a computer, with Search and People first.',
+        ],
+        [
+            'Email',
+            'When a task is given to you, you are mentioned or you join a project, you get one short email with a link. On working days at 9:00 you get a morning email listing what is late, due today or new, and none when nothing is waiting. Nothing in an email changes anything; the link only opens the workspace. Turn either off under Emails in the menu.',
+        ],
+        [
+            'Forgot your password?',
+            'On the sign-in page choose Forgot your password?, type your email and open the link we send. It works once and lasts an hour. The same answer appears whether or not the email has a login. New people get a link like it when they are invited.',
+        ],
+    ];
+
     const roles = [
         {
             key: 'admin',
@@ -104,7 +127,7 @@
             key: 'member',
             title: 'Team member',
             steps: [
-                'My work lists everything given to you, soonest first.',
+                'Start on My work: everything given to you, soonest first. Tick a task when it is done.',
                 'Keep your tasks current: move the card on the board, set your progress and write a status note when something changes. A task saves itself as you leave each field.',
                 'Comment on a task and type @ and a name to bring someone in.',
                 "Added a task by mistake? Delete it with the bin at the top of the task, and Undo brings it back. You can delete the tasks you added; your project's manager can delete any. Work that is finished or dropped is better marked Done or Failed, which keeps its history.",
@@ -402,6 +425,20 @@
                     organizational admin every project of the office.
                 </li>
             </ul>
+        </section>
+
+        <section>
+            <h2 class="section-title mb-3">Getting around</h2>
+            <dl class="border-t border-line">
+                {#each around as [name, text] (name)}
+                    <div
+                        class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                    >
+                        <dt class="font-medium">{name}</dt>
+                        <dd class="text-[13px] text-fg-muted">{text}</dd>
+                    </div>
+                {/each}
+            </dl>
         </section>
 
         <section>

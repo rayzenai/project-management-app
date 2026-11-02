@@ -35,7 +35,7 @@ the same `app/Services/Workspace/*` action service.
   their organization, OR the user is on its team, OR they are its organization's
   organizational admin, OR a super-admin.
   Implemented as `Project::scopeVisibleTo($user)` and enforced on the project
-  index, project/task `show` (403 otherwise), dashboard, My Workspace, search,
+  index, project/task `show` (403 otherwise), dashboard, My work, search,
   and the quick-add picker.
 - **Soft delete + undo:** every `DELETE` soft-deletes; each resource has a
   matching `…/restore` (authorization for restore equals authorization for the
@@ -57,15 +57,24 @@ the same `app/Services/Workspace/*` action service.
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | `/themes` | — | `{ data: { themes, font_allow_list } }` from `config/themes.php` |
-| GET | `/user/preferences` | — | `{ data: { theme, font_override, email_notifications, task_notes_enabled, contacts_enabled, configured, resolved_tokens } }` |
-| PATCH | `/user/preferences` | `theme?`, `font_override?`, `email_notifications?`, `task_notes_enabled?`, `contacts_enabled?` | same shape as GET |
+| GET | `/user/preferences` | — | `{ data: { theme, font_override, email_notifications, email_morning, email_weekly, task_notes_enabled, contacts_enabled, configured, resolved_tokens } }` |
+| PATCH | `/user/preferences` | `theme?`, `font_override?`, `email_notifications?`, `email_morning?`, `email_weekly?`, `task_notes_enabled?`, `contacts_enabled?` | same shape as GET |
 
-The web app exposes a session twin at `PATCH /workspace/preferences`.
+The web app exposes a session twin at `PATCH /workspace/preferences`, and the
+page `/workspace/settings/emails` that uses it. The three email fields are
+booleans, all on by default: `email_notifications` is the right-away email
+(when a task is given to the person, they are mentioned or join a project,
+grouped into one mail a few minutes after the first), `email_morning` is the
+morning email (on the person's working days, at `PM_MORNING_EMAIL_AT`, default
+09:00, only when something is late, due today or new), and `email_weekly` is
+stored for the weekly brief, which is not sent yet. Emails are sent by
+scheduled commands, never inside an API request; a link in one only opens the
+app.
 
 ## Notifications (in-app inbox)
 
-Top-level under `/api/v1` (not the `workspace` prefix). In-app only — email/push
-are deferred.
+Top-level under `/api/v1` (not the `workspace` prefix). The inbox is in-app; email is sent beside it by scheduled commands (see
+the preferences above). Push is deferred.
 
 | Method | Path | Returns |
 | --- | --- | --- |
@@ -76,7 +85,7 @@ are deferred.
 
 Each notification's `data` payload is `{ kind, title, body, task, actor, url }`. Team notifications (`kind` `team_added` or `made_manager`) have `task: null` and add `project { slug, title }`.
 
-Task payloads carry `is_overdue`: still being worked on (not done, not failed) and past the deadline. Every overdue count in the API uses that rule; failed tasks are closed and never on the Home to-do buckets.
+Task payloads carry `is_overdue`: still being worked on (not done, not failed) and past the deadline. Every overdue count in the API uses that rule; failed tasks are closed and never on My work's to-do lists or the Home buckets.
 
 ## Feeds & overview (`/workspace/*`)
 

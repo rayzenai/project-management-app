@@ -1,5 +1,5 @@
 // Shared open/close state for the sticky-notes board. The board itself is
-// rendered once in AppShell; any page (e.g. the My Workspace header strip) can
+// rendered once in AppShell; any page (e.g. the My work header strip) can
 // open it — optionally focused on a note or in compose mode — through this store.
 
 let isOpen = $state(false);
