@@ -1,6 +1,7 @@
 <script lang="ts">
     import { inertia } from '@inertiajs/svelte';
     import { Bell, FolderKanban, ListChecks } from '@lucide/svelte';
+    import { MediaQuery } from 'svelte/reactivity';
     import { currentHref, under } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
     import type { OrganizationSwitch } from '../../lib/types';
@@ -11,7 +12,8 @@
      * The phone's menu, below 768px: a bar fixed to the bottom with My
      * work, Projects, Updates (the notifications, with the unread count)
      * and Me, which raises the account menu as a sheet. The sheet also
-     * carries Search and the sidebar's pages that have no tab here.
+     * carries New task, Search and the sidebar's pages that have no tab
+     * here.
      */
     let {
         links,
@@ -21,6 +23,7 @@
         user,
         role,
         organizationSwitch = null,
+        onnewtask,
         onsearch,
         onsettings,
         onlogout,
@@ -33,6 +36,7 @@
         user: { name: string; email?: string } | null;
         role: string;
         organizationSwitch?: OrganizationSwitch | null;
+        onnewtask: () => void;
         onsearch: () => void;
         onsettings: () => void;
         onlogout: () => void;
@@ -45,6 +49,17 @@
     ];
 
     let meOpen = $state(false);
+    let meButton = $state<HTMLButtonElement | null>(null);
+
+    // Tailwind's md: from there the sidebar shows and the bar is gone, so
+    // a sheet left open must not come back when the window narrows again.
+    const wide = new MediaQuery('(min-width: 48rem)', false);
+
+    $effect(() => {
+        if (wide.current) {
+            meOpen = false;
+        }
+    });
 
     const extra = $derived(
         links.filter((l) => !TABS.some((t) => t.href === l.href)),
@@ -100,6 +115,7 @@
         </a>
     {/each}
     <button
+        bind:this={meButton}
         type="button"
         aria-label="Me"
         aria-haspopup="dialog"
@@ -125,7 +141,9 @@
     {role}
     {extra}
     {organizationSwitch}
+    {onnewtask}
     {onsearch}
     {onsettings}
     {onlogout}
+    onclose={() => meButton?.focus()}
 />

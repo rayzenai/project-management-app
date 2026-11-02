@@ -341,6 +341,7 @@
         {user}
         {role}
         {organizationSwitch}
+        onnewtask={openQuickAdd}
         onsearch={() => palette.open()}
         onsettings={() => (settingsOpen = true)}
         onlogout={logout}

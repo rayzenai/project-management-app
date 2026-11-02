@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia } from '@inertiajs/svelte';
-    import { LogOut, Search, Settings } from '@lucide/svelte';
+    import { LogOut, Plus, Search, Settings } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import { currentHref } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
@@ -14,8 +14,10 @@
      * the guide, the office pages and reports you may open, Settings and
      * Sign out. On a desktop it opens upward from the account button in a
      * popover; on a phone (`sheet`) it rises from the bottom, under the
-     * Me tab, and also carries a super-admin's organization switch, Search
-     * and the pages the bar has no tab for.
+     * Me tab, and also carries a super-admin's organization switch, New
+     * task, Search and the pages the bar has no tab for. The sheet is modal:
+     * focus moves into it, Tab stays inside, and closing hands focus back
+     * through `onclose`.
      */
     let {
         variant,
@@ -29,9 +31,11 @@
         role,
         extra = [],
         organizationSwitch = null,
+        onnewtask,
         onsearch,
         onsettings,
         onlogout,
+        onclose,
     }: {
         variant: 'popover' | 'sheet';
         open?: boolean;
@@ -48,11 +52,32 @@
         extra?: NavLink[];
         /** A super-admin's switch, at the top of the sheet. */
         organizationSwitch?: OrganizationSwitch | null;
-        /** Given on a phone, where the sidebar's Search isn't. */
+        /** Given on a phone, where the sidebar's New task and Search aren't. */
+        onnewtask?: () => void;
         onsearch?: () => void;
         onsettings: () => void;
         onlogout: () => void;
+        /** The sheet closed: give focus back to what opened it. */
+        onclose?: () => void;
     } = $props();
+
+    let sheetPanel = $state<HTMLElement | null>(null);
+
+    const FOCUSABLE =
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+
+    function focusables(): HTMLElement[] {
+        return Array.from(
+            sheetPanel?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
+        );
+    }
+
+    // The sheet opens with focus on its first item.
+    $effect(() => {
+        if (sheet && open && sheetPanel) {
+            focusables()[0]?.focus();
+        }
+    });
 
     const sheet = $derived(variant === 'sheet');
     const current = $derived(
@@ -61,6 +86,10 @@
 
     function close(): void {
         open = false;
+
+        if (sheet) {
+            onclose?.();
+        }
     }
 
     const iconClass = $derived(
@@ -76,9 +105,33 @@
     }
 
     function onWindowKey(e: KeyboardEvent): void {
-        if (sheet && open && e.key === 'Escape') {
+        if (!sheet || !open) {
+            return;
+        }
+
+        if (e.key === 'Escape') {
             e.preventDefault();
             close();
+
+            return;
+        }
+
+        // Tab goes round the sheet's items and never behind it.
+        if (e.key === 'Tab') {
+            const items = focusables();
+            const at = items.indexOf(document.activeElement as HTMLElement);
+
+            if (items.length === 0) {
+                return;
+            }
+
+            if (at === -1 || (e.shiftKey && at === 0)) {
+                e.preventDefault();
+                items[e.shiftKey ? items.length - 1 : 0].focus();
+            } else if (!e.shiftKey && at === items.length - 1) {
+                e.preventDefault();
+                items[0].focus();
+            }
         }
     }
 </script>
@@ -133,8 +186,22 @@
             </div>
         {/if}
 
-        {#if onsearch || extra.length > 0}
+        {#if onnewtask || onsearch || extra.length > 0}
             <div class="pb-1">
+                {#if onnewtask}
+                    <button
+                        type="button"
+                        data-popover-item
+                        class={itemClass(false)}
+                        onclick={() => {
+                            close();
+                            onnewtask?.();
+                        }}
+                    >
+                        <Plus class={`${iconClass} text-accent`} />
+                        <span class="flex-1">New task</span>
+                    </button>
+                {/if}
                 {#if onsearch}
                     <button
                         type="button"
@@ -159,7 +226,7 @@
             <div
                 role="group"
                 aria-labelledby={`account-${variant}-${i}`}
-                class={i > 0 || onsearch || extra.length > 0
+                class={i > 0 || onnewtask || onsearch || extra.length > 0
                     ? 'mt-1 border-t border-line-soft pt-1'
                     : ''}
             >
@@ -221,6 +288,7 @@
             onclick={close}
         ></button>
         <div
+            bind:this={sheetPanel}
             role="dialog"
             aria-modal="true"
             aria-label="Me"
