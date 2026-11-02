@@ -1,9 +1,16 @@
 <script lang="ts">
     import { inertia, page, router, useForm } from '@inertiajs/svelte';
-    import { Copy, Network, RefreshCw, UserPlus } from '@lucide/svelte';
+    import {
+        Copy,
+        MailPlus,
+        Network,
+        RefreshCw,
+        UserPlus,
+    } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import DesignationSelect from '../../components/team/DesignationSelect.svelte';
+    import InviteDialog from '../../components/team/InviteDialog.svelte';
     import MemberRoleFields from '../../components/team/MemberRoleFields.svelte';
     import { writeToClipboard } from '../../lib/clipboard';
     import {
@@ -74,6 +81,16 @@
     // ---- People ----
     let addingMember = $state(false);
     let editingMemberId = $state<number | null>(null);
+    let inviting = $state(false);
+
+    /** Where an invite goes: a super-admin's choice, else the admin's own. */
+    const inviteOrganizations = $derived<OrganizationOption[]>(
+        isSuperAdmin
+            ? organizations
+            : officeAdminOrganization
+              ? [officeAdminOrganization]
+              : [],
+    );
 
     // Readable aloud or over the phone: no 0/O or 1/l/I, three groups of four.
     const PASSWORD_ALPHABET =
@@ -501,6 +518,16 @@
             {#if canCreateMember}
                 <button
                     type="button"
+                    class="btn"
+                    aria-haspopup="dialog"
+                    aria-label="Invite people"
+                    onclick={() => (inviting = true)}
+                >
+                    <MailPlus class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Invite people</span>
+                </button>
+                <button
+                    type="button"
                     class="btn-primary"
                     aria-expanded={addingMember}
                     aria-label={addingMember ? 'Cancel' : 'Add person'}
@@ -516,6 +543,18 @@
             {/if}
         </div>
     {/snippet}
+
+    {#if canCreateMember && inviting}
+        <InviteDialog
+            organizations={inviteOrganizations}
+            initialOrganizationId={isSuperAdmin
+                ? defaultOrganizationId
+                : (officeAdminOrganization?.id ?? null)}
+            canChooseOrganization={isSuperAdmin}
+            {designationOptions}
+            onclose={() => (inviting = false)}
+        />
+    {/if}
 
     <div class="space-y-8">
         {#if canCreateMember && addingMember}

@@ -67,7 +67,7 @@
             key: 'admin',
             title: 'Organizational admin',
             steps: [
-                'Add people on the People page. Each one gets a login by email.',
+                'Add people on the People page, one at a time, or with Invite people: paste their names and emails and each gets an email with a link to set a password. Tick the box there to invite everyone in your organogram who has never signed in.',
                 "Set a person's roles when you add or edit them there: the programs and projects they manage, and the project teams they are on. Choosing someone as a manager hands that program or project over to them; a project's old manager stays on its team.",
                 'Create projects on the Projects page and choose who manages each one.',
                 "Give a task to anyone in your organization from the task form (press N): if they are not on the project's team, they join it. With no project yet, choose General there and it is made for you to manage.",

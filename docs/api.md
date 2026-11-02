@@ -557,6 +557,38 @@ the nightly `git:reconcile` does it again.
 | DELETE | `/workspace/members/{member}` |
 | POST | `/workspace/members/{member}/restore` |
 
+## Inviting people *(organizational admin of their organization or super-admin)*
+
+Invite many people at once; each gets an email with a link to set a password
+(the web's `/workspace/invite/{token}`, 7 days; then `POST /set-password` with
+`kind: invite`). The same rules for both routes: a super-admin sends
+`organization_id` (required, else 422); an organizational admin's people join
+their own organization, and naming another organization is a 403, as is
+anyone who may not create people (a project or program manager). Each person
+is `{ name, email, designation_id? }`; any other field (a `status`, an id) is
+ignored, because the plan is rebuilt on every request.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/workspace/invites/preview` | `organization_id` (super-admin), `people` (at most 200) or `text` (pasted lines, at most 20,000 characters: "Name, email", "Name <email>" or "Name email" a line; the first 200 lines are read), `without_login` | `{ rows: [{ name, email, designation_id, status, member_id }], without_login_count }`. Nothing is created |
+| POST | `/workspace/invites` | `organization_id` (super-admin), `people` (at most 200, else 422 on `people`), `without_login` | `{ message: "Invited 2 people.", data: { invited, skipped: [{ name, email, status }] } }` (`No one was invited.` when nobody was); 409 if someone gave one of the emails a login meanwhile (nothing is created then) |
+
+`status` is `ready` (a new person, or one of the organization's people with no
+login yet: they get a login, and nothing else about them changes), `resend`
+(invited before and never signed in: a fresh link, the old one stops
+working), `needs_email`, `needs_name`, `already_here` (a login with that email
+exists, or the same email came earlier in the list, or the email is another
+organization's person: the answer never says which, and carries no id or
+designation of theirs), `deactivated` (one of the organization's people who is
+deactivated: never invited) or `not_allowed` (one of its people the caller may
+not manage, such as another organizational admin, or a super-admin's email).
+`member_id` and the person's own `designation_id` show only for the
+organization's own people; for a new person, `designation_id` is the one sent
+when it is one of the organization's, else `null`. `without_login: true` adds
+every active person of the organization who has an email and no login and is
+not in the list (`without_login_count` says how many). The links are emailed
+after the response.
+
 ## Task dependencies *(anyone who can see the task's project)*
 
 Finish-to-start, within one project: the task cannot start until the other is

@@ -17,6 +17,7 @@ use App\Http\Controllers\Workspace\EmailSettingsController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\GuideController;
 use App\Http\Controllers\Workspace\HomeController;
+use App\Http\Controllers\Workspace\InviteController;
 use App\Http\Controllers\Workspace\MaintenanceController;
 use App\Http\Controllers\Workspace\MemberController;
 use App\Http\Controllers\Workspace\MemberDesignationController;
@@ -137,6 +138,9 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
         Route::patch('/members/{member}', [MemberController::class, 'update'])->name('members.update');
         Route::delete('/members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
         Route::post('/members/{member}/restore', [MemberController::class, 'restore'])->name('members.restore')->withTrashed();
+        // Invite people: the dialog's preview (JSON) and the send.
+        Route::post('/invites/preview', [InviteController::class, 'preview'])->name('invites.preview');
+        Route::post('/invites', [InviteController::class, 'store'])->name('invites.store');
 
         Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
         Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DesignationController;
 use App\Http\Controllers\Api\HomeController;
+use App\Http\Controllers\Api\InviteController;
 use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\MemberDesignationController;
@@ -112,6 +113,10 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::patch('/members/{member}', [MemberController::class, 'update'])->name('members.update');
             Route::delete('/members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
             Route::post('/members/{member}/restore', [MemberController::class, 'restore'])->name('members.restore')->withTrashed();
+
+            // Invite people: the preview, and the send
+            Route::post('/invites/preview', [InviteController::class, 'preview'])->name('invites.preview');
+            Route::post('/invites', [InviteController::class, 'store'])->name('invites.store');
 
             // Projects
             Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
