@@ -12,7 +12,9 @@
 <tr>
 <td style="padding:12px 0;border-top:1px solid #eceef2;">
 <a href="{{ $row['url'] }}" style="display:block;font-size:16px;line-height:22px;font-weight:500;color:#14171f;text-decoration:none;">{{ $row['title'] }}</a>
+@if ($row['meta'] !== '')
 <span style="display:block;margin-top:3px;font-size:14px;line-height:20px;color:#636a78;">{{ $row['meta'] }}@if ($row['late']) · <span style="color:#c2372d;font-weight:500;">{{ $row['late'] }}</span>@endif</span>
+@endif
 </td>
 </tr>
 @endforeach

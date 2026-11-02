@@ -12,16 +12,11 @@ use App\Models\User;
 use App\Queries\MorningEmailQuery;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Mail\MailManager;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Symfony\Component\Mailer\Envelope;
-use Symfony\Component\Mailer\Exception\TransportException;
-use Symfony\Component\Mailer\SentMessage;
-use Symfony\Component\Mailer\Transport\TransportInterface;
-use Symfony\Component\Mime\RawMessage;
 
 /*
  * The morning email: at 9:00 on the organization's working days, one short
@@ -82,26 +77,6 @@ function morningRunAt(string $time, array $options = []): void
 function morningTitles(MorningMail $mail, string $list): array
 {
     return array_column($mail->lists[$list], 'title');
-}
-
-/** Every send through a real mailer whose server refuses every message. */
-function morningBreakMail(): void
-{
-    $mailer = new MailManager(app());
-    $mailer->extend('broken', fn () => new class implements TransportInterface
-    {
-        public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
-        {
-            throw new TransportException('Connection refused');
-        }
-
-        public function __toString(): string
-        {
-            return 'broken://';
-        }
-    });
-    config(['mail.default' => 'broken', 'mail.mailers.broken' => ['transport' => 'broken']]);
-    Mail::swap($mailer);
 }
 
 it('sends one email with what is late and what is due today', function () {
@@ -275,6 +250,53 @@ it('lists new work once, only while it is still open, on your list and not alrea
         && $mail->envelope()->subject === 'Today: 2 tasks');
 });
 
+it('leaves out who gave it when nobody was signed in to give it', function () {
+    foreach (['Imported with a date' => '2026-11-05', 'Imported without a date' => null] as $title => $deadline) {
+        // A minute apart: notifications in the same second have no order.
+        Carbon::setTestNow($deadline === null ? '2026-11-01 15:01:00' : '2026-11-01 15:00:00');
+        $task = Task::factory()->create(['project_id' => $this->project->id, 'title' => $title, 'status' => 'not_started', 'deadline_type' => 'rolling', 'deadline_at' => $deadline]);
+        ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $this->member->id]);
+    }
+
+    expect($this->user->notifications()->get()->pluck('data.actor.name')->unique()->all())->toBe(['Someone']);
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    Mail::assertSent(MorningMail::class, function (MorningMail $mail) {
+        $html = $mail->render();
+
+        return morningTitles($mail, 'new') === ['Imported with a date', 'Imported without a date']
+            && array_column($mail->lists['new'], 'from') === [null, null]
+            && ! str_contains($html, 'Someone')
+            && str_contains($html, '>due Thu 5 Nov</span>')
+            && str_contains($html, "Imported without a date</a>\n</td>");
+    });
+});
+
+it('starts the next morning\'s new work where this one was claimed, however long the run took', function () {
+    // Given at 9:03, while a long run that began at 9:00 had not reached them yet.
+    Carbon::setTestNow('2026-11-02 09:03:00');
+    morningTask('Call center staff list', '2026-11-12');
+
+    $advanced = false;
+    DB::listen(function ($query) use (&$advanced) {
+        if (! $advanced && str_starts_with($query->sql, 'select') && str_contains($query->sql, 'email_digests')) {
+            $advanced = true;
+            Carbon::setTestNow('2026-11-02 09:05:00');
+        }
+    });
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    Mail::assertSent(MorningMail::class, fn (MorningMail $mail) => morningTitles($mail, 'new') === ['Call center staff list']);
+    expect($advanced)->toBeTrue()
+        ->and(EmailDigest::query()->sole()->sent_at->format('H:i'))->toBe('09:05');
+
+    // The next morning it is no longer new, and nothing else waits.
+    morningRunAt('2026-11-03 09:00:00');
+    Mail::assertSent(MorningMail::class, 1);
+});
+
 it('leaves your own to-dos out of today', function () {
     Carbon::setTestNow('2026-10-30 08:00:00');
     $task = morningTask('Call center staff list', '2026-11-12');
@@ -327,7 +349,7 @@ it('gives the day back when the mail server fails, and reports it once a run', f
     $this->project->ensureTeam()->members()->attach($otherMember->id);
     morningTask('Collect revenue and expense data', '2026-10-31');
     morningTask('Server room checklist', '2026-10-31', on: $otherMember);
-    morningBreakMail();
+    breakMailTransport();
 
     morningRunAt('2026-11-02 09:00:00');
 

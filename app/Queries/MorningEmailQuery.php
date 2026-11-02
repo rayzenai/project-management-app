@@ -31,6 +31,9 @@ final class MorningEmailQuery
      */
     private const NEW_GROUPS = ['tomorrow', 'coming_up', 'later', 'no_date'];
 
+    /** The name the observers give when nobody signed in did it: not a person. */
+    private const UNKNOWN_GIVER = 'Someone';
+
     public function __construct(private readonly MyWorkQuery $myWork) {}
 
     /**
@@ -80,8 +83,9 @@ final class MorningEmailQuery
 
     /**
      * The tasks named by the person's TaskAssigned notifications since their
-     * last morning email (else the last day): task slug => who gave it, in
-     * the order they first came, with the latest giver.
+     * last morning email (else the last day): task slug => who gave it
+     * (null when not known), in the order they first came, with the latest
+     * giver.
      *
      * @return array<string, string|null>
      */
@@ -108,7 +112,7 @@ final class MorningEmailQuery
             $from = $notification->data['actor']['name'] ?? null;
 
             if (is_string($slug)) {
-                $given[$slug] = is_string($from) && $from !== '' ? $from : null;
+                $given[$slug] = is_string($from) && ! in_array($from, ['', self::UNKNOWN_GIVER], true) ? $from : null;
             }
         }
 

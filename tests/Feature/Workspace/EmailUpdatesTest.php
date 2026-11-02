@@ -12,18 +12,12 @@ use App\Notifications\MentionedInComment;
 use App\Notifications\TaskAssigned;
 use App\Notifications\TaskStatusChanged;
 use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Mail\MailManager;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
-use Symfony\Component\Mailer\Envelope;
-use Symfony\Component\Mailer\Exception\TransportException;
-use Symfony\Component\Mailer\SentMessage;
-use Symfony\Component\Mailer\Transport\TransportInterface;
-use Symfony\Component\Mime\RawMessage;
 
 /*
  * Right-away email: everything given to someone inside a few minutes goes
@@ -53,26 +47,6 @@ function euAssign(Member $member, Member $by, string $title = 'Collect revenue d
     ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $member->id]);
 
     return $task;
-}
-
-/** Every send through a real mailer whose server refuses every message. */
-function euBreakMail(): void
-{
-    $mailer = new MailManager(app());
-    $mailer->extend('broken', fn () => new class implements TransportInterface
-    {
-        public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
-        {
-            throw new TransportException('Connection refused');
-        }
-
-        public function __toString(): string
-        {
-            return 'broken://';
-        }
-    });
-    config(['mail.default' => 'broken', 'mail.mailers.broken' => ['transport' => 'broken']]);
-    Mail::swap($mailer);
 }
 
 function euRunAt(string $time, array $options = []): void
@@ -268,7 +242,7 @@ it('does not notify you of a task you gave yourself', function () {
 it('keeps the rows for the next run when the mail server fails', function () {
     euAssign($this->member, $this->assigner);
 
-    euBreakMail();
+    breakMailTransport();
 
     euRunAt('2026-11-03 10:03:00');
 
@@ -288,7 +262,7 @@ it('reports a mail outage once a run, and counts the rest in one warning', funct
         euAssign($other, $this->assigner);
     }
 
-    euBreakMail();
+    breakMailTransport();
     euRunAt('2026-11-03 10:03:00');
 
     Exceptions::assertReportedCount(1);

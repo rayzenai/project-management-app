@@ -7,8 +7,10 @@ Good morning, {!! $firstName !!}.
 @foreach ($section['rows'] as $row)
 
 {!! $row['title'] !!}
+@if ($row['meta'] !== '')
 {!! $row['meta'] !!}@if ($row['late']) · {!! $row['late'] !!}@endif
 
+@endif
 {!! $row['url'] !!}
 @endforeach
 @endforeach

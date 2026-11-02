@@ -1,6 +1,13 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\MailManager;
+use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\TransportInterface;
+use Symfony\Component\Mime\RawMessage;
 use Tests\TestCase;
 
 /*
@@ -47,4 +54,27 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Sends every email through a real mailer whose server refuses every
+ * message, as in a mail outage. `Mail::fake()` puts a working one back.
+ */
+function breakMailTransport(): void
+{
+    $mailer = new MailManager(app());
+    $mailer->extend('broken', fn () => new class implements TransportInterface
+    {
+        public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
+        {
+            throw new TransportException('Connection refused');
+        }
+
+        public function __toString(): string
+        {
+            return 'broken://';
+        }
+    });
+    config(['mail.default' => 'broken', 'mail.mailers.broken' => ['transport' => 'broken']]);
+    Mail::swap($mailer);
 }

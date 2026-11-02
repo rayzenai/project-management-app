@@ -82,7 +82,7 @@ class MorningMail extends Mailable
 
     /**
      * Late and today rows name the project; a new one says who gave it and
-     * when it is due, as far as known (else the project).
+     * when it is due, each only when known (else nothing).
      *
      * @param  MorningRow  $row
      * @return array{title: string, url: string, meta: string, late: string|null}
@@ -96,7 +96,7 @@ class MorningMail extends Mailable
                 $row['from'] === null ? null : "From {$row['from']}",
                 $row['due'] === null ? null : 'due '.CarbonImmutable::parse($row['due'])->format('D j M'),
             ]);
-            $meta = $known === [] ? $row['project'] : implode(' · ', $known);
+            $meta = implode(' · ', $known);
         }
 
         return [

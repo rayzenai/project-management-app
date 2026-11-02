@@ -65,7 +65,9 @@ class SendMorningEmails extends Command
                 'user_id' => $user->id,
                 'kind' => EmailDigest::MORNING,
                 'sent_on' => $now->toDateString(),
-                'sent_at' => $now,
+                // Now, not the run's start: what was read for this person up
+                // to here is not new again tomorrow, however long the run.
+                'sent_at' => CarbonImmutable::now(),
             ]) === 1;
 
             if (! $claimed) {
