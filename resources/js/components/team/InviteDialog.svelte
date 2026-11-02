@@ -35,6 +35,7 @@
     type InviteStatus =
         | 'ready'
         | 'resend'
+        | 'invited_recently'
         | 'needs_email'
         | 'needs_name'
         | 'already_here'
@@ -52,6 +53,7 @@
     const STATUS_WORDS: Record<InviteStatus, string> = {
         ready: 'Ready',
         resend: 'Will get a new link',
+        invited_recently: 'Invited a moment ago',
         needs_email: 'Needs an email',
         needs_name: 'Needs a name',
         already_here: 'Already here',
@@ -154,7 +156,9 @@
                 checkError =
                     response.status === 422 && json?.message
                         ? json.message
-                        : "Couldn't check the list. Try again.";
+                        : response.status === 429
+                          ? 'Checked too often. Wait a minute, then change the list again.'
+                          : "Couldn't check the list. Try again.";
 
                 return;
             }

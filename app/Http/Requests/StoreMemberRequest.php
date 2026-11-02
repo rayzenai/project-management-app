@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Http\Requests\Concerns\ChecksMemberRoles;
 use App\Http\Requests\Concerns\SetsMemberStructure;
 use App\Models\Member;
+use App\Rules\UniqueLoginEmail;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -39,7 +40,7 @@ class StoreMemberRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:255', new UniqueLoginEmail],
             'password' => ['nullable', 'string', 'min:8'],
             'organization_id' => [
                 Rule::requiredIf(fn (): bool => WorkspaceAccess::isSuperAdmin($this->user())),

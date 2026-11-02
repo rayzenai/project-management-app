@@ -28,18 +28,22 @@ use Illuminate\Support\Facades\DB;
  *
  * Statuses: `ready` (a new person, or one of the organization's people with
  * no login yet), `resend` (invited, never signed in: a fresh link),
- * `needs_email`, `needs_name`, `already_here`, `deactivated` (one of the
+ * `invited_recently` (the same, invited less than RESEND_AFTER_MINUTES ago:
+ * not mailed again, so repeated sends can't flood a mailbox), `needs_email`, `needs_name`, `already_here`, `deactivated` (one of the
  * organization's people who is deactivated), `not_allowed` (one of its
  * people the inviter may not manage, such as another organizational admin,
  * or a super-admin's email for anyone but a super-admin).
  *
- * @phpstan-type InviteStatus 'ready'|'resend'|'needs_email'|'needs_name'|'already_here'|'deactivated'|'not_allowed'
+ * @phpstan-type InviteStatus 'ready'|'resend'|'invited_recently'|'needs_email'|'needs_name'|'already_here'|'deactivated'|'not_allowed'
  * @phpstan-type InviteInput array{name: string|null, email: string|null, designation_id?: int|null}
  * @phpstan-type InviteRow array{name: string, email: string|null, designation_id: int|null, status: InviteStatus, member_id: int|null}
  */
 final class InvitePlan
 {
     public const MAX_PEOPLE = 200;
+
+    /** Someone invited this recently gets no fresh link yet. */
+    public const RESEND_AFTER_MINUTES = 10;
 
     /**
      * One person per non-empty line: "Name, email", "Name <email>",
@@ -228,9 +232,13 @@ final class InvitePlan
 
                 $member->setRelation('user', $user);
 
-                return $user->invited_at !== null && $user->last_seen_at === null && WorkspaceAccess::canManageMember($inviter, $member)
-                    ? self::row($name, $email, $designationId, 'resend', $member)
-                    : self::row($name, $email, $designationId, 'already_here');
+                if ($user->invited_at === null || $user->last_seen_at !== null || ! WorkspaceAccess::canManageMember($inviter, $member)) {
+                    return self::row($name, $email, $designationId, 'already_here');
+                }
+
+                return $user->invited_at->greaterThan(now()->subMinutes(self::RESEND_AFTER_MINUTES))
+                    ? self::row($name, $email, $designationId, 'invited_recently', $member)
+                    : self::row($name, $email, $designationId, 'resend', $member);
             }
 
             $withEmail = $members[$key] ?? null;

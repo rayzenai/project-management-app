@@ -7,6 +7,7 @@ use App\Http\Requests\Concerns\SetsMemberStructure;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Team;
+use App\Rules\UniqueLoginEmail;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Collection;
@@ -52,7 +53,7 @@ class UpdateMemberRequest extends FormRequest
 
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($linkedUserId)],
+            'email' => ['sometimes', 'required', 'email', 'max:255', new UniqueLoginEmail($linkedUserId === null ? null : (int) $linkedUserId)],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
             'is_active' => ['sometimes', 'boolean'],
             'organization_id' => ['sometimes', 'required', 'integer', Rule::exists('organizations', 'id')],

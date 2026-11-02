@@ -500,7 +500,7 @@ Inertia page `Reports/CodeActivity`, whose props are `data`'s fields plus
 
 ## Members *(create/edit/delete: organizational admin of their organization or super-admin)*
 
-`POST /workspace/members` takes `name`, `email` (required, not already a login),
+`POST /workspace/members` takes `name`, `email` (required, not already a login in any case: `Deepak@x` is taken when `deepak@x` has one, and the same on `PATCH`),
 optional `password` (min 8) and the role fields below. A super-admin also sends
 `organization_id` (required) and may send `is_office_admin`; an organizational admin's
 people always join their own organization. Every member gets a login: the
@@ -574,7 +574,8 @@ their email lowercased with it). A login that already exists keeps its email
 as it is. At most 200 rows go at once, the listed people and the ones
 `without_login` adds together: more is a 422 on both routes, `{ message,
 errors: { people } }` with `That's 210 people, 210 to invite. Invite at most
-200 at a time.`, and nothing is created.
+200 at a time.`, and nothing is created. Each route takes thirty requests a
+minute per person, web and API counted together (then 429).
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
@@ -584,7 +585,8 @@ errors: { people } }` with `That's 210 people, 210 to invite. Invite at most
 `status` is `ready` (a new person, or one of the organization's people with no
 login yet: they get a login, and nothing else about them changes), `resend`
 (invited before and never signed in: a fresh link, the old one stops
-working), `needs_email`, `needs_name`, `already_here` (a login with that email
+working), `invited_recently` (the same, invited less than 10 minutes ago: not
+mailed again yet), `needs_email`, `needs_name`, `already_here` (a login with that email
 exists, or the same email came earlier in the list, or the email is another
 organization's person: the answer never says which, and carries no id or
 designation of theirs), `deactivated` (one of the organization's people who is
@@ -595,7 +597,8 @@ organization's own people; for a new person, `designation_id` is the one sent
 when it is one of the organization's, else `null`. `without_login: true` adds
 every active person of the organization who has an email and no login and is
 not in the list (`without_login_count` says how many). The links are emailed
-after the response.
+after the response, and only once the invite is saved; a person the caller
+may no longer manage by then gets none.
 
 ## Task dependencies *(anyone who can see the task's project)*
 

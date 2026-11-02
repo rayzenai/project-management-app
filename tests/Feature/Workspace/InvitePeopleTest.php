@@ -10,10 +10,14 @@ use App\Models\User;
 use App\Services\Workspace\InvitePeopleService;
 use App\Services\Workspace\PasswordLinkService;
 use App\Support\InvitePlan;
+use App\Support\WorkspaceAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Sleep;
+use Illuminate\Testing\TestResponse;
+use Laravel\Sanctum\Sanctum;
 
 /*
  * Inviting people (People page, "Invite people"): an organizational admin
@@ -56,6 +60,21 @@ function invitePersonWithLogin(Organization $organization, string $email, array 
     Member::factory()->linkedTo($login)->create(['organization_id' => $organization->id, ...$member]);
 
     return $login;
+}
+
+/**
+ * One request whose after-response work runs once, as under FPM, where
+ * every request has its own app. The test app is shared and
+ * Application::terminate() keeps its callbacks, so a later request would
+ * send this one's invites again (GitWebhookTest's hookSend does the same).
+ */
+function inviteOnce(Closure $request): TestResponse
+{
+    $callbacks = (fn () => $this->terminatingCallbacks)->call(app());
+    $response = $request();
+    (fn () => $this->terminatingCallbacks = $callbacks)->call(app());
+
+    return $response;
 }
 
 /** The statuses a preview gives, by email (or name when there is none). */
@@ -144,7 +163,124 @@ it('lets someone whose invite email failed be invited again', function () {
         ->assertSessionHas('workspace_flash.message', 'Invited 1 person.');
 
     expect(User::query()->where('email', 'deepak@example.com')->value('invited_at'))->not->toBeNull()
-        ->and(inviteStatuses(invitePreview($admin, ['text' => 'Deepak, deepak@example.com'])))->toBe(['deepak@example.com' => 'resend']);
+        ->and(inviteStatuses(invitePreview($admin, ['text' => 'Deepak, deepak@example.com'])))->toBe(['deepak@example.com' => 'invited_recently']);
+
+    $this->travel(InvitePlan::RESEND_AFTER_MINUTES + 1)->minutes();
+
+    expect(inviteStatuses(invitePreview($admin, ['text' => 'Deepak, deepak@example.com'])))->toBe(['deepak@example.com' => 'resend']);
+});
+
+it('queues each invite only once the invite commits, on a worker queue too', function () {
+    config(['queue.default' => 'database']);
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+
+    try {
+        DB::transaction(function () use ($admin, $roads): void {
+            app(InvitePeopleService::class)->execute($admin, $roads->id, [['name' => 'Gone', 'email' => 'gone@example.com']], false);
+
+            throw new RuntimeException('Undo.');
+        });
+    } catch (RuntimeException) {
+        // The rollback is the point.
+    }
+
+    expect(DB::table('jobs')->count())->toBe(0);
+
+    DB::transaction(function () use ($admin, $roads): void {
+        app(InvitePeopleService::class)->execute($admin, $roads->id, [['name' => 'Deepak', 'email' => 'deepak@example.com']], false);
+
+        // Not before the login it names exists for any worker to see.
+        expect(DB::table('jobs')->count())->toBe(0);
+    });
+
+    expect(DB::table('jobs')->count())->toBe(1)
+        ->and(json_decode((string) DB::table('jobs')->value('payload'), true)['displayName'])->toBe(SendInvite::class)
+        // The token is made when the mail goes, never in the queue.
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+    Mail::assertNothingSent();
+});
+
+it('sends no invite once the inviter may no longer manage the person', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    $deepak = invitePersonWithLogin($roads, 'deepak@example.com');
+    $mina = invitePersonWithLogin($roads, 'mina@example.com');
+    Log::spy();
+
+    // Mina became an organizational admin; the inviter stopped being one.
+    Member::query()->where('user_id', $mina->id)->update(['is_office_admin' => true]);
+    (new SendInvite($mina->id, $admin->id))->handle(app(PasswordLinkService::class));
+    Member::query()->where('user_id', $admin->id)->update(['is_office_admin' => false]);
+    WorkspaceAccess::flush();
+    (new SendInvite($deepak->id, $admin->id))->handle(app(PasswordLinkService::class));
+
+    Mail::assertNothingSent();
+    expect(DB::table('invite_tokens')->count())->toBe(0)
+        ->and($deepak->fresh()->invited_at)->toBeNull();
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === "Didn't send an invite: the inviter may no longer manage the person."
+        && $context === ['user_id' => $mina->id, 'inviter_id' => $admin->id])->once();
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $context === ['user_id' => $deepak->id, 'inviter_id' => $admin->id])->once();
+
+    // A super-admin may still.
+    (new SendInvite($deepak->id, inviteBoss()->id))->handle(app(PasswordLinkService::class));
+    Mail::assertSent(SetPasswordLink::class, 1);
+});
+
+it('links no login under the lock unless the person still has the planned email and is the inviter\'s to manage', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    $mina = Member::factory()->create(['organization_id' => $roads->id, 'email' => 'mina@example.com']);
+    $other = Member::factory()->create(['organization_id' => $roads->id, 'email' => 'other@example.com', 'is_office_admin' => true]);
+    $service = app(InvitePeopleService::class);
+    $createLogin = fn (array $row): ?int => (fn (User $inviter, array $row, int $organizationId): ?int => $this->createLogin($inviter, $row, $organizationId))
+        ->call($service, $admin, $row, $roads->id);
+
+    // The email changed after the plan was made, or the person became another admin.
+    expect($createLogin(['name' => 'Mina', 'email' => 'mina.old@example.com', 'designation_id' => null, 'status' => 'ready', 'member_id' => $mina->id]))->toBeNull()
+        ->and($createLogin(['name' => 'Other', 'email' => 'other@example.com', 'designation_id' => null, 'status' => 'ready', 'member_id' => $other->id]))->toBeNull()
+        ->and(User::query()->count())->toBe(1)
+        ->and($createLogin(['name' => 'Mina', 'email' => 'mina@example.com', 'designation_id' => null, 'status' => 'ready', 'member_id' => $mina->id]))->not->toBeNull()
+        ->and($mina->fresh()->user_id)->not->toBeNull();
+});
+
+it('mails nobody twice within minutes: a moment-ago invite waits for its next link', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    $people = ['people' => [['name' => 'Deepak', 'email' => 'deepak@example.com']]];
+
+    inviteOnce(fn () => $this->actingAs($admin)->post('/workspace/invites', $people))->assertSessionHas('workspace_flash.message', 'Invited 1 person.');
+    expect(invitePreview($admin, ['text' => 'Deepak, deepak@example.com']))->toBe([
+        ['name' => 'Deepak', 'email' => 'deepak@example.com', 'designation_id' => null, 'status' => 'invited_recently', 'member_id' => Member::query()->where('email', 'deepak@example.com')->value('id')],
+    ]);
+    inviteOnce(fn () => $this->actingAs($admin)->post('/workspace/invites', $people))->assertSessionHas('workspace_flash.message', 'No one was invited.');
+    Mail::assertSent(SetPasswordLink::class, 1);
+
+    $this->travel(InvitePlan::RESEND_AFTER_MINUTES + 1)->minutes();
+    inviteOnce(fn () => $this->actingAs($admin)->post('/workspace/invites', $people))->assertSessionHas('workspace_flash.message', 'Invited 1 person.');
+    Mail::assertSent(SetPasswordLink::class, 2);
+});
+
+it('takes thirty previews and thirty sends a minute from one person, web and API together', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+
+    foreach (range(1, 30) as $i) {
+        $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => ''])->assertOk();
+    }
+    $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => ''])->assertStatus(429);
+    Sanctum::actingAs($admin, ['*']);
+    $this->postJson('/api/v1/workspace/invites/preview', ['text' => ''])->assertStatus(429);
+
+    foreach (range(1, 30) as $i) {
+        $this->postJson('/api/v1/workspace/invites', ['people' => []])->assertOk();
+    }
+    $this->actingAs($admin)->post('/workspace/invites', ['people' => [['name' => 'Deepak', 'email' => 'deepak@example.com']]])->assertStatus(429);
+
+    expect(User::query()->where('email', 'deepak@example.com')->exists())->toBeFalse();
+
+    $this->travel(61)->seconds();
+    $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => ''])->assertOk();
 });
 
 it('skips a person deactivated before their invite went out', function () {
@@ -336,6 +472,7 @@ it('sends a fresh link to someone invited who never signed in, and creates nothi
     app(PasswordLinkService::class)->sendInvite($deepak, $admin);
     $oldToken = DB::table('invite_tokens')->value('token');
     Mail::fake();
+    $this->travel(InvitePlan::RESEND_AFTER_MINUTES + 1)->minutes();
 
     expect(invitePreview($admin, ['text' => 'Deepak, deepak@example.com']))->toBe([
         ['name' => 'Deepak', 'email' => 'deepak@example.com', 'designation_id' => null, 'status' => 'resend', 'member_id' => Member::query()->where('user_id', $deepak->id)->value('id')],
@@ -449,10 +586,42 @@ it('refuses a deactivated organizational admin', function () {
     $roads = inviteOrganization();
     $admin = inviteAdminOf($roads);
     Member::query()->where('user_id', $admin->id)->update(['is_active' => false]);
+    $people = ['people' => [['name' => 'Deepak', 'email' => 'deepak@example.com']]];
 
-    $this->actingAs($admin)->post('/workspace/invites', ['people' => [['name' => 'Deepak', 'email' => 'deepak@example.com']]]);
+    $this->actingAs($admin)->post('/workspace/invites', $people)->assertRedirect(route('workspace.login'));
+    $this->assertGuest('web');
+
+    Sanctum::actingAs($admin, ['*']);
+    $this->postJson('/api/v1/workspace/invites/preview', $people)->assertUnauthorized();
+    $this->postJson('/api/v1/workspace/invites', $people)->assertUnauthorized();
 
     expect(User::query()->where('email', 'deepak@example.com')->exists())->toBeFalse();
+    Mail::assertNothingSent();
+});
+
+it('keeps one login per address on the person form, whatever the case', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    $this->actingAs($admin)->post('/workspace/invites', ['people' => [['name' => 'Deepak', 'email' => 'Deepak@Example.com']]]);
+    $deepak = Member::query()->where('email', 'deepak@example.com')->sole();
+    $mina = Member::factory()->withUser()->create(['organization_id' => $roads->id]);
+    $taken = 'The email has already been taken.';
+
+    $this->actingAs($admin)->post('/workspace/members', ['name' => 'Deepak Again', 'email' => 'DEEPAK@example.com', 'password' => 'Kp7m-Qx4r-Tz9a'])
+        ->assertSessionHasErrors(['email' => $taken]);
+    $this->actingAs($admin)->patch("/workspace/members/{$mina->id}", ['email' => 'Deepak@EXAMPLE.com'])
+        ->assertSessionHasErrors(['email' => $taken]);
+    // Their own address in another case is still theirs.
+    $this->actingAs($admin)->patch("/workspace/members/{$deepak->id}", ['email' => 'deepak@example.com'])
+        ->assertSessionHasNoErrors();
+
+    Sanctum::actingAs($admin, ['*']);
+    $this->postJson('/api/v1/workspace/members', ['name' => 'Deepak Again', 'email' => 'deepak@EXAMPLE.COM'])
+        ->assertStatus(422)->assertJsonPath('errors.email.0', $taken);
+    $this->patchJson("/api/v1/workspace/members/{$mina->id}", ['email' => 'DEEPAK@EXAMPLE.COM'])
+        ->assertStatus(422)->assertJsonPath('errors.email.0', $taken);
+
+    expect(User::query()->whereRaw('lower(email) = ?', ['deepak@example.com'])->count())->toBe(1);
 });
 
 it('refuses an organizational admin inviting into another organization', function () {

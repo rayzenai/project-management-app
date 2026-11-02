@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Background;
 use App\Support\InvitePlan;
 use App\Support\ServiceResult;
+use App\Support\WorkspaceAccess;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -67,7 +68,7 @@ final class InvitePeopleService
 
                 foreach ($plan as $row) {
                     $userId = match ($row['status']) {
-                        'ready' => $this->createLogin($row, $organizationId),
+                        'ready' => $this->createLogin($inviter, $row, $organizationId),
                         'resend' => $this->loginOf($row),
                         default => null,
                     };
@@ -112,19 +113,25 @@ final class InvitePeopleService
     /**
      * A login with a password nobody knows (the link sets one): for a new
      * person, who joins the organization too, or for one of its people who
-     * has none yet, checked again under a lock so two invites can't both
-     * link them.
+     * has none yet, checked again under a lock (still without a login,
+     * active, of the organization, with the planned email, and the inviter's
+     * to manage) so two invites can't both link them.
      *
      * @param  InviteRow  $row
      */
-    private function createLogin(array $row, int $organizationId): ?int
+    private function createLogin(User $inviter, array $row, int $organizationId): ?int
     {
         $member = null;
 
         if ($row['member_id'] !== null) {
             $member = Member::query()->whereKey($row['member_id'])->lockForUpdate()->first();
 
-            if ($member === null || $member->user_id !== null || ! $member->is_active || (int) $member->organization_id !== $organizationId) {
+            if ($member === null
+                || $member->user_id !== null
+                || ! $member->is_active
+                || (int) $member->organization_id !== $organizationId
+                || mb_strtolower(trim((string) $member->email)) !== $row['email']
+                || ! WorkspaceAccess::canManageMember($inviter, $member)) {
                 return null;
             }
         }
