@@ -52,6 +52,7 @@ use App\Http\Middleware\EnsureCanUseGit;
 use App\Http\Middleware\EnsureProjectVisible;
 use App\Http\Middleware\RemembersOrganizationChoice;
 use App\Http\Middleware\ShareWorkspaceData;
+use App\Http\Middleware\TouchLastSeen;
 use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Laravel\Passport\Http\Controllers\AuthorizationController;
@@ -88,7 +89,7 @@ Route::middleware('guest')
         Route::post('/login', [AuthController::class, 'store'])->name('login.store');
     });
 
-Route::middleware(['auth', EnsureCanSignIn::class, RemembersOrganizationChoice::class, ShareWorkspaceData::class])
+Route::middleware(['auth', EnsureCanSignIn::class, TouchLastSeen::class, RemembersOrganizationChoice::class, ShareWorkspaceData::class])
     ->prefix('workspace')
     ->name('workspace.')
     ->group(function () {

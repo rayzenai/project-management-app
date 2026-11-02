@@ -1,0 +1,28 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * When a person last used the workspace, web or API, kept to the hour
+ * (TouchLastSeen). Null means never signed in; invites and the "who is using
+ * it" count read it.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table): void {
+            $table->timestamp('last_seen_at')->nullable()->index();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table): void {
+            $table->dropIndex(['last_seen_at']);
+            $table->dropColumn('last_seen_at');
+        });
+    }
+};
