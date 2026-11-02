@@ -419,6 +419,46 @@ it('ends both pending links and every remember-me sign-in when an admin sets a p
     $this->assertGuest();
 });
 
+it('ends the old email\'s pending links when the person form changes the email, so they never serve its next owner', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = forgotPasswordPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    $resetToken = Password::broker('users')->createToken($person);
+    $inviteToken = Password::broker('invites')->createToken($person);
+
+    $this->actingAs($admin)->from('/workspace/team')
+        ->patch("/workspace/members/{$member->id}", ['email' => 'sita.sharma@example.com'])
+        ->assertSessionHasNoErrors();
+
+    expect($person->fresh()->email)->toBe('sita.sharma@example.com')
+        ->and(DB::table('password_reset_tokens')->count())->toBe(0)
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+
+    // Whoever gets the old address next can't use a link mailed to it.
+    $next = forgotPasswordPerson('sita@example.com');
+    Auth::logout();
+    forgotPasswordSet('reset', 'sita@example.com', $resetToken)->assertSessionHasErrors(['token' => PasswordLinkService::LINK_REFUSED]);
+    forgotPasswordSet('invite', 'sita@example.com', $inviteToken)->assertSessionHasErrors(['token' => PasswordLinkService::LINK_REFUSED]);
+    expect(Hash::check('old-password', $next->fresh()->password))->toBeTrue();
+});
+
+it('keeps pending links when the person form leaves the email as it is', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = forgotPasswordPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    Password::broker('users')->createToken($person);
+    Password::broker('invites')->createToken($person);
+
+    $this->actingAs($admin)->from('/workspace/team')
+        ->patch("/workspace/members/{$member->id}", ['name' => 'Sita Sharma', 'email' => 'sita@example.com'])
+        ->assertSessionHasNoErrors();
+
+    expect(DB::table('password_reset_tokens')->count())->toBe(1)
+        ->and(DB::table('invite_tokens')->count())->toBe(1);
+});
+
 it('still signs out a changed password when a test acts as the same person again', function () {
     $user = forgotPasswordPerson();
     $this->post('/workspace/login', ['email' => 'sita@example.com', 'password' => 'old-password'])->assertRedirect();

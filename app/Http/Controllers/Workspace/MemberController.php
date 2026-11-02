@@ -126,6 +126,11 @@ class MemberController extends Controller
             if ($user) {
                 $user->name = $member->name;
                 if ($member->email) {
+                    // A link mailed to the old address must not serve whoever
+                    // has it next: links are kept by email.
+                    if ($member->email !== $user->email) {
+                        $links->forgetLinks($user);
+                    }
                     $user->email = $member->email;
                 }
                 if ($request->filled('password')) {

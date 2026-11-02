@@ -509,7 +509,9 @@ emailed their email and password; if that email fails the member is still
 created and `message` says so. `PATCH` accepts `organization_id` and
 `is_office_admin` from a super-admin only (403 otherwise). A `password` on
 `PATCH` also ends the person's other web sessions, every "remember me"
-sign-in and any pending reset or invite link; their API tokens stay.
+sign-in and any pending reset or invite link; their API tokens stay. A changed
+`email` on `PATCH` ends any pending reset or invite link sent to the old
+address, so it can't serve whoever has that address next.
 
 **Roles.** `POST` and `PATCH` take three optional role fields, each the
 complete wanted set of ids; a field left out leaves that role as it is:

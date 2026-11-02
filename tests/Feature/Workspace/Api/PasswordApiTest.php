@@ -175,6 +175,31 @@ it('ends both pending links and remember-me sign-ins when an admin sets a passwo
         ->and(DB::table('invite_tokens')->count())->toBe(0);
 });
 
+it('ends the old email\'s pending links when the API changes a person\'s email', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = passwordApiPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    $resetToken = Password::broker('users')->createToken($person);
+    Password::broker('invites')->createToken($person);
+    Sanctum::actingAs($admin, ['*']);
+
+    $this->patchJson("/api/v1/workspace/members/{$member->id}", ['email' => 'sita.sharma@example.com'])->assertOk();
+
+    expect($person->fresh()->email)->toBe('sita.sharma@example.com')
+        ->and(DB::table('password_reset_tokens')->count())->toBe(0)
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+
+    passwordApiPerson('sita@example.com');
+    $this->postJson('/api/v1/set-password', [
+        'kind' => 'reset',
+        'email' => 'sita@example.com',
+        'token' => $resetToken,
+        'password' => 'new-password-1',
+        'password_confirmation' => 'new-password-1',
+    ])->assertStatus(422)->assertJsonPath('errors.token', PasswordLinkService::LINK_REFUSED);
+});
+
 it('counts only refused links toward the set-password limit', function () {
     $payload = ['kind' => 'reset', 'email' => 'nobody@example.com', 'token' => str_repeat('a', 64), 'password' => 'new-password-1'];
 
