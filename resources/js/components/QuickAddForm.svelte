@@ -3,15 +3,16 @@
     import { page } from '@inertiajs/svelte';
     import {
         CalendarDays,
+        Check,
         ChevronDown,
         Folder,
         Plus,
         UserPlus,
     } from '@lucide/svelte';
-    import { untrack } from 'svelte';
+    import { tick, untrack } from 'svelte';
     import { isoDay, shiftDay, shortDay } from '../lib/dates';
     import { projectLabel } from '../lib/projectLabel';
-    import { tokenDate } from '../lib/quickAddTokens';
+    import { mentionAt, tokenDate } from '../lib/quickAddTokens';
     import type {
         Member,
         Priority,
@@ -20,6 +21,7 @@
         TaskOption,
     } from '../lib/types';
     import AssigneePicker from './AssigneePicker.svelte';
+    import Avatar from './Avatar.svelte';
     import DependsOnPicker from './DependsOnPicker.svelte';
     import PillGroup from './PillGroup.svelte';
     import Popover from './Popover.svelte';
@@ -333,6 +335,118 @@
         tokenInput?.focus();
     }
 
+    /**
+     * Typing `@` in the add field opens the people it may go to, narrowed as
+     * the name is typed (a word of the name starts with it). Picking one
+     * takes the `@...` out of the title and puts them in Who: an explicit
+     * pick, so the server never has to guess a name. Escape closes the list
+     * until the caret leaves that `@`.
+     */
+    let mention = $state<{ start: number; end: number; query: string } | null>(
+        null,
+    );
+    let mentionActive = $state(0);
+    let dismissedAt: number | null = null;
+
+    const MENTION_KEYS = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'];
+
+    const mentionPeople = $derived.by(() => {
+        const query = mention?.query.toLowerCase() ?? null;
+
+        if (query === null) {
+            return [];
+        }
+
+        return [
+            ...projectTeam.map((m) => ({
+                id: m.id,
+                name: m.name,
+                joins: false,
+            })),
+            ...joiners.map((m) => ({ id: m.id, name: m.name, joins: true })),
+        ].filter((person) =>
+            person.name
+                .toLowerCase()
+                .split(/\s+/)
+                .some((word) => word.startsWith(query)),
+        );
+    });
+    const mentionOpen = $derived(mentionPeople.length > 0);
+
+    function readMention(): void {
+        const found = mentionAt(form.title, tokenInput?.caret() ?? 0);
+
+        if (found === null) {
+            dismissedAt = null;
+        }
+
+        if (
+            found?.start !== mention?.start ||
+            found?.query !== mention?.query
+        ) {
+            mentionActive = 0;
+        }
+
+        mention = found !== null && found.start !== dismissedAt ? found : null;
+    }
+
+    function onFieldKeydown(e: KeyboardEvent): void {
+        if (
+            !mentionOpen ||
+            mention === null ||
+            e.isComposing ||
+            e.keyCode === 229
+        ) {
+            return;
+        }
+
+        const count = mentionPeople.length;
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            mentionActive =
+                (mentionActive + (e.key === 'ArrowDown' ? 1 : -1) + count) %
+                count;
+            document
+                .getElementById(
+                    `${uid}-person-${mentionPeople[mentionActive]?.id}`,
+                )
+                ?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            // Picks the person; the task is not added yet.
+            e.preventDefault();
+            pickMention(mentionPeople[mentionActive].id);
+        } else if (e.key === 'Escape') {
+            // Closes the list only: the field (and a dialog) stay.
+            e.preventDefault();
+            e.stopPropagation();
+            dismissedAt = mention.start;
+            mention = null;
+        }
+    }
+
+    async function pickMention(memberId: number): Promise<void> {
+        if (mention === null) {
+            return;
+        }
+
+        const { start, end } = mention;
+        const before = form.title.slice(0, start);
+        const after = form.title.slice(end);
+
+        form.title =
+            before +
+            (before === '' || /\s$/.test(before) ? after.trimStart() : after);
+
+        if (!form.assignee_member_ids.includes(memberId)) {
+            form.assignee_member_ids = [...form.assignee_member_ids, memberId];
+        }
+
+        mention = null;
+        await tick();
+        tokenInput?.setCaret(start);
+    }
+
     const CHIP =
         'inline-flex h-[34px] max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-[14px] font-medium text-fg transition hover:bg-hover sm:h-[28px] sm:text-[13px]';
     const EMPTY_CHIP = 'border-dashed text-fg-muted';
@@ -410,7 +524,11 @@
     /** Tasks the new one waits for (same project). */
     let dependsOn = $state<TaskOption[]>([]);
     let selfAutoSeeded = $state(false);
-    let tokenInput = $state<{ focus: () => void } | null>(null);
+    let tokenInput = $state<{
+        focus: () => void;
+        caret: () => number;
+        setCaret: (position: number) => void;
+    } | null>(null);
     let keepOpen = $state(false);
 
     // Validation errors AND service failures (which arrive under `__global`),
@@ -427,8 +545,9 @@
 
     function submit() {
         // Add task is disabled, and says "Pick a project.", in either case.
-        // The add field stays enabled while adding (a disabled field loses
-        // its focus), so a second Enter waits here.
+        // The title field stays enabled while adding (a disabled field
+        // loses its focus, and "the next one" needs it), so a second Enter
+        // waits here.
         if (form.processing || !form.title.trim() || !hasProject) {
             return;
         }
@@ -449,6 +568,7 @@
                 }
 
                 form.reset('title', 'deadline_at', 'description');
+                mention = null;
                 dependsOn = [];
                 // Re-seed the default assignee (self when eligible) for the
                 // next task; the add field keeps only its project.
@@ -658,7 +778,7 @@
 >
     {#if variant === 'inline'}
         <div
-            class="rounded-lg border border-line bg-surface transition focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-soft"
+            class="relative rounded-lg border border-line bg-surface transition focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-soft"
         >
             <div class="flex items-center gap-3 px-3.5">
                 <Plus class="h-4 w-4 shrink-0 text-accent" />
@@ -667,11 +787,69 @@
                         bind:this={tokenInput}
                         bind:value={form.title}
                         placeholder="Add a task"
+                        aria-label="Add a task"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-expanded={mentionOpen}
+                        aria-controls={`${uid}-people`}
+                        aria-activedescendant={mentionOpen
+                            ? `${uid}-person-${mentionPeople[mentionActive]?.id}`
+                            : undefined}
                         size="lg"
+                        oninput={readMention}
+                        onclick={readMention}
+                        onkeyup={(e: KeyboardEvent) => {
+                            if (!MENTION_KEYS.includes(e.key)) {
+                                readMention();
+                            }
+                        }}
+                        onblur={() => (mention = null)}
+                        onkeydown={onFieldKeydown}
                         onsubmit={submit}
                     />
                 </div>
             </div>
+
+            {#if mentionOpen}
+                <ul
+                    id={`${uid}-people`}
+                    role="listbox"
+                    aria-label="People"
+                    class="popover absolute top-[48px] left-[42px] z-30 max-h-64 w-[min(300px,calc(100%-56px))] overflow-auto px-1"
+                >
+                    {#each mentionPeople as person, i (person.id)}
+                        <!-- The field keeps the focus and the keys (aria-activedescendant);
+                             a press here must not blur it. -->
+                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                        <li
+                            id={`${uid}-person-${person.id}`}
+                            role="option"
+                            tabindex="-1"
+                            aria-selected={i === mentionActive}
+                            class={`menu-item cursor-pointer ${i === mentionActive ? 'bg-hover text-fg' : ''}`}
+                            onmousedown={(e) => e.preventDefault()}
+                            onmousemove={() => (mentionActive = i)}
+                            onclick={() => pickMention(person.id)}
+                        >
+                            <Avatar name={person.name} size="md" />
+                            <span
+                                class="min-w-0 flex-1 truncate font-medium text-fg"
+                                >{person.name}</span
+                            >
+                            {#if person.joins}
+                                <span class="shrink-0 text-xs text-fg-muted"
+                                    >Joins the team</span
+                                >
+                            {/if}
+                            {#if form.assignee_member_ids.includes(person.id)}
+                                <Check
+                                    class="h-3.5 w-3.5 shrink-0 text-accent"
+                                />
+                            {/if}
+                        </li>
+                    {/each}
+                </ul>
+            {/if}
 
             <div
                 class="flex flex-wrap items-center gap-2 px-3.5 pb-3 sm:pl-[42px]"
@@ -825,7 +1003,6 @@
                     bind:this={tokenInput}
                     bind:value={form.title}
                     placeholder="What needs to happen?"
-                    disabled={form.processing}
                     size="xl"
                     onsubmit={submit}
                 />

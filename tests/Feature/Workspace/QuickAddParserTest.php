@@ -68,6 +68,16 @@ it('reads the Nepali date words as it reads the English ones', function (string 
     'बिहीबार, spelt long' => ['Report बिहीबार', '2026-11-05'],
     'शुक्रबार, Friday' => ['Report शुक्रबार', '2026-11-06'],
     'शनिबार, Saturday' => ['Report शनिबार', '2026-11-07'],
+    'आइतवार, spelt with व' => ['Report आइतवार', '2026-11-08'],
+    'सोमवार, spelt with व' => ['Report सोमवार', '2026-11-09'],
+    'मंगलवार, spelt with व' => ['Report मंगलवार', '2026-11-10'],
+    'मङ्गलबार, spelt with ङ्' => ['Report मङ्गलबार', '2026-11-10'],
+    'मङ्गलवार, spelt with ङ् and व' => ['Report मङ्गलवार', '2026-11-10'],
+    'बुधवार, spelt with व' => ['Report बुधवार', '2026-11-04'],
+    'बिहिवार, spelt with व' => ['Report बिहिवार', '2026-11-05'],
+    'बिहीवार, spelt long with व' => ['Report बिहीवार', '2026-11-05'],
+    'शुक्रवार, spelt with व' => ['Report शुक्रवार', '2026-11-06'],
+    'शनिवार, spelt with व' => ['Report शनिवार', '2026-11-07'],
     'first word' => ['भोलि Report', '2026-11-05'],
 ]);
 

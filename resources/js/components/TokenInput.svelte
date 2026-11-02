@@ -1,22 +1,34 @@
 <script lang="ts">
+    import type { HTMLInputAttributes } from 'svelte/elements';
     import { tokenize } from '../lib/quickAddTokens';
 
     let {
         value = $bindable(''),
         placeholder = '',
-        disabled = false,
         size = 'md',
         oninput,
         onsubmit,
+        onkeydown,
+        ...rest
     }: {
         value: string;
         placeholder?: string;
-        disabled?: boolean;
         /** `lg` is the add field on My work; `xl` is the new-task dialog. */
         size?: 'md' | 'lg' | 'xl';
         oninput?: () => void;
         onsubmit?: () => void;
-    } = $props();
+        /** Runs first: a handler that calls preventDefault keeps Enter from submitting. */
+        onkeydown?: (e: KeyboardEvent) => void;
+    } & Omit<
+        HTMLInputAttributes,
+        | 'value'
+        | 'placeholder'
+        | 'size'
+        | 'oninput'
+        | 'onkeydown'
+        | 'class'
+        | 'type'
+    > = $props();
 
     let inputEl = $state<HTMLInputElement | null>(null);
     let mirrorEl = $state<HTMLDivElement | null>(null);
@@ -35,6 +47,18 @@
 
     export function focus(): void {
         inputEl?.focus();
+    }
+
+    /** Where the caret is in the text. */
+    export function caret(): number {
+        return inputEl?.selectionStart ?? value.length;
+    }
+
+    /** Focus the field with the caret at `position`. */
+    export function setCaret(position: number): void {
+        inputEl?.focus();
+        inputEl?.setSelectionRange(position, position);
+        syncScroll();
     }
 
     function syncScroll(): void {
@@ -61,11 +85,11 @@
         {/each}
     </div>
     <input
+        {...rest}
         bind:this={inputEl}
         bind:value
         type="text"
         {placeholder}
-        {disabled}
         class={`relative w-full bg-transparent text-transparent caret-fg outline-none placeholder:text-fg-faint ${metrics}`}
         autocomplete="off"
         spellcheck="false"
@@ -75,9 +99,15 @@
         }}
         onscroll={syncScroll}
         onkeydown={(e) => {
+            onkeydown?.(e);
+
             // Enter that confirms an input method's composition (Nepali
             // typed through an IME) is not a submit.
-            if (e.key === 'Enter' && !(e.isComposing || e.keyCode === 229)) {
+            if (
+                !e.defaultPrevented &&
+                e.key === 'Enter' &&
+                !(e.isComposing || e.keyCode === 229)
+            ) {
                 e.preventDefault();
                 onsubmit?.();
             }

@@ -25,16 +25,26 @@ const NEPALI_DAYS: Record<string, number> = {
     पर्सी: 2,
 };
 
-/** Sunday is 0, as Date#getDay counts. */
+/** Sunday is 0, as Date#getDay counts. Both spellings: बार and वार. */
 const NEPALI_WEEKDAYS: Record<string, number> = {
     आइतबार: 0,
+    आइतवार: 0,
     सोमबार: 1,
+    सोमवार: 1,
     मंगलबार: 2,
+    मंगलवार: 2,
+    मङ्गलबार: 2,
+    मङ्गलवार: 2,
     बुधबार: 3,
+    बुधवार: 3,
     बिहिबार: 4,
     बिहीबार: 4,
+    बिहिवार: 4,
+    बिहीवार: 4,
     शुक्रबार: 5,
+    शुक्रवार: 5,
     शनिबार: 6,
+    शनिवार: 6,
 };
 
 // Literal words: a Devanagari vowel sign is not a word character.
@@ -206,4 +216,29 @@ function monthDay(
     const iso = isoDay(date);
 
     return iso < today ? isoDay(new Date(year + 1, month, day)) : iso;
+}
+
+/**
+ * The `@name` being typed at the caret: where its `@` starts, where the word
+ * ends and what follows the `@` so far; null when the caret is not in one.
+ * Only an `@` that starts a word counts, as in the parser, so an email
+ * address never opens the people list.
+ */
+export function mentionAt(
+    input: string,
+    caret: number,
+): { start: number; end: number; query: string } | null {
+    const typed = /(?:^|\s)@([^\s@]*)$/.exec(input.slice(0, caret));
+
+    if (!typed) {
+        return null;
+    }
+
+    const rest = /^[^\s]*/.exec(input.slice(caret))?.[0] ?? '';
+
+    return {
+        start: caret - typed[1].length - 1,
+        end: caret + rest.length,
+        query: typed[1],
+    };
 }

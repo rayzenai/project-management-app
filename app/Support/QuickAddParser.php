@@ -10,7 +10,7 @@ use Carbon\Carbon;
  *
  *   #project-token   @assignee-token   !low|!medium|!high|!urgent|!p1..!p4
  *   today · tomorrow · weekday names · YYYY-MM-DD · "jun 20" · "20 jun"
- *   आज · भोलि · पर्सि · आइतबार to शनिबार (Nepali, read as the English ones)
+ *   आज · भोलि · पर्सि · आइतबार to शनिबार, or with वार (Nepali, read as the English ones)
  *
  * `parse()` is pure tokenization — it never touches the database. The caller
  * resolves project/assignee tokens and then calls `strip()` with only the
@@ -37,15 +37,26 @@ class QuickAddParser
     /** Days from today, by their Nepali word. */
     private const NEPALI_DAYS = ['आज' => 0, 'भोलि' => 1, 'पर्सि' => 2, 'पर्सी' => 2];
 
+    /** Both spellings: बार and वार (and मङ्गल for मंगल). */
     private const NEPALI_WEEKDAYS = [
         'आइतबार' => Carbon::SUNDAY,
+        'आइतवार' => Carbon::SUNDAY,
         'सोमबार' => Carbon::MONDAY,
+        'सोमवार' => Carbon::MONDAY,
         'मंगलबार' => Carbon::TUESDAY,
+        'मंगलवार' => Carbon::TUESDAY,
+        'मङ्गलबार' => Carbon::TUESDAY,
+        'मङ्गलवार' => Carbon::TUESDAY,
         'बुधबार' => Carbon::WEDNESDAY,
+        'बुधवार' => Carbon::WEDNESDAY,
         'बिहिबार' => Carbon::THURSDAY,
         'बिहीबार' => Carbon::THURSDAY,
+        'बिहिवार' => Carbon::THURSDAY,
+        'बिहीवार' => Carbon::THURSDAY,
         'शुक्रबार' => Carbon::FRIDAY,
+        'शुक्रवार' => Carbon::FRIDAY,
         'शनिबार' => Carbon::SATURDAY,
+        'शनिवार' => Carbon::SATURDAY,
     ];
 
     private const MONTHS = [
