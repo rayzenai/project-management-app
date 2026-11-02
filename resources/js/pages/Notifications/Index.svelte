@@ -441,7 +441,7 @@
                             {/if}
 
                             <span
-                                class="w-16 shrink-0 text-right font-mono text-xs text-fg-faint tabular-nums"
+                                class="min-w-24 shrink-0 text-right text-xs whitespace-nowrap text-fg-faint tabular-nums"
                             >
                                 {formatTimeAgo(n.created_at)}
                             </span>
@@ -510,7 +510,7 @@
                         {/if}
 
                         <span
-                            class="w-16 shrink-0 text-right font-mono text-xs text-fg-faint tabular-nums"
+                            class="min-w-24 shrink-0 text-right text-xs whitespace-nowrap text-fg-faint tabular-nums"
                         >
                             {formatTimeAgo(entry.happened_at)}
                         </span>

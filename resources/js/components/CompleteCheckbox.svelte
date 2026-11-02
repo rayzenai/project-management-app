@@ -1,7 +1,7 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
     import { Check } from '@lucide/svelte';
-    import { toast } from '../lib/toast.svelte';
+    import { QUIET, toast } from '../lib/toast.svelte';
     import type { SharedProps, Task } from '../lib/types';
 
     let {
@@ -37,9 +37,14 @@
         }
     });
 
+    /**
+     * `quiet` for completing and its Undo, which the toast below announces:
+     * the server then flashes nothing, so one click shows one toast.
+     * Reopening keeps the server's own message.
+     */
     function patchStatus(
         value: string,
-        options: { onSuccess?: () => void } = {},
+        options: { onSuccess?: () => void; quiet?: boolean } = {},
     ) {
         const previous = shown;
         optimistic = value;
@@ -48,6 +53,7 @@
             `/workspace/projects/${projectSlug}/tasks/${task.slug}`,
             { status: value },
             {
+                headers: options.quiet ? QUIET : {},
                 preserveState: true,
                 preserveScroll: true,
                 onSuccess: options.onSuccess,
@@ -71,10 +77,13 @@
 
         const previous = shown;
         patchStatus(completeStatus, {
+            quiet: true,
             onSuccess: () => {
                 onCompleted?.(previous);
                 toast.show(`Completed "${task.short_title ?? task.title}"`, {
-                    undo: { run: () => patchStatus(previous) },
+                    undo: {
+                        run: () => patchStatus(previous, { quiet: true }),
+                    },
                 });
             },
         });

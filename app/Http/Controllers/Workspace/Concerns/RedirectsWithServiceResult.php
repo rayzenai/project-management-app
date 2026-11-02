@@ -13,6 +13,13 @@ use Illuminate\Http\RedirectResponse;
 trait RedirectsWithServiceResult
 {
     /**
+     * Sent by a page that announces the result itself (the done circle's
+     * "Completed ... Undo", My work's row menu): a success flashes nothing,
+     * so one action shows one toast. A failure still flashes.
+     */
+    public const QUIET_HEADER = 'X-Workspace-Quiet';
+
+    /**
      * @param  array{label: string, url: string}|null  $undo
      */
     protected function redirectWithResult(ServiceResult $result, string $successRoute = '', ?string $defaultRoute = null, ?array $undo = null): RedirectResponse
@@ -27,9 +34,11 @@ trait RedirectsWithServiceResult
         }
 
         if ($result->success) {
-            return $successRoute
-                ? redirect()->route($successRoute)->with('workspace_flash', $flash)
-                : back()->with('workspace_flash', $flash);
+            $redirect = $successRoute ? redirect()->route($successRoute) : back();
+
+            return request()->hasHeader(self::QUIET_HEADER)
+                ? $redirect
+                : $redirect->with('workspace_flash', $flash);
         }
 
         return back()

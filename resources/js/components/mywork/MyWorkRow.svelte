@@ -2,8 +2,9 @@
     import { router } from '@inertiajs/svelte';
     import { Check, CircleDashed, Star } from '@lucide/svelte';
     import { dueLabel } from '../../lib/dates';
-    import { plural, timeAgo } from '../../lib/format';
+    import { formatTimeAgo, plural } from '../../lib/format';
     import { peek } from '../../lib/peek.svelte';
+    import { QUIET, toast } from '../../lib/toast.svelte';
     import type { MyWorkGroup, MyWorkRow } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
     import CompleteCheckbox from '../CompleteCheckbox.svelte';
@@ -67,18 +68,33 @@
 
     let todoDone = $state(false);
 
+    /** A to-do's check: one toast, with Undo, like the done circle's. */
     function finishTodo(): void {
         if (!row.subtask || todoDone) {
             return;
         }
 
+        const url = `/workspace/subtasks/${row.subtask.id}`;
+        const body = row.subtask.body;
+        const quietly = {
+            headers: QUIET,
+            preserveScroll: true,
+            preserveState: true,
+        };
+
         todoDone = true;
         router.patch(
-            `/workspace/subtasks/${row.subtask.id}`,
+            url,
             { is_done: true },
             {
-                preserveScroll: true,
-                preserveState: true,
+                ...quietly,
+                onSuccess: () =>
+                    toast.show(`Completed "${body}"`, {
+                        undo: {
+                            run: () =>
+                                router.patch(url, { is_done: false }, quietly),
+                        },
+                    }),
                 onError: () => (todoDone = false),
             },
         );
@@ -176,7 +192,7 @@
                     >
                     {#if update.at}
                         <span class="shrink-0 whitespace-pre"
-                            >{DOT}{timeAgo(update.at)}</span
+                            >{DOT}{formatTimeAgo(update.at)}</span
                         >
                     {/if}
                 </span>

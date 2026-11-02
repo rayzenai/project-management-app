@@ -4,7 +4,7 @@ namespace App\Services\Workspace;
 
 use App\Models\Task;
 use App\Support\ServiceResult;
-use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -82,7 +82,7 @@ class UpdateTaskService
             $parts[] = 'Progress: '.(int) $before['progress'].'% → '.(int) $task->progress.'%';
         }
 
-        $beforeDue = $before['deadline_at'] instanceof Carbon ? $before['deadline_at']->toDateString() : (string) ($before['deadline_at'] ?? '');
+        $beforeDue = $before['deadline_at'] instanceof CarbonInterface ? $before['deadline_at']->toDateString() : (string) ($before['deadline_at'] ?? '');
         $afterDue = $task->deadline_at?->toDateString() ?? '';
         if ($beforeDue !== $afterDue) {
             $parts[] = 'Due: '.($beforeDue ?: 'none').' → '.($afterDue ?: 'none');

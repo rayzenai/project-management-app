@@ -43,6 +43,15 @@ export function longDay(iso: string): string {
     });
 }
 
+/** "Thu 12 Nov". */
+export function shortDay(iso: string): string {
+    return localDay(iso).toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+    });
+}
+
 /**
  * A due day beside today: "Today", "Tomorrow", the weekday for the rest of
  * the coming week ("Thu", always the next one), else "Thu 12 Nov".
@@ -56,17 +65,11 @@ export function dueLabel(iso: string, today: string): string {
         return 'Tomorrow';
     }
 
-    const date = localDay(iso);
-
     if (iso > today && iso <= shiftDay(today, 6)) {
-        return date.toLocaleDateString('en-GB', { weekday: 'short' });
+        return localDay(iso).toLocaleDateString('en-GB', { weekday: 'short' });
     }
 
-    return date.toLocaleDateString('en-GB', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-    });
+    return shortDay(iso);
 }
 
 /** "2 Nov", "2 to 4 Nov", "30 Oct to 2 Nov". */

@@ -52,56 +52,23 @@ export function formatRelative(value: string | null | undefined): string {
     return `${Math.abs(diffDays)}d overdue`;
 }
 
-export function formatTimeAgo(value: string | null | undefined): string {
+/**
+ * "just now", "5 minutes ago", "3 hours ago", "2 days ago", "3 weeks ago",
+ * "2 months ago", "1 year ago"; empty for none.
+ */
+export function formatTimeAgo(
+    value: string | null | undefined,
+    now: Date = new Date(),
+): string {
     if (!value) {
         return '';
     }
 
-    const then = new Date(value).getTime();
-    const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
-
-    if (secs < 60) {
-        return 'just now';
-    }
-
-    const mins = Math.round(secs / 60);
-
-    if (mins < 60) {
-        return `${mins}m ago`;
-    }
-
-    const hrs = Math.round(mins / 60);
-
-    if (hrs < 24) {
-        return `${hrs}h ago`;
-    }
-
-    const days = Math.round(hrs / 24);
-
-    if (days < 7) {
-        return `${days}d ago`;
-    }
-
-    const weeks = Math.round(days / 7);
-
-    if (weeks < 5) {
-        return `${weeks}w ago`;
-    }
-
-    const months = Math.round(days / 30);
-
-    if (months < 12) {
-        return `${months}mo ago`;
-    }
-
-    return `${Math.round(days / 365)}y ago`;
-}
-
-/** "just now", "5 minutes ago", "3 hours ago", "2 days ago". */
-export function timeAgo(value: string, now: Date = new Date()): string {
     const minutes = Math.floor(
         Math.max(0, now.getTime() - new Date(value).getTime()) / 60_000,
     );
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
 
     if (minutes < 1) {
         return 'just now';
@@ -111,13 +78,23 @@ export function timeAgo(value: string, now: Date = new Date()): string {
         return `${plural(minutes, 'minute')} ago`;
     }
 
-    const hours = Math.floor(minutes / 60);
-
     if (hours < 24) {
         return `${plural(hours, 'hour')} ago`;
     }
 
-    return `${plural(Math.floor(hours / 24), 'day')} ago`;
+    if (days < 7) {
+        return `${plural(days, 'day')} ago`;
+    }
+
+    if (days < 35) {
+        return `${plural(Math.floor(days / 7), 'week')} ago`;
+    }
+
+    if (days < 365) {
+        return `${plural(Math.max(1, Math.floor(days / 30)), 'month')} ago`;
+    }
+
+    return `${plural(Math.floor(days / 365), 'year')} ago`;
 }
 
 export function initials(name: string | null | undefined): string {

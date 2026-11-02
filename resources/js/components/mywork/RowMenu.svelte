@@ -1,14 +1,17 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { Ellipsis, Moon, Star, StarOff, Sun, X } from '@lucide/svelte';
-    import { shiftDay } from '../../lib/dates';
+    import { shiftDay, shortDay } from '../../lib/dates';
+    import { QUIET, toast } from '../../lib/toast.svelte';
     import type { MyWorkRow } from '../../lib/types';
     import Popover from '../Popover.svelte';
 
     /**
      * A row's own menu on My work: star it, snooze it, or give it your own
      * date. Only the person on the assignment changes these (Task 3), and on
-     * My work that is always the viewer. Days are the office's Y-m-d.
+     * My work that is always the viewer. Days are the office's Y-m-d. The
+     * menu says what it did itself (a star says nothing: the filled star
+     * is the answer), so the server stays quiet.
      */
     let {
         assignment,
@@ -36,12 +39,35 @@
         }
     });
 
-    function patch(data: Record<string, string | boolean | null>): void {
+    function patch(
+        data: Record<string, string | boolean | null>,
+        said?: string,
+    ): void {
         open = false;
         router.patch(`/workspace/assignments/${assignment.id}`, data, {
+            headers: QUIET,
             preserveScroll: true,
             preserveState: true,
+            onSuccess: () => {
+                if (said) {
+                    toast.show(said);
+                }
+            },
         });
+    }
+
+    function snooze(until: string | null): void {
+        patch(
+            { snoozed_until: until },
+            until ? `Snoozed until ${shortDay(until)}` : 'No longer snoozed',
+        );
+    }
+
+    function setOwnDate(day: string | null): void {
+        patch(
+            { personal_due_at: day },
+            day ? `Your date: ${shortDay(day)}` : 'Your date cleared',
+        );
     }
 
     /** Arrow keys belong to the date field, not the menu's item focus. */
@@ -84,7 +110,7 @@
         type="button"
         data-popover-item
         class="menu-item"
-        onclick={() => patch({ snoozed_until: tomorrow })}
+        onclick={() => snooze(tomorrow)}
     >
         <Moon class="size-4 shrink-0" />
         Snooze until tomorrow
@@ -93,7 +119,7 @@
         type="button"
         data-popover-item
         class="menu-item"
-        onclick={() => patch({ snoozed_until: shiftDay(today, 7) })}
+        onclick={() => snooze(shiftDay(today, 7))}
     >
         <Moon class="size-4 shrink-0" />
         Snooze for a week
@@ -102,7 +128,7 @@
         class="px-2 pt-1 pb-1.5"
         onsubmit={(e) => {
             e.preventDefault();
-            patch({ snoozed_until: snoozeDate });
+            snooze(snoozeDate);
         }}
     >
         <label class="label" for={`snooze-${assignment.id}`}>Snooze until</label
@@ -125,7 +151,7 @@
             type="button"
             data-popover-item
             class="menu-item"
-            onclick={() => patch({ snoozed_until: null })}
+            onclick={() => snooze(null)}
         >
             <Sun class="size-4 shrink-0" />
             Stop snoozing
@@ -138,7 +164,7 @@
         class="px-2 pt-1 pb-1.5"
         onsubmit={(e) => {
             e.preventDefault();
-            patch({ personal_due_at: ownDate });
+            setOwnDate(ownDate);
         }}
     >
         <label class="label" for={`own-date-${assignment.id}`}
@@ -161,7 +187,7 @@
             type="button"
             data-popover-item
             class="menu-item"
-            onclick={() => patch({ personal_due_at: null })}
+            onclick={() => setOwnDate(null)}
         >
             <X class="size-4 shrink-0" />
             Clear my own date

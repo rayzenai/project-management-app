@@ -13,6 +13,13 @@ export interface ToastItem {
     undo: { label: string; run: () => void | Promise<void> } | null;
 }
 
+/**
+ * Headers for a request whose result the page announces itself: the server
+ * then flashes nothing on success, so one action shows one toast
+ * (RedirectsWithServiceResult::QUIET_HEADER). A failure still flashes.
+ */
+export const QUIET = { 'X-Workspace-Quiet': '1' };
+
 const DURATION = 6000;
 const MAX = 3;
 
