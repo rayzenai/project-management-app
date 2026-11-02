@@ -12,7 +12,9 @@
      * Invite many people at once: paste "Name, email" lines, see what
      * sending would do for each (the server's preview, never decided here),
      * choose a designation for the new ones, and send each a link to set a
-     * password. The server builds the plan again when it sends.
+     * password. Ticking the "never signed in" box lists those people too,
+     * so what is sent is what is shown. The server builds the plan again
+     * when it sends, and refuses more than 200 at once.
      */
     let {
         organizations,
@@ -94,7 +96,7 @@
     );
     const willInvite = $derived(
         rows.filter((r) => r.status === 'ready' || r.status === 'resend')
-            .length + (includeWithoutLogin ? withoutLoginCount : 0),
+            .length,
     );
 
     function isNewPerson(row: InviteRow): boolean {
@@ -125,7 +127,7 @@
     }
 
     async function preview(
-        body: { text: string; organization_id: Id },
+        body: { text: string; organization_id: Id; without_login: boolean },
         mine: number,
     ) {
         try {
@@ -147,6 +149,8 @@
             }
 
             if (!response.ok) {
+                // Nothing listed that the text no longer says.
+                rows = [];
                 checkError =
                     response.status === 422 && json?.message
                         ? json.message
@@ -160,6 +164,7 @@
             checkError = null;
         } catch {
             if (mine === seq) {
+                rows = [];
                 checkError = "Couldn't check the list. Try again.";
             }
         } finally {
@@ -173,6 +178,7 @@
     $effect(() => {
         const pasted = text;
         const organization = organizationId;
+        const withoutLogin = includeWithoutLogin;
         const mine = ++seq;
 
         if (organization === null) {
@@ -187,7 +193,11 @@
         const timer = setTimeout(
             () =>
                 void preview(
-                    { text: pasted, organization_id: organization },
+                    {
+                        text: pasted,
+                        organization_id: organization,
+                        without_login: withoutLogin,
+                    },
                     mine,
                 ),
             400,
@@ -206,6 +216,7 @@
         if (
             willInvite === 0 ||
             checking ||
+            checkError !== null ||
             sending ||
             organizationId === null
         ) {
@@ -231,7 +242,6 @@
                             ? (chosenDesignations.get(emailKey(r)) ?? null)
                             : null,
                     })),
-                without_login: includeWithoutLogin,
             },
             {
                 preserveScroll: true,
@@ -343,9 +353,6 @@
                     Only the first {MAX_PEOPLE} people are read. Invite the rest next.
                 </p>
             {/if}
-            {#if checkError}
-                <p class="mt-1 text-xs text-danger">{checkError}</p>
-            {/if}
         </div>
 
         {#if rows.length > 0}
@@ -447,6 +454,9 @@
                     </span>
                 </label>
             {/if}
+            {#if checkError}
+                <p class="mt-2 text-xs text-danger">{checkError}</p>
+            {/if}
             {#if sendErrors.people}
                 <p class="mt-2 text-xs text-danger">{sendErrors.people}</p>
             {/if}
@@ -460,7 +470,10 @@
                 <button
                     type="button"
                     class="btn-primary"
-                    disabled={willInvite === 0 || checking || sending}
+                    disabled={willInvite === 0 ||
+                        checking ||
+                        checkError !== null ||
+                        sending}
                     onclick={send}
                     >{willInvite === 1
                         ? 'Send 1 invite'

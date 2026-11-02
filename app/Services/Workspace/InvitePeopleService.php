@@ -20,8 +20,11 @@ use Illuminate\Support\Str;
  * login with a password nobody knows: a new person also becomes one of the
  * organization's people; someone already among them is linked to it and
  * nothing else about them changes (organization, roles, teams, admin flag,
- * designation). Then each `ready` and `resend` person is emailed a link to
- * set their password, by SendInvite after the commit and the response.
+ * designation), but for their email's case: the login and the person keep
+ * it lowercased, like every email an invite stores. Then each `ready` and
+ * `resend` person is emailed a link to set their password, by SendInvite
+ * after the commit and the response. A plan of more than
+ * InvitePlan::MAX_PEOPLE rows is refused whole (422).
  *
  * @phpstan-import-type InviteInput from InvitePlan
  * @phpstan-import-type InviteRow from InvitePlan
@@ -29,17 +32,40 @@ use Illuminate\Support\Str;
 final class InvitePeopleService
 {
     /**
+     * What sending would do (the dialog's list), refused like the send when
+     * it is more than can go at once.
+     *
+     * @param  list<InviteInput>  $people
+     */
+    public function preview(User $inviter, int $organizationId, array $people, bool $withoutLogin): ServiceResult
+    {
+        $preview = InvitePlan::preview($inviter, $organizationId, $people, $withoutLogin);
+        $tooBig = InvitePlan::tooBig($preview['rows']);
+
+        return $tooBig === null
+            ? ServiceResult::success($preview)
+            : ServiceResult::failure($tooBig, 422, ['people' => $tooBig]);
+    }
+
+    /**
      * @param  list<InviteInput>  $people
      */
     public function execute(User $inviter, int $organizationId, array $people, bool $withoutLogin): ServiceResult
     {
         try {
-            /** @var array{0: list<int>, 1: list<array{name: string, email: string|null, status: string}>} $outcome */
-            $outcome = DB::transaction(function () use ($inviter, $organizationId, $people, $withoutLogin): array {
+            /** @var array{0: list<int>, 1: list<array{name: string, email: string|null, status: string}>}|string $outcome */
+            $outcome = DB::transaction(function () use ($inviter, $organizationId, $people, $withoutLogin): array|string {
+                $plan = InvitePlan::build($inviter, $organizationId, $people, $withoutLogin);
+                $tooBig = InvitePlan::tooBig($plan);
+
+                if ($tooBig !== null) {
+                    return $tooBig;
+                }
+
                 $invited = [];
                 $skipped = [];
 
-                foreach (InvitePlan::build($inviter, $organizationId, $people, $withoutLogin) as $row) {
+                foreach ($plan as $row) {
                     $userId = match ($row['status']) {
                         'ready' => $this->createLogin($row, $organizationId),
                         'resend' => $this->loginOf($row),
@@ -68,6 +94,10 @@ final class InvitePeopleService
         } catch (UniqueConstraintViolationException) {
             // Someone else gave one of these emails a login a moment ago.
             return ServiceResult::failure('Someone was added while you were inviting. Look at the list again and send.', 409);
+        }
+
+        if (is_string($outcome)) {
+            return ServiceResult::failure($outcome, 422, ['people' => $outcome]);
         }
 
         [$invited, $skipped] = $outcome;
@@ -103,13 +133,15 @@ final class InvitePeopleService
         // `resend` next time rather than stuck as `already_here`.
         $user = User::query()->forceCreate([
             'name' => $member->name ?? $row['name'],
-            'email' => $member->email ?? $row['email'],
+            'email' => $member !== null ? mb_strtolower(trim((string) $member->email)) : $row['email'],
             'password' => Hash::make(Str::random(40)),
             'invited_at' => now(),
         ]);
 
         if ($member !== null) {
-            $member->forceFill(['user_id' => $user->id])->save();
+            // Their email in the same lowercase form as the login's, so the
+            // person form keeps the two (and the login's links) as one.
+            $member->forceFill(['user_id' => $user->id, 'email' => $user->email])->save();
 
             return $user->id;
         }

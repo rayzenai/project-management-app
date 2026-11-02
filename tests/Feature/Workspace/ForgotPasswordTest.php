@@ -443,6 +443,29 @@ it('ends the old email\'s pending links when the person form changes the email, 
     expect(Hash::check('old-password', $next->fresh()->password))->toBeTrue();
 });
 
+it('ends a deleted person\'s pending links, so they never serve the address\'s next owner', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = forgotPasswordPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    $resetToken = Password::broker('users')->createToken($person);
+    $inviteToken = Password::broker('invites')->createToken($person);
+
+    $this->actingAs($admin)->from('/workspace/team')
+        ->delete("/workspace/members/{$member->id}")
+        ->assertSessionHasNoErrors();
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
+        ->and(DB::table('password_reset_tokens')->count())->toBe(0)
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+
+    $next = forgotPasswordPerson('sita@example.com');
+    Auth::logout();
+    forgotPasswordSet('reset', 'sita@example.com', $resetToken)->assertSessionHasErrors(['token' => PasswordLinkService::LINK_REFUSED]);
+    forgotPasswordSet('invite', 'sita@example.com', $inviteToken)->assertSessionHasErrors(['token' => PasswordLinkService::LINK_REFUSED]);
+    expect(Hash::check('old-password', $next->fresh()->password))->toBeTrue();
+});
+
 it('keeps pending links when the person form leaves the email as it is', function () {
     $admin = User::factory()->create();
     Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);

@@ -200,6 +200,21 @@ it('ends the old email\'s pending links when the API changes a person\'s email',
     ])->assertStatus(422)->assertJsonPath('errors.token', PasswordLinkService::LINK_REFUSED);
 });
 
+it('ends a deleted person\'s pending links through the API too', function () {
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = passwordApiPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    Password::broker('users')->createToken($person);
+    Password::broker('invites')->createToken($person);
+    Sanctum::actingAs($admin, ['*']);
+
+    $this->deleteJson("/api/v1/workspace/members/{$member->id}")->assertOk();
+
+    expect(DB::table('password_reset_tokens')->count())->toBe(0)
+        ->and(DB::table('invite_tokens')->count())->toBe(0);
+});
+
 it('counts only refused links toward the set-password limit', function () {
     $payload = ['kind' => 'reset', 'email' => 'nobody@example.com', 'token' => str_repeat('a', 64), 'password' => 'new-password-1'];
 

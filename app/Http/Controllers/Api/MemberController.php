@@ -167,13 +167,18 @@ class MemberController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Member $member, RemoveFromForgeService $forge): JsonResponse
+    public function destroy(Request $request, Member $member, RemoveFromForgeService $forge, PasswordLinkService $links): JsonResponse
     {
         abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
         $user = $member->user;
 
-        DB::transaction(function () use ($member, $user): void {
+        DB::transaction(function () use ($member, $user, $links): void {
+            // Links are kept by email: none may outlive the login and serve
+            // whoever is given the address next.
+            if ($user !== null) {
+                $links->forgetLinks($user);
+            }
             $member->delete();
             $user?->delete();
         });

@@ -235,7 +235,7 @@ it('gives an existing person without a login a login of their own, not a second 
     $other = Designation::factory()->create(['organization_id' => $roads->id, 'name' => 'Under Secretary']);
 
     expect(invitePreview($admin, ['text' => 'Mina T, MINA@example.com']))->toBe([
-        ['name' => 'Mina T', 'email' => 'MINA@example.com', 'designation_id' => $officer->id, 'status' => 'ready', 'member_id' => $mina->id],
+        ['name' => 'Mina T', 'email' => 'mina@example.com', 'designation_id' => $officer->id, 'status' => 'ready', 'member_id' => $mina->id],
     ]);
 
     $this->actingAs($admin)
@@ -293,7 +293,7 @@ it('answers another organization\'s people as already here, the same as its own,
     // The same answer for another organization's people as for one's own,
     // and nothing of theirs (no id, name or designation) in it.
     expect($response->json('rows'))->toBe([
-        ['name' => 'G', 'email' => 'GITA@health.example', 'designation_id' => null, 'status' => 'already_here', 'member_id' => null],
+        ['name' => 'G', 'email' => 'gita@health.example', 'designation_id' => null, 'status' => 'already_here', 'member_id' => null],
         ['name' => 'K', 'email' => 'kamala@health.example', 'designation_id' => null, 'status' => 'already_here', 'member_id' => null],
         ['name' => 'O', 'email' => 'own@example.com', 'designation_id' => null, 'status' => 'already_here', 'member_id' => null],
     ]);
@@ -526,7 +526,7 @@ it('never lets an organizational admin give a login to a super-admin\'s email', 
     $chief = Member::factory()->create(['organization_id' => $roads->id, 'email' => 'chief@example.com']);
 
     expect(inviteStatuses(invitePreview($admin, ['text' => "Chief, CHIEF@example.com\nBoss, boss@example.com"])))
-        ->toBe(['CHIEF@example.com' => 'not_allowed', 'boss@example.com' => 'not_allowed']);
+        ->toBe(['chief@example.com' => 'not_allowed', 'boss@example.com' => 'not_allowed']);
 
     $this->actingAs($admin)->post('/workspace/invites', ['people' => [['name' => 'Chief', 'email' => 'chief@example.com'], ['name' => 'Boss', 'email' => 'boss@example.com']]]);
 
@@ -551,6 +551,98 @@ it('never lets an organizational admin give a login to another organizational ad
     $this->actingAs(inviteBoss())->post('/workspace/invites', ['organization_id' => $roads->id, 'people' => [['name' => 'Other', 'email' => 'other@example.com']]]);
 
     expect($other->fresh()->user_id)->not->toBeNull();
+});
+
+it('stores invited emails in lowercase and takes any case for the same person', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    $mina = Member::factory()->create(['organization_id' => $roads->id, 'name' => 'Mina Thapa', 'email' => 'Mina.Thapa@Example.com']);
+
+    expect(invitePreview($admin, ['text' => "Deepak Karki, Deepak.Karki@Example.com\nMina, mina.thapa@EXAMPLE.com\nDeepak, deepak.karki@example.com"]))->toBe([
+        ['name' => 'Deepak Karki', 'email' => 'deepak.karki@example.com', 'designation_id' => null, 'status' => 'ready', 'member_id' => null],
+        ['name' => 'Mina', 'email' => 'mina.thapa@example.com', 'designation_id' => null, 'status' => 'ready', 'member_id' => $mina->id],
+        ['name' => 'Deepak', 'email' => 'deepak.karki@example.com', 'designation_id' => null, 'status' => 'already_here', 'member_id' => null],
+    ]);
+
+    $this->actingAs($admin)->post('/workspace/invites', ['people' => [
+        ['name' => 'Deepak Karki', 'email' => 'Deepak.Karki@Example.com'],
+        ['name' => 'Mina', 'email' => 'mina.thapa@EXAMPLE.com'],
+    ]])->assertSessionHas('workspace_flash.message', 'Invited 2 people.');
+
+    $deepak = Member::query()->where('name', 'Deepak Karki')->sole();
+    expect($deepak->email)->toBe('deepak.karki@example.com')
+        ->and($deepak->user->email)->toBe('deepak.karki@example.com')
+        // The person and their new login keep one, lowercase, email.
+        ->and($mina->fresh()->email)->toBe('mina.thapa@example.com')
+        ->and($mina->fresh()->user->email)->toBe('mina.thapa@example.com');
+    Mail::assertSent(SetPasswordLink::class, fn (SetPasswordLink $mail): bool => $mail->hasTo('deepak.karki@example.com'));
+    Mail::assertSent(SetPasswordLink::class, fn (SetPasswordLink $mail): bool => $mail->hasTo('mina.thapa@example.com'));
+
+    // So editing the person on the person form keeps their invite link.
+    $this->actingAs($admin)
+        ->patch("/workspace/members/{$mina->id}", ['name' => 'Mina Thapa Magar', 'email' => 'mina.thapa@example.com'])
+        ->assertSessionHasNoErrors();
+    expect(DB::table('invite_tokens')->where('email', 'mina.thapa@example.com')->exists())->toBeTrue();
+});
+
+it('leaves an existing mixed-case login as it is, and its fresh link still works', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    $hari = invitePersonWithLogin($roads, 'Hari.Rai@Example.com', ['invited_at' => now()->subDays(8)]);
+
+    expect(inviteStatuses(invitePreview($admin, ['text' => 'Hari, hari.rai@example.com'])))->toBe(['hari.rai@example.com' => 'resend']);
+
+    $this->actingAs($admin)->post('/workspace/invites', ['people' => [['name' => 'Hari', 'email' => 'hari.rai@example.com']]]);
+
+    $sent = null;
+    Mail::assertSent(SetPasswordLink::class, function (SetPasswordLink $mail) use (&$sent): bool {
+        $sent = $mail;
+
+        return $mail->hasTo('Hari.Rai@Example.com');
+    });
+    expect($hari->fresh()->email)->toBe('Hari.Rai@Example.com')
+        ->and(User::query()->whereRaw('lower(email) = ?', ['hari.rai@example.com'])->count())->toBe(1);
+
+    // The link names the login's own email, so it sets the password.
+    auth()->logout();
+    $this->post('/workspace/set-password', [
+        'kind' => 'invite',
+        'email' => 'Hari.Rai@Example.com',
+        'token' => basename((string) parse_url($sent->url, PHP_URL_PATH)),
+        'password' => 'new-password-1',
+        'password_confirmation' => 'new-password-1',
+    ])->assertRedirect(route('workspace.my'));
+    expect(Hash::check('new-password-1', $hari->fresh()->password))->toBeTrue();
+});
+
+it('refuses more than 200 people at once, the pasted and the added together', function () {
+    $roads = inviteOrganization();
+    $admin = inviteAdminOf($roads);
+    Member::factory()->count(60)->create(['organization_id' => $roads->id]);
+    $lines = fn (int $n): string => implode("\n", array_map(fn (int $i): string => "Person {$i}, person{$i}@example.com", range(1, $n)));
+    $refusal = "That's 210 people, 210 to invite. Invite at most 200 at a time.";
+
+    $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => $lines(150)])
+        ->assertOk()
+        ->assertJsonCount(150, 'rows')
+        ->assertJsonPath('without_login_count', 60);
+    $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => $lines(150), 'without_login' => true])
+        ->assertStatus(422)
+        ->assertExactJson(['message' => $refusal, 'errors' => ['people' => $refusal]]);
+    $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => $lines(140), 'without_login' => true])
+        ->assertOk()
+        ->assertJsonCount(200, 'rows');
+
+    $people = array_map(fn (int $i): array => ['name' => "Person {$i}", 'email' => "person{$i}@example.com"], range(1, 150));
+    $this->actingAs($admin)->from('/workspace/team')
+        ->post('/workspace/invites', ['people' => $people, 'without_login' => true])
+        ->assertRedirect('/workspace/team')
+        ->assertSessionHasErrors(['people' => $refusal])
+        ->assertSessionHas('workspace_flash.success', false);
+
+    expect(User::query()->count())->toBe(1)
+        ->and(Member::query()->whereNotNull('user_id')->count())->toBe(1);
+    Mail::assertNothingSent();
 });
 
 it('shows Invite people on the People page to whoever may add people', function () {

@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\DB;
  * designation of theirs in the row. Only people of the organization carry a
  * `member_id`.
  *
+ * Emails are lowercased: the rows show, and an invite stores, the lowercase
+ * form, and every comparison (logins, people, repeats in the list,
+ * super-admins' emails) ignores case, so "Deepak@x" and "deepak@x" are one
+ * person. At most MAX_PEOPLE rows are sent at once, the pasted people and
+ * the ones the "never signed in" box adds together (tooBig).
+ *
  * Statuses: `ready` (a new person, or one of the organization's people with
  * no login yet), `resend` (invited, never signed in: a fresh link),
  * `needs_email`, `needs_name`, `already_here`, `deactivated` (one of the
@@ -97,6 +103,22 @@ final class InvitePlan
         ];
     }
 
+    /**
+     * The refusal when a plan is more than can be sent at once, else null.
+     *
+     * @param  list<InviteRow>  $rows
+     */
+    public static function tooBig(array $rows): ?string
+    {
+        if (count($rows) <= self::MAX_PEOPLE) {
+            return null;
+        }
+
+        $invited = count(array_filter($rows, fn (array $row): bool => in_array($row['status'], ['ready', 'resend'], true)));
+
+        return "That's ".count($rows)." people, {$invited} to invite. Invite at most ".self::MAX_PEOPLE.' at a time.';
+    }
+
     public static function isEmail(string $value): bool
     {
         return strlen($value) <= 255 && filter_var($value, FILTER_VALIDATE_EMAIL) !== false;
@@ -150,7 +172,7 @@ final class InvitePlan
 
         $inputs = array_map(fn (array $person): array => [
             'name' => trim((string) ($person['name'] ?? '')),
-            'email' => trim((string) ($person['email'] ?? '')),
+            'email' => mb_strtolower(trim((string) ($person['email'] ?? ''))),
             'designation_id' => $person['designation_id'] ?? null,
         ], $people);
 
@@ -248,7 +270,7 @@ final class InvitePlan
         // `already_here` here and left out.
         $extra = [];
         foreach ($unlisted as $member) {
-            $planned = $row($member->name, (string) $member->email, null);
+            $planned = $row($member->name, mb_strtolower(trim((string) $member->email)), null);
 
             if ($planned['status'] === 'ready') {
                 $extra[] = $planned;

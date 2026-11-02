@@ -103,6 +103,20 @@ it('adds the organization\'s people who have no login', function () {
     Mail::assertSent(SetPasswordLink::class, 2);
 });
 
+it('refuses more than 200 people at once, saying how many', function () {
+    $roads = Organization::factory()->create();
+    inviteApiAdmin($roads);
+    Member::factory()->count(60)->create(['organization_id' => $roads->id]);
+    $people = array_map(fn (int $i): array => ['name' => "Person {$i}", 'email' => "person{$i}@example.com"], range(1, 150));
+    $refusal = ['message' => "That's 210 people, 210 to invite. Invite at most 200 at a time.", 'errors' => ['people' => "That's 210 people, 210 to invite. Invite at most 200 at a time."]];
+
+    $this->postJson('/api/v1/workspace/invites/preview', ['people' => $people, 'without_login' => true])->assertStatus(422)->assertExactJson($refusal);
+    $this->postJson('/api/v1/workspace/invites', ['people' => $people, 'without_login' => true])->assertStatus(422)->assertExactJson($refusal);
+    $this->postJson('/api/v1/workspace/invites', ['people' => $people])->assertOk()->assertJsonPath('data.invited', 150);
+
+    expect(User::query()->count())->toBe(151);
+});
+
 it('refuses a project manager and an admin of another organization', function () {
     $roads = Organization::factory()->create();
     $health = Organization::factory()->create();

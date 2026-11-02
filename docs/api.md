@@ -511,7 +511,8 @@ created and `message` says so. `PATCH` accepts `organization_id` and
 `PATCH` also ends the person's other web sessions, every "remember me"
 sign-in and any pending reset or invite link; their API tokens stay. A changed
 `email` on `PATCH` ends any pending reset or invite link sent to the old
-address, so it can't serve whoever has that address next.
+address, so it can't serve whoever has that address next; so does `DELETE`
+for the person's own address.
 
 **Roles.** `POST` and `PATCH` take three optional role fields, each the
 complete wanted set of ids; a field left out leaves that role as it is:
@@ -566,11 +567,18 @@ Invite many people at once; each gets an email with a link to set a password
 their own organization, and naming another organization is a 403, as is
 anyone who may not create people (a project or program manager). Each person
 is `{ name, email, designation_id? }`; any other field (a `status`, an id) is
-ignored, because the plan is rebuilt on every request.
+ignored, because the plan is rebuilt on every request. Emails are compared
+without case and stored lowercased ("Deepak@x" and "deepak@x" are one
+person; the rows show the lowercase form, and a person who gets a login has
+their email lowercased with it). A login that already exists keeps its email
+as it is. At most 200 rows go at once, the listed people and the ones
+`without_login` adds together: more is a 422 on both routes, `{ message,
+errors: { people } }` with `That's 210 people, 210 to invite. Invite at most
+200 at a time.`, and nothing is created.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| POST | `/workspace/invites/preview` | `organization_id` (super-admin), `people` (at most 200) or `text` (pasted lines, at most 20,000 characters: "Name, email", "Name <email>" or "Name email" a line; the first 200 lines are read), `without_login` | `{ rows: [{ name, email, designation_id, status, member_id }], without_login_count }`. Nothing is created |
+| POST | `/workspace/invites/preview` | `organization_id` (super-admin), `people` (at most 200) or `text` (pasted lines, at most 20,000 characters: "Name, email", "Name <email>" or "Name email" a line; the first 200 lines are read), `without_login` | `{ rows: [{ name, email, designation_id, status, member_id }], without_login_count }`; with `without_login: true` the rows include the people it adds. Nothing is created |
 | POST | `/workspace/invites` | `organization_id` (super-admin), `people` (at most 200, else 422 on `people`), `without_login` | `{ message: "Invited 2 people.", data: { invited, skipped: [{ name, email, status }] } }` (`No one was invited.` when nobody was); 409 if someone gave one of the emails a login meanwhile (nothing is created then) |
 
 `status` is `ready` (a new person, or one of the organization's people with no

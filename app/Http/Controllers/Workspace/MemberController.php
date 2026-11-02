@@ -163,13 +163,18 @@ class MemberController extends Controller
         return back()->with('workspace_flash', ['success' => $success, 'message' => $message]);
     }
 
-    public function destroy(Request $request, Member $member, RemoveFromForgeService $forge): RedirectResponse
+    public function destroy(Request $request, Member $member, RemoveFromForgeService $forge, PasswordLinkService $links): RedirectResponse
     {
         abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
         $user = $member->user;
 
-        DB::transaction(function () use ($member, $user): void {
+        DB::transaction(function () use ($member, $user, $links): void {
+            // Links are kept by email: none may outlive the login and serve
+            // whoever is given the address next.
+            if ($user !== null) {
+                $links->forgetLinks($user);
+            }
             $member->delete();
             $user?->delete();
         });
