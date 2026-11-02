@@ -448,7 +448,7 @@
     }
 
     const CHIP =
-        'inline-flex h-[34px] max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-[14px] font-medium text-fg transition hover:bg-hover sm:h-[28px] sm:text-[13px]';
+        'inline-flex h-[34px] max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-[14px] font-medium text-fg transition hover:bg-hover lg:h-[28px] lg:text-[13px]';
     const EMPTY_CHIP = 'border-dashed text-fg-muted';
 
     // When the project changes (and on mount), drop assignees who aren't on the new
@@ -543,43 +543,176 @@
         tokenInput?.focus();
     }
 
-    function submit() {
-        // Add task is disabled, and says "Pick a project.", in either case.
-        // The title field stays enabled while adding (a disabled field
-        // loses its focus, and "the next one" needs it), so a second Enter
-        // waits here.
-        if (form.processing || !form.title.trim() || !hasProject) {
-            return;
+    /**
+     * One task as Enter took it. Where the form stays open (the add field,
+     * "Create another") it clears for the next task the moment Enter is
+     * pressed, so typing on never waits for the server: a task entered
+     * while the last is still being added waits its turn, and one the
+     * server refuses comes back into the form.
+     */
+    type Draft = {
+        project_id: ProjectChoice;
+        title: string;
+        deadline_at: string;
+        assignee_member_ids: number[];
+        selfAutoSeeded: boolean;
+        description: string;
+        priority: Priority | '';
+        status: string;
+        dependsOn: TaskOption[];
+    };
+
+    const staysOpen = $derived(variant === 'inline' || keepOpen);
+    /** Entered while the one before was still being added, oldest first. */
+    const waiting: Draft[] = [];
+    /** Set as the post starts (useForm's `processing` waits for the request). */
+    let sending = false;
+
+    function capture(): Draft {
+        return {
+            project_id: form.project_id,
+            title: form.title,
+            deadline_at: form.deadline_at,
+            assignee_member_ids: [...form.assignee_member_ids],
+            selfAutoSeeded,
+            description: form.description,
+            priority: form.priority,
+            status: form.status,
+            dependsOn: [...dependsOn],
+        };
+    }
+
+    function apply(draft: Draft): void {
+        form.project_id = draft.project_id;
+        form.title = draft.title;
+        form.deadline_at = draft.deadline_at;
+        form.assignee_member_ids = draft.assignee_member_ids;
+        selfAutoSeeded = draft.selfAutoSeeded;
+        form.description = draft.description;
+        form.priority = draft.priority;
+        form.status = draft.status;
+        dependsOn = draft.dependsOn;
+    }
+
+    function nextAssignees(): number[] {
+        return seedsSelf && selfEligible && currentMemberId !== null
+            ? [currentMemberId]
+            : [];
+    }
+
+    /** Ready for the next task; the project stays. */
+    function clearForNext(): void {
+        form.title = '';
+        form.deadline_at = '';
+        form.description = '';
+        form.assignee_member_ids = nextAssignees();
+        selfAutoSeeded = form.assignee_member_ids.length > 0;
+        form.priority = '';
+        form.status = defaultStatus;
+        dependsOn = [];
+        mention = null;
+        tokenInput?.focus();
+    }
+
+    /**
+     * The server refused a task: put it back. Nothing typed is lost, so
+     * text typed since goes after it, and a field set since keeps its value.
+     */
+    function restore(draft: Draft): void {
+        if (!form.title.trim()) {
+            form.project_id = draft.project_id;
         }
 
-        // A one-off create from the dialog closes it and lands on the project
-        // board, which destroys this form before onSuccess runs: decide now,
-        // and read none of its deriveds once it is gone. "Create another"
-        // (and the inline bar) stays open, so it resets for the next task.
-        const closeAfter = keepOpen ? undefined : onSuccess;
+        form.title = form.title.trim()
+            ? `${draft.title} ${form.title}`
+            : draft.title;
+        form.deadline_at ||= draft.deadline_at;
+        form.description ||= draft.description;
+        form.priority ||= draft.priority;
 
+        if (form.assignee_member_ids.join() === nextAssignees().join()) {
+            form.assignee_member_ids = draft.assignee_member_ids;
+            selfAutoSeeded = draft.selfAutoSeeded;
+        }
+
+        if (form.status === defaultStatus) {
+            form.status = draft.status;
+        }
+
+        if (dependsOn.length === 0) {
+            dependsOn = draft.dependsOn;
+        }
+    }
+
+    /**
+     * Posts a task. useForm takes its data when the post starts, so the form
+     * holds the draft only for that moment and then goes back to what is
+     * being typed.
+     */
+    function send(draft: Draft): void {
+        const typing = capture();
+        let added = false;
+
+        sending = true;
+        apply(draft);
         form.post('/workspace/quick-add', {
             preserveScroll: true,
             onSuccess: () => {
-                if (closeAfter) {
-                    closeAfter();
+                added = true;
+            },
+            onFinish: () => {
+                sending = false;
 
-                    return;
+                if (!added) {
+                    restore(draft);
                 }
 
-                form.reset('title', 'deadline_at', 'description');
-                mention = null;
-                dependsOn = [];
-                // Re-seed the default assignee (self when eligible) for the
-                // next task; the add field keeps only its project.
-                form.assignee_member_ids =
-                    seedsSelf && selfEligible && currentMemberId !== null
-                        ? [currentMemberId]
-                        : [];
-                selfAutoSeeded = form.assignee_member_ids.length > 0;
-                form.priority = '';
-                form.status = defaultStatus;
-                tokenInput?.focus();
+                const next = waiting.shift();
+
+                if (next) {
+                    queueMicrotask(() => send(next));
+                }
+            },
+        });
+        apply(typing);
+    }
+
+    function submit() {
+        // Add task is disabled, and says "Pick a project.", in either case.
+        if (!form.title.trim() || !hasProject) {
+            return;
+        }
+
+        if (staysOpen) {
+            const draft = capture();
+
+            clearForNext();
+
+            if (sending) {
+                waiting.push(draft);
+            } else {
+                send(draft);
+            }
+
+            return;
+        }
+
+        if (sending) {
+            return;
+        }
+
+        // A one-off create from the dialog closes it and lands on the
+        // project board, which destroys this form before onSuccess runs:
+        // decide now, and read none of its deriveds once it is gone. Its
+        // title is read-only until then.
+        const closeAfter = onSuccess;
+
+        sending = true;
+        form.post('/workspace/quick-add', {
+            preserveScroll: true,
+            onSuccess: () => closeAfter?.(),
+            onFinish: () => {
+                sending = false;
             },
         });
     }
@@ -852,7 +985,7 @@
             {/if}
 
             <div
-                class="flex flex-wrap items-center gap-2 px-3.5 pb-3 sm:pl-[42px]"
+                class="flex flex-wrap items-center gap-2 px-3.5 pb-3 lg:pl-[42px]"
             >
                 <Popover
                     bind:open={dateOpen}
@@ -970,16 +1103,14 @@
                 >
                 <button
                     type="submit"
-                    disabled={form.processing ||
-                        !form.title.trim() ||
-                        !hasProject}
+                    disabled={!form.title.trim() || !hasProject}
                     aria-describedby={hasProject ? undefined : `${uid}-why`}
                     class="btn-primary ml-auto lg:hidden">Add</button
                 >
             </div>
 
             {#if !hasProject || isGeneral || pickedJoiners.length > 0}
-                <div class="flex flex-col gap-1 px-3.5 pb-3 sm:pl-[42px]">
+                <div class="flex flex-col gap-1 px-3.5 pb-3 lg:pl-[42px]">
                     {@render missingProject()}
                     {@render generalNote()}
                     {#if pickedJoiners.length > 0}
@@ -1003,6 +1134,7 @@
                     bind:this={tokenInput}
                     bind:value={form.title}
                     placeholder="What needs to happen?"
+                    readonly={!staysOpen && form.processing}
                     size="xl"
                     onsubmit={submit}
                 />

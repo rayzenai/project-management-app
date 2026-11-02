@@ -739,6 +739,10 @@
                     </div>
                 {/each}
             </dl>
+            <p class="mt-3 text-[13px] text-fg-muted">
+                Status and what a task depends on are set in the New task dialog
+                (press N).
+            </p>
         </section>
 
         <section class="text-[13px] text-fg-muted">
