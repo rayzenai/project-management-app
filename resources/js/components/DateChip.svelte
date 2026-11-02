@@ -88,9 +88,8 @@
         );
     }
 
-    const sizing = $derived(
-        size === 'sm' ? 'h-5 text-[11.5px]' : 'h-6 text-xs',
-    );
+    // sm is the chip as it is; md one step up, for a page's side panel.
+    const sizing = $derived(size === 'sm' ? '' : 'h-[28px] text-xs');
 </script>
 
 <Popover

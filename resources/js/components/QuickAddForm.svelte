@@ -606,9 +606,14 @@
             <span class="text-fg-faint">from your #tag</span>
         </span>
     {:else}
-        <label class="flex items-center gap-1.5 text-xs text-fg-muted">
+        <label
+            class="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-fg-muted sm:flex-none"
+        >
             Project
-            <select bind:value={form.project_id} class="input h-7 w-auto py-0">
+            <select
+                bind:value={form.project_id}
+                class="input h-7 w-auto min-w-0 flex-1 py-0 sm:flex-none"
+            >
                 {@render projectOptions()}
             </select>
         </label>

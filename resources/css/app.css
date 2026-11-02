@@ -11,6 +11,14 @@
     --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
     --font-np: 'Mukta', 'Geist', ui-sans-serif, system-ui, sans-serif;
 
+    /* Type on a 15px root: text-xs is the meta line (about 13px), text-sm
+       the secondary line (about 14px), so neither drops below what people
+       read without leaning in. */
+    --text-xs: 0.875rem;
+    --text-xs--line-height: calc(1.25 / 0.875);
+    --text-sm: 0.9375rem;
+    --text-sm--line-height: calc(1.375 / 0.9375);
+
     /* ------------------------------------------------------------------ *
      * Semantic color layer. Each Tailwind color utility resolves to a
      * runtime `--ws-*` variable that applyTheme.ts writes per the active
@@ -71,8 +79,8 @@
     --ws-line: #e2e5ec;
     --ws-line-soft: #ebedf3;
     --ws-text: #1b2030;
-    --ws-text-muted: #626b7d;
-    --ws-text-faint: #9aa2b3;
+    --ws-text-muted: #4e5664;
+    --ws-text-faint: #636d83;
     --ws-accent: #3b6fe0;
     --ws-accent-dim: #2f5fc7;
     --ws-accent-soft: rgba(59, 111, 224, 0.1);
@@ -100,8 +108,8 @@
         --ws-line: #262c39;
         --ws-line-soft: #1f2430;
         --ws-text: #e4e7ee;
-        --ws-text-muted: #8e95a6;
-        --ws-text-faint: #5b6275;
+        --ws-text-muted: #a4a9b7;
+        --ws-text-faint: #8990a4;
         --ws-accent: #6d94f5;
         --ws-accent-dim: #5a82e6;
         --ws-accent-soft: rgba(109, 148, 245, 0.14);
@@ -131,7 +139,7 @@
 
 @layer base {
     html {
-        font-size: 13.5px;
+        font-size: 15px;
     }
 
     body {
@@ -173,22 +181,22 @@
 @layer components {
     /* ---- Buttons ------------------------------------------------------ */
     .btn {
-        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface-alt px-2.5 text-[13px] font-medium whitespace-nowrap text-fg transition hover:bg-hover active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+        @apply inline-flex h-[36px] items-center gap-1.5 rounded-md border border-line bg-surface-alt px-2.5 text-[14px] font-medium whitespace-nowrap text-fg transition hover:bg-hover active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
     }
     .btn-primary {
-        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-accent bg-accent px-2.5 text-[13px] font-medium whitespace-nowrap text-white transition hover:bg-accent-dim active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+        @apply inline-flex h-[36px] items-center gap-1.5 rounded-md border border-accent bg-accent px-2.5 text-[14px] font-medium whitespace-nowrap text-white transition hover:bg-accent-dim active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
     }
     .btn-ghost {
-        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 text-[13px] font-medium whitespace-nowrap text-fg-muted transition hover:bg-hover hover:text-fg active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+        @apply inline-flex h-[36px] items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 text-[14px] font-medium whitespace-nowrap text-fg-muted transition hover:bg-hover hover:text-fg active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
     }
     .btn-danger {
-        @apply inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface-alt px-2.5 text-[13px] font-medium whitespace-nowrap text-danger transition hover:bg-danger-soft active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+        @apply inline-flex h-[36px] items-center gap-1.5 rounded-md border border-line bg-surface-alt px-2.5 text-[14px] font-medium whitespace-nowrap text-danger transition hover:bg-danger-soft active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
     }
     .btn-lg {
-        @apply h-9 px-3.5 text-sm;
+        @apply h-[44px] px-3.5 text-sm;
     }
     .btn-icon {
-        @apply inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-fg-muted transition hover:bg-hover hover:text-fg;
+        @apply inline-flex h-[36px] w-[36px] items-center justify-center rounded-md border border-transparent text-fg-muted transition hover:bg-hover hover:text-fg;
     }
     .kbd {
         @apply rounded-sm border border-line bg-surface px-1 font-mono text-[10.5px] text-fg-faint;
@@ -196,7 +204,7 @@
 
     /* ---- Inputs ------------------------------------------------------- */
     .input {
-        @apply w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] text-fg placeholder:text-fg-faint focus:border-accent focus:outline-none;
+        @apply min-h-[40px] w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[16px] text-fg placeholder:text-fg-faint focus:border-accent focus:outline-none md:text-[14px];
     }
     .label {
         @apply text-xs font-medium text-fg-muted;
@@ -204,7 +212,7 @@
 
     /* ---- Chips (small state labels) ----------------------------------- */
     .chip {
-        @apply inline-flex h-5 items-center gap-1.5 rounded-sm border border-line px-1.5 text-[11.5px] font-medium whitespace-nowrap text-fg-muted;
+        @apply inline-flex h-[24px] items-center gap-1.5 rounded-sm border border-line px-1.5 text-[12.5px] font-medium whitespace-nowrap text-fg-muted;
     }
     .chip-danger {
         @apply border-transparent bg-danger-soft text-danger;
@@ -232,13 +240,13 @@
     /* Registers share this rhythm so a group head and its rows line up on
        every screen: 20px gutter, 24px from lg. */
     .group-head {
-        @apply flex h-9 items-center gap-2 border-y border-line bg-surface-alt px-5 text-[13px] font-medium text-fg lg:px-6;
+        @apply flex h-[40px] items-center gap-2 border-y border-line bg-surface-alt px-5 text-[13px] font-medium text-fg lg:px-6;
     }
     .row {
-        @apply flex items-center gap-3 border-b border-line px-5 transition hover:bg-hover lg:px-6;
+        @apply flex min-h-[44px] items-center gap-3 border-b border-line px-5 transition hover:bg-hover lg:px-6;
     }
     .col-head {
-        @apply text-[11.5px] font-medium text-fg-faint;
+        @apply text-[12.5px] font-medium text-fg-faint;
     }
 
     /* ---- Task register grid -------------------------------------------
@@ -267,7 +275,7 @@
         }
     }
     .task-head {
-        @apply sticky top-12 z-10 h-10 border-b border-line bg-surface-alt text-[11.5px] font-medium text-fg-faint;
+        @apply sticky top-12 z-10 h-10 border-b border-line bg-surface-alt text-[12.5px] font-medium text-fg-faint;
     }
     .task-row {
         @apply cursor-pointer border-b border-line text-left transition hover:bg-hover;
@@ -278,7 +286,7 @@
         @apply rounded-lg border border-line bg-raised py-1 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.12)];
     }
     .menu-item {
-        @apply flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-fg-muted hover:bg-hover hover:text-fg;
+        @apply flex min-h-[40px] w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[14px] text-fg-muted hover:bg-hover hover:text-fg;
     }
 
     /* ---- Quick-add token highlighting (TokenInput mirror layer) ------- */

@@ -213,7 +213,7 @@
         aria-level={depth + 1}
         aria-expanded={node.children.length > 0 ? open : undefined}
         tabindex="-1"
-        class={`row min-h-11 gap-2 py-1.5 ${dropTarget === person.id ? 'bg-accent-soft' : ''} ${dragging?.person.id === person.id ? 'opacity-50' : ''}`}
+        class={`row gap-2 py-1.5 ${dropTarget === person.id ? 'bg-accent-soft' : ''} ${dragging?.person.id === person.id ? 'opacity-50' : ''}`}
         style={`--depth:${depth}`}
         ondragenter={(e) => dragOver(e, person.id)}
         ondragover={(e) => dragOver(e, person.id)}

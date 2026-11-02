@@ -354,10 +354,11 @@
                 <button
                     type="button"
                     onclick={deleteTask}
+                    aria-label="Delete"
                     class="btn-ghost hover:text-danger"
                 >
                     <Trash2 class="h-3.5 w-3.5" />
-                    Delete
+                    <span class="hidden sm:inline">Delete</span>
                 </button>
             {/if}
         </div>
@@ -502,7 +503,7 @@
                         bind:value={todoForm.body}
                         placeholder="Add a subtask"
                         aria-label="Add a subtask"
-                        class="input flex-1"
+                        class="input min-w-0 flex-1"
                     />
                     <input
                         type="date"

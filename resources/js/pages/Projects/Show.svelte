@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia, page, router } from '@inertiajs/svelte';
-    import { ChartGantt } from '@lucide/svelte';
+    import { Archive, ChartGantt, Pencil } from '@lucide/svelte';
     import { onMount } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
@@ -231,25 +231,32 @@
                     href={`/workspace/projects/${project.slug}/progress`}
                     use:inertia
                     class="btn-ghost"
-                    ><ChartGantt class="h-3.5 w-3.5" />Progress</a
+                    aria-label="Progress"
+                    ><ChartGantt class="h-3.5 w-3.5" /><span
+                        class="hidden sm:inline">Progress</span
+                    ></a
                 >
             {/if}
             {#if project.can_manage_access && !project.is_archived}
                 <button
                     type="button"
                     class="btn-ghost"
+                    aria-label="Edit project"
                     onclick={() => (editing = true)}
                 >
-                    Edit project
+                    <Pencil class="h-3.5 w-3.5 sm:hidden" />
+                    <span class="hidden sm:inline">Edit project</span>
                 </button>
             {/if}
             {#if project.can_archive && !project.is_archived}
                 <button
                     type="button"
                     class="btn-ghost"
+                    aria-label="Archive"
                     onclick={archiveProject}
                 >
-                    Archive
+                    <Archive class="h-3.5 w-3.5 sm:hidden" />
+                    <span class="hidden sm:inline">Archive</span>
                 </button>
             {/if}
             <button

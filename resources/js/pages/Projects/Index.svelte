@@ -430,7 +430,7 @@
                         {#each group.projects as project (project.id)}
                             <a
                                 href={`/workspace/projects/${project.slug}`}
-                                class={`row group min-h-10 py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
+                                class={`row group py-2 lg:px-8 ${archivedView ? 'text-fg-muted' : ''}`}
                             >
                                 <ProgressRing
                                     percent={project.percent_complete ?? 0}

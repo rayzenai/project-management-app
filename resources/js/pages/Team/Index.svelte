@@ -696,7 +696,7 @@
             <div class="border-t border-line">
                 {#each members as member (member.id)}
                     <div
-                        class={`row min-h-11 px-2 py-1.5 ${
+                        class={`row flex-wrap px-2 py-1.5 sm:flex-nowrap ${
                             member.is_active === false ? 'opacity-60' : ''
                         }`}
                     >
@@ -878,7 +878,9 @@
                                 </div>
                             </div>
                             {#if member.can_manage}
-                                <div class="flex shrink-0 items-center gap-1">
+                                <div
+                                    class="flex w-full shrink-0 items-center justify-end gap-1 sm:w-auto"
+                                >
                                     <button
                                         type="button"
                                         class="btn-ghost"

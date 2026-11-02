@@ -100,7 +100,7 @@
         <ul class="max-w-3xl border-t border-line">
             {#each team.members as member (member.id)}
                 <li
-                    class={`row min-h-11 gap-2.5 px-1 py-1.5 ${member.is_active ? '' : 'opacity-60'}`}
+                    class={`row gap-2.5 px-1 py-1.5 ${member.is_active ? '' : 'opacity-60'}`}
                 >
                     <Avatar name={member.name} size="md" />
                     <div class="min-w-0 flex-1">
