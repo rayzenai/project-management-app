@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Requests\Auth\ForgotPasswordRequest;
+use App\Http\Requests\Auth\SetPasswordRequest;
 use App\Mail\SetPasswordLink;
 use App\Models\Member;
 use App\Models\User;
@@ -138,4 +139,19 @@ it('counts the web and the API together', function () {
     }
 
     $this->postJson('/api/v1/forgot-password', ['email' => 'sita@example.com'])->assertStatus(429);
+});
+
+it('answers the eleventh set-password try in a minute from one address with 429', function () {
+    $payload = ['kind' => 'reset', 'email' => 'nobody@example.com', 'token' => str_repeat('a', 64), 'password' => 'new-password-1', 'password_confirmation' => 'new-password-1'];
+
+    foreach (range(1, 10) as $i) {
+        $this->postJson('/api/v1/set-password', $payload)->assertStatus(422);
+    }
+
+    $this->postJson('/api/v1/set-password', $payload)
+        ->assertStatus(429)
+        ->assertJsonPath('errors.password.0', SetPasswordRequest::THROTTLED);
+
+    // Another address is not held back.
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.7'])->postJson('/api/v1/set-password', $payload)->assertStatus(422);
 });

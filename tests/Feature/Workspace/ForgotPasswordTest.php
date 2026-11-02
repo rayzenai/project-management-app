@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Requests\Auth\ForgotPasswordRequest;
+use App\Http\Requests\Auth\SetPasswordRequest;
 use App\Mail\SetPasswordLink;
 use App\Models\Member;
 use App\Models\User;
@@ -15,7 +16,9 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Sleep;
 use Illuminate\Testing\TestResponse;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Inertia\Testing\AssertableInertia;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\Mailer\Exception\TransportException;
 
 beforeEach(function () {
@@ -306,6 +309,75 @@ it('signs out the person\'s other web sessions when their password is set', func
     Auth::forgetGuards();
     $this->get('/workspace/my')->assertRedirect('/workspace/login');
     $this->assertGuest();
+});
+
+it('keeps the admin signed in, and the person\'s API tokens, when an admin sets someone else\'s password', function () {
+    $admin = User::factory()->create(['email' => 'admin@example.com', 'password' => Hash::make('admin-password')]);
+    Member::factory()->linkedTo($admin)->create(['is_office_admin' => true]);
+    $person = forgotPasswordPerson();
+    $member = Member::query()->where('user_id', $person->id)->firstOrFail();
+    $phone = $person->createToken('phone')->plainTextToken;
+
+    $this->post('/workspace/login', ['email' => 'admin@example.com', 'password' => 'admin-password'])->assertRedirect();
+    $this->get('/workspace/my')->assertOk();
+    $this->from('/workspace/team')->patch("/workspace/members/{$member->id}", ['password' => 'given-password-1'])
+        ->assertSessionHasNoErrors();
+
+    Auth::forgetGuards();
+    $this->get('/workspace/my')->assertOk();
+    $this->assertAuthenticatedAs($admin);
+
+    expect(Hash::check('given-password-1', $person->fresh()->password))->toBeTrue()
+        ->and(PersonalAccessToken::findToken($phone)?->tokenable?->is($person))->toBeTrue();
+});
+
+it('sends the eleventh set-password try in a minute from one address away, before any link is checked', function () {
+    forgotPasswordPerson();
+    $this->post('/workspace/forgot-password', ['email' => 'sita@example.com']);
+    $token = forgotPasswordToken(forgotPasswordLinkTo('sita@example.com'));
+
+    foreach (range(1, 10) as $i) {
+        forgotPasswordSet('reset', "nobody{$i}@example.com", str_repeat('a', 64))->assertSessionHasErrors('token');
+    }
+
+    forgotPasswordSet('reset', 'sita@example.com', $token)
+        ->assertSessionHasErrors(['password' => SetPasswordRequest::THROTTLED])
+        ->assertSessionMissing('errors.token');
+    $this->assertGuest();
+
+    $this->travel(61)->seconds();
+
+    // The refused try never reached the link: it still works.
+    forgotPasswordSet('reset', 'sita@example.com', $token)->assertRedirect(route('workspace.my'));
+});
+
+it('describes the password rules the server checks, in plain words, before anyone fails them', function () {
+    $page = fn () => $this->get(route('workspace.password.reset', ['token' => 'abc', 'email' => 'sita@example.com']))
+        ->assertOk();
+
+    // Outside production the app's default: eight characters.
+    $page()->assertInertia(fn (AssertableInertia $p) => $p->where('passwordRules', 'At least 8 characters.'));
+
+    PasswordRule::defaults(fn (): PasswordRule => PasswordRule::min(12)->mixedCase()->letters()->numbers()->symbols()->uncompromised());
+    $page()->assertInertia(fn (AssertableInertia $p) => $p->where(
+        'passwordRules',
+        'At least 12 characters, with upper and lower case letters, a number and a symbol. Not one that has shown up in a data leak.',
+    ));
+
+    PasswordRule::defaults(fn (): PasswordRule => PasswordRule::min(10)->letters()->numbers());
+    expect(SetPasswordRequest::describeRules())->toBe('At least 10 characters, with a letter and a number.');
+});
+
+it('still names each rule a new password fails', function () {
+    PasswordRule::defaults(fn (): PasswordRule => PasswordRule::min(12)->numbers()->symbols());
+    forgotPasswordPerson();
+    $this->post('/workspace/forgot-password', ['email' => 'sita@example.com']);
+    $token = forgotPasswordToken(forgotPasswordLinkTo('sita@example.com'));
+
+    forgotPasswordSet('reset', 'sita@example.com', $token, 'short')
+        ->assertSessionHasErrors(['password' => 'The password field must be at least 12 characters.']);
+    forgotPasswordSet('reset', 'sita@example.com', $token, 'longenoughpassword1')
+        ->assertSessionHasErrors(['password' => 'The password field must contain at least one symbol.']);
 });
 
 it('keeps the session of an admin who changes their own password on the person form', function () {

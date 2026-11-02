@@ -8,11 +8,14 @@
         token,
         email,
         status = null,
+        passwordRules,
     }: {
         kind: 'reset' | 'invite';
         token: string;
         email: string;
         status?: string | null;
+        /** The rules the server checks, in plain words. */
+        passwordRules: string;
     } = $props();
 
     const uid = $props.id();
@@ -111,6 +114,7 @@
                             id="{uid}-password"
                             type={showPassword ? 'text' : 'password'}
                             autocomplete="new-password"
+                            aria-describedby="{uid}-rules"
                             bind:value={form.password}
                             required
                             class="input h-9 pr-10"
@@ -128,6 +132,9 @@
                                 />{:else}<Eye class="h-4 w-4" />{/if}
                         </button>
                     </div>
+                    <p id="{uid}-rules" class="text-xs text-fg-muted">
+                        {passwordRules}
+                    </p>
                     {#if form.errors.password}<p class="text-xs text-danger">
                             {form.errors.password}
                         </p>{/if}

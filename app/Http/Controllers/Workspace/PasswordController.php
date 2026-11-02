@@ -81,6 +81,7 @@ class PasswordController extends Controller
             'token' => $token,
             'email' => (string) $request->query('email', ''),
             'status' => $request->session()->get('status'),
+            'passwordRules' => SetPasswordRequest::describeRules(),
         ]);
     }
 }
