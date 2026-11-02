@@ -23,6 +23,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $git_username
  * @property int|null $workspace_organization_id the organization a super-admin's workspace is switched to (WorkspaceOrganization); null is all
  * @property Carbon|null $last_seen_at when they last used the workspace, to the hour (TouchLastSeen); null is never
+ * @property Carbon|null $invited_at when they were last sent an invite link (PasswordLinkService::sendInvite); null is never
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -125,6 +126,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'workspace_organization_id' => 'integer',
             'last_seen_at' => 'datetime',
+            'invited_at' => 'datetime',
         ];
     }
 }

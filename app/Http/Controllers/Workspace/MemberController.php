@@ -17,6 +17,7 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -130,6 +131,12 @@ class MemberController extends Controller
                     $user->password = Hash::make($request->validated('password'));
                 }
                 $user->save();
+
+                // Their own login: the session keeps the new password's hash
+                // (AuthenticateSession), so this session stays signed in.
+                if ($user->is($request->user())) {
+                    Auth::setUser($user);
+                }
             }
         }, self::LOCK_ATTEMPTS);
 

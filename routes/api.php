@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\OrganizationGitController;
 use App\Http\Controllers\Api\OrganogramController;
+use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\PlanTrackerController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProgramController;
@@ -54,6 +55,10 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->name('api.')->group(function () {
     // Unauthenticated: exchange credentials for a personal access token.
     Route::post('/login', [AuthController::class, 'login'])->name('login');
+    // Unauthenticated: a forgotten-password link, and setting a password
+    // from an emailed link (the app then signs in through /login).
+    Route::post('/forgot-password', [PasswordController::class, 'email'])->name('password.email');
+    Route::post('/set-password', [PasswordController::class, 'store'])->name('password.store');
 
     Route::middleware(['auth:sanctum', EnsureCanSignIn::class, TouchLastSeen::class])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

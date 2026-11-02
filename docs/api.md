@@ -17,7 +17,8 @@ the same `app/Services/Workspace/*` action service.
 ## Conventions (JSON API)
 
 - **Base:** `${APP_URL}/api/v1`. **Auth:** `Authorization: Bearer <token>` on
-  everything except `POST /login`. Send `Accept: application/json`.
+  everything except `POST /login`, `POST /forgot-password` and
+  `POST /set-password`. Send `Accept: application/json`.
 - **Success:** `{ "message": string, "data": <resource|array> }` — `200`, or
   `201` on create.
 - **Error:** `{ "message": string, "errors": { field: message } }` — `401`
@@ -46,6 +47,8 @@ the same `app/Services/Workspace/*` action service.
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | POST | `/login` | `email`, `password`, `device_name` | `{ token, user }`; a deactivated person (not a super-admin) gets 422 on `email` with `This account is deactivated. Ask your organizational admin to turn it back on.` and no token; after five wrong passwords for an email from one address (counted together with the web login, and started again by a right password), 429 on `email` with `Too many login attempts. Please try again in {n} seconds.` until the minute is up |
+| POST | `/forgot-password` | `email` | always `{ message: "If that email has a login here, a link to set a new password is on its way." }`, whether or not the email has a login (a deactivated person's gets no link either); the link (60 minutes, the web's `/workspace/reset-password/{token}?email=`) is mailed after the answer is sent. Five per address and five per email in 15 minutes, counted together with the web's form and before anyone is looked up: then 429 on `email` with `Too many tries. Wait a few minutes.` |
+| POST | `/set-password` | `kind` (`reset` or `invite`), `email`, `token` (from the emailed link), `password`, `password_confirmation` | `{ message: "Your password is set." }`, no token: sign in with `POST /login`. A wrong, used, expired or other-kind link, and a deactivated person's, all get 422 `{ message, errors: { token } }` with `This link has expired or was already used.` A link works once; reset links last 60 minutes, invite links 7 days. Ends the person's other web sessions and "remember me" cookies; their API tokens stay |
 | POST | `/logout` | — | `{ message }` (revokes the current token) |
 | GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, managed_program_ids, features, git_enabled, attendance_enabled, office }`; `managed_program_ids` lists the programs the person manages (while active, in their own organization), the web's `managedProgramIds`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled`; `attendance_enabled` is true when the person may clock in (an active member of an organization with attendance on); `office` says which office pages they may open, the web's `office`: `{ organogram, attendance, attendance_settings, leave, team_work, my_work_member_id }` |
 

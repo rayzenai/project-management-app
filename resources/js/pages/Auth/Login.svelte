@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { useForm } from '@inertiajs/svelte';
+    import { Link, useForm } from '@inertiajs/svelte';
     import { Eye, EyeOff } from '@lucide/svelte';
 
     const uid = $props.id();
@@ -75,6 +75,11 @@
                 {#if form.errors.password}<p class="text-xs text-danger">
                         {form.errors.password}
                     </p>{/if}
+                <Link
+                    href="/workspace/forgot-password"
+                    class="self-start text-[13px] text-accent hover:underline"
+                    >Forgot your password?</Link
+                >
             </div>
 
             <label class="flex items-center gap-2 text-[13px] text-fg-muted">

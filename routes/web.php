@@ -27,6 +27,7 @@ use App\Http\Controllers\Workspace\OrganizationController;
 use App\Http\Controllers\Workspace\OrganizationGitController;
 use App\Http\Controllers\Workspace\OrganizationSwitchController;
 use App\Http\Controllers\Workspace\OrganogramController;
+use App\Http\Controllers\Workspace\PasswordController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProgramController;
@@ -57,6 +58,7 @@ use App\Http\Middleware\TouchLastSeen;
 use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Laravel\Passport\Http\Controllers\AuthorizationController;
+use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 
 Route::redirect('/', '/workspace/my')->name('home');
 
@@ -65,7 +67,7 @@ Route::redirect('/', '/workspace/my')->name('home');
 // signing key (/oauth/jwks). Only people GitAccess lets in get a code. The
 // forge calls the token endpoint server to server: no session, no CSRF.
 Route::get('/oauth/authorize', [AuthorizationController::class, 'authorize'])
-    ->middleware(['auth', EnsureCanSignIn::class, EnsureCanUseGit::class])
+    ->middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, EnsureCanUseGit::class])
     ->name('passport.authorizations.authorize');
 Route::post('/oauth/token', [AccessTokenController::class, 'issueToken'])
     ->withoutMiddleware('web')
@@ -88,9 +90,20 @@ Route::middleware('guest')
     ->group(function () {
         Route::get('/login', [AuthController::class, 'create'])->name('login');
         Route::post('/login', [AuthController::class, 'store'])->name('login.store');
+
+        // Forgotten password and invite links. Opening a link only shows the
+        // page (mail scanners open links); the password is set by the POST.
+        Route::get('/forgot-password', [PasswordController::class, 'request'])->name('password.request');
+        Route::post('/forgot-password', [PasswordController::class, 'email'])->name('password.email');
+        Route::get('/reset-password/{token}', [PasswordController::class, 'reset'])->name('password.reset');
+        Route::get('/invite/{token}', [PasswordController::class, 'invite'])->name('invite.accept');
+        Route::post('/set-password', [PasswordController::class, 'store'])->name('password.store');
     });
 
-Route::middleware(['auth', EnsureCanSignIn::class, TouchLastSeen::class, RemembersOrganizationChoice::class, ShareWorkspaceData::class])
+// AuthenticateSession ends a web session once its person's password changes
+// elsewhere (a reset or invite link, an admin setting it). Sanctum's, which
+// looks only at the session guard (sanctum.guard), so API tokens are untouched.
+Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, TouchLastSeen::class, RemembersOrganizationChoice::class, ShareWorkspaceData::class])
     ->prefix('workspace')
     ->name('workspace.')
     ->group(function () {

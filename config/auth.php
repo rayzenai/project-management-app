@@ -99,6 +99,15 @@ return [
             'expire' => 60,
             'throttle' => 60,
         ],
+
+        // Invite links (PasswordLinkService::sendInvite): a week, in a table
+        // of their own so they never mix with the reset links above.
+        'invites' => [
+            'provider' => 'users',
+            'table' => 'invite_tokens',
+            'expire' => 10080,
+            'throttle' => 0,
+        ],
     ],
 
     /*
