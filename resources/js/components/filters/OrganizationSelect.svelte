@@ -18,7 +18,7 @@
 
 {#if options.length > 1}
     <select
-        class="input h-7 w-auto max-w-40 py-0 sm:max-w-56"
+        class="input h-7 w-auto max-w-28 py-0 sm:max-w-56"
         aria-label="Organization"
         value={String(value)}
         onchange={(e) => onchange(Number(e.currentTarget.value))}

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia, page, router, useForm } from '@inertiajs/svelte';
-    import { Copy, Network, RefreshCw } from '@lucide/svelte';
+    import { Copy, Network, RefreshCw, UserPlus } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
     import DesignationSelect from '../../components/team/DesignationSelect.svelte';
@@ -466,16 +466,17 @@
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
             <span class="truncate font-medium">People</span>
             {#if officeAdminOrganization}
-                <span class="truncate text-fg-muted"
+                <span class="hidden truncate text-fg-muted md:inline"
                     >· {officeAdminOrganization.name}</span
                 >
             {/if}
         </div>
         <div class="flex items-center gap-1.5">
+            <!-- A phone reaches the organogram from Me; its bar keeps the title. -->
             <a
                 href="/workspace/organogram"
                 use:inertia
-                class="btn-ghost"
+                class="btn-ghost max-sm:hidden"
                 title="Organogram"
                 ><Network class="h-3.5 w-3.5" /><span class="hidden sm:inline"
                     >Organogram</span
@@ -483,7 +484,7 @@
             >
             {#if isSuperAdmin && organizations.length > 0}
                 <select
-                    class="input h-7 w-auto max-w-56 py-0"
+                    class="input h-7 w-auto max-w-28 py-0 sm:max-w-56"
                     aria-label="Show one organization"
                     value={organizationFilter ?? ''}
                     onchange={(e) =>
@@ -502,9 +503,16 @@
                     type="button"
                     class="btn-primary"
                     aria-expanded={addingMember}
+                    aria-label={addingMember ? 'Cancel' : 'Add person'}
                     onclick={openMemberForm}
-                    >{addingMember ? 'Cancel' : 'Add person'}</button
                 >
+                    {#if addingMember}
+                        Cancel
+                    {:else}
+                        <UserPlus class="h-3.5 w-3.5 sm:hidden" />
+                        <span class="hidden sm:inline">Add person</span>
+                    {/if}
+                </button>
             {/if}
         </div>
     {/snippet}

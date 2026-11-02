@@ -4,6 +4,7 @@
         Check,
         LoaderCircle,
         Mail,
+        MessageSquare,
         Phone,
         Trash2,
         X,
@@ -233,6 +234,47 @@
         save();
     }
 
+    // The title wraps instead of running off a phone's screen: the box grows
+    // with it. It stays one line of text: Enter saves, pasted breaks go.
+    let titleEl = $state<HTMLTextAreaElement | null>(null);
+
+    function fitTitle(_title?: string) {
+        if (!titleEl) {
+            return;
+        }
+
+        titleEl.style.height = 'auto';
+        titleEl.style.height = `${titleEl.scrollHeight}px`;
+    }
+
+    $effect(() => fitTitle(draft.title));
+
+    function onTitleInput(e: Event & { currentTarget: HTMLTextAreaElement }) {
+        const el = e.currentTarget;
+
+        if (el.value.includes('\n')) {
+            el.value = el.value.replace(/\s*\n+\s*/g, ' ');
+            draft.title = el.value;
+        }
+    }
+
+    function onTitleKeydown(
+        e: KeyboardEvent & { currentTarget: HTMLTextAreaElement },
+    ) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+        }
+    }
+
+    // Below lg the properties sit at the bottom of the page; the summary
+    // under the title takes a phone straight to the comment box.
+    function goToCommentBox() {
+        document
+            .getElementById(`${uid}-comment`)
+            ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
     // Closing the tab skips the blur that saves, so ask first.
     function warnIfUnsaved(e: BeforeUnloadEvent) {
         if (dirty || saving) {
@@ -325,19 +367,25 @@
     );
 </script>
 
-<svelte:window onkeydown={handleSaveShortcut} onbeforeunload={warnIfUnsaved} />
+<svelte:window
+    onkeydown={handleSaveShortcut}
+    onbeforeunload={warnIfUnsaved}
+    onresize={() => fitTitle()}
+/>
 
 <svelte:head><title>{task.title} · Workspace</title></svelte:head>
 
 <AppShell flush>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <!-- A phone's bar keeps only where you are. -->
             <a
                 href="/workspace/projects"
                 use:inertia
-                class="shrink-0 text-fg-muted hover:text-fg">Projects</a
+                class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
+                >Projects</a
             >
-            <span class="text-fg-faint">/</span>
+            <span class="hidden text-fg-faint sm:inline">/</span>
             <a
                 href={`/workspace/projects/${project.slug}`}
                 use:inertia
@@ -349,7 +397,10 @@
             </span>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
-            <AutosaveStatus {saving} {savedAt} {dirty} error={saveError} />
+            <!-- Below md only a failed save shows; the rest is read out. -->
+            <span class={saveError ? 'min-w-0' : 'max-md:sr-only'}>
+                <AutosaveStatus {saving} {savedAt} {dirty} error={saveError} />
+            </span>
             {#if canDelete}
                 <button
                     type="button"
@@ -368,19 +419,58 @@
         <div class="min-w-0 max-w-[760px] px-5 py-6 lg:px-10 lg:py-8">
             <form onsubmit={saveEdit} onfocusout={save}>
                 <label class="sr-only" for={`${uid}-title`}>Title</label>
-                <input
+                <textarea
+                    bind:this={titleEl}
                     id={`${uid}-title`}
-                    type="text"
                     bind:value={draft.title}
+                    rows="1"
                     placeholder="Task title"
-                    class="w-full rounded-sm border-0 bg-transparent p-0 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg outline-none placeholder:text-fg-faint focus-visible:outline-none"
-                />
+                    oninput={onTitleInput}
+                    onkeydown={onTitleKeydown}
+                    class="block w-full resize-none overflow-hidden rounded-sm border-0 bg-transparent p-0 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg outline-none placeholder:text-fg-faint focus-visible:outline-none"
+                ></textarea>
                 {#if task.title_np}
                     <p class="mt-1.5 font-np text-[16px] text-fg-muted">
                         {task.title_np}
                     </p>
                 {/if}
+            </form>
 
+            <!-- Below lg the properties come last, so what matters first
+                 (status, date, people, the comments) sits here. -->
+            <div
+                class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 lg:hidden"
+            >
+                <StatusChip {task} projectSlug={project.slug} />
+                <DateChip {task} projectSlug={project.slug} />
+                <button
+                    type="button"
+                    class="btn-ghost ml-auto"
+                    onclick={goToCommentBox}
+                >
+                    <MessageSquare class="h-3.5 w-3.5" />
+                    Comments
+                    {#if comments.length > 0}
+                        <span class="section-count">{comments.length}</span>
+                    {/if}
+                </button>
+                <span class="flex min-w-0 basis-full items-center gap-2">
+                    <AssigneeStack
+                        {task}
+                        {team}
+                        others={joinCandidates}
+                        max={4}
+                        align="left"
+                    />
+                    {#if ownerNames}
+                        <span class="truncate text-xs text-fg-muted"
+                            >{ownerNames}</span
+                        >
+                    {/if}
+                </span>
+            </div>
+
+            <form onsubmit={saveEdit} onfocusout={save}>
                 <label class="sr-only" for={`${uid}-description`}
                     >Description</label
                 >
@@ -493,23 +583,24 @@
                         </li>
                     {/each}
                 </ul>
+                <!-- On a phone the text gets its own line, date and Add under it. -->
                 <form
                     bind:this={todoFormEl}
                     onsubmit={addTodo}
-                    class="mt-2 flex items-center gap-2"
+                    class="mt-2 flex flex-wrap items-center gap-2 md:flex-nowrap"
                 >
                     <input
                         type="text"
                         bind:value={todoForm.body}
                         placeholder="Add a subtask"
                         aria-label="Add a subtask"
-                        class="input min-w-0 flex-1"
+                        class="input min-w-0 basis-full md:basis-0 md:flex-1"
                     />
                     <input
                         type="date"
                         bind:value={todoForm.due_at}
                         aria-label="Due date"
-                        class="input w-auto"
+                        class="input w-auto min-w-0 flex-1 md:flex-none"
                     />
                     <button
                         type="submit"
@@ -775,7 +866,12 @@
                         <span class="section-count">{comments.length}</span>
                     {/if}
                 </h2>
-                <CommentThread {comments} {task} members={mentionCandidates} />
+                <CommentThread
+                    {comments}
+                    {task}
+                    members={mentionCandidates}
+                    composeId={`${uid}-comment`}
+                />
             </section>
         </div>
 

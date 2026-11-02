@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia, router } from '@inertiajs/svelte';
-    import { Plus } from '@lucide/svelte';
+    import { Pencil, Plus, Trash2 } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import ProgramForm from '../../components/program/ProgramForm.svelte';
     import ProgressReport from '../../components/ProgressReport.svelte';
@@ -70,17 +70,19 @@
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <!-- A phone's bar keeps only where you are. -->
             <a
                 href="/workspace/projects"
                 use:inertia
-                class="shrink-0 text-fg-muted hover:text-fg">Projects</a
+                class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
+                >Projects</a
             >
-            <span class="text-fg-faint">/</span>
+            <span class="hidden text-fg-faint sm:inline">/</span>
             <span class="truncate font-medium">{progress.program.name}</span>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
-            <!-- From sm only: a phone's bar keeps the breadcrumb. -->
-            <span class="hidden text-xs text-fg-muted sm:inline"
+            <!-- From md only: a phone's bar keeps the breadcrumb. -->
+            <span class="hidden text-xs text-fg-muted md:inline"
                 >Live · updated <span class="font-mono tabular-nums"
                     >{updatedAt}</span
                 ></span
@@ -89,10 +91,11 @@
                 <button
                     type="button"
                     class="btn-primary"
+                    aria-label="New project"
                     onclick={() => (creating = true)}
                 >
                     <Plus class="h-3.5 w-3.5" />
-                    New project
+                    <span class="hidden sm:inline">New project</span>
                 </button>
             {/if}
             {#if creating}
@@ -103,14 +106,25 @@
                 >
             {/if}
             {#if progress.program.can_manage && !editing && !creating}
+                <!-- Icons only on a phone, so the bar keeps its title. -->
                 <button
                     type="button"
                     class="btn-ghost"
-                    onclick={() => (editing = true)}>Edit</button
+                    aria-label="Edit"
+                    onclick={() => (editing = true)}
                 >
-                <button type="button" class="btn-danger" onclick={destroy}
-                    >Delete</button
+                    <Pencil class="h-3.5 w-3.5 sm:hidden" />
+                    <span class="hidden sm:inline">Edit</span>
+                </button>
+                <button
+                    type="button"
+                    class="btn-danger"
+                    aria-label="Delete"
+                    onclick={destroy}
                 >
+                    <Trash2 class="h-3.5 w-3.5 sm:hidden" />
+                    <span class="hidden sm:inline">Delete</span>
+                </button>
             {/if}
         </div>
     {/snippet}

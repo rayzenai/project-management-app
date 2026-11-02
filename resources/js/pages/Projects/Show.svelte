@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia, page, router } from '@inertiajs/svelte';
-    import { Archive, ChartGantt, Pencil } from '@lucide/svelte';
+    import { Archive, ChartGantt, Pencil, Plus } from '@lucide/svelte';
     import { onMount } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
@@ -212,12 +212,14 @@
 <AppShell flush>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <!-- A phone's bar keeps only where you are. -->
             <a
                 href="/workspace/projects"
                 use:inertia
-                class="shrink-0 text-fg-muted hover:text-fg">Projects</a
+                class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
+                >Projects</a
             >
-            <span class="text-fg-faint">/</span>
+            <span class="hidden text-fg-faint sm:inline">/</span>
             <span class="truncate font-medium">{project.title}</span>
             {#if project.title_np}
                 <span class="font-np hidden truncate text-fg-faint sm:inline"
@@ -262,10 +264,12 @@
             <button
                 type="button"
                 class="btn-primary"
+                aria-label="Add task"
                 onclick={() =>
                     quickAdd.open({ projectId: project.id, lockProject: true })}
             >
-                Add task
+                <Plus class="h-3.5 w-3.5 sm:hidden" />
+                <span class="hidden sm:inline">Add task</span>
             </button>
         </div>
     {/snippet}

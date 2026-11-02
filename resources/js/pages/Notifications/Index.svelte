@@ -289,7 +289,9 @@
                 {tab === 'activity' ? 'Activity' : 'Notifications'}
             </span>
             {#if tab === 'notifications' && counts.unread > 0}
-                <span class="chip chip-accent">{counts.unread} unread</span>
+                <span class="chip chip-accent hidden md:inline-flex"
+                    >{counts.unread} unread</span
+                >
             {/if}
         </div>
         {#if tab === 'notifications' && hasUnread}

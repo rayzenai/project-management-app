@@ -119,15 +119,19 @@
 <AppShell flush>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
-            <a href="/workspace/projects" class="text-fg-muted hover:text-fg"
+            <!-- A phone's bar keeps only where you are. -->
+            <a
+                href="/workspace/projects"
+                class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
                 >Projects</a
             >
-            <span class="text-fg-faint">/</span>
+            <span class="hidden text-fg-faint sm:inline">/</span>
             <a
                 href={`/workspace/projects/${project.slug}`}
-                class="truncate text-fg-muted hover:text-fg">{project.title}</a
+                class="hidden truncate text-fg-muted hover:text-fg sm:inline"
+                >{project.title}</a
             >
-            <span class="text-fg-faint">/</span>
+            <span class="hidden text-fg-faint sm:inline">/</span>
             <span class="truncate font-medium">100-point tracker</span>
         </div>
     {/snippet}

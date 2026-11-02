@@ -246,7 +246,7 @@
                         <!-- Icon only on a phone, so the bar keeps its title. -->
                         <button
                             type="button"
-                            class="btn max-sm:w-7 max-sm:justify-center max-sm:px-0"
+                            class="btn max-sm:w-[36px] max-sm:justify-center max-sm:px-0"
                             title="New program"
                             aria-label="New program"
                             onclick={() => (creatingProgram = true)}

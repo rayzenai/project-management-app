@@ -99,9 +99,10 @@
                         ></button
                     >
                 </div>
+                <!-- Not on a phone, whose bar keeps the title. -->
                 <button
                     type="button"
-                    class="btn-ghost"
+                    class="btn-ghost max-sm:hidden"
                     aria-label="Print the chart"
                     onclick={printChart}
                     ><Printer class="h-3.5 w-3.5" /><span

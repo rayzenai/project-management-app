@@ -8,10 +8,13 @@
         comments,
         task,
         members,
+        composeId,
     }: {
         comments: Comment[];
         task: Task;
         members: Member[];
+        /** The comment box's id, for a page that links to it. */
+        composeId?: string;
     } = $props();
 
     /** Matches the canonical mention token `@[Display Name](member:ID)` (mirrors the PHP MentionParser). */
@@ -316,6 +319,7 @@
         <div class="relative">
             <textarea
                 bind:this={textarea}
+                id={composeId}
                 bind:value={composeForm.body}
                 rows="3"
                 placeholder="Write a comment. Type @ to mention a teammate."

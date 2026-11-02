@@ -303,7 +303,15 @@
                 <PanelLeft class="h-4 w-4" />
             </button>
             {#if bar}
-                {@render bar()}
+                <!-- The page's bar. Its first element, the title or
+                     breadcrumb, gives way: it shrinks and clips (the padding
+                     keeps focus rings inside), so it never runs under the
+                     actions after it, which keep their size. -->
+                <div
+                    class="flex min-w-0 flex-1 items-center gap-2 [&>:first-child]:-m-1 [&>:first-child]:min-w-0 [&>:first-child]:overflow-hidden [&>:first-child]:p-1"
+                >
+                    {@render bar()}
+                </div>
             {:else}
                 <div class="flex-1 truncate font-medium">{title}</div>
             {/if}

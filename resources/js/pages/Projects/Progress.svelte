@@ -32,12 +32,14 @@
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <!-- A phone's bar keeps only where you are. -->
             <a
                 href="/workspace/projects"
                 use:inertia
-                class="shrink-0 text-fg-muted hover:text-fg">Projects</a
+                class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
+                >Projects</a
             >
-            <span class="text-fg-faint">/</span>
+            <span class="hidden text-fg-faint sm:inline">/</span>
             <a
                 href={`/workspace/projects/${progress.project.slug}`}
                 use:inertia
@@ -50,8 +52,8 @@
                 <span class="chip">Archived</span>
             {/if}
         </div>
-        <!-- From sm only: a phone's bar keeps the breadcrumb. -->
-        <span class="hidden shrink-0 text-xs text-fg-muted sm:inline"
+        <!-- From md only: a phone's bar keeps the breadcrumb. -->
+        <span class="hidden shrink-0 text-xs text-fg-muted md:inline"
             >Live · updated <span class="font-mono tabular-nums"
                 >{updatedAt}</span
             ></span
