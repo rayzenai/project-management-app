@@ -1,18 +1,21 @@
 <script lang="ts">
     import { inertia } from '@inertiajs/svelte';
-    import { LogOut, Palette, Search } from '@lucide/svelte';
+    import { LogOut, Search, Settings } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import { currentHref } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
+    import type { OrganizationSwitch } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
     import Popover from '../Popover.svelte';
+    import OrganizationSwitcher from './OrganizationSwitcher.svelte';
 
     /**
      * Everything the sidebar doesn't carry: your notifications, emails and
-     * the guide, the office pages and reports you may open, Appearance and
+     * the guide, the office pages and reports you may open, Settings and
      * Sign out. On a desktop it opens upward from the account button in a
      * popover; on a phone (`sheet`) it rises from the bottom, under the
-     * Me tab, and also carries Search and the pages the bar has no tab for.
+     * Me tab, and also carries a super-admin's organization switch, Search
+     * and the pages the bar has no tab for.
      */
     let {
         variant,
@@ -25,6 +28,7 @@
         user,
         role,
         extra = [],
+        organizationSwitch = null,
         onsearch,
         onsettings,
         onlogout,
@@ -42,6 +46,8 @@
         role: string;
         /** Pages shown first, on a phone: those without a tab. */
         extra?: NavLink[];
+        /** A super-admin's switch, at the top of the sheet. */
+        organizationSwitch?: OrganizationSwitch | null;
         /** Given on a phone, where the sidebar's Search isn't. */
         onsearch?: () => void;
         onsettings: () => void;
@@ -103,6 +109,16 @@
     <div
         class={`max-h-[min(560px,80vh)] overflow-y-auto ${sheet ? 'px-[12px] pt-3 pb-3' : ''}`}
     >
+        {#if sheet && organizationSwitch}
+            <div class="flex pb-3">
+                <OrganizationSwitcher
+                    {organizationSwitch}
+                    sheet
+                    onswitch={close}
+                />
+            </div>
+        {/if}
+
         {#if sheet && user}
             <div class="flex items-center gap-3 px-2 pt-1 pb-3">
                 <Avatar name={user.name} size="lg" />
@@ -169,8 +185,8 @@
                     onsettings();
                 }}
             >
-                <Palette class={iconClass} />
-                <span class="flex-1">Appearance</span>
+                <Settings class={iconClass} />
+                <span class="flex-1">Settings</span>
             </button>
             <button
                 type="button"

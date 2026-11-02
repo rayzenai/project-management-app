@@ -1,14 +1,14 @@
 <script lang="ts">
     import { inertia, router } from '@inertiajs/svelte';
-    import { Check, ChevronsUpDown, Plus, Search } from '@lucide/svelte';
+    import { ChevronsUpDown, Plus, Search } from '@lucide/svelte';
     import { onMount } from 'svelte';
     import { currentHref, under } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
-    import type { Id, OrganizationSwitch } from '../../lib/types';
+    import type { OrganizationSwitch } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
-    import Popover from '../Popover.svelte';
     import AccountMenu from './AccountMenu.svelte';
     import Logo from './Logo.svelte';
+    import OrganizationSwitcher from './OrganizationSwitcher.svelte';
 
     /**
      * The one sidebar, from 768px: the organization (a super-admin's
@@ -57,37 +57,8 @@
     const FILTER_FROM = 9;
 
     let query = $state('');
-    let switchOpen = $state(false);
     let accountOpen = $state(false);
     let list = $state<HTMLElement | null>(null);
-
-    const switchChoices = $derived(
-        organizationSwitch
-            ? [
-                  { id: null as Id | null, name: 'All organizations' },
-                  ...organizationSwitch.organizations,
-              ]
-            : [],
-    );
-    const switchedName = $derived(
-        organizationSwitch?.organizations.find(
-            (organization) => organization.id === organizationSwitch.current,
-        )?.name ?? 'All organizations',
-    );
-
-    function switchTo(id: Id | null) {
-        switchOpen = false;
-
-        if (id === (organizationSwitch?.current ?? null)) {
-            return;
-        }
-
-        router.put(
-            '/workspace/organization',
-            { organization: id ?? 'all' },
-            { preserveScroll: true },
-        );
-    }
 
     function projectHref(slug: string): string {
         return `/workspace/projects/${slug}`;
@@ -202,44 +173,7 @@
             >
                 <Logo class="h-[26px] w-[26px]" />
             </a>
-            <Popover
-                bind:open={switchOpen}
-                role="listbox"
-                triggerLabel={`Organization: ${switchedName}`}
-                wrapperClass="min-w-0 flex-1"
-                triggerClass="flex h-[36px] w-full items-center gap-2 rounded-lg px-2 text-left text-[14.5px] font-semibold text-fg transition hover:bg-hover"
-                panelClass="w-[280px]"
-            >
-                {#snippet trigger()}
-                    <span class="min-w-0 flex-1 truncate">{switchedName}</span>
-                    <ChevronsUpDown
-                        class="h-[16px] w-[16px] shrink-0 text-fg-faint"
-                    />
-                {/snippet}
-                <div class="max-h-[min(420px,70vh)] overflow-y-auto py-1">
-                    {#each switchChoices as choice (choice.id ?? 'all')}
-                        {@const selected =
-                            choice.id === (organizationSwitch.current ?? null)}
-                        <button
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            data-popover-item
-                            class={`menu-item ${selected ? 'text-fg' : ''}`}
-                            onclick={() => switchTo(choice.id)}
-                        >
-                            <span class="min-w-0 flex-1 truncate"
-                                >{choice.name}</span
-                            >
-                            {#if selected}
-                                <Check
-                                    class="h-3.5 w-3.5 shrink-0 text-accent"
-                                />
-                            {/if}
-                        </button>
-                    {/each}
-                </div>
-            </Popover>
+            <OrganizationSwitcher {organizationSwitch} />
         {:else}
             <a
                 href="/workspace/my"

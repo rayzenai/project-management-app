@@ -340,6 +340,7 @@
         unread={unreadNotifications}
         {user}
         {role}
+        {organizationSwitch}
         onsearch={() => palette.open()}
         onsettings={() => (settingsOpen = true)}
         onlogout={logout}

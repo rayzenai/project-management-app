@@ -3,6 +3,7 @@
     import { Bell, FolderKanban, ListChecks } from '@lucide/svelte';
     import { currentHref, under } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
+    import type { OrganizationSwitch } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
     import AccountMenu from './AccountMenu.svelte';
 
@@ -19,6 +20,7 @@
         unread,
         user,
         role,
+        organizationSwitch = null,
         onsearch,
         onsettings,
         onlogout,
@@ -30,6 +32,7 @@
         unread: number;
         user: { name: string; email?: string } | null;
         role: string;
+        organizationSwitch?: OrganizationSwitch | null;
         onsearch: () => void;
         onsettings: () => void;
         onlogout: () => void;
@@ -121,6 +124,7 @@
     {user}
     {role}
     {extra}
+    {organizationSwitch}
     {onsearch}
     {onsettings}
     {onlogout}
