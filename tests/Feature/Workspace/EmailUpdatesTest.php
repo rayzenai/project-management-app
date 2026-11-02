@@ -15,7 +15,10 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Mail\MailManager;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
@@ -50,6 +53,26 @@ function euAssign(Member $member, Member $by, string $title = 'Collect revenue d
     ProjectAssignment::create(['task_id' => $task->id, 'member_id' => $member->id]);
 
     return $task;
+}
+
+/** Every send through a real mailer whose server refuses every message. */
+function euBreakMail(): void
+{
+    $mailer = new MailManager(app());
+    $mailer->extend('broken', fn () => new class implements TransportInterface
+    {
+        public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
+        {
+            throw new TransportException('Connection refused');
+        }
+
+        public function __toString(): string
+        {
+            return 'broken://';
+        }
+    });
+    config(['mail.default' => 'broken', 'mail.mailers.broken' => ['transport' => 'broken']]);
+    Mail::swap($mailer);
 }
 
 function euRunAt(string $time, array $options = []): void
@@ -200,12 +223,16 @@ it('sends and marks nothing with --pretend', function () {
 });
 
 it('never emails notifications from before the migration', function () {
+    // Rolled back and run again in migration order: the scan's index first.
+    $index = require database_path('migrations/2026_11_03_110200_index_notifications_for_email_updates.php');
     $migration = require database_path('migrations/2026_11_03_110100_add_email_settings.php');
+    $index->down();
     $migration->down();
 
     euAssign($this->member, $this->assigner);
 
     $migration->up();
+    $index->up();
 
     euRunAt('2026-11-03 10:03:00');
 
@@ -241,22 +268,7 @@ it('does not notify you of a task you gave yourself', function () {
 it('keeps the rows for the next run when the mail server fails', function () {
     euAssign($this->member, $this->assigner);
 
-    // A real mailer whose server refuses every message.
-    $mailer = new MailManager(app());
-    $mailer->extend('broken', fn () => new class implements TransportInterface
-    {
-        public function send(RawMessage $message, ?Envelope $envelope = null): ?SentMessage
-        {
-            throw new TransportException('Connection refused');
-        }
-
-        public function __toString(): string
-        {
-            return 'broken://';
-        }
-    });
-    config(['mail.default' => 'broken', 'mail.mailers.broken' => ['transport' => 'broken']]);
-    Mail::swap($mailer);
+    euBreakMail();
 
     euRunAt('2026-11-03 10:03:00');
 
@@ -265,6 +277,27 @@ it('keeps the rows for the next run when the mail server fails', function () {
     Mail::fake();
     euRunAt('2026-11-03 10:04:00');
     Mail::assertSent(UpdatesMail::class, 1);
+});
+
+it('reports a mail outage once a run, and counts the rest in one warning', function () {
+    Exceptions::fake();
+    Log::spy();
+
+    foreach (['Rabin Ghimire', 'Asha Rai', 'Mina Rai'] as $name) {
+        $other = Member::factory()->linkedTo(User::factory()->create(['name' => $name]))->create();
+        euAssign($other, $this->assigner);
+    }
+
+    euBreakMail();
+    euRunAt('2026-11-03 10:03:00');
+
+    Exceptions::assertReportedCount(1);
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, '2 more'));
+    expect(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(3);
+});
+
+it('indexes the notifications the scan reads', function () {
+    expect(Schema::hasIndex('notifications', ['email_handled_at', 'created_at']))->toBeTrue();
 });
 
 it('runs every minute without overlapping', function () {

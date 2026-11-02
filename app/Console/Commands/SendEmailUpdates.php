@@ -15,6 +15,7 @@ use Illuminate\Console\Command;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
@@ -28,7 +29,9 @@ use Throwable;
  * conditional update per row, so an overlapping run never sends it again; a
  * failed send gives the claim back for the next run. Someone who turned
  * right-away email off, or can no longer sign in, has their rows marked
- * handled with no email, so turning it on later never sends old news.
+ * handled with no email, so turning it on later never sends old news. A
+ * mail outage is reported once per run, the other failures counted in one
+ * warning.
  */
 class SendEmailUpdates extends Command
 {
@@ -103,10 +106,19 @@ class SendEmailUpdates extends Command
                 Mail::to($user)->send(new UpdatesMail($user, $items));
                 $sent++;
             } catch (Throwable $e) {
-                report($e);
                 DB::table('notifications')->whereIn('id', $claimed)->update(['email_handled_at' => null]);
+
+                // An outage fails every send: report the first, count the rest.
+                if ($failed === 0) {
+                    report($e);
+                }
+
                 $failed++;
             }
+        }
+
+        if ($failed > 1) {
+            Log::warning('workspace:send-email-updates: '.($failed - 1).' more update emails failed to send after the one reported.');
         }
 
         if ($pretend || $sent + $skipped + $failed > 0) {
