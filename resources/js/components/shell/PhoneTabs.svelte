@@ -1,0 +1,127 @@
+<script lang="ts">
+    import { inertia } from '@inertiajs/svelte';
+    import { Bell, FolderKanban, ListChecks } from '@lucide/svelte';
+    import { currentHref, under } from '../../lib/navigation';
+    import type { NavGroup, NavLink } from '../../lib/navigation';
+    import Avatar from '../Avatar.svelte';
+    import AccountMenu from './AccountMenu.svelte';
+
+    /**
+     * The phone's menu, below 768px: a bar fixed to the bottom with My
+     * work, Projects, Updates (the notifications, with the unread count)
+     * and Me, which raises the account menu as a sheet. The sheet also
+     * carries Search and the sidebar's pages that have no tab here.
+     */
+    let {
+        links,
+        groups,
+        path,
+        unread,
+        user,
+        role,
+        onsearch,
+        onsettings,
+        onlogout,
+    }: {
+        /** The sidebar's pages; those without a tab go in the sheet. */
+        links: NavLink[];
+        groups: NavGroup[];
+        path: string;
+        unread: number;
+        user: { name: string; email?: string } | null;
+        role: string;
+        onsearch: () => void;
+        onsettings: () => void;
+        onlogout: () => void;
+    } = $props();
+
+    const TABS = [
+        { label: 'My work', href: '/workspace/my', icon: ListChecks },
+        { label: 'Projects', href: '/workspace/projects', icon: FolderKanban },
+        { label: 'Updates', href: '/workspace/notifications', icon: Bell },
+    ];
+
+    let meOpen = $state(false);
+
+    const extra = $derived(
+        links.filter((l) => !TABS.some((t) => t.href === l.href)),
+    );
+    // A project's pages, programs and tasks are all under Projects.
+    const tab = $derived(
+        under(path, '/workspace/programs')
+            ? '/workspace/projects'
+            : currentHref(path, TABS),
+    );
+    const meHere = $derived(
+        meOpen ||
+            (tab === null &&
+                currentHref(path, [
+                    ...extra,
+                    ...groups.flatMap((g) => g.links),
+                ]) !== null),
+    );
+
+    function tabClass(active: boolean): string {
+        return `flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-[11.5px] font-medium transition ${
+            active ? 'text-accent' : 'text-fg-muted'
+        }`;
+    }
+</script>
+
+<nav
+    aria-label="Main"
+    class="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface px-2 pb-[env(safe-area-inset-bottom)] md:hidden"
+>
+    {#each TABS as item (item.href)}
+        {@const active = !meOpen && tab === item.href}
+        {@const Icon = item.icon}
+        <a
+            href={item.href}
+            use:inertia
+            aria-current={active ? 'page' : undefined}
+            aria-label={item.href === '/workspace/notifications' && unread > 0
+                ? `Updates, ${unread} unread`
+                : undefined}
+            class={tabClass(active)}
+        >
+            <span class="relative inline-flex">
+                <Icon class="h-[20px] w-[20px]" />
+                {#if item.href === '/workspace/notifications' && unread > 0}
+                    <span
+                        class="absolute -top-[4px] -right-[8px] h-[16px] min-w-[16px] rounded-full bg-accent px-[4px] text-center text-[10.5px] leading-[16px] font-bold text-white tabular-nums"
+                        >{unread > 99 ? '99+' : unread}</span
+                    >
+                {/if}
+            </span>
+            {item.label}
+        </a>
+    {/each}
+    <button
+        type="button"
+        aria-label="Me"
+        aria-haspopup="dialog"
+        aria-expanded={meOpen}
+        class={tabClass(meHere)}
+        onclick={() => (meOpen = !meOpen)}
+    >
+        <Avatar
+            name={user?.name}
+            size="md"
+            class={meHere ? 'border-accent text-accent' : ''}
+        />
+        Me
+    </button>
+</nav>
+
+<AccountMenu
+    variant="sheet"
+    bind:open={meOpen}
+    {groups}
+    {path}
+    {user}
+    {role}
+    {extra}
+    {onsearch}
+    {onsettings}
+    {onlogout}
+/>

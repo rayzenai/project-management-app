@@ -1,10 +1,9 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
-    import { Menu, X } from '@lucide/svelte';
+    import { PanelLeft, StickyNote, X } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import type { AppearanceProps } from '../lib/appearance';
-    import { areaOf, currentHref, navAreas } from '../lib/navigation';
-    import type { AreaKey } from '../lib/navigation';
+    import { accountGroups, mainLinks } from '../lib/navigation';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { palette } from '../lib/palette.svelte';
     import { peek } from '../lib/peek.svelte';
@@ -15,19 +14,19 @@
     import ClockButton from './attendance/ClockButton.svelte';
     import CommandPalette from './CommandPalette.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
-    import NavPanel from './shell/NavPanel.svelte';
-    import NavRail from './shell/NavRail.svelte';
+    import PhoneTabs from './shell/PhoneTabs.svelte';
+    import Sidebar from './shell/Sidebar.svelte';
     import TaskPeek from './TaskPeek.svelte';
     import ThemeToggle from './ThemeToggle.svelte';
     import Toasts from './Toasts.svelte';
     import WorkspaceNotesBoard from './WorkspaceNotesBoard.svelte';
 
     /**
-     * The app frame: the sidebar (a rail of areas and the panel of the one
-     * shown, see shell/) and a bordered content panel. Pages provide the
-     * panel's 44px top bar through the `bar` snippet (breadcrumb on the
-     * left, actions on the right); `flush` drops the content padding for
-     * full-bleed registers and boards.
+     * The app frame: the sidebar from 768px, the bar of tabs below it (see
+     * shell/), and the content. Pages provide the content's top bar
+     * through the `bar` snippet (breadcrumb on the left, actions on the
+     * right); `flush` drops the content padding for full-bleed registers
+     * and boards.
      */
     let {
         children,
@@ -63,8 +62,6 @@
     const programs = $derived(shared.managedPrograms ?? []);
     const noteCount = $derived(shared.workspaceNotes?.length ?? 0);
 
-    let mobileOpen = $state(false);
-
     const COLLAPSE_KEY = 'workspace.sidebar.collapsed';
 
     function initialCollapsed(): boolean {
@@ -83,7 +80,6 @@
 
     function toggleCollapsed(): void {
         collapsed = !collapsed;
-        peeking = false;
 
         try {
             window.localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
@@ -134,15 +130,6 @@
         return () => clearInterval(id);
     });
 
-    // Navigation closes the drawer and a floating panel, and shows the
-    // page's own area.
-    $effect(() => {
-        void path;
-        shownArea = pageArea;
-        mobileOpen = false;
-        peeking = false;
-    });
-
     const office = $derived(
         shared.office ?? {
             organogram: false,
@@ -156,40 +143,16 @@
         },
     );
 
-    const areas = $derived(
-        navAreas(office, {
+    const links = $derived(
+        mainLinks({ isSuperAdmin: Boolean(shared.isSuperAdmin) }),
+    );
+    const groups = $derived(
+        accountGroups(office, {
             gitEnabled: Boolean(shared.gitEnabled),
             isSuperAdmin: Boolean(shared.isSuperAdmin),
+            unread: unreadNotifications,
         }),
     );
-    const current = $derived(currentHref(path, areas));
-    const pageArea = $derived(areaOf(path, areas));
-
-    /**
-     * The area whose panel is shown: the page's, until the rail picks
-     * another to look at. With the panel hidden, picking one floats its
-     * panel over the content (`peeking`) until you choose or click away.
-     * On phones the drawer always shows the rail and the panel.
-     */
-    let shownArea = $state<AreaKey>('work');
-    let peeking = $state(false);
-
-    const panelVisible = $derived(mobileOpen || !collapsed || peeking);
-    const floating = $derived(!mobileOpen && collapsed && peeking);
-    const panelArea = $derived(
-        areas.find((a) => a.key === shownArea) ?? areas[0],
-    );
-
-    function pick(area: AreaKey): void {
-        if (floating && shownArea === area) {
-            peeking = false;
-
-            return;
-        }
-
-        shownArea = area;
-        peeking = !mobileOpen && collapsed;
-    }
 
     const role = $derived(
         shared.isSuperAdmin
@@ -246,14 +209,7 @@
         }
 
         if (e.key === 'Escape') {
-            if (peeking) {
-                e.preventDefault();
-                peeking = false;
-            } else if (shownArea !== pageArea && !overlayOpen) {
-                // Back to the page's own area after looking at another.
-                e.preventDefault();
-                shownArea = pageArea;
-            } else if (palette.isOpen) {
+            if (palette.isOpen) {
                 e.preventDefault();
                 palette.close();
             } else if (quickAdd.isOpen) {
@@ -308,101 +264,86 @@
     }
 </script>
 
-<div class="flex min-h-screen bg-bg text-fg">
-    {#if mobileOpen}
-        <button
-            type="button"
-            aria-label="Close menu"
-            class="fixed inset-0 z-30 bg-black/40 lg:hidden"
-            onclick={() => (mobileOpen = false)}
-        ></button>
-    {:else if floating}
-        <!-- A click beside the floating panel puts it away. -->
-        <button
-            type="button"
-            aria-label="Close the panel"
-            class="fixed inset-0 z-30 cursor-default"
-            onclick={() => (peeking = false)}
-        ></button>
+<div class="flex min-h-screen bg-surface text-fg">
+    {#if !collapsed}
+        <aside class="sticky top-0 hidden h-screen shrink-0 md:block">
+            <Sidebar
+                {links}
+                {groups}
+                {path}
+                projects={sidebarProjects}
+                {programs}
+                organizationName={shared.organization?.name ?? 'Workspace'}
+                {organizationSwitch}
+                {user}
+                {role}
+                onnewtask={openQuickAdd}
+                onsearch={() => palette.open()}
+                onsettings={() => (settingsOpen = true)}
+                onlogout={logout}
+            />
+        </aside>
     {/if}
 
-    <aside
-        class="fixed inset-y-0 left-0 z-40 flex -translate-x-full bg-bg transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start"
-        class:translate-x-0={mobileOpen}
+    <div
+        class="flex min-w-0 flex-1 flex-col pb-[calc(57px+env(safe-area-inset-bottom))] md:pb-0"
     >
-        <NavRail
-            {areas}
-            selected={panelVisible ? shownArea : pageArea}
-            here={pageArea}
-            panelHidden={!panelVisible}
-            {path}
-            unread={unreadNotifications}
-            {noteCount}
-            notesOpen={notesBoard.open}
-            {user}
-            {role}
-            onpick={pick}
-            onnewtask={openQuickAdd}
-            onsearch={() => palette.open()}
-            onnotes={() => notesBoard.toggle()}
-            onsettings={() => (settingsOpen = true)}
-            onlogout={logout}
-        />
-        {#if panelVisible}
-            <div
-                class={floating
-                    ? 'popover fixed top-2 bottom-2 left-[60px] z-40 py-0'
-                    : 'h-full'}
-            >
-                <NavPanel
-                    area={panelArea}
-                    {current}
-                    {path}
-                    projects={sidebarProjects}
-                    {programs}
-                    {organizationSwitch}
-                    mobile={mobileOpen}
-                    {floating}
-                    onnewtask={openQuickAdd}
-                    onsearch={() => palette.open()}
-                    ontoggle={toggleCollapsed}
-                    onclose={() => (mobileOpen = false)}
-                />
-            </div>
-        {/if}
-    </aside>
-
-    <div class="flex min-w-0 flex-1 flex-col lg:p-2 lg:pl-0">
         <div
-            class="flex min-h-full flex-1 flex-col bg-surface lg:rounded-lg lg:border lg:border-line"
+            class="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur md:px-6"
         >
-            <div
-                class="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur lg:rounded-t-lg lg:px-6"
+            <button
+                type="button"
+                class="btn-icon -ml-2 hidden shrink-0 md:inline-flex"
+                title={collapsed
+                    ? 'Show the sidebar ([)'
+                    : 'Hide the sidebar ([)'}
+                aria-label={collapsed ? 'Show the sidebar' : 'Hide the sidebar'}
+                onclick={toggleCollapsed}
             >
-                <button
-                    type="button"
-                    aria-label="Open menu"
-                    class="btn-icon lg:hidden"
-                    onclick={() => (mobileOpen = true)}
-                >
-                    <Menu class="h-4 w-4" />
-                </button>
-                {#if bar}
-                    {@render bar()}
-                {:else}
-                    <div class="flex-1 truncate font-medium">{title}</div>
+                <PanelLeft class="h-4 w-4" />
+            </button>
+            {#if bar}
+                {@render bar()}
+            {:else}
+                <div class="flex-1 truncate font-medium">{title}</div>
+            {/if}
+            <ClockButton />
+            <button
+                type="button"
+                class={`btn-ghost shrink-0 ${notesBoard.open ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
+                title="Sticky notes"
+                aria-label={noteCount > 0
+                    ? `Sticky notes, ${noteCount}`
+                    : 'Sticky notes'}
+                aria-pressed={notesBoard.open}
+                onclick={() => notesBoard.toggle()}
+            >
+                <StickyNote class="h-4 w-4" />
+                {#if noteCount > 0}
+                    <span class="tabular-nums">{noteCount}</span>
                 {/if}
-                <ClockButton />
-                <ThemeToggle />
-            </div>
-
-            <main
-                class={`flex min-w-0 flex-1 flex-col ${flush ? '' : 'px-5 py-6 lg:px-8 lg:py-8'}`}
-            >
-                {@render children()}
-            </main>
+            </button>
+            <ThemeToggle />
         </div>
+
+        <main
+            class={`flex min-w-0 flex-1 flex-col ${flush ? '' : 'px-5 py-6 lg:px-8 lg:py-8'}`}
+        >
+            {@render children()}
+        </main>
     </div>
+
+    <PhoneTabs
+        {links}
+        {groups}
+        {path}
+        unread={unreadNotifications}
+        {user}
+        {role}
+        onsearch={() => palette.open()}
+        onsettings={() => (settingsOpen = true)}
+        onlogout={logout}
+    />
 
     <WorkspaceNotesBoard
         open={notesBoard.open}

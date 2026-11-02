@@ -73,7 +73,7 @@
                 "Give a task to anyone in your organization from the task form (press N): if they are not on the project's team, they join it. With no project yet, choose General there and it is made for you to manage.",
                 "Check each project's key, the letters in its task codes (SG in SG-12), in Edit project. You or a super-admin can change it; the old key keeps working, so codes already written still find their tasks.",
                 'Hand a project to a new manager from its People tab with Make manager. The old manager stays on the team. Make member there leaves the project with no manager until you choose one.',
-                'Open Maintenance, under Admin, now and then (the number on Admin says how much is waiting): it lists what needs fixing in your organization, such as projects with no manager or nobody on the team, open tasks nobody holds, people on no project or with no designation, each with a link to where you fix it.',
+                'Open Needs attention, in the menu under your name at the bottom of the sidebar, now and then (its number says how much is waiting): it lists what needs fixing in your organization, such as projects with no manager or nobody on the team, open tasks nobody holds, people on no project or with no designation, each with a link to where you fix it.',
                 'If you like, group projects into programs: New program on the Projects page names one and its program manager; then choose the program when you create or edit a project.',
                 'Watch everything from the Projects page: projects in a program sit under it and the rest under their manager, with how much is done, what is overdue and the next deadline.',
                 "On the Organogram page, give each person a designation and the person they report to (the menu at the end of each row). That draws your office's organogram and decides who sees whose attendance and work.",
@@ -83,7 +83,7 @@
             key: 'program',
             title: 'Program manager',
             steps: [
-                'Open your program page every week, from Programs under Work in the sidebar: how far each project has got, what is overdue and who is working on what.',
+                'Open your program page every week, from Programs in the sidebar: how far each project has got, what is overdue and who is working on what.',
                 "Manage each project's team and tasks as its manager would: add people on its People tab, break the work into tasks and keep them moving.",
                 "Create projects in your program with New project on its page, and choose or replace each project's manager. A new program comes with a General project to start from: add a task and assign someone straight away.",
                 'Ask an organizational admin to move a project into your program or take one out.',
@@ -104,12 +104,12 @@
             key: 'member',
             title: 'Team member',
             steps: [
-                'My Workspace lists everything given to you, soonest first.',
+                'My work lists everything given to you, soonest first.',
                 'Keep your tasks current: move the card on the board, set your progress and write a status note when something changes. A task saves itself as you leave each field.',
                 'Comment on a task and type @ and a name to bring someone in.',
                 "Added a task by mistake? Delete it with the bin at the top of the task, and Undo brings it back. You can delete the tasks you added; your project's manager can delete any. Work that is finished or dropped is better marked Done or Failed, which keeps its history.",
                 'Notifications tell you about new tasks, mentions, deadlines and teams you join.',
-                'Want a log of meetings and decisions, or outside contacts, on your tasks? Turn on Task notes or Contacts in Settings.',
+                'Want a log of meetings and decisions, or outside contacts, on your tasks? Turn on Task notes or Contacts in Appearance, in the menu under your name.',
             ],
         },
     ];
@@ -157,7 +157,7 @@
         ],
         [
             'Code activity',
-            "Code activity, under Reports in the sidebar, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. Tests shows how many of their commits passed and failed their tests. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
+            "Code activity, in the menu under your name, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. Tests shows how many of their commits passed and failed their tests. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
         ],
         [
             'Forge access',
@@ -328,8 +328,8 @@
     const shortcuts = [
         ['N or Q', 'Add a task, from anywhere'],
         ['Ctrl K or /', 'Search tasks and projects (Cmd K on a Mac)'],
-        ['[', 'Hide the panel beside the rail, or bring it back'],
-        ['Esc', "Back to your page's own area after looking at another"],
+        ['[', 'Hide the sidebar, or bring it back'],
+        ['Esc', 'Close what is open: a menu, search or a new task'],
     ];
 
     const tokens = [
