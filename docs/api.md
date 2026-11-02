@@ -574,8 +574,9 @@ their email lowercased with it). A login that already exists keeps its email
 as it is. At most 200 rows go at once, the listed people and the ones
 `without_login` adds together: more is a 422 on both routes, `{ message,
 errors: { people } }` with `That's 210 people, 210 to invite. Invite at most
-200 at a time.`, and nothing is created. Each route takes thirty requests a
-minute per person, web and API counted together (then 429).
+200 at a time.`, and nothing is created. The preview takes 120 requests a
+minute per person and the send thirty, web and API counted together (then
+429).
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |

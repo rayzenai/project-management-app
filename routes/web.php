@@ -138,9 +138,9 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
         Route::patch('/members/{member}', [MemberController::class, 'update'])->name('members.update');
         Route::delete('/members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
         Route::post('/members/{member}/restore', [MemberController::class, 'restore'])->name('members.restore')->withTrashed();
-        // Invite people: the dialog's preview (JSON) and the send, thirty a
-        // minute each per person (web and API counted together).
-        Route::post('/invites/preview', [InviteController::class, 'preview'])->middleware('throttle:30,1,invite-preview')->name('invites.preview');
+        // Invite people: the dialog's preview (JSON), 120 a minute per
+        // person, and the send, thirty (web and API counted together).
+        Route::post('/invites/preview', [InviteController::class, 'preview'])->middleware('throttle:120,1,invite-preview')->name('invites.preview');
         Route::post('/invites', [InviteController::class, 'store'])->middleware('throttle:30,1,invite-send')->name('invites.store');
 
         Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');

@@ -114,9 +114,9 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::delete('/members/{member}', [MemberController::class, 'destroy'])->name('members.destroy');
             Route::post('/members/{member}/restore', [MemberController::class, 'restore'])->name('members.restore')->withTrashed();
 
-            // Invite people: the preview, and the send, thirty a minute each
-            // per person (web and API counted together)
-            Route::post('/invites/preview', [InviteController::class, 'preview'])->middleware('throttle:30,1,invite-preview')->name('invites.preview');
+            // Invite people: the preview, 120 a minute per person, and the
+            // send, thirty (web and API counted together)
+            Route::post('/invites/preview', [InviteController::class, 'preview'])->middleware('throttle:120,1,invite-preview')->name('invites.preview');
             Route::post('/invites', [InviteController::class, 'store'])->middleware('throttle:30,1,invite-send')->name('invites.store');
 
             // Projects

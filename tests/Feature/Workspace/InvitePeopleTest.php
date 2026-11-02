@@ -261,11 +261,11 @@ it('mails nobody twice within minutes: a moment-ago invite waits for its next li
     Mail::assertSent(SetPasswordLink::class, 2);
 });
 
-it('takes thirty previews and thirty sends a minute from one person, web and API together', function () {
+it('takes 120 previews and thirty sends a minute from one person, web and API together', function () {
     $roads = inviteOrganization();
     $admin = inviteAdminOf($roads);
 
-    foreach (range(1, 30) as $i) {
+    foreach (range(1, 120) as $i) {
         $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => ''])->assertOk();
     }
     $this->actingAs($admin)->postJson('/workspace/invites/preview', ['text' => ''])->assertStatus(429);
