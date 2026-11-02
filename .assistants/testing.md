@@ -27,6 +27,10 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `DeadlineReminderTest` also excludes failed (closed) work. `TeamActivityTest`
   covers roster/manager audit entries, team notifications, actor suppression,
   project-feed visibility on web/API and the publication capability.
+  `TaskDeleteTest` covers immutable creator attribution, creator/project-runner
+  delete and restore access, public-project and teammate refusals, loss of
+  creator visibility, web/API parity, task-page/Peek capability flags,
+  undo redirects and migration backfill from creation activity.
   `GuidePageTest` checks signed-in access, guest redirects and the reader's
   accessible forge list/username without leaking tokens;
   `SdocProjectsSeederTest` checks project/team creation, safe reruns and

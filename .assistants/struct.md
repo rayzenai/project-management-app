@@ -79,7 +79,8 @@ database/
                            # 2026_10_31_140000 SDOC agreed-key migration (frozen map + aliases),
                            # repository grants/access-sync fields + commit author/line-count fields,
                            # designations/reporting lines, attendance/leave, title retirement, Git checks,
-                           # audit rewording, fixed protected branches, users' workspace organization
+                           # audit rewording, fixed protected branches, users' workspace organization,
+                           # immutable task creator attribution for delete/restore authorization
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (fresh databases only per CLAUDE.md; never production)
 resources/
@@ -112,6 +113,7 @@ tests/
   Feature/Workspace/Api/   # API-surface feature tests
   Unit/                    # parsers, diff classification + ForgejoClient HTTP boundary tests
 docs/api.md                # HTTP API reference + external-integration guide
+docs/backups.md            # encrypted SDOC VM backup schedule, retention and restore drill
 docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local proof,
                            # section 12: webhooks, queue worker, nightly reconcile;
                            # section 13: repositories, access sync, commit stats + code activity;
@@ -121,6 +123,8 @@ docs/superpowers/          # design specs + implementation plans (Programs, Git 
 forgejo/                   # separate Dokploy app: Dockerfile, start.sh, .env.example;
                            # custom/ SDOC Git branding (templates, themes, fonts, logos),
                            # local.sh Homebrew/SQLite laptop runner; runner/ four runners sharing one bounded dind
+                           # plus host/ firewall script + systemd unit for runner-job isolation
+ops/backup/                # encrypted SDOC VM backup script + systemd service/timer
 deploy.sh                  # SDOC Dokploy web/scheduler deploy + health verification
 Dockerfile, dock.sh        # production image and local image runner
 ```

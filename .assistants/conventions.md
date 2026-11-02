@@ -98,13 +98,22 @@ only web/scheduler.
 Section 14 covers four bounded Forgejo runners, protected main and checks.
 Runner jobs, forge data and forge Postgres live on separate logical volumes
 (`runner-jobs`, `forge-data`, `forge-db`) so a runaway job cannot fill the
-tracker's database disk.
+tracker's database disk. Runner dind is capped at 46 GB; the host firewall kit
+under `forgejo/runner/host/` lets jobs reach the internet but only the forge's
+80, 443 and 2222 ports on the VM.
 `git:commit-checks` runs every two minutes with a ten-minute overlap lock.
 Section 13 covers the ten-minute access sync and five-minute commit stats;
 their overlap locks expire after 15 and 30 minutes respectively.
 The scheduler appends every scheduled command's output to `/proc/1/fd/2` when
 it is writable; with `LOG_CHANNEL=stderr`, command output and logs therefore
 reach the scheduler container log in production without changing other hosts.
+
+The VM-wide backup kit is `ops/backup/`, with its runbook in `docs/backups.md`.
+Its systemd timer takes 12 age-encrypted backups a day to the separately mounted
+`/srv/backups` volume: every PostgreSQL database and incremental RustFS data,
+plus nightly roles, forge data, Dokploy settings and VM configuration. The age
+private key is deliberately kept off the VM; the runbook owns retention and
+restore procedure.
 
 ## Structure, attendance and work
 

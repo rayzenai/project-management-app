@@ -160,6 +160,10 @@ and supports Cmd/Ctrl+S (submits the focused add form, otherwise saves the task)
 `TaskPeek` saves title/description on blur and progress on change; subtask
 creation/editing also supports blur or Enter. `AutosaveStatus` reports saving,
 the saved time, pending edits or errors in both task surfaces.
+The task page's `canDelete` and Peek's `can_delete` show deletion only to
+whoever runs the project or the task creator. Peek deletes in place and closes;
+the full page returns to the project, while deletion from a project view stays
+on that view. Both use the undoable trash/restore flow.
 
 `AppearanceConfig` provides Settings toggles for Task notes and Contacts along
 with theme and email preferences; changes persist with its Save button.

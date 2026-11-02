@@ -111,7 +111,9 @@ Key methods: `isSuperAdmin`, `memberFor` (read-only), `canSignIn`,
 per project; keep in step), `canRemoveFromTeam`, `canJoinTeam`,
 `canAssignOutsideTeam`, `canStartGeneralProject`, `canSetRolesIn`,
 `canViewTeamProgress`, `canViewProjectProgress`, `canCreateMember`,
-`canManageMember`, `canViewProject`,
+`canManageMember`, `canViewProject`, `canDeleteTask` (project managers,
+program managers, organization admins and super-admins; otherwise only the
+task creator while they can still view its project),
 `canCreateProject`, `canCreateProjectInProgram`, `createsProjectsOnlyInPrograms`,
 `canManageProjectAccess`, `canPublishProject`,
 `canChangeProjectKey` (organizational admin/super-admin), `canManageGit` (super-admin),
@@ -245,6 +247,12 @@ program. `ProjectResource.can_choose_manager` and each roster member's
   Permanent `number` comes from `projects.last_task_number` in the creating
   hook; create/quick-add services lock the project row. Unique per project,
   never fillable/request-editable, never reused even after purging trash.
+  `created_by` is also set once by the creating hook from the signed-in user,
+  never fillable; the migration backfills it from the first task-created
+  activity where possible. `DeleteTaskRequest` gates both soft-delete and
+  restore through `WorkspaceAccess::canDeleteTask` on web and API. A creator
+  may act only while they can still view the project; whoever manages project
+  access may act on every task.
   `item_number` remains editable plan metadata (1..2147483647);
   `nextItemNumber()` includes trash and returns null at the limit.
   The backfill preserves unique legacy item numbers in 1..100000, then assigns
@@ -588,10 +596,13 @@ in these controllers, requests, resources or pages.
 
 - `forgejo/runner/` contains four organization runners in Dokploy's `git-runners`
   compose app, one job each; all four share one dind limited to 4 vCPUs, 10 GB
-  memory and 30 GB file-backed ext4 Docker storage, with no actions cache.
+  memory and 46 GB file-backed ext4 Docker storage, with no actions cache.
   Dind, forge data and forge Postgres are mounted on separate logical volumes
   (`runner-jobs`, `forge-data`, `forge-db`), isolating the tracker database disk
-  from job images, artifacts and logs. `forgejo/Dockerfile` enables Actions
+  from job images, artifacts and logs. `forgejo/runner/host/sdoc-runner-firewall`
+  and its systemd unit key on the compose bridge `sdoc-runners`: jobs retain
+  internet access but can reach only ports 80, 443 and 2222 on the VM, enforced
+  on both local INPUT and DNAT/FORWARD paths. `forgejo/Dockerfile` enables Actions
   with GitHub as the default action source. Runbook: `docs/forgejo.md` section 14.
 - `Services/Git/MainBranch::RULE` describes every branch protection field on
   each repository's fixed `protected_branch` (never its later forge default):
