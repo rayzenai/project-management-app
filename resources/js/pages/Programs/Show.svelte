@@ -127,7 +127,7 @@
             </div>
         {/if}
         {#if creating}
-            <div class="max-w-2xl border-b border-line pb-6">
+            <div class="border-b border-line pb-6">
                 <ProjectCreateForm
                     {managerCandidates}
                     {defaultManagerId}

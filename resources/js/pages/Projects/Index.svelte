@@ -292,7 +292,7 @@
 
     <div class="px-4 py-5 lg:px-8 lg:py-6">
         {#if creatingProgram}
-            <div class="mb-6 max-w-2xl border-b border-line pb-6">
+            <div class="mb-6 border-b border-line pb-6">
                 <!-- A program's manager is an active person of its organization,
                      the same people who may manage a new project. -->
                 <ProgramForm
@@ -305,7 +305,7 @@
         {/if}
 
         {#if creating}
-            <div class="mb-6 max-w-2xl border-b border-line pb-6">
+            <div class="mb-6 border-b border-line pb-6">
                 <ProjectCreateForm
                     {managerCandidates}
                     {programRequired}

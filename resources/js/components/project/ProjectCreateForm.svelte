@@ -145,130 +145,148 @@
             In the {program.name} program.
         </p>
     {/if}
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-            <label for={`${uid}-title`} class="label mb-1 block">Title</label>
-            <input
-                id={`${uid}-title`}
-                type="text"
-                bind:value={form.title}
-                required
-                class="input"
-            />
-        </div>
-        <div>
-            <label for={`${uid}-title-np`} class="label mb-1 block"
-                >Title (Nepali)</label
-            >
-            <input
-                id={`${uid}-title-np`}
-                type="text"
-                bind:value={form.title_np}
-                class="input font-np"
-            />
-        </div>
-    </div>
-    <div class="mt-3">
-        <label for={`${uid}-description`} class="label mb-1 block"
-            >Description</label
-        >
-        <textarea
-            id={`${uid}-description`}
-            bind:value={form.description}
-            rows="2"
-            class="input"
-        ></textarea>
-    </div>
-    {#if isSuperAdmin && !program}
-        <div class="mt-3">
-            <label for={`${uid}-organization`} class="label mb-1 block"
-                >Organization</label
-            >
-            <select
-                id={`${uid}-organization`}
-                class="input"
-                required
-                value={form.organization_id ?? ''}
-                onchange={(e) => {
-                    form.organization_id = e.currentTarget.value
-                        ? Number(e.currentTarget.value)
-                        : null;
-                    managerIds = [];
-                    form.program_id = null;
-                }}
-            >
-                <option value="" disabled>Choose an organization</option>
-                {#each organizations as organization (organization.id)}
-                    <option value={organization.id}>{organization.name}</option>
-                {/each}
-            </select>
-            {#if form.errors.organization_id}<p
-                    class="mt-1 text-xs text-danger"
-                >
-                    {form.errors.organization_id}
-                </p>{/if}
-        </div>
-    {/if}
-    <div class="mt-3">
-        <span class="label mb-1 block">Project manager</span>
-        {#if isSuperAdmin && !program && form.organization_id === null}
-            <p class="text-xs text-fg-muted">Choose an organization first.</p>
-        {:else}
-            <AssigneePicker
-                team={formManagers}
-                bind:selectedIds={managerIds}
-                placeholder="Search or choose who manages it"
-            />
-        {/if}
-        <p class="mt-1 text-xs text-fg-muted">
-            In a ministry, usually an Under Secretary.
-        </p>
-        <p class="mt-1 text-xs text-fg-muted">
-            The project gets its own team, led by its manager, who then adds the
-            people.
-        </p>
-        {#if form.errors.manager_id}<p class="mt-1 text-xs text-danger">
-                {form.errors.manager_id}
-            </p>{/if}
-    </div>
-    {#if !program && formPrograms.length > 0}
-        <div class="mt-3">
-            <label for={`${uid}-program`} class="label mb-1 block"
-                >{programRequired ? 'Program' : 'Program (optional)'}</label
-            >
-            <select
-                id={`${uid}-program`}
-                class="input"
-                required={programRequired}
-                value={form.program_id ?? ''}
-                onchange={(e) =>
-                    (form.program_id = e.currentTarget.value
-                        ? Number(e.currentTarget.value)
-                        : null)}
-            >
-                {#if programRequired}
-                    <option value="" disabled
-                        >Choose one of your programs</option
+    <!-- What the project is on the left, who runs it on the right. -->
+    <div class="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
+        <div class="flex flex-col gap-3">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                    <label for={`${uid}-title`} class="label mb-1 block"
+                        >Title</label
                     >
-                {:else}
-                    <option value="">No program</option>
-                {/if}
-                {#each formPrograms as program (program.id)}
-                    <option value={program.id}>{program.name}</option>
-                {/each}
-            </select>
-            {#if form.errors.program_id}<p class="mt-1 text-xs text-danger">
-                    {form.errors.program_id}
-                </p>{/if}
+                    <input
+                        id={`${uid}-title`}
+                        type="text"
+                        bind:value={form.title}
+                        required
+                        class="input"
+                    />
+                </div>
+                <div>
+                    <label for={`${uid}-title-np`} class="label mb-1 block"
+                        >Title (Nepali)</label
+                    >
+                    <input
+                        id={`${uid}-title-np`}
+                        type="text"
+                        bind:value={form.title_np}
+                        class="input font-np"
+                    />
+                </div>
+            </div>
+            <div>
+                <label for={`${uid}-description`} class="label mb-1 block"
+                    >Description</label
+                >
+                <textarea
+                    id={`${uid}-description`}
+                    bind:value={form.description}
+                    rows="4"
+                    class="input"
+                ></textarea>
+            </div>
         </div>
-    {/if}
+        <div class="flex flex-col gap-3">
+            {#if isSuperAdmin && !program}
+                <div>
+                    <label for={`${uid}-organization`} class="label mb-1 block"
+                        >Organization</label
+                    >
+                    <select
+                        id={`${uid}-organization`}
+                        class="input"
+                        required
+                        value={form.organization_id ?? ''}
+                        onchange={(e) => {
+                            form.organization_id = e.currentTarget.value
+                                ? Number(e.currentTarget.value)
+                                : null;
+                            managerIds = [];
+                            form.program_id = null;
+                        }}
+                    >
+                        <option value="" disabled>Choose an organization</option
+                        >
+                        {#each organizations as organization (organization.id)}
+                            <option value={organization.id}
+                                >{organization.name}</option
+                            >
+                        {/each}
+                    </select>
+                    {#if form.errors.organization_id}<p
+                            class="mt-1 text-xs text-danger"
+                        >
+                            {form.errors.organization_id}
+                        </p>{/if}
+                </div>
+            {/if}
+            <div>
+                <span class="label mb-1 block">Project manager</span>
+                {#if isSuperAdmin && !program && form.organization_id === null}
+                    <p class="text-xs text-fg-muted">
+                        Choose an organization first.
+                    </p>
+                {:else}
+                    <AssigneePicker
+                        team={formManagers}
+                        bind:selectedIds={managerIds}
+                        placeholder="Search or choose who manages it"
+                    />
+                {/if}
+                <p class="mt-1 text-xs text-fg-muted">
+                    In a ministry, usually an Under Secretary.
+                </p>
+                <p class="mt-1 text-xs text-fg-muted">
+                    The project gets its own team, led by its manager, who then
+                    adds the people.
+                </p>
+                {#if form.errors.manager_id}<p class="mt-1 text-xs text-danger">
+                        {form.errors.manager_id}
+                    </p>{/if}
+            </div>
+            {#if !program && formPrograms.length > 0}
+                <div>
+                    <label for={`${uid}-program`} class="label mb-1 block"
+                        >{programRequired
+                            ? 'Program'
+                            : 'Program (optional)'}</label
+                    >
+                    <select
+                        id={`${uid}-program`}
+                        class="input"
+                        required={programRequired}
+                        value={form.program_id ?? ''}
+                        onchange={(e) =>
+                            (form.program_id = e.currentTarget.value
+                                ? Number(e.currentTarget.value)
+                                : null)}
+                    >
+                        {#if programRequired}
+                            <option value="" disabled
+                                >Choose one of your programs</option
+                            >
+                        {:else}
+                            <option value="">No program</option>
+                        {/if}
+                        {#each formPrograms as program (program.id)}
+                            <option value={program.id}>{program.name}</option>
+                        {/each}
+                    </select>
+                    {#if form.errors.program_id}<p
+                            class="mt-1 text-xs text-danger"
+                        >
+                            {form.errors.program_id}
+                        </p>{/if}
+                </div>
+            {/if}
 
-    {#if canPublish && !program}
-        <label class="mt-4 flex items-center gap-2 text-fg-muted">
-            <input type="checkbox" bind:checked={form.is_public} /> Public (everyone
-            in its organization can see it)
-        </label>
-    {/if}
+            {#if canPublish && !program}
+                <label class="flex items-center gap-2 text-fg-muted">
+                    <input type="checkbox" bind:checked={form.is_public} /> Public
+                    (everyone in its organization can see it)
+                </label>
+            {/if}
+        </div>
+    </div>
 
     <div class="mt-4 flex items-center gap-2">
         <div class="flex-1"></div>
