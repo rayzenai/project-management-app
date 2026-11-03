@@ -764,6 +764,8 @@ export interface QuickAddProject extends ProjectSummary {
 
 export interface QuickAddContext {
     projects: QuickAddProject[];
+    /** The organizations of `projects`, by name: the project picker's dropdown. */
+    organizations?: OrganizationOption[];
     team: Member[];
     currentMemberId: Id | null;
     /** The active people of the viewer's organization, for whoever runs a team in it; else empty. */

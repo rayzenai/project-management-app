@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Http\Resources\NoteResource;
 use App\Http\Resources\WorkspaceNoteResource;
 use App\Models\Member;
+use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectNote;
@@ -124,8 +125,16 @@ class ShareWorkspaceData
                 fn (array $p): bool => $p['can_add_people'] && (int) $p['organization_id'] === (int) $organizationId,
             ));
 
+            // The project picker's dropdown: the organizations of those
+            // projects, by name, in one query.
+            $organizationIds = $projects->pluck('organization_id')->unique()->values();
+
             return [
                 'projects' => $projects->all(),
+                'organizations' => $organizationIds->isEmpty() ? [] : Organization::query()
+                    ->whereKey($organizationIds)->orderBy('name')->get(['id', 'name'])
+                    ->map(fn (Organization $organization): array => ['id' => $organization->id, 'name' => $organization->name])
+                    ->all(),
                 'organizationPeople' => $addsPeople
                     ? Member::query()->active()->where('organization_id', $organizationId)->orderBy('name')
                         ->with('designation:id,name')

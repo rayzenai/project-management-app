@@ -187,7 +187,19 @@
             e.stopPropagation();
             open = !open;
         }}
-        onkeydown={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+            // Escape on a closed trigger is for whatever holds it (a dialog
+            // closes); every other key stays here, so a row's keys don't fire.
+            if (e.key === 'Escape' && !open) {
+                return;
+            }
+
+            e.stopPropagation();
+
+            if (e.key === 'Escape') {
+                open = false;
+            }
+        }}
     >
         {@render trigger({ open })}
     </button>

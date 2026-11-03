@@ -2,6 +2,7 @@
     import { inertia, router } from '@inertiajs/svelte';
     import { ChevronsUpDown, Plus, Search } from '@lucide/svelte';
     import { onMount } from 'svelte';
+    import { forgivingFilter } from '../../lib/forgivingFilter';
     import { currentHref, under } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
     import type { OrganizationSwitch } from '../../lib/types';
@@ -75,39 +76,14 @@
     );
     const current = $derived(inList ? null : currentHref(path, links));
 
-    /**
-     * Forgiving, as a filter should be: the projects holding what was typed
-     * come first, then those holding its letters in order ("pms" finds
-     * PMIS), each group in list order.
-     */
-    const matching = $derived.by(() => {
-        const needle = query.trim().toLowerCase().replace(/\s+/g, ' ');
-
-        if (needle === '') {
-            return projects;
-        }
-
-        const inOrder = (text: string) => {
-            let at = 0;
-
-            for (const ch of text) {
-                if (ch === needle[at] && ++at === needle.length) {
-                    return true;
-                }
-            }
-
-            return false;
-        };
-        const text = (p: (typeof projects)[number]) =>
-            `${p.title} ${p.program ?? ''}`.toLowerCase();
-
-        return [
-            ...projects.filter((p) => text(p).includes(needle)),
-            ...projects.filter(
-                (p) => !text(p).includes(needle) && inOrder(text(p)),
-            ),
-        ];
-    });
+    /** Forgiving, as a filter should be ("pms" finds PMIS). */
+    const matching = $derived(
+        forgivingFilter(
+            projects,
+            query,
+            (p) => `${p.title} ${p.program ?? ''}`,
+        ),
+    );
 
     function onFilterKey(e: KeyboardEvent) {
         if (e.key === 'Enter' && matching.length > 0) {

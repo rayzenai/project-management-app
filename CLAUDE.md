@@ -478,7 +478,11 @@ the organizational admin switch and the program and project manager pickers.
 - **Web** (`routes/web.php`, prefix `workspace`, names `workspace.*`):
   `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`
   (`projects` with `member_ids`, `organization_id` and `can_add_people` =
-  `canManageRosterOfProject`, no query per project; `organizationPeople` (`PersonRef`s), the active
+  `canManageRosterOfProject`, no query per project; `organizations`, those
+  projects' organizations by name in one query, for the add field's project
+  picker (`components/ProjectPicker.svelte`: "Your projects" first, a
+  dropdown to each organization's projects, a search across all of them);
+  `organizationPeople` (`PersonRef`s), the active
   people of the viewer's organization for whoever runs a team in it or may
   start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`;
   `lastProjectId`, where the add field starts: the project of the newer of

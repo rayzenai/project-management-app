@@ -4,7 +4,6 @@
     import {
         CalendarDays,
         Check,
-        ChevronDown,
         Folder,
         Plus,
         UserPlus,
@@ -25,6 +24,7 @@
     import DependsOnPicker from './DependsOnPicker.svelte';
     import PillGroup from './PillGroup.svelte';
     import Popover from './Popover.svelte';
+    import ProjectPicker from './ProjectPicker.svelte';
     import StatusGlyph from './StatusGlyph.svelte';
     import TokenInput from './TokenInput.svelte';
 
@@ -74,6 +74,7 @@
         shared.quickAddContext?.organizationPeople ?? [],
     );
     const organizationId = $derived(shared.organization?.id ?? null);
+    const organizations = $derived(shared.quickAddContext?.organizations ?? []);
 
     // The project being viewed, else where the person last added a task.
     const initialProject = untrack(
@@ -319,14 +320,6 @@
                   .map((m) => m.name)
             : tokenAssignees.map((m) => m.name),
     );
-    const projectChip = $derived(
-        selectedProject
-            ? projectLabel(selectedProject)
-            : isGeneral
-              ? 'General (new)'
-              : 'Project',
-    );
-
     let dateOpen = $state(false);
 
     function pickDate(day: string): void {
@@ -848,16 +841,22 @@
     {/if}
 {/snippet}
 
-{#snippet projectOptions()}
-    {#if form.project_id === null}
-        <option value={null} disabled>Pick a project</option>
-    {/if}
-    {#if startGeneral}
-        <option value={GENERAL}>General (new)</option>
-    {/if}
-    {#each projects as project (project.id)}
-        <option value={project.id}>{projectLabel(project)}</option>
-    {/each}
+{#snippet projectPicker(field: boolean)}
+    <ProjectPicker
+        bind:value={form.project_id}
+        {projects}
+        {organizations}
+        {currentMemberId}
+        homeOrganizationId={organizationId}
+        general={startGeneral}
+        {field}
+        disabled={!staysOpen && form.processing}
+        placeholder={field ? 'Pick a project' : 'Project'}
+        triggerClass={field
+            ? `input flex items-center gap-2 text-left ${hasProject ? 'text-fg' : 'text-fg-faint'}`
+            : `${CHIP} ${hasProject ? '' : EMPTY_CHIP}`}
+        onpick={field ? undefined : () => tokenInput?.focus()}
+    />
 {/snippet}
 
 {#snippet generalNote()}
@@ -888,14 +887,8 @@
                 {/if}
             </p>
         {:else}
-            <label for={`${uid}-project`} class="label">Project</label>
-            <select
-                id={`${uid}-project`}
-                bind:value={form.project_id}
-                class="input"
-            >
-                {@render projectOptions()}
-            </select>
+            <span class="label">Project</span>
+            {@render projectPicker(true)}
             {@render generalNote()}
         {/if}
     </div>
@@ -1051,28 +1044,12 @@
                 {#if tokenProject}
                     <span class={CHIP} title="From your #tag">
                         <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
-                        <span class="truncate">{projectChip}</span>
+                        <span class="truncate"
+                            >{projectLabel(tokenProject)}</span
+                        >
                     </span>
                 {:else}
-                    <label
-                        class={`${CHIP} relative cursor-pointer focus-within:border-accent ${hasProject ? '' : EMPTY_CHIP}`}
-                    >
-                        <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
-                        <span class="max-w-[16rem] truncate">{projectChip}</span
-                        >
-                        <ChevronDown
-                            class="h-3.5 w-3.5 shrink-0 text-fg-faint"
-                        />
-                        <!-- The native list (a phone's own picker), laid
-                             invisibly over the chip; 16px so iOS doesn't zoom. -->
-                        <select
-                            aria-label="Project"
-                            bind:value={form.project_id}
-                            class="absolute inset-0 cursor-pointer appearance-none opacity-0 text-[16px]"
-                        >
-                            {@render projectOptions()}
-                        </select>
-                    </label>
+                    {@render projectPicker(false)}
                 {/if}
 
                 <Popover
