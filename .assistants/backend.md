@@ -18,24 +18,41 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
 ## Two delivery surfaces
 
 - **Web**: `routes/web.php`, prefix `workspace`, names `workspace.*`, `auth` +
-  `EnsureCanSignIn` + `RemembersOrganizationChoice` + `ShareWorkspaceData`
+  Sanctum `AuthenticateSession` + `EnsureCanSignIn` + `TouchLastSeen` +
+  `RemembersOrganizationChoice` + `ShareWorkspaceData`
   middleware. Shared Inertia props: `statuses`,
   `completeStatus`, `quickAddContext`, `workspaceNotes`, `taskNotes`,
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
-  `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
+  `todoCount`, `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`,
   `office` (`OfficeLinks` capabilities/count), `clock` (`MyAttendanceQuery`),
   `organizationSwitch` (`OrganizationChoicesQuery::switcher`). Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
 - **API**: `routes/api.php`, prefix `api/v1`, names `api.*`, Sanctum tokens;
-  every authenticated route uses `auth:sanctum` + `EnsureCanSignIn`.
+  every authenticated route uses `auth:sanctum` + `EnsureCanSignIn` +
+  `TouchLastSeen`.
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and organizational-admin
   context plus `features: {task_notes, contacts}`, `managed_program_ids`,
-  `git_enabled` and `office` (`OfficeLinks`). Cross-cutting API context
+  `git_enabled`, `office` (`OfficeLinks`) and `todo_count`. Cross-cutting API context
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
+
+`/` and `/workspace` land on web `/workspace/my`. `MyWorkQuery` is the shared
+web/API/morning-email read: open assigned tasks, open work the caller created
+for others, dated open subtasks and private to-dos, grouped as Today, Tomorrow,
+Coming up, Later, You asked others, No date and Snoozed (plus Done on request).
+An assignment's `personal_due_at` overrides the task date; snoozed work appears
+only in Snoozed; the overdue rule forces work into Today; Tomorrow follows
+`WorkingDays`. `joined` lists up to five project teams another person added the
+caller to in the last 14 days. The older API-only `/api/v1/workspace/home` and
+`/api/v1/workspace/my` endpoints retain their old query classes.
+
+`BikramSambat` converts supported Gregorian dates (2070–2100 BS) for display.
+`WorkingDays` is the shared answer for organization workdays/holidays, the next
+working day and stable week start; organizations without attendance and people
+without an organization fall back to Sunday through Friday.
 
 ## Super-admin organization switch
 
@@ -45,7 +62,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
 `?organization=` pick share it; `OrganizationChoicesQuery::defaultId` uses the
 choice when a page offers that organization. People supports explicit `all`.
 
-Web Home, Projects, My Workspace, the activity feed and Code activity pass the
+Web My work, Projects, the activity feed and Code activity pass the
 choice into their queries. `Project::inOrganization` is the common project
 scope; Code activity narrows a super-admin's all-organizations report to the
 chosen organization. Search, quick add, My week and single project/program
@@ -68,6 +85,24 @@ email and IP address. Five wrong passwords across either surface exhaust the
 minute-long limit; a successful login clears it. Web returns the normal
 validation error flow, while API throttling uses 429.
 
+Emails are stored trimmed and lowercase by `User`/`Member`; login, forgotten
+password, set-password and API-token entry points lowercase input before lookup.
+`TouchLastSeen` updates `users.last_seen_at` at most hourly on authenticated web
+and API requests. `PasswordLinkService` is the only password-link mail path: the
+`users` broker gives 60-minute reset tokens and `invites` gives seven-day invite
+tokens, so the two kinds are not interchangeable. Opening a link only renders a
+page; `POST set-password` consumes it, rejects bad/used/expired/deactivated links
+with the same timeboxed 422, deletes both token kinds, rotates `remember_token`
+and ends other web sessions through `AuthenticateSession` (API tokens remain).
+Forgot-password always returns the same answer and sends after the response.
+
+`InvitePlan` rebuilds the preview/send plan server-side (maximum 200), with
+privacy-preserving statuses for new, recent, existing, deactivated and forbidden
+addresses. `InvitePeopleService` rechecks under locks; `SendInvite` dispatches
+after commit through `Background`, rechecks the inviter and sends a set-password
+link. A changed/deleted person's old links are forgotten. `UniqueLoginEmail`
+keeps login emails unique regardless of letter case.
+
 ## Optional task features
 
 `User::features()` reads `UserPreference.task_notes_enabled` and
@@ -79,6 +114,9 @@ both stored flag names alongside appearance and notification preferences.
 `ShareWorkspaceData` returns an empty `taskNotes` feed while task notes are off.
 These are per-user display preferences: existing data, task payloads, search
 queries and authorized note/contact endpoints remain available.
+Email preferences (`email_notifications`, `email_morning`, stored
+`email_weekly`) use the same preference endpoint; the web exposes the two
+implemented deliveries on `/workspace/settings/emails` and leaves weekly hidden.
 
 ## Authorization — SECURITY CRITICAL
 
@@ -118,6 +156,7 @@ task creator while they can still view its project),
 `canManageProjectAccess`, `canPublishProject`,
 `canChangeProjectKey` (organizational admin/super-admin), `canManageGit` (super-admin),
 `canViewProjectCode`, `canManageProjectRepositories`, `canManageRepositoryAccess`,
+`canSeeUnlinkedRepositories`, `ownsAssignment`, `ownsPersonalTodo`,
 `canGrantRepositoryAccessTo` (query twin: `RepositoryAccessCandidatesQuery`),
 `repositoryMaintainerIds`, `codeReportScope` (applied by `CodeActivityQuery`),
 `ledTeamIds`,
@@ -192,6 +231,10 @@ in the same transaction; a selected manager keeps their leader role.
   and activity. No foreign newcomer, even on cross-organization teams.
   `Assignees::joinCandidates` is the list twin; task show uses `joinCandidates`,
   preview uses `join_candidates`, each `{id, name, designation}` only.
+- `canUpdateAssignment` permits role/priority changes to project viewers, but
+  star, snooze, personal progress/status note and `personal_due_at` additionally require `ownsAssignment`:
+  only the active member linked to the caller owns those fields, never a
+  super-admin acting on someone else's assignment.
 - `QuickAddTaskRequest.start_general` with no `project_id` is allowed only for
   an organizational admin whose organization has no active project; otherwise
   422 `Pick a project.` on `project_id`. `StartGeneralProjectService` locks the
@@ -199,12 +242,18 @@ in the same transaction; a selected manager keeps their leader role.
   `CreateProjectService`. `QuickAddDispatcher` creates General and its task in
   one transaction; failure leaves neither. Parsed `@tokens` and default-to-self
   still resolve only through `scopeAssignableFor`.
+- `QuickAddTaskRequest.personal` asks for a private `PersonalTodo` when no
+  project is fixed. `QuickAddDispatcher` maps date words to `due_on`, discards
+  priority words and refuses naming anyone else with `Pick a project to give it
+  to someone.` A resolvable `#project` still makes a task. `fileTitle` is also
+  the one path for moving a personal to-do into a project task.
 - `ShareWorkspaceData.quickAddContext` adds project `organization_id`, program
   name, `member_ids`, `can_add_people`; `organizationPeople` (`{id, name, designation}`)
   is the viewer's active organization people only when they run a team there or
-  may start General. `startGeneral` signals that option; `team` and
-  `currentMemberId` remain. Roster capability uses the loaded-project twin to
-  avoid a query per project.
+  may start General. It also supplies the projects' organizations, `startGeneral`,
+  `startPersonal` (nothing fileable), and `lastProjectId` (the newer of the
+  caller's latest created task/team join). `team` and `currentMemberId` remain.
+  Roster capability uses the loaded-project twin to avoid a query per project.
 
 ## Domain model
 
@@ -249,7 +298,7 @@ in the same transaction; a selected manager keeps their leader role.
   complete statuses (currently done and failed). `notClosed()` selects open
   work; `overdue()`/`is_overdue` mean not closed and deadline before today.
   Queries, reminders and task/reference/progress payloads share this rule;
-  Home excludes closed work. `is_late` also covers finished-late/failed work
+  My work excludes closed work. `is_late` also covers finished-late/failed work
   and remains a separate derived attribute, never a status.
   Permanent `number` comes from `projects.last_task_number` in the creating
   hook; create/quick-add services lock the project row. Unique per project,
@@ -273,14 +322,23 @@ in the same transaction; a selected manager keeps their leader role.
   controllers serve `POST/DELETE tasks/{task}/dependencies[/{dependsOn}]`.
   `TaskResource` emits references when loaded; `QuickAddTaskService` accepts
   initial dependency ids, ignoring tasks outside the chosen project.
-- **Subtask** — personal (`user_id`). **Member** — belongs to one organization
+- **Subtask** — personal (`user_id`). **PersonalTodo** — a private "Just for
+  me" row owned by `user_id`, with `due_on`, `started_at` (Doing) and `done_at`.
+  It appears only on My work and the top-bar to-do panel, never in activity,
+  notifications, reports or email. `PersonalTodosQuery` returns Doing, To do and
+  the last week's Done in one query plus the open count. Paired web/API routes
+  update/delete/restore/move it; soft-deleted rows keep a seven-day undo window.
+  Every request uses `WorkspaceAccess::ownsPersonalTodo` and returns the same 404
+  to any non-owner, including a super-admin.
+  **Member** — belongs to one organization
   (except a super-admin's own member), optionally links to a `User`, and may be
   an organizational admin. `Member::forUser` `firstOrCreate`s (never call in
   authorization); `managedPrograms()` exposes its managed programs.
   `scopeAssignableFor(Project)` supplies existing assignees; `Assignees` adds
-  eligible newcomers for roster managers. Creating a person also creates a login
-  and synchronously emails its supplied/generated password via `SendLoginDetailsService`; passwords are
-  never queued.
+  eligible newcomers for roster managers. The ordinary create-person form
+  provisions a login and synchronously sends its supplied/generated password
+  through `SendLoginDetailsService`. The separate bulk invite flow can create a
+  person/login or link an existing person without one, then sends a password link.
 - **Team** — made with its project and named after it (`Team::project()`);
   belongs to the same organization, is auto-slugged, may be
   `is_cross_organization`, and uses pivot `member_team.role` through
@@ -333,12 +391,31 @@ under the `team` filter/count on both surfaces. `ProgramObserver` sends
 `made_program_manager` for appointments/handovers except to the actor, with
 `task: null`, `program {slug, name}` and the program URL; also in the Teams filter.
 
+Scheduled email reads these database notifications; the notifications themselves
+remain synchronous `database` channel only. `SendEmailUpdates` claims unread,
+unhandled assignment/mention/team/manager rows from the last 24 hours and groups
+them per person after a two-minute quiet period or five-minute maximum wait.
+Claims use `notifications.email_handled_at`, so read or concurrently claimed
+rows are not mailed. `SendMorningEmails` uses `MorningEmailQuery`/`MyWorkQuery`
+on each enabled person's working day for late, today and newly assigned work;
+unique `email_digests` rows make the daily send idempotent.
+
+`MailFailure` classifies SMTP failures as unreachable (release claims and stop),
+deferred at/after RCPT TO (release that person and continue), or refused at/after
+RCPT TO (keep handled and warn). `FirstRefusals` treats three refusals among the
+run's first three sends as a server-wide refusal: release them and stop. Morning
+mail uses the same server/recipient distinction for its day claims. Both commands
+catch/report per-person errors without exposing addresses in logs.
+
 ## Scheduled / console commands
 
 Schedule in `routes/console.php`. Commands: `workspace:api-token`,
 `workspace:prune-trashed` (trash TTL from config) and
 `workspace:send-deadline-reminders`; both maintenance commands support
-`--pretend`. Weekly digest mail, command and subscriber model/table are retired.
+`--pretend`. `workspace:send-email-updates` runs every minute with a five-minute
+overlap lock; `workspace:send-morning-emails` runs daily at
+`project-management.emails.morning_at` (09:00 by default). Both support
+`--pretend`; weekly digest delivery is not implemented.
 `passport:purge` also runs daily. `git:oidc-client {redirect_uri}` creates/reuses
 the sole Forgejo client; reruns keep its id and rotate its secret.
 `git:reconcile [--connection=] [--allow-removals]` runs daily at 01:30 without
@@ -512,11 +589,15 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   repositories of the organizations/programs/projects the viewer runs, plus
   their own commits anywhere. Non-merge, reachable commits count by local
   `committed_at`; PRs opened/merged, linked tasks, line totals and active days
-  accompany them. People default to name order, unmatched authors to one final
-  row only for whole-repository viewers. Daily series include zero days.
-  Shared `CodeActivityRequest` requires `GitAccess`, defaults to 30 days,
-  caps at 366 days and four compared user IDs; unknown/out-of-scope project or
-  program filters are 403. Paired controllers serve web `/workspace/reports/code`
+  accompany them, plus repositories created in scoped projects. Except for
+  name sorting, rows are ranked by the selected figure with competition ranks;
+  unmatched authors remain an unranked final row only for whole-repository
+  viewers. Daily series include zero days. Shared `CodeActivityRequest` requires
+  `GitAccess`; periods are today, the viewer's working week (default), last week,
+  month or a custom range up to 366 days. It filters by project, program or an
+  in-scope designation, sorts by commits/lines/tests/active days/name and compares
+  up to four user IDs. Unknown/out-of-scope project or program filters are 403.
+  Paired controllers serve web `/workspace/reports/code`
   (`Reports/CodeActivity`) and API `/api/v1/workspace/reports/code`, with
   `/people/{user}` returning the latest 50 scoped commits; unknown/out-of-scope
   people return an empty list. Runbook: `docs/forgejo.md` section 13; spec/plan:
@@ -524,6 +605,15 @@ The one-time timestamp migration converts existing UTC wall-clock values.
 - `GuideController` renders `GuideQuery`: the forges `GitAccess` admits (the
   reader's own organization first) and their stored forge username, never a
   token. The Guide turns these into its copyable code workflow walkthrough.
+- `UnlinkedRepositoriesQuery` finds non-archived forge repositories that no
+  project links, newest first. Forge results (including failure) are cached for
+  five minutes per connection and forgotten by `GitRepositoryObserver`; the
+  sidebar maintenance count reads cache only, while Code activity and Maintenance
+  may ask the forge. `find()` always reads the forge before a write. Viewers pass
+  `canSeeUnlinkedRepositories`; rows include suggested titles/keys, linkable
+  projects and programs. Existing repositories use the normal link service;
+  `CreateProjectForRepositoryService` creates a project and links exactly the
+  requested repository atomically, rolling both back on link failure.
 
 ## Structure, attendance, work and maintenance
 
@@ -594,7 +684,8 @@ in these controllers, requests, resources or pages.
   `canViewMaintenance` (= `administers`), checks manager-less/empty/quiet active
   projects, unassigned/inactive-only tasks, unmanaged programs, disconnected
   people/missing designations/logins/inactive bosses, missing attendance places
-  and networks, and failing/unprotected/untested protected branches plus
+  and networks, forge repositories with no project link, and
+  failing/unprotected/untested protected branches plus
   repositories whose forge default moved away from that branch. New checks
   belong in its lists, `countOf`, and the Maintenance page's report type.
   `QUIET_DAYS = 30`, `COUNT_TTL_SECONDS = 300`; full reads refresh the count.

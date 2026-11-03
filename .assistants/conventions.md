@@ -12,6 +12,8 @@ npm run lint && npm run format && npm run types:check && npm run build
 php artisan test --compact tests/Feature/Workspace   # scoped test runs
 php artisan db:seed --class=WorkspaceDemoSeeder      # demo data (non-prod)
 php artisan db:seed --class=SdocProjectsSeeder       # fresh databases only; never production
+php artisan workspace:send-email-updates --pretend   # preview grouped right-away mail
+php artisan workspace:send-morning-emails --pretend  # preview the morning digest
 php artisan passport:keys                            # local OIDC signing keys
 php artisan git:oidc-client https://git.example/user/oauth2/sdoc-tasks/callback
 php artisan git:reconcile --connection=1              # nightly forge repair, scoped by office connection
@@ -59,6 +61,12 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
   (`Task::completeStatuses()`); lateness is derived, not a status.
 - The app and PostgreSQL connection are fixed to `Asia/Kathmandu`;
   date/time behavior must not depend on a host or environment timezone.
+- Stored and compared emails are trimmed and lowercase. Login, password-link,
+  invite and API-token paths normalize input before lookup; do not add a
+  case-sensitive identity path.
+- Personal assignment fields (star, snooze, progress/status note and own due date)
+  require `WorkspaceAccess::ownsAssignment`, in addition to ordinary assignment
+  update access. Private `PersonalTodo` rows always require `ownsPersonalTodo`.
 
 ## Frontend
 
@@ -104,6 +112,9 @@ under `forgejo/runner/host/` lets jobs reach the internet but only the forge's
 `git:commit-checks` runs every two minutes with a ten-minute overlap lock.
 Section 13 covers the ten-minute access sync and five-minute commit stats;
 their overlap locks expire after 15 and 30 minutes respectively.
+Right-away email runs every minute with a five-minute overlap lock; morning
+email runs at `PM_MORNING_EMAIL_AT` (09:00 by default). Both commands own their
+claim/retry behavior; web requests never send these notification digests.
 The scheduler appends every scheduled command's output to `/proc/1/fd/2` when
 it is writable; with `LOG_CHANNEL=stderr`, command output and logs therefore
 reach the scheduler container log in production without changing other hosts.

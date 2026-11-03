@@ -5,8 +5,10 @@ Single Inertia entry `resources/js/app.ts`; single root view
 
 ## Pages (`resources/js/pages`)
 
-`Home`, `MyWorkspace`, `PlanTracker`, `Auth/`, `Notifications/` (two tabs:
-personal inbox + workspace activity feed, `?tab=activity`),
+`MyWork` (the signed-in landing page), `PlanTracker`,
+`Auth/{Login,ForgotPassword,SetPassword}`, `Settings/Emails`,
+`Notifications/` (two tabs: personal inbox + workspace activity feed,
+`?tab=activity`),
 `Organizations/Index` (super-admin tenant CRUD + Git connection controls),
 `Projects/Index` (program groups, then unprogrammed projects by manager),
 `Projects/Show` (list/board/people/code views via `components/project/`),
@@ -15,20 +17,22 @@ personal inbox + workspace activity feed, `?tab=activity`),
 `Programs/Show` (project summary, workload, Gantt and activity across active
 projects; polls `progress` every 15s while visible, with admin edit/delete and
 New project for admins and its manager), `Reports/CodeActivity` (scoped code
-activity, comparison and per-person commits).
+activity, ranking/comparison, unlinked repositories and per-person commits).
 Pages wrap themselves in `AppShell` and supply the 44px top bar through its
 `bar` snippet (breadcrumb left, actions right); `flush` drops content padding
-for full-bleed registers/boards. Navigation is a rail of Work, Office, Reports
-and Admin areas plus the selected area's panel (`components/shell/{NavRail,
-NavPanel,Logo}`). `lib/navigation.ts` maps pages to areas and capability-filtered
-links; register every new page there. `AppShell` follows the current page's area;
-`[` hides the panel (persisted), picking an area while hidden floats it over the
-content. `managedPrograms`, `gitEnabled` and `office` supply contextual links.
-Organizations remains super-admin-only.
-When `organizationSwitch` is shared, `NavPanel` offers All organizations or one
-organization; `AppShell` narrows the sidebar's projects but leaves quick add's
-project list whole. Home, Projects, My Workspace, activity and Code activity
-follow the choice; Home names it. Search and single project/program pages do not.
+for full-bleed registers/boards. From `md`, `shell/Sidebar` carries New task,
+Search, My work/Projects/People (plus Code activity when enabled), managed
+programs, projects and the account button; `[` collapses it. Below `md`,
+`PhoneTabs` gives My work, Projects, Updates and Me. `AccountMenu` is a desktop
+popover/phone bottom sheet grouped as You, Office, Reports and Admin, with
+Appearance and Sign out; `lib/navigation.ts` owns all capability-filtered links.
+When shared, `OrganizationSwitcher` is in the sidebar/account sheet and narrows
+sidebar projects plus My work, Projects, activity and Code activity; quick add
+and single project/program pages stay organization-wide.
+`MyWork` groups the caller's tasks, dated subtasks and private to-dos by Today,
+Tomorrow, Coming up, Later, You asked others, No date and Snoozed, with optional
+Done. Recently joined projects sit above the groups. A quick-added row opens its
+folded group, scrolls into view and glows once via `flash.created_key`.
 `Guide` (`/workspace/guide`, sidebar link for all signed-in
 users) explains the organization/program/project/team model, role routines, ministry title
 mapping, dependencies, overdue work and shortcuts. Its Code section appears
@@ -44,20 +48,25 @@ Primitives: `StatusGlyph` (ring / dashed ring / amber half disc / green check /
 red cross), `PriorityBars`, `Avatar` (squircle initials), `ProgressRing`.
 Shell + chrome: `AppShell`, `CommandPalette`, `Popover`, `Toasts`, and
 `ThemeToggle` (top-bar light/dark switch that saves through preferences and
-uses `applyAppearance` for the immediate transition).
+uses `applyAppearance` for the immediate transition). `Popover` portals to
+`body`; nested popovers register with the outer panel so interacting with one
+does not close its parent, and presses on `[data-toasts]` close neither.
 Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 `lib/quickAddTokens.ts` (server twin: `App\Support\QuickAddParser`).
 `QuickAddForm` mirrors resolved `#project`/`@assignee` tokens, scopes picks to
 the effective project and clears incompatible assignments/dependencies when it
-changes. Self defaults only when eligible; choosing someone else replaces that
-automatic self pick. Roster managers also see organization people marked
+changes. `ProjectPicker` opens with Your projects, drills into organizations and
+searches every eligible project; where allowed its first row is Just for me, and
+an office admin with no project sees General (new). The form starts at shared
+`lastProjectId` or private mode when `startPersonal`. Self defaults only when
+eligible; choosing someone else replaces that automatic self pick. Roster managers also see organization people marked
 "Joins the team"; an organizational admin with no active project gets General
 (created on submit). Missing project disables submit; validation and service
 errors stay visible. Overlay creates redirect to the project board unless
 "Create another" is selected. `AssigneePicker` closes outside on click capture
 so an expanded list cannot shift the submit button between press and release;
 `QuickAddOverlay` closes only for a press begun and ended on the backdrop.
-Task UI: `TaskRow`, `TaskRegisterHead` (the shared register column header),
+Task UI: `TaskRow`,
 `TaskCode` (mono `KEY-12` id chip from stored project key + permanent task number,
 shared formatter `lib/taskCode.ts`; `#12` when the project code is unknown),
 `TaskPeek` (+ `lib/peek.svelte.ts`), `CommentThread`, `AssigneePicker/Stack`,
@@ -67,7 +76,7 @@ Project overdue counts/filters, dependency chips/links and progress views use
 server-provided `is_overdue`; `is_late` remains available for finished-late work.
 Dependencies: `TaskDependencies` in the task page/Peek, `DependsOnPicker` in
 quick-add, and `project/DependencyChips` on board cards/list rows.
-Notes: `NoteSticky`, `NotesStrip`, `WorkspaceNotesBoard` +
+Notes: `WorkspaceNotesBoard` +
 `lib/notesBoard.svelte.ts`, `lib/noteColors.ts`.
 Teams: `project/ProjectTeamPanel` manages the project's roster in its People
 tab; `team/RosterSearch` performs debounced server-side eligible-person search.
@@ -84,6 +93,9 @@ outside those lists and sends only changed complete sets. Directory rows show
 roles followed by other memberships; `lib/projectLabel.ts` includes the
 program name ("General (Revenue)") in project labels, matching `Project::label()`.
 `lib/clipboard.ts` provides Clipboard API + legacy fallback for copied logins.
+`team/InviteDialog` pastes up to 200 name/email rows, previews the server-built
+invite plan, optionally includes active people without logins, assigns
+designations and sends set-password links; it never decides status locally.
 Notifications: inbox Teams filter covers team additions and project/program manager appointments;
 the activity tab includes project-level team changes with no task.
 Project views: `components/project/{ListView,BoardView,PeopleView,BoardCard,
@@ -142,13 +154,16 @@ program/git context shapes.
 Repository rows show the fixed `protected_branch` and warn when the forge's
 `default_branch` moved away from it, because work merged into the new default
 skips the tracker's rule.
-Reports: `Reports/CodeActivity` filters by date, project or program, defaults
-to name order with sortable columns and compares up to four people. It shows
+Reports: `Reports/CodeActivity` offers today/week/last-week/month/custom periods,
+project/program/designation filters, ranking by commits/lines/tests/active days
+(or unranked name order), and compares up to four people. It shows
 uncounted work, a side-by-side comparison and `reports/DailyCodeChart` (code
 lines changed per day with daily commit counts in its tooltip). The empty state
 also directs people to commit with the email they use to sign in.
 `reports/PersonCommitsDrawer` fetches scoped recent commits for a selected
-person, preserving the report's range/filters.
+person, preserving the report's range/filters. `reports/UnlinkedRepositories`
+shows forge repositories with no project, linking one to an existing project or
+creating a new project whose Title/Key suggestions stay editable and in step.
 Comments: the full task page passes `mentionCandidates` (`{id, name}` only,
 team plus program manager) to `CommentThread`; `team` stays the existing
 assignee list. Full task `joinCandidates` and Peek `join_candidates` feed
@@ -171,12 +186,20 @@ whoever runs the project or the task creator. Peek deletes in place and closes;
 the full page returns to the project, while deletion from a project view stays
 on that view. Both use the undoable trash/restore flow.
 
-`AppearanceConfig` provides Settings toggles for Task notes and Contacts along
-with theme and email preferences; changes persist with its Save button.
+`AppearanceConfig` provides theme plus Task notes and Contacts settings; email
+preferences live on `Settings/Emails`, where each implemented switch saves by
+itself (right-away updates and morning mail; weekly remains stored but hidden).
 `SharedProps.features` (`lib/types.ts`) controls optional sections in task
-page/Peek, read-only `TaskReportDrawer`, `MyWorkspace`, list-row counts and
+page/Peek, read-only `TaskReportDrawer`, list-row counts and
 command-palette results. Both features start off per user; turning them off
 keeps their data. Personal sticky notes remain available.
+
+`todos/TodoPanel` is a top-bar popover on desktop and bottom sheet on phones
+(`T` toggles it). It fetches Doing, To do and the last week's Done from
+`GET /workspace/todos`, serializes mutations, quietly reloads My work/count/flash,
+and supports add/start/done/undo/delete/edit/move-to-project. `mywork/TodoRow`
+is the same private item in the landing-page list; `mywork/MyWorkRow` and
+`RowMenu` handle task/subtask actions and personal assignment fields.
 
 ## Theming
 

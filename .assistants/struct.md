@@ -5,7 +5,8 @@ Single-stack Laravel monolith; frontend is compiled by Vite from `resources/js`.
 ```
 app/
   Console/Commands/        # workspace:api-token, workspace:prune-trashed,
-                           # workspace:send-deadline-reminders, git:oidc-client, git:reconcile,
+                           # workspace:send-deadline-reminders/send-email-updates/send-morning-emails,
+                           # git:oidc-client, git:reconcile,
                            # git:sync-access, git:commit-stats, git:commit-checks
   Http/
     Controllers/GitWebhookController.php # signed, sessionless forge deliveries
@@ -13,15 +14,17 @@ app/
     Controllers/Workspace/ # /workspace Inertia controllers + Concerns/RedirectsWithServiceResult
     Middleware/            # ShareWorkspaceData, EnsureProjectVisible, HandleInertiaRequests,
                            # EnsureCanSignIn (deactivation gate), EnsureCanUseGit (OIDC git gate),
-                           # RemembersOrganizationChoice (super-admin workspace switch)
+                           # TouchLastSeen, RemembersOrganizationChoice (super-admin workspace switch)
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
                            # Concerns/ChecksMemberRoles validates person-form role sets
     Resources/             # JsonResources ($wrap = null)
-  Mail/                    # new-member login-details mailable
-  Jobs/                    # ProcessGitDelivery, BackfillGitRepository, SyncForgeOwners, SyncRepositoryAccess
+  Mail/                    # login details/password links, grouped updates and morning digest mailables
+  Jobs/                    # ProcessGitDelivery, BackfillGitRepository, SyncForgeOwners,
+                           # SyncRepositoryAccess, SendInvite
   Models/                  # Organization, Program, Project, Task, TaskDependency, Subtask, Team, Member, User, TaskComment,
                            # ProjectAssignment/Note/Contact/Activity,
-                           # TeamMembership (member_team pivot), WorkspaceNote, UserPreference,
+                           # TeamMembership (member_team pivot), WorkspaceNote, PersonalTodo,
+                           # UserPreference, EmailDigest,
                            # ProjectKeyAlias, GitConnection, OAuthClient (Passport),
                            # GitRepository/Branch/Commit/PullRequest, GitRepositoryGrant,
                            # TaskGitLink, GitWebhookDelivery; Designation, AttendanceSetting/Place/Network/Punch,
@@ -33,7 +36,8 @@ app/
   Providers/AppServiceProvider.php  # manage-workspace Gate, morph map, observer registry
   Queries/                 # heavy reads (ProjectShow, OrganizationIndex, Guide,
                            # TeamIndex/Candidates, ProjectProgress/ProgramProgress + ProgressReport,
-                           # RepositoryCandidates, RepositoryAccess/Candidates, TaskCode, CodeActivity, ...)
+                           # RepositoryCandidates, RepositoryAccess/Candidates, TaskCode, CodeActivity,
+                           # MyWork, PersonalTodos, MorningEmail, UnlinkedRepositories, ...)
   Queries/Structure/       # PeopleInView, OrganizationChoices, ReportOptions, PersonRef, Organogram
   Queries/Attendance/      # MyAttendance (shared clock), Register, Summary, Settings, Leave
   Queries/Work/            # WorkActivity shared by WorkDay, PersonWork, TeamWork; WorkAttendance
@@ -51,20 +55,24 @@ app/
                            # Assignees (existing assignees + eligible team joiners),
                            # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background,
                            # LoginThrottle (shared web/API credential limit), OrgChart, OfficeLinks,
-                           # WorkspaceOrganization (super-admin switch), ActivityText (audit wording)
+                           # WorkspaceOrganization (super-admin switch), ActivityText (audit wording),
+                           # InvitePlan, BikramSambat, WorkingDays, MailFailure, FirstRefusals
   Support/Attendance/      # AttendanceCalendar, DaySchedule, PunchPlace
   Support/Git/             # GitAccess, GitUsernames, TaskReferences, DiffStats, CommentSyntax,
                            # GeneratedFiles, Checks, Oidc/{IdentityEntity,IdentityRepository}
 routes/
   web.php                  # /workspace/* Inertia routes (names workspace.*), guest login;
-                           # authenticated routes enforce EnsureCanSignIn
+                           # forgot/invite/set-password; authenticated routes enforce EnsureCanSignIn
                            # /oauth/authorize + /oauth/token (forge sign-in), /git/webhooks/{connection}
   api.php                  # /api/v1/* Sanctum routes (names api.*); authenticated routes
                            # enforce EnsureCanSignIn
-  console.php              # daily maintenance + ten-minute access sync / five-minute commit stats / two-minute checks;
+  console.php              # daily reminders/morning mail + minute updates + maintenance;
+                           # ten-minute access sync / five-minute commit stats / two-minute checks;
                            # forwards scheduled output to the container log when available
 config/
   project-management.php   # status workflow, super-admins, trash TTL, reminders, suggested forge URL
+  auth.php                 # distinct reset and invite password brokers
+  mail.php                 # SMTP transport including bounded timeout
   government.php           # plan-tracker metadata (categories, deadline types, oath date)
   themes.php               # system/light/dark token sets
   openid.php               # OIDC scopes/claims, identity repository, discovery + JWKS
@@ -80,12 +88,14 @@ database/
                            # repository grants/access-sync fields + commit author/line-count fields,
                            # designations/reporting lines, attendance/leave, title retirement, Git checks,
                            # audit rewording, fixed protected branches, users' workspace organization,
-                           # immutable task creator attribution for delete/restore authorization
+                           # immutable task creator attribution, last-seen/email preferences and claims,
+                           # separate invite tokens, lowercased emails, private personal to-dos
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (fresh databases only per CLAUDE.md; never production)
 resources/
   js/app.ts                # single Inertia entry
-  js/pages/                # Home, MyWorkspace, PlanTracker, Guide, Auth/, Notifications/,
+  js/pages/                # MyWork, PlanTracker, Guide, Auth/{Login,ForgotPassword,SetPassword},
+                           # Notifications/, Settings/Emails,
                            # Organizations/Index, Projects/{Index,Show,Progress}, Tasks/Show,
                            # Programs/Show, Team/Index (People directory), Reports/CodeActivity,
                            # Organogram/Index, Attendance/{Register,Leave,Settings},
@@ -96,22 +106,24 @@ resources/
                            # team/{RosterSearch,MemberRoleFields,DesignationSelect,GanttChart,TaskReportDrawer},
                            # task dependency UI, program/ProgramForm,
                            # project/{ProjectCreateForm,CodeView,RepositoryAccess}, TaskCodePanel,
-                           # reports/{DailyCodeChart,PersonCommitsDrawer}, ChecksMark,
-                           # shell/{NavRail,NavPanel,Logo}, attendance/ClockButton + settings/,
+                           # reports/{DailyCodeChart,PersonCommitsDrawer,UnlinkedRepositories}, ChecksMark,
+                           # shell/{Sidebar,AccountMenu,PhoneTabs,OrganizationSwitcher,Logo},
+                           # mywork/, todos/, team/InviteDialog, attendance/ClockButton + settings/,
                            # organogram/, filters/, work/RangePicker
   js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils,
                            # dependencies (board ordering/links), schedule (Gantt planning),
                            # taskCode (stored project key + permanent task number),
                            # memberRoles (person-form role sets), projectLabel (title + program),
-                           # navigation (areas/page map), dates, format, reportVisit.svelte,
+                           # navigation (main/account links), dates, format, reportVisit.svelte,
                            # structure, attendance, attendanceRegister, work, maintenance
   css/app.css              # --ws-* tokens, Tailwind @theme mapping, component classes
   views/app.blade.php      # single root view
-  views/emails/            # HTML + text login-details templates
+  views/emails/            # HTML + text password-link, update and morning templates
 tests/
   Feature/Workspace/       # web-surface feature tests
   Feature/Workspace/Api/   # API-surface feature tests
-  Unit/                    # parsers, diff classification + ForgejoClient HTTP boundary tests
+  Unit/                    # parsers, calendars, mail-failure classification,
+                           # diff classification + ForgejoClient HTTP boundary tests
 docs/api.md                # HTTP API reference + external-integration guide
 docs/backups.md            # encrypted SDOC VM backup schedule, retention and restore drill
 docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local proof,

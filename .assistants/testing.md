@@ -7,7 +7,7 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 
 - `tests/Feature/Workspace/**` — web-surface feature tests (visibility,
   permissions, quick-add, notifications, soft-delete/restore, reminders,
-  seeder, plan tracker, appearance, login-detail email, organizations,
+  seeder, plan tracker, appearance, login-detail/password/invite/update/morning email, organizations,
   project progress, task dependencies, multi-tenant isolation, stable task codes,
   programs, Git connections/code/webhooks/reconcile, OIDC sign-in and forge offboarding).
 - `tests/Feature/Workspace/Api/**` — API-surface twins (`AuthApiTest`,
@@ -15,8 +15,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `TeamRosterApiTest`, `MemberRolesApiTest`, `NotificationApiTest`, `RestoreApiTest`).
 - `tests/Feature/` root — cross-cutting (WorkspaceAccessTest, theme tokens,
   user preferences, api-token command, seeders).
-- `tests/Unit/` — parsers (MentionParser, TaskReferences), DiffStats classification
-  and ForgejoClient HTTP tests.
+- `tests/Unit/` — parsers (MentionParser, TaskReferences), Bikram Sambat,
+  mail-failure classification, DiffStats classification and ForgejoClient HTTP tests.
 - `ProjectProgressTest` covers both surfaces, access gates and legacy web
   redirects; `TaskDependencyTest` covers web/API links, cycle/scope validation,
   audit logging, quick-add and graph props. `OneTeamPerProjectMigrationTest`
@@ -27,7 +27,7 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   a selected manager's leader role, refusing foreign/inactive/unknown people
   without creating a project or team, super-admin cross-organization creation,
   ignored organizational-admin flags and program-manager membership boundaries.
-- `OverdueRuleTest` checks the model scope/attribute and project/Home counts;
+- `OverdueRuleTest` checks the model scope/attribute and project/My work counts;
   `DeadlineReminderTest` also excludes failed (closed) work. `TeamActivityTest`
   covers roster/manager audit entries, team notifications, actor suppression,
   project-feed visibility on web/API and the publication capability.
@@ -62,6 +62,19 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   across both credential surfaces, reset after a successful login, deactivated
   login refusal, the super-admin exception, and termination of existing web
   sessions/API tokens after deactivation.
+- `ForgotPasswordTest` + `Api/PasswordApiTest` cover generic reset answers,
+  separate reset/invite brokers, expiry/one-use/kind/deactivation refusals,
+  timing, throttles, password rules, session invalidation and API-token survival.
+  `EmailCaseTest`, `ApiTokenCommandTest` and migration tests cover lowercased
+  storage/lookups, case-collision warnings and case-insensitive super-admins.
+  `LastSeenTest` covers hourly touches and invite resend classification.
+- `InvitePeopleTest` + `Api/InvitePeopleApiTest` cover preview/send plan rebuilds,
+  200-person limits, throttles, tenant/manager privacy, existing/no-login people,
+  designations, recent resend suppression, after-commit jobs and send-time rechecks.
+- `EmailUpdatesTest` and `MorningEmailTest` cover preferences, grouping/quiet/max
+  waits, claims and idempotency, My work/working-day selection, pretend mode and
+  unreachable/deferred/refused SMTP behavior including first-three refusals.
+  `FirstRefusalsTest` and `MailFailureTest` isolate the failure classifiers.
 - `OptionalFeaturesTest` covers default-off notes/contacts, web/API preference
   updates, preservation of other settings, boolean validation, shared task-note
   feed gating and API user feature context. `TaskNotesInWorkspaceFeedTest`
@@ -91,6 +104,16 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   to assignment activity descriptions.
   `ActivityWordingTest` covers status/priority/note labels, office-formatted
   dates, task lifecycle wording and migration of reconstructable old rows.
+- `MyWorkTest` + `Api/MyWorkApiTest` cover every due/snooze/asked-others/Done
+  group, personal dates, closed-work exclusion, organization switching, recent
+  team joins and query bounds. `WorkingDaysTest` covers fallback/configured work
+  weeks and stable week starts; `Unit/BikramSambatTest` covers calendar bounds.
+- `AssignmentUpdateAccessTest` proves only an assignment's owner changes star,
+  snooze and personal due date, even when another viewer may change role/priority.
+  `PersonalTodoTest` + API twin cover private quick add, date parsing, assignment
+  refusals, move-to-task atomicity and owner-only 404s. `TodoListTest` + API twin
+  cover Doing/To do/recent Done ordering, serialized actions, delete/restore and
+  pruning.
 - Code: `ProjectRepositoryTest` + `Api/ProjectRepositoryTest` cover link/search/
   unlink gates, ownership, concurrency, secret redaction and backfill.
   `ProjectCodeViewTest` covers project/task payloads, PR flags and repository
@@ -123,10 +146,14 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   linear scans of long lines. `Unit/ForgejoClientTest` also covers repository
   creation, collaborators, protection and bounded streamed diffs.
 - `CodeActivityTest` + `Api/CodeActivityTest` cover report role/tenant scopes,
-  name order/unmatched authors, own commits, ranges/filters, merge/unreachable
-  exclusions, PR/task counts, zero-filled comparisons, private person drill-down
+  ranking/ties/name order/unmatched authors, own commits, period/range/project/
+  program/designation filters, repository-created counts, merge/unreachable
+  exclusions, PR/task/check counts, zero-filled comparisons, private person drill-down
   and bounded query counts. The query-count test fakes `SyncRepositoryAccess`
   so after-response access-sync queries cannot affect its measurements.
+- `UnlinkedRepositoriesTest` + API twin cover forge-list caching/failure, cached
+  sidebar counts, stale linked-row removal, title/key suggestions, link and
+  create-project writes, rename/concurrency races, rollback and tenant gates.
 
 - Structure: `Structure/{Foundation,ReportingLines,ReportsTo,Designation,
   MemberDesignation,Organogram,PersonFormStructure,OfficeLinks}Test` cover CTE
@@ -159,7 +186,7 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   writes. `CreateRepositoryTest` checks README creation before protection.
 - `OrganizationSwitchTest` covers super-admin-only persistence, sidebar/shared
   state, page-pick synchronization, deleted organizations, People/office-page
-  defaults, web list narrowing (Home, Projects, My Workspace, activity) and API
+  defaults, web list narrowing (My work, Projects, activity) and API
   independence. `CodeActivityTest` covers its switched-organization report scope.
 - Repository link/create/access-sync tests cover fixing `protected_branch` at
   link time, forcing tracker-created repositories to `main`, keeping the rule
