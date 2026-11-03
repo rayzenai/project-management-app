@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Http\Requests\Concerns\LowercasesEmail;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -15,6 +16,8 @@ use Illuminate\Validation\ValidationException;
  */
 class ForgotPasswordRequest extends FormRequest
 {
+    use LowercasesEmail;
+
     public const THROTTLED = 'Too many tries. Wait a few minutes.';
 
     private const MAX_PER_EMAIL = 5;
@@ -41,6 +44,11 @@ class ForgotPasswordRequest extends FormRequest
     public function email(): string
     {
         return (string) $this->validated('email');
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->lowercaseEmail();
     }
 
     /**

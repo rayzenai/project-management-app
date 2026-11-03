@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -112,6 +113,17 @@ class User extends Authenticatable
             'task_notes' => $preferences !== null && $preferences->task_notes_enabled,
             'contacts' => $preferences !== null && $preferences->contacts_enabled,
         ];
+    }
+
+    /**
+     * Stored trimmed and lowercase, so sign-in and password links, which
+     * look it up lowercase, find it however it was typed.
+     *
+     * @return Attribute<string, ?string>
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => $value === null ? null : mb_strtolower(trim($value)));
     }
 
     /**

@@ -754,12 +754,12 @@ it('stores invited emails in lowercase and takes any case for the same person', 
     expect(DB::table('invite_tokens')->where('email', 'mina.thapa@example.com')->exists())->toBeTrue();
 });
 
-it('leaves an existing mixed-case login as it is, and its fresh link still works', function () {
+it('keeps a login typed in mixed case as one lowercase address, and its fresh link works in any case', function () {
     $roads = inviteOrganization();
     $admin = inviteAdminOf($roads);
     $hari = invitePersonWithLogin($roads, 'Hari.Rai@Example.com', ['invited_at' => now()->subDays(8)]);
 
-    expect(inviteStatuses(invitePreview($admin, ['text' => 'Hari, hari.rai@example.com'])))->toBe(['hari.rai@example.com' => 'resend']);
+    expect(inviteStatuses(invitePreview($admin, ['text' => 'Hari, Hari.Rai@example.com'])))->toBe(['hari.rai@example.com' => 'resend']);
 
     $this->actingAs($admin)->post('/workspace/invites', ['people' => [['name' => 'Hari', 'email' => 'hari.rai@example.com']]]);
 
@@ -767,12 +767,12 @@ it('leaves an existing mixed-case login as it is, and its fresh link still works
     Mail::assertSent(SetPasswordLink::class, function (SetPasswordLink $mail) use (&$sent): bool {
         $sent = $mail;
 
-        return $mail->hasTo('Hari.Rai@Example.com');
+        return $mail->hasTo('hari.rai@example.com');
     });
-    expect($hari->fresh()->email)->toBe('Hari.Rai@Example.com')
+    expect($hari->fresh()->email)->toBe('hari.rai@example.com')
         ->and(User::query()->whereRaw('lower(email) = ?', ['hari.rai@example.com'])->count())->toBe(1);
 
-    // The link names the login's own email, so it sets the password.
+    // The link sets the password whatever case its email is typed in.
     auth()->logout();
     $this->post('/workspace/set-password', [
         'kind' => 'invite',

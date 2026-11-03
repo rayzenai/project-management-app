@@ -44,6 +44,9 @@ the same `app/Services/Workspace/*` action service.
 
 ## Account & session
 
+Emails are matched in any case: they are stored in lowercase, and `login`,
+`forgot-password` and `set-password` lowercase the `email` they are given.
+
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | POST | `/login` | `email`, `password`, `device_name` | `{ token, user }`; a deactivated person (not a super-admin) gets 422 on `email` with `This account is deactivated. Ask your organizational admin to turn it back on.` and no token; after five wrong passwords for an email from one address (counted together with the web login, and started again by a right password), 429 on `email` with `Too many login attempts. Please try again in {n} seconds.` until the minute is up |

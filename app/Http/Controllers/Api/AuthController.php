@@ -35,12 +35,14 @@ class AuthController extends Controller
             'device_name' => ['required', 'string', 'max:255'],
         ]);
 
-        $throttleKey = LoginThrottle::key($validated['email'], $request->ip());
+        // Stored lowercase (User::email), so typed in any case.
+        $email = mb_strtolower(trim($validated['email']));
+        $throttleKey = LoginThrottle::key($email, $request->ip());
         LoginThrottle::ensureNotLimited($throttleKey, 429);
 
         $userModel = User::class;
 
-        $user = $userModel::query()->where('email', $validated['email'])->first();
+        $user = $userModel::query()->where('email', $email)->first();
 
         if ($user === null || ! Hash::check($validated['password'], $user->password)) {
             RateLimiter::hit($throttleKey);

@@ -293,6 +293,14 @@ Privilege-escalation protections — do not regress:
   other web sessions (API tokens stay). An admin setting a password on the
   person form does the same. Sign-in stays refused for a deactivated person
   (`EnsureCanSignIn`).
+- **Email case**: emails are stored trimmed and lowercase (the `email`
+  mutators on `User` and `Member`), and both logins, `forgot-password` and
+  `set-password` lowercase what was typed before looking it up
+  (`Requests\Concerns\LowercasesEmail`; the API login inline). The
+  `2026_11_03_140000` migration lowercased the emails stored before, except
+  rows of one table that differ only in case: it leaves those as they are
+  and logs a `warning` with their ids (never merged or deleted); someone
+  sorts them out by hand.
 - `last_seen_at` (`TouchLastSeen`, on the signed-in web and API routes) is
   written at most once an hour; `InvitePlan` reads it to tell `resend` from
   `already_here` (a person who has signed in is never invited again).

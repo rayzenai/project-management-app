@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Http\Middleware\EnsureCanSignIn;
+use App\Http\Requests\Concerns\LowercasesEmail;
 use App\Support\LoginThrottle;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -18,6 +19,8 @@ use Illuminate\Validation\ValidationException;
  */
 class LoginRequest extends FormRequest
 {
+    use LowercasesEmail;
+
     public function authorize(): bool
     {
         return true;
@@ -33,6 +36,11 @@ class LoginRequest extends FormRequest
             'password' => ['required', 'string'],
             'remember' => ['boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->lowercaseEmail();
     }
 
     /**

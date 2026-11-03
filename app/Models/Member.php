@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Database\Factories\MemberFactory;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,6 +73,16 @@ class Member extends Model
             'is_office_admin' => 'boolean',
             'attendance_exempt' => 'boolean',
         ];
+    }
+
+    /**
+     * Stored trimmed and lowercase, like the login's (User::email).
+     *
+     * @return Attribute<string|null, ?string>
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => $value === null ? null : mb_strtolower(trim($value)));
     }
 
     /**

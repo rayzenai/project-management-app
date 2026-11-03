@@ -169,7 +169,7 @@ it('signs an active member of a git office straight in, with every claim in the 
 
     expect($payload['iss'])->toBe(config('app.url'))
         ->and($payload['sub'])->toBe((string) $user->id)
-        ->and($payload['email'])->toBe('Ram.Sharma+git@x.np')
+        ->and($payload['email'])->toBe('ram.sharma+git@x.np')
         ->and($payload['email_verified'])->toBeTrue()
         ->and($payload['name'])->toBe($user->name)
         ->and($payload['preferred_username'])->toBe('ram.sharma-git')

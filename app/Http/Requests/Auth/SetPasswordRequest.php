@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Http\Requests\Concerns\LowercasesEmail;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\RateLimiter;
@@ -18,6 +19,8 @@ use Illuminate\Validation\ValidationException;
  */
 class SetPasswordRequest extends FormRequest
 {
+    use LowercasesEmail;
+
     public const THROTTLED = 'Too many tries. Wait a minute.';
 
     private const MAX_ATTEMPTS = 10;
@@ -79,6 +82,8 @@ class SetPasswordRequest extends FormRequest
     }
 
     /**
+     * The link's email in lowercase, as it is stored.
+     *
      * @throws ValidationException 429 on `password` once the address used up its tries
      */
     protected function prepareForValidation(): void
@@ -86,6 +91,8 @@ class SetPasswordRequest extends FormRequest
         if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
             throw ValidationException::withMessages(['password' => self::THROTTLED])->status(429);
         }
+
+        $this->lowercaseEmail();
     }
 
     private function throttleKey(): string
