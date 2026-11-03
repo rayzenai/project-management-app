@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\OrganizationGitController;
 use App\Http\Controllers\Api\OrganogramController;
 use App\Http\Controllers\Api\PasswordController;
+use App\Http\Controllers\Api\PersonalTodoController;
 use App\Http\Controllers\Api\PlanTrackerController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProgramController;
@@ -85,6 +86,11 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/plan-tracker', PlanTrackerController::class)->name('plan-tracker');
             Route::get('/search', TaskSearchController::class)->name('search');
             Route::post('/quick-add', QuickAddController::class)->name('quick-add');
+
+            // Private to-dos: their owner's alone (PersonalTodoRequest).
+            Route::patch('/todos/{todo}', [PersonalTodoController::class, 'update'])->name('todos.update');
+            Route::delete('/todos/{todo}', [PersonalTodoController::class, 'destroy'])->name('todos.destroy');
+            Route::post('/todos/{todo}/move', [PersonalTodoController::class, 'move'])->name('todos.move');
 
             // Organizations (super-admin)
             Route::get('/organizations', [OrganizationController::class, 'index'])->name('organizations.index');

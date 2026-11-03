@@ -20,7 +20,9 @@ use Throwable;
  * and unresolvable tokens stay in it so nothing typed is silently lost. `@name`
  * resolves against the project's assignable members, so the project is resolved first.
  * With no project at all, an organizational admin whose organization has none yet
- * may start one, "General", and the task is filed there (both or neither).
+ * may start one, "General", and the task is filed there (both or neither); or,
+ * asked for ("Just for me"), the item is the caller's own private to-do,
+ * unless it names someone else, which needs a project.
  *
  * @phpstan-import-type Token from QuickAddParser
  */
@@ -29,12 +31,14 @@ final readonly class QuickAddDispatcher
     public function __construct(
         private QuickAddTaskService $service,
         private StartGeneralProjectService $general,
+        private CreatePersonalTodoService $todos,
     ) {}
 
     /**
      * @param  list<int>  $explicitAssigneeIds  Picker-selected members; win over parsed @tokens.
      * @param  list<int>  $dependsOnTaskIds  Tasks the new one waits for (same project only).
      * @param  bool  $startGeneral  With no project chosen: start the organization's "General" for the task.
+     * @param  bool  $personal  With no project chosen: a private to-do of the caller's ("Just for me").
      */
     public function dispatch(
         string $rawTitle,
@@ -47,6 +51,7 @@ final readonly class QuickAddDispatcher
         ?string $description = null,
         array $dependsOnTaskIds = [],
         bool $startGeneral = false,
+        bool $personal = false,
     ): ServiceResult {
         $tokens = QuickAddParser::parse($rawTitle);
         $consumed = [];
@@ -56,32 +61,30 @@ final readonly class QuickAddDispatcher
         $project = $this->resolveProject($tokens, $consumed, $user)
             ?? ($projectId === null ? null : Project::query()->active()->find($projectId));
 
+        // A #token naming a project they may add to is their latest word
+        // and wins over "Just for me".
+        if ($project === null && $projectId === null && $personal) {
+            return $this->personalTodo($rawTitle, $tokens, $explicitAssigneeIds, $deadline, $user);
+        }
+
         if ($project === null && $projectId === null && $startGeneral) {
             return $this->inGeneral($user, fn (Project $general): ServiceResult => $this->dispatch(
                 $rawTitle, $general->id, $explicitAssigneeIds, $priority, $deadline, $user, $status, $description, $dependsOnTaskIds,
             ));
         }
 
-        if ($project === null) {
-            return ServiceResult::failure('Pick a project.', 422);
-        }
+        $project = $this->fileable($project, $user);
 
-        if (! WorkspaceAccess::canViewProject($user, $project)) {
-            return ServiceResult::failure('That project is not available to you.', 403);
+        if ($project instanceof ServiceResult) {
+            return $project;
         }
 
         $assignees = $explicitAssigneeIds;
         if ($assignees === []) {
             $assignees = $this->resolveAssignees($project, $tokens, $consumed);
         }
-        // Default to self only when the acting user is actually assignable on this
-        // project (on one of its teams, or the project has no teams). Otherwise the
-        // task is created unassigned — to be assigned later — rather than rejected.
         if ($assignees === []) {
-            $self = Member::forUser($user)->id;
-            if (Member::assignableFor($project)->whereKey($self)->exists()) {
-                $assignees = [$self];
-            }
+            $assignees = $this->self($project, $user);
         }
 
         foreach ($tokens as $token) {
@@ -108,6 +111,105 @@ final readonly class QuickAddDispatcher
             dependsOnTaskIds: $dependsOnTaskIds,
             actor: $user,
         );
+    }
+
+    /**
+     * Files a title already written, a private to-do moving into a project,
+     * as dispatch() files a task: the same refusals and the caller on it when
+     * assignable there. Its words are not read for tokens again.
+     */
+    public function fileTitle(int $projectId, string $title, ?string $deadline, Authenticatable $user): ServiceResult
+    {
+        $project = $this->fileable(Project::query()->active()->find($projectId), $user);
+
+        if ($project instanceof ServiceResult) {
+            return $project;
+        }
+
+        return $this->service->execute(
+            project: $project,
+            title: $title,
+            assigneeMemberIds: $this->self($project, $user),
+            deadline: $deadline,
+            priority: 'medium',
+            authorUserId: $user->getAuthIdentifier(),
+            // What the add field sends: a task just written has not started.
+            status: 'not_started',
+            actor: $user,
+        );
+    }
+
+    /**
+     * The project a task may be filed in, or the answer why not: a missing
+     * or archived one asks for a project, one they cannot see is refused.
+     */
+    private function fileable(?Project $project, Authenticatable $user): Project|ServiceResult
+    {
+        if ($project === null) {
+            return ServiceResult::failure('Pick a project.', 422);
+        }
+
+        if (! WorkspaceAccess::canViewProject($user, $project)) {
+            return ServiceResult::failure('That project is not available to you.', 403);
+        }
+
+        return $project;
+    }
+
+    /**
+     * The caller, when they are assignable on the project (on its team, or
+     * any active person of its organization for a public one with no team);
+     * else nobody, and the task waits unassigned rather than refused.
+     *
+     * @return list<int>
+     */
+    private function self(Project $project, Authenticatable $user): array
+    {
+        $self = Member::forUser($user)->id;
+
+        return Member::assignableFor($project)->whereKey($self)->exists() ? [$self] : [];
+    }
+
+    /**
+     * The caller's own private to-do: date words set its date (a picked one
+     * wins), priority words are dropped, an @word for the caller is taken
+     * out. Naming anyone else, by @word or by pick, needs a project. An
+     *
+     * @word that is nobody the caller can see stays in the title.
+     *
+     * @param  list<Token>  $tokens
+     * @param  list<int>  $explicitAssigneeIds
+     */
+    private function personalTodo(string $rawTitle, array $tokens, array $explicitAssigneeIds, ?string $deadline, Authenticatable $user): ServiceResult
+    {
+        $member = WorkspaceAccess::memberFor($user);
+        $consumed = [];
+        $someoneElse = array_diff($explicitAssigneeIds, [$member?->id]) !== [];
+
+        foreach ($tokens as $token) {
+            if ($token['type'] === 'date') {
+                $deadline ??= $token['value'];
+                $consumed[] = $token;
+            } elseif ($token['type'] === 'priority') {
+                $consumed[] = $token;
+            } elseif ($token['type'] === 'assignee') {
+                $needle = mb_strtolower($token['value']);
+
+                if ($member !== null && str_starts_with(mb_strtolower($member->name), $needle)) {
+                    $consumed[] = $token;
+                } elseif (Member::query()->visibleTo($user)->active()->whereRaw('LOWER(name) LIKE ?', [$needle.'%'])->exists()) {
+                    $someoneElse = true;
+                }
+            }
+        }
+
+        if ($someoneElse) {
+            $message = 'Pick a project to give it to someone.';
+
+            return ServiceResult::failure($message, 422, ['project_id' => $message]);
+        }
+
+        return $this->todos->execute($user, QuickAddParser::strip($rawTitle, $consumed), $deadline);
     }
 
     /**

@@ -3,7 +3,7 @@
     import { Ellipsis, Moon, Star, StarOff, Sun, X } from '@lucide/svelte';
     import { shiftDay, shortDay } from '../../lib/dates';
     import { QUIET, toast } from '../../lib/toast.svelte';
-    import type { MyWorkRow } from '../../lib/types';
+    import type { MyWorkTaskRow } from '../../lib/types';
     import Popover from '../Popover.svelte';
 
     /**
@@ -20,7 +20,7 @@
         today,
         tomorrow,
     }: {
-        assignment: NonNullable<MyWorkRow['assignment']>;
+        assignment: NonNullable<MyWorkTaskRow['assignment']>;
         title: string;
         today: string;
         tomorrow: string;

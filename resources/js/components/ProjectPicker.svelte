@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Check, ChevronDown, Folder, Search } from '@lucide/svelte';
+    import { Check, ChevronDown, Folder, Lock, Search } from '@lucide/svelte';
     import { tick, untrack } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { forgivingFilter } from '../lib/forgivingFilter';
@@ -12,16 +12,19 @@
      * the New task dialog's Project field. It opens on "Your projects" (the
      * teams you are on, else your organization's projects); when there is
      * more to reach, a dropdown lists each organization's projects, and the
-     * search looks through every project you may add to. A popover on a
-     * desktop, a bottom sheet on a phone.
+     * search looks through every project you may add to. Where quick add
+     * may make one, "Just for me" comes first: a private to-do, in no
+     * project. A popover on a desktop, a bottom sheet on a phone.
      */
     let {
         projects,
         organizations = [],
         currentMemberId,
         value = $bindable(null),
+        open = $bindable(false),
         homeOrganizationId = null,
         general = false,
+        personal = false,
         disabled = false,
         field = false,
         triggerClass,
@@ -32,12 +35,19 @@
         /** The organizations of `projects`, by name. */
         organizations?: OrganizationOption[];
         currentMemberId: Id | null;
-        /** A project's id, or "general" for the organization's first project. */
-        value?: Id | 'general' | null;
+        /**
+         * A project's id, "general" for the organization's first project, or
+         * "personal" for a private to-do.
+         */
+        value?: Id | 'general' | 'personal' | null;
+        /** Bound by a caller that opens the list itself (a to-do's "Move to a project"). */
+        open?: boolean;
         /** The viewer's own organization: listed first. */
         homeOrganizationId?: Id | null;
         /** Offer "General (new)": an organizational admin's first project. */
         general?: boolean;
+        /** Offer "Just for me": a private to-do instead of a task. */
+        personal?: boolean;
         disabled?: boolean;
         /** A form field (the dialog) rather than a chip (the add field). */
         field?: boolean;
@@ -45,13 +55,23 @@
         /** The trigger's words while nothing is chosen. */
         placeholder?: string;
         /** After a pick, e.g. to put the caret back in the add field. */
-        onpick?: (value: Id | 'general') => void;
+        onpick?: (value: Id | 'general' | 'personal') => void;
     } = $props();
 
     const uid = $props.id();
     const YOURS = 'yours';
     type View = typeof YOURS | Id;
-    type Row = { value: Id | 'general'; title: string; detail: string | null };
+    type Row = {
+        value: Id | 'general' | 'personal';
+        title: string;
+        detail: string | null;
+    };
+
+    const PERSONAL_ROW: Row = {
+        value: 'personal',
+        title: 'Just for me',
+        detail: 'A private to-do',
+    };
 
     const GENERAL_ROW: Row = {
         value: 'general',
@@ -62,7 +82,6 @@
     // Tailwind's md: below it the picker rises from the bottom as a sheet.
     const wide = new MediaQuery('(min-width: 48rem)', true);
 
-    let open = $state(false);
     let query = $state('');
     let view = $state<View>(YOURS);
     let active = $state(0);
@@ -115,7 +134,9 @@
             ? projectLabel(chosen)
             : value === 'general'
               ? GENERAL_ROW.title
-              : placeholder,
+              : value === 'personal'
+                ? PERSONAL_ROW.title
+                : placeholder,
     );
 
     /**
@@ -164,8 +185,15 @@
                 ? forgivingFilter([GENERAL_ROW], query, (r) => r.title).length >
                   0
                 : view === YOURS || view === homeOrganizationId);
+        const offersPersonal =
+            personal &&
+            (searching
+                ? forgivingFilter([PERSONAL_ROW], query, (r) => r.title)
+                      .length > 0
+                : view === YOURS);
 
         return [
+            ...(offersPersonal ? [PERSONAL_ROW] : []),
             ...(offersGeneral ? [GENERAL_ROW] : []),
             ...listed.map((p) => ({
                 value: p.id,
@@ -226,7 +254,7 @@
         return root?.querySelector('button') ?? null;
     }
 
-    function pick(next: Id | 'general'): void {
+    function pick(next: Id | 'general' | 'personal'): void {
         value = next;
         open = false;
         triggerButton()?.focus();
@@ -437,7 +465,11 @@
 </script>
 
 {#snippet face()}
-    <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+    {#if value === 'personal'}
+        <Lock class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+    {:else}
+        <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+    {/if}
     <span class={field ? 'min-w-0 flex-1 truncate' : 'max-w-[16rem] truncate'}
         >{label}</span
     >
@@ -561,6 +593,9 @@
                     onmousemove={() => (active = i)}
                     onclick={() => pick(row.value)}
                 >
+                    {#if row.value === 'personal'}
+                        <Lock class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                    {/if}
                     <span class="min-w-0 flex-1 leading-tight">
                         <span
                             class={`block truncate font-medium text-fg ${sheet ? 'text-[15px]' : 'text-[14px]'}`}
@@ -577,6 +612,13 @@
                         <Check class="h-3.5 w-3.5 shrink-0 text-accent" />
                     {/if}
                 </li>
+                {#if row.value === 'personal' && i < rows.length - 1}
+                    <!-- Just for me, then the projects. -->
+                    <li
+                        role="presentation"
+                        class="mx-2 my-1 border-t border-line-soft"
+                    ></li>
+                {/if}
             {:else}
                 <li class="px-2 py-3 text-[13px] text-fg-faint">
                     {searching

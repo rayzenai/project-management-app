@@ -6,6 +6,7 @@
     import AppShell from '../components/AppShell.svelte';
     import JoinedProjects from '../components/mywork/JoinedProjects.svelte';
     import MyWorkRow from '../components/mywork/MyWorkRow.svelte';
+    import TodoRow from '../components/mywork/TodoRow.svelte';
     import QuickAddBar from '../components/QuickAddBar.svelte';
     import { peek } from '../lib/peek.svelte';
     import type {
@@ -20,6 +21,7 @@
      * by when it is due (MyWorkQuery). Later folds away when it is long, No
      * date and Snoozed start folded; each fold is remembered on this device.
      * Projects you were just added to sit above them, under the add field.
+     * Your private to-dos ("Just for me") sit among the tasks by their date.
      */
     let { today, groups, joined }: MyWorkPayload = $props();
 
@@ -89,7 +91,9 @@
     onMount(() => {
         peek.openFromUrl(
             groups.flatMap((g) =>
-                g.rows.map((r) => ({ id: r.task.id, slug: r.task.slug })),
+                g.rows.flatMap((r) =>
+                    r.task ? [{ id: r.task.id, slug: r.task.slug }] : [],
+                ),
             ),
         );
     });
@@ -196,12 +200,16 @@
                 {#if open}
                     <div id={`rows-${group.key}`}>
                         {#each group.rows as row (row.key)}
-                            <MyWorkRow
-                                {row}
-                                {group}
-                                today={today.date}
-                                tomorrow={today.tomorrow}
-                            />
+                            {#if row.kind === 'todo'}
+                                <TodoRow {row} {group} today={today.date} />
+                            {:else}
+                                <MyWorkRow
+                                    {row}
+                                    {group}
+                                    today={today.date}
+                                    tomorrow={today.tomorrow}
+                                />
+                            {/if}
                         {/each}
                     </div>
                 {/if}

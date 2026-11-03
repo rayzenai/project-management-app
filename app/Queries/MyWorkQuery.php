@@ -3,6 +3,7 @@
 namespace App\Queries;
 
 use App\Models\Member;
+use App\Models\PersonalTodo;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\ProjectAssignment;
@@ -30,11 +31,13 @@ use Illuminate\Support\Str;
  * tasks they created that are on others and not on them ("You asked
  * others"), and their own open to-dos (subtasks) that have a date on open
  * tasks, all in active projects they may see (and, on the web, of the switched
- * organization). A row's group follows its date: the person's own date on
- * the assignment when set, else the task's (a subtask's own date); a late
- * task (the one overdue rule, by the task's own deadline) is always Today;
- * a snoozed one only Snoozed. Tomorrow is the next working day and Coming
- * up runs to the end of next week (WorkingDays).
+ * organization), plus their open private to-dos ("Just for me", whatever the
+ * organization; nobody else's, ever). A row's group follows its date: the
+ * person's own date on the assignment when set, else the task's (a subtask's
+ * or private to-do's own date); a late task (the one overdue rule, by the
+ * task's own deadline) is always Today; a snoozed one only Snoozed. Tomorrow
+ * is the next working day and Coming up runs to the end of next week
+ * (WorkingDays).
  *
  * Beside the list, `joined`: the project teams they were put on lately, so
  * someone added to a project with no tasks yet is told where they land.
@@ -42,7 +45,9 @@ use Illuminate\Support\Str;
  * @phpstan-type MyWorkPerson array{id: int, name: string}
  * @phpstan-type MyWorkUpdate array{author: string, body: string, at: string|null}
  * @phpstan-type MyWorkTask array{id: int, slug: string, number: int, code: string, title: string, status: string, priority: string, deadline_at: string|null, completed_at: string|null, project: MyWorkProject}
- * @phpstan-type MyWorkRow array{kind: 'task'|'subtask', key: string, assignment: array{id: int, is_focused: bool, snoozed_until: string|null, personal_due_at: string|null}|null, task: MyWorkTask, subtask: array{id: int, body: string, due_at: string, is_done: bool}|null, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: MyWorkUpdate|null}
+ * @phpstan-type MyWorkTaskRow array{kind: 'task'|'subtask', key: string, assignment: array{id: int, is_focused: bool, snoozed_until: string|null, personal_due_at: string|null}|null, task: MyWorkTask, subtask: array{id: int, body: string, due_at: string, is_done: bool}|null, todo: null, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: MyWorkUpdate|null}
+ * @phpstan-type MyWorkTodoRow array{kind: 'todo', key: string, assignment: null, task: null, subtask: null, todo: array{id: int, title: string, due_on: string|null, done_at: string|null}, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: null}
+ * @phpstan-type MyWorkRow MyWorkTaskRow|MyWorkTodoRow
  * @phpstan-type MyWorkGroup array{key: string, label: string, rows: list<MyWorkRow>}
  * @phpstan-type MyWorkProject array{id: int, slug: string, title: string, code: string, label: string}
  * @phpstan-type MyWorkJoined array{project: MyWorkProject, role: 'leader'|'member', joined_at: string, added_by: string|null}
@@ -112,6 +117,14 @@ final class MyWorkQuery
             ->whereNotNull('due_at')
             ->whereIn('task_id', Task::query()->whereIn('project_id', $projectIds)->notClosed()->select('id'))
             ->get();
+        // Their private to-dos, in one query: open ones, and with done the
+        // ones done in the last week.
+        $todos = PersonalTodo::query()
+            ->where('user_id', $user->id)
+            ->where(fn (Builder $q) => $q->whereNull('done_at')
+                ->when($withDone, fn (Builder $q) => $q->orWhere('done_at', '>=', $today->subDays(self::RECENT_DAYS))))
+            ->get();
+        [$doneTodos, $openTodos] = $todos->partition(fn (PersonalTodo $todo): bool => $todo->done_at !== null);
 
         // Every task on the page once, so its project, people and latest
         // update are each read in one query whatever the number of rows.
@@ -135,6 +148,7 @@ final class MyWorkQuery
         $rows = [
             ...$mine->map(fn (Task $task): array => $row($task, $ownAssignment($task)))->all(),
             ...$subtasks->map(fn (Subtask $subtask): array => $this->subtaskRow($subtask, $updates[$subtask->task_id] ?? null))->all(),
+            ...array_map(fn (PersonalTodo $todo): array => $this->todoRow($todo), $openTodos->all()),
         ];
 
         $days = WorkingDays::forUser($user);
@@ -147,7 +161,12 @@ final class MyWorkQuery
         }
 
         $grouped['asked_others'] = $asked->map(fn (Task $task): array => $row($task, null))->all();
-        $grouped['done'] = $done->map(fn (Task $task): array => $row($task, $ownAssignment($task)))->all();
+        // Finished tasks and to-dos together, the newest first.
+        $grouped['done'] = [
+            ...$done->map(fn (Task $task): array => $row($task, $ownAssignment($task)))->all(),
+            ...array_map(fn (PersonalTodo $todo): array => $this->todoRow($todo), $doneTodos->all()),
+        ];
+        usort($grouped['done'], fn (array $a, array $b): int => $this->doneAt($b) <=> $this->doneAt($a));
 
         $groups = [];
 
@@ -289,7 +308,7 @@ final class MyWorkQuery
     }
 
     /**
-     * @return MyWorkRow
+     * @return MyWorkTaskRow
      */
     private function taskRow(Task $task, ?ProjectAssignment $assignment, ?TaskComment $update, CarbonImmutable $today): array
     {
@@ -304,6 +323,7 @@ final class MyWorkQuery
             ],
             'task' => $this->task($task),
             'subtask' => null,
+            'todo' => null,
             'due' => ($assignment->personal_due_at ?? $task->deadline_at)?->toDateString(),
             'days_late' => $this->daysLate($task, $today),
             'people' => $this->people($task),
@@ -314,7 +334,7 @@ final class MyWorkQuery
     /**
      * A to-do sits where its own date puts it; it is never late itself.
      *
-     * @return MyWorkRow
+     * @return MyWorkTaskRow
      */
     private function subtaskRow(Subtask $subtask, ?TaskComment $update): array
     {
@@ -327,10 +347,35 @@ final class MyWorkQuery
             'assignment' => null,
             'task' => $this->task($task),
             'subtask' => ['id' => $subtask->id, 'body' => $subtask->body, 'due_at' => $due, 'is_done' => (bool) $subtask->is_done],
+            'todo' => null,
             'due' => $due,
             'days_late' => 0,
             'people' => $this->people($task),
             'latest_update' => $this->update($update),
+        ];
+    }
+
+    /**
+     * A private to-do sits where its own date puts it, like a subtask, and
+     * is never late itself; it belongs to no task and has nobody else on it.
+     *
+     * @return MyWorkTodoRow
+     */
+    private function todoRow(PersonalTodo $todo): array
+    {
+        $due = $todo->due_on?->toDateString();
+
+        return [
+            'kind' => 'todo',
+            'key' => "todo-{$todo->id}",
+            'assignment' => null,
+            'task' => null,
+            'subtask' => null,
+            'todo' => ['id' => $todo->id, 'title' => $todo->title, 'due_on' => $due, 'done_at' => $todo->done_at?->toIso8601String()],
+            'due' => $due,
+            'days_late' => 0,
+            'people' => [],
+            'latest_update' => null,
         ];
     }
 
@@ -414,6 +459,16 @@ final class MyWorkQuery
     }
 
     /**
+     * When a done row was finished (ISO 8601, all in the office's zone).
+     *
+     * @param  MyWorkRow  $row
+     */
+    private function doneAt(array $row): string
+    {
+        return $row['task']['completed_at'] ?? $row['todo']['done_at'] ?? '';
+    }
+
+    /**
      * @param  MyWorkRow  $row
      */
     private function groupOf(array $row, CarbonImmutable $today, CarbonImmutable $nextWorkingDay, CarbonImmutable $comingUpEnd): string
@@ -444,7 +499,7 @@ final class MyWorkQuery
             $group === 'today' ? -$row['days_late'] : 0,
             ($row['assignment']['is_focused'] ?? false) ? 0 : 1,
             $row['due'] ?? self::NO_DATE,
-            $row['task']['number'],
+            $row['task']['number'] ?? 0,
             $row['key'],
         ];
     }

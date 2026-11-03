@@ -12,13 +12,14 @@ use Carbon\CarbonImmutable;
  * the two never disagree.
  *
  * `late` and `today` are My work's Today tasks, split by whether the task
- * is past its own deadline (to-dos are left out). `new` is the tasks given
+ * is past its own deadline (to-dos are left out: a task's own and private
+ * ones alike, which show on My work and nowhere else). `new` is the tasks given
  * to them (TaskAssigned) since their last morning email, or in the last day
  * before their first, that are still open and on their list (not snoozed,
  * not only something they asked of others), and not already late or today;
  * each once, in the order they came, with who gave it last.
  *
- * @phpstan-import-type MyWorkRow from MyWorkQuery
+ * @phpstan-import-type MyWorkTaskRow from MyWorkQuery
  *
  * @phpstan-type MorningRow array{task_id: int, title: string, url: string, project: string, due: string|null, days_late: int, from: string|null}
  * @phpstan-type MorningLists array{late: list<MorningRow>, today: list<MorningRow>, new: list<MorningRow>}
@@ -44,7 +45,7 @@ final class MorningEmailQuery
      */
     public function for(User $user, CarbonImmutable $today): array
     {
-        /** @var array<string, list<MyWorkRow>> $tasks each group's task rows (no to-dos) by its key */
+        /** @var array<string, list<MyWorkTaskRow>> $tasks each group's task rows (no to-dos) by its key */
         $tasks = [];
 
         foreach ($this->myWork->get($user, null, false, $today)['groups'] as $group) {
@@ -120,7 +121,7 @@ final class MorningEmailQuery
     }
 
     /**
-     * @param  MyWorkRow  $row
+     * @param  MyWorkTaskRow  $row
      * @return MorningRow
      */
     private function row(array $row, ?string $from): array

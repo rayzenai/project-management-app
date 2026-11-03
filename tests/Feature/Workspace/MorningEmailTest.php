@@ -5,6 +5,7 @@ use App\Models\AttendanceSetting;
 use App\Models\EmailDigest;
 use App\Models\Holiday;
 use App\Models\Member;
+use App\Models\PersonalTodo;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\Task;
@@ -305,6 +306,23 @@ it('leaves your own to-dos out of today', function () {
     morningRunAt('2026-11-02 09:00:00');
 
     Mail::assertNothingSent();
+});
+
+it('leaves private to-dos out, and sends nothing for them alone', function () {
+    PersonalTodo::create(['user_id' => $this->user->id, 'title' => 'Pay the electricity bill', 'due_on' => '2026-11-02']);
+    PersonalTodo::create(['user_id' => $this->user->id, 'title' => 'Renew the licence', 'due_on' => '2026-10-30']);
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    Mail::assertNothingSent();
+
+    morningTask('Server room checklist', '2026-11-02');
+    Carbon::setTestNow('2026-11-03 08:00:00');
+    morningTask('Collect the forms', '2026-11-03');
+    morningRunAt('2026-11-03 09:00:00');
+
+    Mail::assertSent(MorningMail::class, fn (MorningMail $mail) => morningTitles($mail, 'late') === ['Server room checklist']
+        && morningTitles($mail, 'today') === ['Collect the forms']);
 });
 
 it('uses Sunday to Friday for a super-admin in no organization', function () {

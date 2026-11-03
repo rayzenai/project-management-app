@@ -31,6 +31,7 @@ class QuickAddController extends Controller
             description: $request->input('description'),
             dependsOnTaskIds: array_values(array_map('intval', (array) ($request->input('depends_on_task_ids') ?: []))),
             startGeneral: $request->startsGeneral(),
+            personal: $request->isPersonal(),
         );
 
         // A task created from anywhere else in the app is invisible until you

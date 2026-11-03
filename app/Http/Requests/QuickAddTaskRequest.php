@@ -24,9 +24,11 @@ class QuickAddTaskRequest extends FormRequest
     {
         return [
             // Without one, only an organizational admin whose organization
-            // has no project yet may ask to start "General" for the task.
-            'project_id' => [Rule::requiredIf(fn (): bool => ! $this->startsGeneral()), 'nullable', 'integer', 'exists:projects,id'],
+            // has no project yet may ask to start "General" for the task;
+            // anyone may ask for their own private to-do ("Just for me").
+            'project_id' => [Rule::requiredIf(fn (): bool => ! $this->startsGeneral() && ! $this->isPersonal()), 'nullable', 'integer', 'exists:projects,id'],
             'start_general' => ['nullable', 'boolean'],
+            'personal' => ['nullable', 'boolean'],
             'title' => ['required', 'string', 'max:255'],
             'assignee_member_ids' => ['nullable', 'array'],
             'assignee_member_ids.*' => ['integer', 'exists:members,id'],
@@ -65,6 +67,16 @@ class QuickAddTaskRequest extends FormRequest
      */
     public function startsGeneral(): bool
     {
-        return $this->boolean('start_general') && ! $this->filled('project_id');
+        return $this->boolean('start_general') && ! $this->filled('project_id') && ! $this->isPersonal();
+    }
+
+    /**
+     * Whether the item is the caller's own private to-do instead: asked for,
+     * with no project (which wins). It starts nothing, so it wins over
+     * `start_general`.
+     */
+    public function isPersonal(): bool
+    {
+        return $this->boolean('personal') && ! $this->filled('project_id');
     }
 }

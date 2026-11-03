@@ -143,6 +143,9 @@ class ShareWorkspaceData
                         ->all()
                     : [],
                 'startGeneral' => $startGeneral,
+                // Nothing to add a task to and no General to start: the add
+                // field starts on "Just for me", a private to-do.
+                'startPersonal' => $projects->isEmpty() && ! $startGeneral,
                 // The add field starts where the person last added a task or
                 // was last added to a team, among the projects it offers them.
                 'lastProjectId' => $this->lastProjectId($user, $projects->pluck('id')),
@@ -281,6 +284,9 @@ class ShareWorkspaceData
             ->join('project_team', 'project_team.team_id', '=', 'member_team.team_id')
             ->where('member_team.member_id', $member->id)
             ->whereIn('project_team.project_id', $projectIds)
+            // A membership with no date (rows from before the column was
+            // filled) says nothing about when; Postgres would sort it first.
+            ->whereNotNull('member_team.created_at')
             ->orderByDesc('member_team.created_at')->orderByDesc('member_team.id')
             ->first(['project_team.project_id', 'member_team.created_at']);
 

@@ -98,10 +98,10 @@ Task payloads carry `is_overdue`: still being worked on (not done, not failed) a
 | GET | `/workspace/home` | the overview: headline `stats`, `status_breakdown`, per-project `projects` rollup, `recent_activity`, plus open work bucketed by due date (`overdue`, `today`, `week`, `later`, `unscheduled`) and `recently_done`. `?scope=mine\|all` scopes every field together — defaults to `mine` when the caller has open assignments, `all` otherwise |
 | GET | `/workspace/dashboard` | per-project rollups, status breakdown, recent activity |
 | GET | `/workspace/my` | the caller's focused tasks, open todos, assigned work |
-| GET | `/workspace/my-work` | My work, as the web page reads it: `{ today { date, label, bs, tomorrow }, groups, joined }` (`tomorrow` is the next working day, Y-m-d: what the Tomorrow group and "snooze until tomorrow" mean). `groups` in order `today`, `tomorrow` (to the next working day), `coming_up` (to the end of next week), `later`, `asked_others` (open tasks the caller created that are on others and not on them), `no_date`, `snoozed`, and with `?done=1` `done` (their tasks finished in the last 7 days, newest first); empty groups are left out. Each group `{ key, label, rows }`; each row `{ kind (task\|subtask), key, assignment { id, is_focused, snoozed_until, personal_due_at } (null for `asked_others` and subtasks), task { id, slug, number, code, title, status, priority, deadline_at, completed_at, project { id, slug, title, code, label } }, subtask { id, body, due_at, is_done }, due, days_late, people [{ id, name }], latest_update { author, body, at } }`. `joined`: the project teams the caller was put on in the last 14 days, newest first, at most 5, `[{ project { id, slug, title, code, label }, role (leader\|member), joined_at (ISO 8601), added_by }]` (`added_by` is the name of whoever added them, null when unknown; teams they joined themselves, such as a project they made and manage, are left out). The caller's own date (`personal_due_at`) places a row before the task's; `days_late` counts from the task's own deadline, only while it is overdue; open subtasks with a date sit by their date. Every organization (the web's switch does not apply) |
+| GET | `/workspace/my-work` | My work, as the web page reads it: `{ today { date, label, bs, tomorrow }, groups, joined }` (`tomorrow` is the next working day, Y-m-d: what the Tomorrow group and "snooze until tomorrow" mean). `groups` in order `today`, `tomorrow` (to the next working day), `coming_up` (to the end of next week), `later`, `asked_others` (open tasks the caller created that are on others and not on them), `no_date`, `snoozed`, and with `?done=1` `done` (their tasks and private to-dos finished in the last 7 days, newest first); empty groups are left out. Each group `{ key, label, rows }`; each row `{ kind (task\|subtask\|todo), key, assignment { id, is_focused, snoozed_until, personal_due_at } (null for `asked_others`, subtasks and to-dos), task { id, slug, number, code, title, status, priority, deadline_at, completed_at, project { id, slug, title, code, label } } (null for a to-do), subtask { id, body, due_at, is_done }, todo { id, title, due_on, done_at } (a private to-do, see Private to-dos; else null), due, days_late, people [{ id, name }], latest_update { author, body, at } }`. A to-do row (`key` `todo-{id}`) has no task, assignment, people or update, and `days_late` 0. `joined`: the project teams the caller was put on in the last 14 days, newest first, at most 5, `[{ project { id, slug, title, code, label }, role (leader\|member), joined_at (ISO 8601), added_by }]` (`added_by` is the name of whoever added them, null when unknown; teams they joined themselves, such as a project they made and manage, are left out). The caller's own date (`personal_due_at`) places a row before the task's; `days_late` counts from the task's own deadline, only while it is overdue; open subtasks with a date and open private to-dos sit by their date (an undated to-do in `no_date`). Every organization (the web's switch does not apply) |
 | GET | `/workspace/plan-tracker` | the 100-point plan tracker (`config/government.php`) |
 | GET | `/workspace/search?q=` | search across active projects (2 characters at least): `{ projects, tasks, notes, contacts }`. Tasks match on title, short title and Nepali title; a bare number (`12`) also finds tasks by their `number`, and a task code (`SG-12`, any case) finds task 12 of the project whose key is `SG` now or was before (an old key stays an alias). A number above 2147483647 is searched as text only. Each task is `{ id, slug, number, title, short_title, status, status_label, project { slug, title, code } }` |
-| POST | `/workspace/quick-add` | `{ title, project_id }` natural-language task capture (a `#token` in the title beats `project_id`); without `project_id`, 422 `Pick a project.` on `project_id`. `start_general: true` in place of `project_id` starts the organization's first project, "General", managed by the caller, and files the task there in one transaction (both or neither): only an organizational admin whose organization has no active project, else 422 `Pick a project.`. Optional `assignee_member_ids: int[]` (see Assignments: who may be assigned), `depends_on_task_ids: int[]` (tasks of other projects are ignored) |
+| POST | `/workspace/quick-add` | `{ title, project_id }` natural-language task capture (a `#token` in the title beats `project_id`); without `project_id`, 422 `Pick a project.` on `project_id`. `start_general: true` in place of `project_id` starts the organization's first project, "General", managed by the caller, and files the task there in one transaction (both or neither): only an organizational admin whose organization has no active project, else 422 `Pick a project.`. `personal: true` in place of `project_id` adds the caller's own private to-do instead ("Just for me", see Private to-dos): 201 `Added to your to-dos.` with the to-do; a date word in the title (or `deadline_at`) sets its `due_on`, priority words are dropped, and naming anyone else (an `@name` of someone the caller can see, or `assignee_member_ids` other than their own member) is 422 `Pick a project to give it to someone.` on `project_id`; a `#token` that names a project the caller may add to still files a task there. Optional `assignee_member_ids: int[]` (see Assignments: who may be assigned), `depends_on_task_ids: int[]` (tasks of other projects are ignored) |
 
 ## Projects
 
@@ -162,6 +162,20 @@ an integer from 1 to 2147483647.
 | PATCH | `/workspace/subtasks/{subtask}` |
 | DELETE | `/workspace/subtasks/{subtask}` |
 | POST | `/workspace/subtasks/{subtask}/restore` |
+
+## Private to-dos *(their owner's alone)*
+
+A person's own items ("Just for me"), made by `POST /workspace/quick-add`
+with `personal: true` and listed on My work (`kind: todo`). Only their
+owner reads or changes one: to anyone else, a super-admin included, each
+route answers the 404 a missing to-do gets, word for word. They are never
+counted, logged or notified.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| PATCH | `/workspace/todos/{todo}` | Any of `title` (up to 255), `due_on` (a date or null), `done` (boolean: `done_at` is set, or cleared). 200 `{ id, title, due_on, done_at, created_at }` |
+| DELETE | `/workspace/todos/{todo}` | Deletes it for good (no trash). 200 `To-do deleted.` |
+| POST | `/workspace/todos/{todo}/move` | `{ project_id }`: "Move to a project". The to-do becomes a task in that project the way quick add files one (its title, `deadline_at` = `due_on`, status `not_started`, the caller on it when they are assignable there) and is deleted, in one transaction: 201 `Moved to {project}.` with the task. A project the caller cannot see is 403 `That project is not available to you.`, an archived one 422 `Pick a project.`, and the to-do stays |
 
 ## Assignments
 
@@ -1112,6 +1126,16 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Private to-dos ("Just for me").**
+
+- `POST /workspace/quick-add` takes `personal: true` in place of
+  `project_id` and answers 201 with the caller's new private to-do.
+- New: `PATCH|DELETE /workspace/todos/{todo}` and
+  `POST /workspace/todos/{todo}/move` (see Private to-dos).
+- My work rows add `todo` (null on task and subtask rows), and a row of
+  `kind: todo` has `task: null`: a client reading `row.task` checks the
+  kind first.
 
 **The protected branch no longer follows the forge's default.**
 

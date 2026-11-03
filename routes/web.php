@@ -29,6 +29,7 @@ use App\Http\Controllers\Workspace\OrganizationGitController;
 use App\Http\Controllers\Workspace\OrganizationSwitchController;
 use App\Http\Controllers\Workspace\OrganogramController;
 use App\Http\Controllers\Workspace\PasswordController;
+use App\Http\Controllers\Workspace\PersonalTodoController;
 use App\Http\Controllers\Workspace\PlanTrackerController;
 use App\Http\Controllers\Workspace\PreferenceController;
 use App\Http\Controllers\Workspace\ProgramController;
@@ -113,6 +114,10 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
 
         Route::get('/my', MyWorkController::class)->name('my');
         Route::post('/quick-add', QuickAddController::class)->name('quick-add');
+        // Private to-dos: their owner's alone (PersonalTodoRequest).
+        Route::patch('/todos/{todo}', [PersonalTodoController::class, 'update'])->name('todos.update');
+        Route::delete('/todos/{todo}', [PersonalTodoController::class, 'destroy'])->name('todos.destroy');
+        Route::post('/todos/{todo}/move', [PersonalTodoController::class, 'move'])->name('todos.move');
         Route::get('/search', TaskSearchController::class)->name('search');
 
         Route::get('/organizations', [OrganizationController::class, 'index'])->name('organizations.index');

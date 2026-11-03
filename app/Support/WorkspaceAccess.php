@@ -7,6 +7,7 @@ use App\Models\GitConnection;
 use App\Models\GitRepository;
 use App\Models\LeaveRequest;
 use App\Models\Member;
+use App\Models\PersonalTodo;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
@@ -517,6 +518,15 @@ class WorkspaceAccess
         return $member !== null
             && $member->is_active
             && (int) $assignment->member_id === (int) $member->getKey();
+    }
+
+    /**
+     * A private to-do is its owner's alone: read, changed, deleted or moved
+     * by nobody else, a super-admin included.
+     */
+    public static function ownsPersonalTodo(?Authenticatable $user, PersonalTodo $todo): bool
+    {
+        return $user !== null && (int) $todo->user_id === (int) $user->getAuthIdentifier();
     }
 
     /**

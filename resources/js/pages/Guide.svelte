@@ -128,6 +128,7 @@
             title: 'Team member',
             steps: [
                 'Start on My work: everything given to you, soonest first. Tick a task when it is done.',
+                "Something only for you? Choose Just for me in the add field's project: a private to-do on your My work that nobody else sees, not even your managers. Its menu moves it into a project as a task later.",
                 'Keep your tasks current: move the card on the board, set your progress and write a status note when something changes. A task saves itself as you leave each field.',
                 'Comment on a task and type @ and a name to bring someone in.',
                 "Added a task by mistake? Delete it with the bin at the top of the task, and Undo brings it back. You can delete the tasks you added; your project's manager can delete any. Work that is finished or dropped is better marked Done or Failed, which keeps its history.",

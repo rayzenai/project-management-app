@@ -4,6 +4,7 @@ use App\Models\Member;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 
 /*
@@ -81,4 +82,21 @@ it('is the newer of the task you created and the team you joined', function () {
     $task->forceFill(['created_at' => now()->subDays(5)])->save();
 
     ($this->lastProjectIs)($joined->id);
+});
+
+it('never takes a membership with no date', function () {
+    $made = Project::factory()->public()->create(['title' => 'Made']);
+    $undated = Project::factory()->create(['title' => 'Undated']);
+    $dated = Project::factory()->create(['title' => 'Dated']);
+
+    Task::factory()->for($made)->create(['created_by' => $this->user->id, 'created_at' => now()->subDays(2)]);
+    $undated->ensureTeam()->members()->attach($this->member->id, ['role' => 'member']);
+    DB::table('member_team')->where('team_id', $undated->ensureTeam()->id)->update(['created_at' => null]);
+
+    ($this->lastProjectIs)($made->id);
+
+    Task::query()->where('project_id', $made->id)->forceDelete();
+    $this->travelTo(now()->subDays(3), fn () => $dated->ensureTeam()->members()->attach($this->member->id, ['role' => 'member']));
+
+    ($this->lastProjectIs)($dated->id);
 });

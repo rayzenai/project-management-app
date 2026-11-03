@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\RespondsWithServiceResult;
 use App\Http\Requests\QuickAddTaskRequest;
+use App\Http\Resources\PersonalTodoResource;
 use App\Http\Resources\TaskResource;
+use App\Models\PersonalTodo;
 use App\Models\Task;
 use App\Services\Workspace\QuickAddDispatcher;
 use Illuminate\Http\JsonResponse;
@@ -32,11 +34,17 @@ class QuickAddController extends Controller
             description: $request->input('description'),
             dependsOnTaskIds: array_values(array_map('intval', (array) ($request->input('depends_on_task_ids') ?: []))),
             startGeneral: $request->startsGeneral(),
+            personal: $request->isPersonal(),
         );
 
+        // A task, or with `personal` the caller's private to-do.
         return $this->respondWithResult(
             $result,
-            $result->data instanceof Task ? new TaskResource($result->data) : null,
+            match (true) {
+                $result->data instanceof Task => new TaskResource($result->data),
+                $result->data instanceof PersonalTodo => new PersonalTodoResource($result->data),
+                default => null,
+            },
             $result->success ? 201 : null,
         );
     }

@@ -791,6 +791,8 @@ export interface QuickAddContext {
     organizationPeople?: PersonRef[];
     /** The viewer is an organizational admin whose organization has no project yet: offer "General". */
     startGeneral?: boolean;
+    /** Nothing to add a task to and no General to start: the add field starts on "Just for me". */
+    startPersonal?: boolean;
     /**
      * The project of the newer of the newest task the viewer created and the
      * newest team they joined, among `projects`; the add field starts there.
@@ -877,8 +879,29 @@ export type MyWorkGroupKey =
     | 'snoozed'
     | 'done';
 
+/** A task as My work shows it (MyWorkQuery's `MyWorkTask`). */
+export interface MyWorkTask {
+    id: Id;
+    slug: string;
+    number: number;
+    code: string;
+    title: string;
+    status: string;
+    priority: string;
+    deadline_at: string | null;
+    completed_at: string | null;
+    project: {
+        id: Id;
+        slug: string;
+        title: string;
+        code: string;
+        /** "General (Revenue)": the project with its program. */
+        label: string;
+    };
+}
+
 /** One row of My work: a task, or one of your own dated to-dos (a subtask) on one. */
-export interface MyWorkRow {
+export interface MyWorkTaskRow {
     kind: 'task' | 'subtask';
     /** "task-12", "subtask-7": unique on the page. */
     key: string;
@@ -890,26 +913,9 @@ export interface MyWorkRow {
         personal_due_at: string | null;
     } | null;
     /** The task; a to-do's parent. */
-    task: {
-        id: Id;
-        slug: string;
-        number: number;
-        code: string;
-        title: string;
-        status: string;
-        priority: string;
-        deadline_at: string | null;
-        completed_at: string | null;
-        project: {
-            id: Id;
-            slug: string;
-            title: string;
-            code: string;
-            /** "General (Revenue)": the project with its program. */
-            label: string;
-        };
-    };
+    task: MyWorkTask;
     subtask: { id: Id; body: string; due_at: string; is_done: boolean } | null;
+    todo: null;
     /** The date that placed the row: your own date, else the task's (Y-m-d). */
     due: string | null;
     /** Whole days past the task's own deadline; 0 when it is not late. */
@@ -919,6 +925,30 @@ export interface MyWorkRow {
     /** The newest update of the last 7 days; `author` is '' for a deleted login. */
     latest_update: { author: string; body: string; at: string | null } | null;
 }
+
+/** One of your private to-dos ("Just for me"): yours alone, on no task. */
+export interface MyWorkTodoRow {
+    kind: 'todo';
+    /** "todo-3". */
+    key: string;
+    assignment: null;
+    task: null;
+    subtask: null;
+    /** `due_on` is Y-m-d; `done_at` ISO 8601, set in the Done group. */
+    todo: {
+        id: Id;
+        title: string;
+        due_on: string | null;
+        done_at: string | null;
+    };
+    due: string | null;
+    /** Always 0: a to-do is never late itself. */
+    days_late: number;
+    people: [];
+    latest_update: null;
+}
+
+export type MyWorkRow = MyWorkTaskRow | MyWorkTodoRow;
 
 export interface MyWorkGroup {
     key: MyWorkGroupKey;
@@ -931,7 +961,7 @@ export interface MyWorkGroup {
  * at most 5); never one they joined themselves.
  */
 export interface MyWorkJoined {
-    project: MyWorkRow['task']['project'];
+    project: MyWorkTask['project'];
     /** `leader`: they manage it. */
     role: 'leader' | 'member';
     /** ISO 8601. */

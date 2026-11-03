@@ -146,6 +146,7 @@ it('gives each row the task, its project, its date and its people', function () 
             'project' => ['id' => $this->project->id, 'slug' => $this->project->slug, 'title' => 'Roads', 'code' => 'MW', 'label' => 'Roads (Transport)'],
         ],
         'subtask' => null,
+        'todo' => null,
         'due' => '2026-11-05',
         'days_late' => 0,
         'people' => collect([['id' => $colleague->id, 'name' => 'Asha'], ['id' => $this->member->id, 'name' => $this->member->name]])->sortBy('name')->values()->all(),

@@ -158,6 +158,7 @@ a task and restore it: whoever passes `canManageProjectAccess`, or its
 creator, `tasks.created_by`, set once from the signed-in user and never
 fillable, while they pass `canViewProject`; shown as the task hub's
 `canDelete` and the preview's `can_delete`),
+`ownsPersonalTodo` (a private to-do's owner, nobody else),
 `canCreateMember`, `canManageMember`, `canSetRolesIn` (the person form's
 role fields: whoever administers the organization), `canViewProject` (twin of
 `Project::scopeVisibleTo`), `canCreateProject`, `canCreateProjectInProgram`
@@ -343,7 +344,20 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   On the board (`resources/js/lib/dependencies.ts`) a task always sits below
   what it waits for in its column, dotted lines join them, and dropping a
   card onto another links them.
-- **Subtask** — personal (`user_id`). **Member** — a person in one organization
+- **Subtask** — personal (`user_id`). **PersonalTodo** — a private to-do
+  ("Just for me", `personal_todos`: `user_id`, `title`, `due_on`,
+  `done_at`): its owner's alone on every surface
+  (`WorkspaceAccess::ownsPersonalTodo`; `PersonalTodoRequest` answers anyone
+  else, a super-admin included, with the 404 of a missing one, word for
+  word). Made by quick add's `personal: true` (`QuickAddDispatcher`: date
+  words set `due_on`, priority words are dropped, naming anyone else is 422
+  `Pick a project to give it to someone.` on `project_id`, a `#token` naming
+  a project they may add to still makes a task); `PATCH|DELETE
+  /workspace/todos/{todo}`; `POST .../move` turns it into a task through
+  `QuickAddDispatcher::fileTitle` (quick add's refusals and default-to-self)
+  and deletes it in one transaction. Shown on My work and nowhere else
+  (never in the morning email, counts, reports, activity or
+  notifications; no morph map entry). **Member** — a person in one organization
   (a super-admin's own member may have none), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
   `scopeAssignableFor(Project)` is who is assignable as things stand;
@@ -484,7 +498,10 @@ the organizational admin switch and the program and project manager pickers.
   dropdown to each organization's projects, a search across all of them);
   `organizationPeople` (`PersonRef`s), the active
   people of the viewer's organization for whoever runs a team in it or may
-  start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`;
+  start its General, else `[]`; `startGeneral`; `startPersonal` (no
+  project to add to and no General to start: the add field opens on "Just
+  for me", the picker's first row wherever the project is not fixed by the
+  page); `team`; `currentMemberId`;
   `lastProjectId`, where the add field starts: the project of the newer of
   the caller's newest created task and newest team joined),
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
@@ -494,8 +511,10 @@ the organizational admin switch and the program and project manager pickers.
   Add cross-cutting web context there. `/` and `/workspace` redirect to
   **My work** (`GET /workspace/my`, `MyWorkQuery`, page `MyWork`), the
   signed-in landing page: Today, Tomorrow, Coming up, Later, You asked others,
-  No date, Snoozed and, with `?done=1`, Done, as one list of the caller's tasks
-  and open to-dos; the caller's own date (`personal_due_at`) places a row
+  No date, Snoozed and, with `?done=1`, Done, as one list of the caller's tasks,
+  their open subtasks with a date and their open private to-dos (`kind:
+  todo`, `mywork/TodoRow.svelte`, "Only you" where the project would be;
+  one query); the caller's own date (`personal_due_at`) places a row
   before the task's, a snoozed task sits only in Snoozed, and rows act through
   `PATCH /workspace/assignments/{id}` (star, snooze, own date) and the
   existing task routes. Its `joined` (teams the caller was put on in the

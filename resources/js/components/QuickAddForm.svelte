@@ -5,6 +5,7 @@
         CalendarDays,
         Check,
         Folder,
+        Lock,
         Plus,
         UserPlus,
     } from '@lucide/svelte';
@@ -66,22 +67,34 @@
      * server makes it (managed by them) on submit.
      */
     const GENERAL = 'general';
-    type ProjectChoice = number | typeof GENERAL | null;
+    /**
+     * "Just for me": a private to-do, in no project, that only you see (on
+     * My work). Offered wherever the project is not fixed by the page.
+     */
+    const PERSONAL = 'personal';
+    type ProjectChoice = number | typeof GENERAL | typeof PERSONAL | null;
     const startGeneral = $derived(
         Boolean(shared.quickAddContext?.startGeneral) && !lockProject,
     );
+    const offersPersonal = $derived(!lockProject);
+    const NEEDS_PROJECT = 'Pick a project to give it to someone';
     const organizationPeople = $derived(
         shared.quickAddContext?.organizationPeople ?? [],
     );
     const organizationId = $derived(shared.organization?.id ?? null);
     const organizations = $derived(shared.quickAddContext?.organizations ?? []);
 
-    // The project being viewed, else where the person last added a task.
+    // The project being viewed, else where the person last added a task;
+    // with nothing to add a task to, a private to-do.
     const initialProject = untrack(
         (): ProjectChoice =>
             defaultProjectId ??
             shared.quickAddContext?.lastProjectId ??
-            (startGeneral ? GENERAL : (projects[0]?.id ?? null)),
+            (startGeneral
+                ? GENERAL
+                : shared.quickAddContext?.startPersonal && !lockProject
+                  ? PERSONAL
+                  : (projects[0]?.id ?? null)),
     );
 
     // When launched from inside a project, the project is fixed: we hide the
@@ -166,9 +179,15 @@
             (typeof form.project_id === 'number' ? form.project_id : null),
     );
     const isGeneral = $derived(!tokenProject && form.project_id === GENERAL);
+    /** A typed `#project` wins over "Just for me", as on the server. */
+    const isPersonal = $derived(!tokenProject && form.project_id === PERSONAL);
     /** Nothing to file it under: Add task waits, and says why. */
-    const hasProject = $derived(effectiveProjectId !== null || isGeneral);
-    const projectKey = $derived(isGeneral ? GENERAL : effectiveProjectId);
+    const hasProject = $derived(
+        effectiveProjectId !== null || isGeneral || isPersonal,
+    );
+    const projectKey = $derived(
+        isGeneral ? GENERAL : isPersonal ? PERSONAL : effectiveProjectId,
+    );
 
     // Once General exists the context stops offering it (the page reloads
     // after the create): stay on the project it became.
@@ -210,6 +229,16 @@
 
         if (data.project_id === GENERAL) {
             payload.start_general = true;
+        } else if (data.project_id === PERSONAL) {
+            // A to-do has a title and a date; the server reads the rest of
+            // the line (a date word) and nothing else.
+            payload.personal = true;
+
+            if (data.deadline_at) {
+                payload.deadline_at = data.deadline_at;
+            }
+
+            return payload;
         } else {
             payload.project_id = data.project_id;
         }
@@ -266,13 +295,16 @@
     const selectedProject = $derived(
         projects.find((p) => p.id === effectiveProjectId) ?? null,
     );
+    // A private to-do goes to nobody: Who stays empty.
     const projectMemberIds = $derived(
         new Set(
-            isGeneral
-                ? currentMemberId !== null
-                    ? [currentMemberId]
-                    : []
-                : (selectedProject?.member_ids ?? team.map((m) => m.id)),
+            isPersonal
+                ? []
+                : isGeneral
+                  ? currentMemberId !== null
+                      ? [currentMemberId]
+                      : []
+                  : (selectedProject?.member_ids ?? team.map((m) => m.id)),
         ),
     );
     const projectTeam = $derived(
@@ -733,7 +765,9 @@
 {#snippet fields()}
     <div class="flex flex-col gap-1">
         <span class="label">Assign to</span>
-        {#if projectTeam.length > 0 || joiners.length > 0}
+        {#if isPersonal}
+            <p class="text-xs text-fg-faint">{NEEDS_PROJECT}.</p>
+        {:else if projectTeam.length > 0 || joiners.length > 0}
             <AssigneePicker
                 team={projectTeam}
                 others={joiners}
@@ -849,6 +883,7 @@
         {currentMemberId}
         homeOrganizationId={organizationId}
         general={startGeneral}
+        personal={offersPersonal}
         {field}
         disabled={!staysOpen && form.processing}
         placeholder={field ? 'Pick a project' : 'Project'}
@@ -863,6 +898,15 @@
     {#if isGeneral}
         <p class="text-xs text-fg-muted">
             Your organization's first project, managed by you.
+        </p>
+    {/if}
+{/snippet}
+
+{#snippet personalNote()}
+    {#if isPersonal}
+        <p class="flex items-center gap-1.5 text-xs text-fg-muted">
+            <Lock class="h-3 w-3 shrink-0" />
+            A private to-do on My work. Only you see it.
         </p>
     {/if}
 {/snippet}
@@ -890,6 +934,7 @@
             <span class="label">Project</span>
             {@render projectPicker(true)}
             {@render generalNote()}
+            {@render personalNote()}
         {/if}
     </div>
 {/snippet}
@@ -1052,32 +1097,48 @@
                     {@render projectPicker(false)}
                 {/if}
 
-                <Popover
-                    role="dialog"
-                    triggerLabel={whoNames.length > 0
-                        ? `Who: ${whoNames.join(', ')}`
-                        : 'Who'}
-                    triggerClass={`${CHIP} ${whoNames.length > 0 ? '' : EMPTY_CHIP}`}
-                    panelClass="w-[300px]"
-                >
-                    {#snippet trigger()}
+                {#if isPersonal}
+                    <!-- A private to-do goes to nobody else. -->
+                    <button
+                        type="button"
+                        disabled
+                        title={NEEDS_PROJECT}
+                        aria-label={`Who: ${NEEDS_PROJECT}`}
+                        class={`${CHIP} ${EMPTY_CHIP} cursor-default opacity-60`}
+                    >
                         <UserPlus class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
-                        <span class="max-w-[12rem] truncate"
-                            >{whoNames.length === 0
-                                ? 'Who'
-                                : whoNames.length === 1
-                                  ? whoNames[0]
-                                  : `${whoNames[0]} +${whoNames.length - 1}`}</span
-                        >
-                    {/snippet}
-                    <AssigneePicker
-                        listOnly
-                        team={projectTeam}
-                        others={joiners}
-                        bind:selectedIds={form.assignee_member_ids}
-                        max={5}
-                    />
-                </Popover>
+                        Who
+                    </button>
+                {:else}
+                    <Popover
+                        role="dialog"
+                        triggerLabel={whoNames.length > 0
+                            ? `Who: ${whoNames.join(', ')}`
+                            : 'Who'}
+                        triggerClass={`${CHIP} ${whoNames.length > 0 ? '' : EMPTY_CHIP}`}
+                        panelClass="w-[300px]"
+                    >
+                        {#snippet trigger()}
+                            <UserPlus
+                                class="h-3.5 w-3.5 shrink-0 text-fg-muted"
+                            />
+                            <span class="max-w-[12rem] truncate"
+                                >{whoNames.length === 0
+                                    ? 'Who'
+                                    : whoNames.length === 1
+                                      ? whoNames[0]
+                                      : `${whoNames[0]} +${whoNames.length - 1}`}</span
+                            >
+                        {/snippet}
+                        <AssigneePicker
+                            listOnly
+                            team={projectTeam}
+                            others={joiners}
+                            bind:selectedIds={form.assignee_member_ids}
+                            max={5}
+                        />
+                    </Popover>
+                {/if}
 
                 <!-- A touch screen (a phone, an iPad) gets a button. -->
                 <span
@@ -1092,10 +1153,11 @@
                 >
             </div>
 
-            {#if !hasProject || isGeneral || pickedJoiners.length > 0}
+            {#if !hasProject || isGeneral || isPersonal || pickedJoiners.length > 0}
                 <div class="flex flex-col gap-1 px-3.5 pb-3 lg:pl-[42px]">
                     {@render missingProject()}
                     {@render generalNote()}
+                    {@render personalNote()}
                     {#if pickedJoiners.length > 0}
                         <p class="text-xs text-fg-muted">
                             <span class="font-medium text-fg"
@@ -1124,16 +1186,18 @@
             </div>
         </div>
 
-        <div class="border-b border-line px-5 py-4">
-            <label for={`${uid}-desc`} class="label">Description</label>
-            <textarea
-                id={`${uid}-desc`}
-                bind:value={form.description}
-                rows="4"
-                placeholder="Any detail worth writing down (optional)"
-                class="input mt-1.5 resize-y"
-            ></textarea>
-        </div>
+        {#if !isPersonal}
+            <div class="border-b border-line px-5 py-4">
+                <label for={`${uid}-desc`} class="label">Description</label>
+                <textarea
+                    id={`${uid}-desc`}
+                    bind:value={form.description}
+                    rows="4"
+                    placeholder="Any detail worth writing down (optional)"
+                    class="input mt-1.5 resize-y"
+                ></textarea>
+            </div>
+        {/if}
 
         <!-- Everything is on screen: hiding the assignee, date and priority
              behind "More" was the reason tasks got created without them. The
@@ -1145,19 +1209,22 @@
             {@render fields()}
         </div>
 
-        <div class="border-b border-line px-5 py-4">
-            <DependsOnPicker
-                projectSlug={selectedProject?.slug ?? null}
-                bind:selected={dependsOn}
-            />
-        </div>
+        <!-- A private to-do is a title and a date. -->
+        {#if !isPersonal}
+            <div class="border-b border-line px-5 py-4">
+                <DependsOnPicker
+                    projectSlug={selectedProject?.slug ?? null}
+                    bind:selected={dependsOn}
+                />
+            </div>
 
-        <div
-            class="flex flex-wrap items-start gap-x-10 gap-y-4 border-b border-line px-5 py-4"
-        >
-            {@render priorityPicker()}
-            {@render statusPicker()}
-        </div>
+            <div
+                class="flex flex-wrap items-start gap-x-10 gap-y-4 border-b border-line px-5 py-4"
+            >
+                {@render priorityPicker()}
+                {@render statusPicker()}
+            </div>
+        {/if}
 
         <div
             class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line px-5 py-2.5 text-xs text-fg-faint"
@@ -1196,7 +1263,11 @@
                 title={hasProject ? undefined : 'Pick a project.'}
                 class="btn-primary"
             >
-                {form.processing ? 'Adding...' : 'Add task'}
+                {form.processing
+                    ? 'Adding...'
+                    : isPersonal
+                      ? 'Add to-do'
+                      : 'Add task'}
                 <kbd class="kbd border-white/30 bg-transparent text-white/80"
                     >&#8629;</kbd
                 >

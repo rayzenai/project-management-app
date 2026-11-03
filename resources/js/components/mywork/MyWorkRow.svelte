@@ -5,7 +5,7 @@
     import { formatTimeAgo, plural } from '../../lib/format';
     import { peek } from '../../lib/peek.svelte';
     import { QUIET, toast } from '../../lib/toast.svelte';
-    import type { MyWorkGroup, MyWorkRow } from '../../lib/types';
+    import type { MyWorkGroup, MyWorkTaskRow } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
     import CompleteCheckbox from '../CompleteCheckbox.svelte';
     import RowMenu from './RowMenu.svelte';
@@ -23,7 +23,7 @@
         today,
         tomorrow,
     }: {
-        row: MyWorkRow;
+        row: MyWorkTaskRow;
         group: MyWorkGroup;
         today: string;
         /** The next working day (MyWorkPayload's `today.tomorrow`). */
