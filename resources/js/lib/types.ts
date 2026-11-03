@@ -509,6 +509,8 @@ export interface Status {
     is_complete: boolean;
     /** Work has stopped, finished or not: never overdue. */
     is_closed: boolean;
+    /** Work has begun (Task::startedStatuses): My work's half-filled circle. */
+    is_started: boolean;
 }
 
 export interface ActivityEntry {

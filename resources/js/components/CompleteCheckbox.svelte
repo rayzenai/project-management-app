@@ -13,7 +13,10 @@
         task: Pick<Task, 'id' | 'slug' | 'status' | 'title' | 'short_title'>;
         projectSlug: string;
         onCompleted?: (previousStatus: string) => void;
-        /** My work's circle: 24px on a phone, 18px from `sm`, 44px to tap. */
+        /**
+         * My work's circle: 24px on a phone, 18px from `sm`, 44px to tap,
+         * half filled while the task is started.
+         */
         round?: boolean;
     } = $props();
 
@@ -26,6 +29,9 @@
     const shown = $derived(optimistic ?? task.status);
     const isComplete = $derived(
         statuses.find((s) => s.value === shown)?.is_complete ?? false,
+    );
+    const isStarted = $derived(
+        round && (statuses.find((s) => s.value === shown)?.is_started ?? false),
     );
     const firstIncomplete = $derived(
         statuses.find((s) => !s.is_complete)?.value ?? 'not_started',
@@ -94,21 +100,32 @@
     type="button"
     role="checkbox"
     aria-checked={isComplete}
-    aria-label={isComplete ? 'Mark not complete' : 'Mark complete'}
-    class={`flex shrink-0 items-center justify-center border-[1.5px] transition ${
+    aria-label={isComplete
+        ? 'Mark not complete'
+        : isStarted
+          ? 'Started, mark complete'
+          : 'Mark complete'}
+    class={`group/check flex shrink-0 items-center justify-center border-[1.5px] transition ${
         round
             ? "relative size-[24px] rounded-full before:absolute before:-inset-[10px] before:content-[''] sm:size-[18px] sm:before:-inset-[13px]"
             : 'h-4 w-4 rounded-sm'
     } ${
         isComplete
             ? 'border-success bg-success text-white'
-            : 'border-fg-faint bg-transparent text-transparent hover:border-success hover:text-success'
+            : `${isStarted ? 'border-accent' : 'border-fg-faint'} bg-transparent text-transparent hover:border-success hover:text-success`
     } ${failed ? 'ring-1 ring-danger' : ''}`}
     onclick={toggle}
     onkeydown={(e) => e.stopPropagation()}
 >
+    {#if isStarted && !isComplete}
+        <!-- Started: the left half filled; the check takes over on hover. -->
+        <span
+            class="pointer-events-none absolute inset-y-0 left-0 w-1/2 rounded-l-full bg-accent transition group-hover/check:opacity-0"
+            aria-hidden="true"
+        ></span>
+    {/if}
     <Check
-        class={round ? 'size-[14px] sm:size-[11px]' : 'h-3 w-3'}
+        class={round ? 'relative size-[14px] sm:size-[11px]' : 'h-3 w-3'}
         strokeWidth={3}
     />
 </button>

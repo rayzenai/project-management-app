@@ -60,6 +60,16 @@ it('shares ordered statuses with completion flags on every workspace page', func
         ->has('statuses.0.color'));
 });
 
+it('marks the started statuses in the shared ones, as Task::startedStatuses reads them', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get('/workspace/my')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('statuses', fn ($statuses): bool => collect($statuses)->where('is_started', true)->pluck('value')->all() === Task::startedStatuses()
+            && Task::startedStatuses() === ['in_progress']
+            && collect($statuses)->every(fn (array $status): bool => is_bool($status['is_started'])))
+    );
+});
+
 it('exposes the configured one-click complete status', function () {
     expect(config('project-management.complete_status'))->toBe('done');
 });

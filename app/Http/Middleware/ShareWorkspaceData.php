@@ -29,8 +29,8 @@ use Symfony\Component\HttpFoundation\Response;
  * workspace page:
  *
  * - `statuses` — the ordered task workflow from config/project-management.php, with
- *   completion flags, so status chips, board columns, and pickers all render
- *   from one definition.
+ *   its completion, closed and started flags, so status chips, board columns,
+ *   pickers and My work's circle all render from one definition.
  * - `workspaceNotes` — the authenticated user's personal sticky notes
  *   (newest-updated first) so the top-bar notes icon, its count badge, and
  *   the slide-over drawer render instantly everywhere without a fetch.
@@ -67,6 +67,7 @@ class ShareWorkspaceData
                 'color' => $meta['color'] ?? '#9CA3AF',
                 'is_complete' => (bool) ($meta['is_complete'] ?? false),
                 'is_closed' => (bool) ($meta['is_closed'] ?? $meta['is_complete'] ?? false),
+                'is_started' => (bool) ($meta['is_started'] ?? false),
             ])
             ->values()
             ->all());
