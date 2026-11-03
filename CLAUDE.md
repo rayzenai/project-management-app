@@ -743,12 +743,23 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
 - **Code activity report**: `CodeActivityQuery` over
   `WorkspaceAccess::codeReportScope` (whole repositories of what the viewer
   runs, plus anyone's own commits), non-merge and reachable commits by
-  `committed_at`; `CodeActivityRequest` (anyone `GitAccess` admits; range at
-  most 366 days, default 30; up to 4 compared people; a project or program
-  outside the scope, or unknown, is 403). People are ordered by name, never by
-  a figure; commits matched to no user are one "Not matched to anyone" row,
-  only for viewers of whole repositories. Web `/workspace/reports/code` (page
-  `Reports/CodeActivity`) and `/workspace/reports/code/people/{user}`; API
+  `committed_at`; `CodeActivityRequest` (anyone `GitAccess` admits; `period`
+  `today`, `week` (from `WorkingDays::forUser()->weekStart`, the default),
+  `last_week` (the 7 days before it), `month` or `custom` (`from`/`to`, at
+  most 366 days, default the last 30; a range without a period is custom);
+  `designation`, one of an organization in scope (the same 422 for one
+  elsewhere or none); `sort` `commits|lines|tests|active_days|name`; up to 4
+  compared people; a project or program outside the scope, or unknown, is
+  403). By the owner's decision this report, and only this one, ranks people:
+  by the sort's figure, ties sharing a rank (1, 1, 3), then by name; `name`
+  ranks no one; every other report stays by name. Each row also has
+  `lines_changed` (code added + removed) and `repositories_created` (the
+  `created` rows `GitRepositoryObserver` writes, by `user_id`, in the scope's
+  projects plus the viewer's own). Commits matched to no user are one "Not
+  matched to anyone" row, last and unranked, only for viewers of whole
+  repositories. Web `/workspace/reports/code` (page `Reports/CodeActivity`,
+  every filter in the URL; a card per person below `md`) and
+  `/workspace/reports/code/people/{user}`; API
   `/api/v1/workspace/reports/code[/people/{user}]`.
 - **UI**: the Code tab's New repository and Access (grants and maintainers),
   the sidebar's Code activity (shown with git). Keep the Guide in step:
@@ -941,7 +952,8 @@ Shared building blocks (reach for these before writing anything new):
 - **Sidebar**: `OfficeLinks` (shared as `office`, on the API's `/user`)
   says which office pages the user may open; the pages check again. One
   sidebar: `lib/navigation.ts` has `mainLinks` (My work,
-  Projects, People; Search is a button) and `accountGroups` (You:
+  Projects, People, and Code activity with `gitEnabled`, which stays in
+  Reports too; Search is a button) and `accountGroups` (You:
   Notifications, Emails, Guide; Office; Reports; Admin; a group with no
   link is dropped), so a new page is one entry in one of them.
   `components/shell/` draws it: `Sidebar` (from `md`: logo, New task,

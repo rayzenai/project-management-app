@@ -1,8 +1,10 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
-    import { ArrowDown, ArrowUp, GitCommitHorizontal } from '@lucide/svelte';
+    import { ChevronDown, GitCommitHorizontal } from '@lucide/svelte';
+    import { SvelteSet } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
+    import ChecksMark from '../../components/ChecksMark.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
     import DailyCodeChart, {
         SERIES_BG,
@@ -10,19 +12,24 @@
     import type { ChartSeries } from '../../components/reports/DailyCodeChart.svelte';
     import PersonCommitsDrawer from '../../components/reports/PersonCommitsDrawer.svelte';
     import Spinner from '../../components/Spinner.svelte';
-    import { isoDay } from '../../lib/dates';
     import type {
+        Checks,
         CodeActivityFilters,
         CodeActivityOptions,
+        CodeActivityPeriod,
         CodeActivityPerson,
         CodeActivitySeries,
+        CodeActivitySort,
         Id,
     } from '../../lib/types';
 
     /**
-     * Code activity: each person's commits and lines in a range, within
-     * what the viewer runs. Tick up to four people to compare them side by
-     * side, with their code lines per day; click a person for their commits.
+     * Code activity: each person's commits, lines, tests, pull requests and
+     * repositories created in a period, within what the viewer runs, ranked
+     * by the figure chosen (or by name). Every filter lives in the URL, so
+     * "this week, Developers, by commits" is a link. Tick up to four people
+     * to compare them side by side, with their code lines per day; click a
+     * person for their commits.
      */
     let {
         people,
@@ -42,7 +49,14 @@
     } = $props();
 
     const MAX_COMPARED = 4;
-    const DAY = 86_400_000;
+
+    const SORTS: { value: CodeActivitySort; label: string }[] = [
+        { value: 'commits', label: 'Most commits' },
+        { value: 'lines', label: 'Most lines changed' },
+        { value: 'tests', label: 'Most tests passed' },
+        { value: 'active_days', label: 'Most active days' },
+        { value: 'name', label: 'By name' },
+    ];
 
     // ---- Filters: every change is a visit with the query string ----
     let loading = $state(false);
@@ -51,13 +65,22 @@
     let pending = $state<Id[] | null>(null);
     let visits = 0;
 
-    /** The range and the project or program, as the query string has them. */
+    /**
+     * The filters as the query string has them: a custom period carries its
+     * days, the others are worked out by the server from today.
+     */
     function scopeParams(query: CodeActivityFilters): Record<string, string> {
         return {
-            from: query.from,
-            to: query.to,
+            period: query.period,
+            ...(query.period === 'custom'
+                ? { from: query.from, to: query.to }
+                : {}),
             ...(query.project ? { project: query.project } : {}),
             ...(query.program ? { program: query.program } : {}),
+            ...(query.designation !== null
+                ? { designation: String(query.designation) }
+                : {}),
+            sort: query.sort,
         };
     }
 
@@ -89,42 +112,16 @@
         );
     }
 
-    function dayNumber(iso: string): number {
-        const [y, m, d] = iso.split('-').map(Number);
-
-        return Date.UTC(y, m - 1, d) / DAY;
-    }
-
-    const today = isoDay(new Date());
-
-    const PRESETS = [
-        { value: '7', label: '7 days' },
-        { value: '30', label: '30 days' },
-        { value: '90', label: '90 days' },
-    ];
-
-    const preset = $derived.by(() => {
-        const span = dayNumber(filters.to) - dayNumber(filters.from) + 1;
-
-        return filters.to === today &&
-            PRESETS.some((p) => p.value === String(span))
-            ? String(span)
-            : '';
-    });
-
-    function applyPreset(value: string) {
-        const end = new Date();
-        const start = new Date(
-            end.getFullYear(),
-            end.getMonth(),
-            end.getDate() - (Number(value) - 1),
-        );
-        visit({ from: isoDay(start), to: isoDay(end) });
+    function setPeriod(value: string) {
+        if (value !== filters.period) {
+            // Custom starts from the days on screen.
+            visit({ period: value as CodeActivityPeriod });
+        }
     }
 
     function setDate(field: 'from' | 'to', value: string) {
         if (value !== '' && value !== filters[field]) {
-            visit({ [field]: value });
+            visit({ period: 'custom', [field]: value });
         }
     }
 
@@ -143,6 +140,16 @@
             program: kind === 'program' ? slug : null,
         });
     }
+
+    function setDesignation(value: string) {
+        visit({ designation: value === '' ? null : Number(value) });
+    }
+
+    function setSort(value: string) {
+        visit({ sort: value as CodeActivitySort });
+    }
+
+    const ranked = $derived(filters.sort !== 'name');
 
     // ---- Compare ----
     const visibleIds = $derived(
@@ -210,12 +217,16 @@
     const number = new Intl.NumberFormat();
     const fmt = (n: number) => number.format(n);
 
-    /** The compare table's rows, in the order of the people table. */
+    /** The compare table's rows. */
     const STATS: { label: string; value: (p: CodeActivityPerson) => number }[] =
         [
             { label: 'Commits', value: (p) => p.commits },
             { label: 'Active days', value: (p) => p.active_days },
             { label: 'Repositories', value: (p) => p.repositories },
+            {
+                label: 'Repositories created',
+                value: (p) => p.repositories_created,
+            },
             { label: 'Files changed', value: (p) => p.files_changed },
             { label: 'Code lines added', value: (p) => p.code_added },
             { label: 'Code lines removed', value: (p) => p.code_removed },
@@ -251,72 +262,10 @@
             { label: 'Tasks', value: (p) => p.tasks },
         ];
 
-    // ---- Sorting: by name unless the viewer picks a column ----
-    type SortKey =
-        | 'name'
-        | 'commits'
-        | 'active_days'
-        | 'code'
-        | 'comments'
-        | 'blank'
-        | 'docs'
-        | 'pull_requests'
-        | 'tests'
-        | 'tasks';
-
-    const SORT_VALUE: Record<
-        Exclude<SortKey, 'name'>,
-        (p: CodeActivityPerson) => number
-    > = {
-        commits: (p) => p.commits,
-        active_days: (p) => p.active_days,
-        code: (p) => p.code_added + p.code_removed,
-        comments: (p) => p.comment_added + p.comment_removed,
-        blank: (p) => p.blank_added + p.blank_removed,
-        docs: (p) => p.docs_added + p.docs_removed,
-        pull_requests: (p) => p.pull_requests_opened,
-        tests: (p) => p.checks_failed,
-        tasks: (p) => p.tasks,
-    };
-
-    let sort = $state<{ key: SortKey; dir: 'asc' | 'desc' }>({
-        key: 'name',
-        dir: 'asc',
-    });
-
-    function sortBy(key: SortKey) {
-        sort = {
-            key,
-            dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc',
-        };
-    }
-
-    const byName = (a: CodeActivityPerson, b: CodeActivityPerson) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-
-    /** The people in the chosen order; the unmatched row always last. */
-    const rows = $derived.by(() => {
-        const sign = sort.dir === 'asc' ? 1 : -1;
-        const key = sort.key;
-
-        return [...people].sort((a, b) => {
-            if ((a.user_id === null) !== (b.user_id === null)) {
-                return a.user_id === null ? 1 : -1;
-            }
-
-            const order =
-                key === 'name'
-                    ? byName(a, b)
-                    : SORT_VALUE[key](a) - SORT_VALUE[key](b);
-
-            return sign * order || byName(a, b);
-        });
-    });
-
     // ---- One person's commits ----
     let openId = $state<Id | null>(null);
 
-    // Someone who leaves the report (another range or project) closes
+    // Someone who leaves the report (another period or project) closes
     // their drawer for good, rather than reopening it if they come back.
     $effect(() => {
         if (openId !== null && !people.some((p) => p.user_id === openId)) {
@@ -327,8 +276,11 @@
     const openPerson = $derived(
         people.find((p) => p.user_id !== null && p.user_id === openId) ?? null,
     );
+    // The drawer asks for exactly the days on screen.
     const drawerQuery = $derived(
-        new URLSearchParams(scopeParams(filters)).toString(),
+        new URLSearchParams(
+            scopeParams({ ...filters, period: 'custom' }),
+        ).toString(),
     );
 
     function onRowClick(event: MouseEvent, person: CodeActivityPerson) {
@@ -341,7 +293,16 @@
         }
     }
 
-    const rangeLabel = $derived.by(() => {
+    // ---- Phone cards: the rest of a person's figures behind More ----
+    const expanded = new SvelteSet<Id | null>();
+
+    function toggleMore(id: Id | null) {
+        if (!expanded.delete(id)) {
+            expanded.add(id);
+        }
+    }
+
+    const rangeText = $derived.by(() => {
         const format = new Intl.DateTimeFormat(undefined, {
             month: 'short',
             day: 'numeric',
@@ -353,43 +314,119 @@
             return new Date(y, m - 1, d);
         };
 
-        return `${format.format(local(filters.from))} and ${format.format(local(filters.to))}`;
+        return filters.from === filters.to
+            ? `on ${format.format(local(filters.from))}`
+            : `between ${format.format(local(filters.from))} and ${format.format(local(filters.to))}`;
     });
 
     const tone = (n: number) => (n === 0 ? 'text-fg-faint' : '');
+
+    const PASSED: Checks = { state: 'passed', checks: [] };
+    const FAILED: Checks = { state: 'failed', checks: [] };
 </script>
 
 <svelte:head><title>Code activity · Workspace</title></svelte:head>
 
-{#snippet sortHead(
-    key: SortKey,
-    label: string,
-    align: 'left' | 'right' = 'right',
-)}
-    {@const active = sort.key === key}
-    {@const Arrow = sort.dir === 'asc' ? ArrowUp : ArrowDown}
-    <th
-        class={`col-head py-1.5 font-normal ${align === 'left' ? 'pr-3 text-left' : 'px-3 text-right last:pr-0'}`}
-        aria-sort={active
-            ? sort.dir === 'asc'
-                ? 'ascending'
-                : 'descending'
-            : undefined}
+{#snippet lines(person: CodeActivityPerson)}
+    <span
+        class="font-mono whitespace-nowrap tabular-nums"
+        title={`${fmt(person.lines_changed)} code lines changed`}
+        ><span class={person.code_added > 0 ? 'text-success' : 'text-fg-faint'}
+            >+{fmt(person.code_added)}</span
+        >
+        <span class={person.code_removed > 0 ? 'text-danger' : 'text-fg-faint'}
+            >&minus;{fmt(person.code_removed)}</span
+        ></span
     >
+{/snippet}
+
+{#snippet tests(person: CodeActivityPerson)}
+    <span
+        class="inline-flex items-center gap-1 font-mono whitespace-nowrap tabular-nums"
+        title="Commits whose tests passed / failed"
+    >
+        {#if person.checks_passed > 0}
+            <ChecksMark checks={PASSED} link={false} />
+        {/if}
+        <span class={tone(person.checks_passed)}
+            >{fmt(person.checks_passed)}</span
+        >
+        <span class="text-fg-faint">/</span>
+        {#if person.checks_failed > 0}
+            <ChecksMark checks={FAILED} link={false} />
+        {/if}
+        <span class={person.checks_failed > 0 ? 'text-danger' : tone(0)}
+            >{fmt(person.checks_failed)}</span
+        >
+    </span>
+{/snippet}
+
+{#snippet pullRequests(person: CodeActivityPerson)}
+    <span
+        class="inline-flex items-center gap-1 font-mono whitespace-nowrap tabular-nums"
+        title="Pull requests opened / merged"
+    >
+        <span class={tone(person.pull_requests_opened)}
+            >{fmt(person.pull_requests_opened)}</span
+        >
+        <span class="text-fg-faint">/</span>
+        <span class={tone(person.pull_requests_merged)}
+            >{fmt(person.pull_requests_merged)}</span
+        >
+    </span>
+{/snippet}
+
+{#snippet compareBox(person: CodeActivityPerson, id: Id)}
+    {@const ticked = chosen.includes(id)}
+    <label
+        class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center"
+    >
+        <input
+            type="checkbox"
+            class="accent-accent"
+            checked={ticked}
+            disabled={!ticked && chosen.length >= MAX_COMPARED}
+            aria-label={`Compare ${person.name}`}
+            title={!ticked && chosen.length >= MAX_COMPARED
+                ? `Compare at most ${MAX_COMPARED} people`
+                : undefined}
+            onchange={() => toggle(id)}
+        />
+    </label>
+{/snippet}
+
+{#snippet who(person: CodeActivityPerson)}
+    {#if person.user_id !== null}
+        {@const id = person.user_id}
         <button
             type="button"
-            class={`inline-flex items-center gap-1 hover:text-fg ${active ? 'text-fg-muted' : ''}`}
-            onclick={() => sortBy(key)}
+            class="flex w-full min-w-0 items-center gap-2 text-left"
+            title={`See ${person.name}'s commits`}
+            onclick={() => (openId = id)}
         >
-            {#if active && align === 'right'}
-                <Arrow class="h-3 w-3" />
-            {/if}
-            {label}
-            {#if active && align === 'left'}
-                <Arrow class="h-3 w-3" />
-            {/if}
+            <Avatar name={person.name} size="md" />
+            <span class="min-w-0">
+                <span class="block truncate font-medium hover:text-accent"
+                    >{person.name}</span
+                >
+                {#if person.designation}
+                    <span class="block truncate text-xs text-fg-muted"
+                        >{person.designation}</span
+                    >
+                {/if}
+            </span>
         </button>
-    </th>
+    {:else}
+        <div class="flex min-w-0 items-center gap-2">
+            <Avatar name="?" size="md" />
+            <span class="min-w-0">
+                <span class="block truncate text-fg-muted">{person.name}</span>
+                <span class="block truncate text-xs text-fg-faint"
+                    >Author emails on no SDOC Git account</span
+                >
+            </span>
+        </div>
+    {/if}
 {/snippet}
 
 <AppShell>
@@ -398,35 +435,75 @@
     {/snippet}
 
     <div class="space-y-6">
-        <!-- Filters, one row above everything they scope. -->
-        <div>
+        <!-- Filters, above everything they scope. -->
+        <div class="space-y-2">
             <div class="flex flex-wrap items-center gap-2">
-                <PillGroup
-                    options={PRESETS}
-                    bind:value={() => preset, applyPreset}
-                />
-                <div class="flex items-center gap-1.5">
-                    <input
-                        type="date"
-                        class="input h-7 w-auto py-0"
-                        aria-label="From"
-                        value={filters.from}
-                        max={filters.to}
-                        onchange={(e) => setDate('from', e.currentTarget.value)}
-                    />
-                    <span class="text-xs text-fg-faint">to</span>
-                    <input
-                        type="date"
-                        class="input h-7 w-auto py-0"
-                        aria-label="To"
-                        value={filters.to}
-                        min={filters.from}
-                        onchange={(e) => setDate('to', e.currentTarget.value)}
+                <div
+                    class="-mx-5 max-w-[100vw] overflow-x-auto px-5 md:mx-0 md:px-0"
+                >
+                    <PillGroup
+                        options={options.periods}
+                        bind:value={() => filters.period, setPeriod}
                     />
                 </div>
+                {#if filters.period === 'custom'}
+                    <div class="flex items-center gap-1.5">
+                        <input
+                            type="date"
+                            class="input h-9 w-auto py-0"
+                            aria-label="From"
+                            value={filters.from}
+                            max={filters.to}
+                            onchange={(e) =>
+                                setDate('from', e.currentTarget.value)}
+                        />
+                        <span class="text-xs text-fg-faint">to</span>
+                        <input
+                            type="date"
+                            class="input h-9 w-auto py-0"
+                            aria-label="To"
+                            value={filters.to}
+                            min={filters.from}
+                            onchange={(e) =>
+                                setDate('to', e.currentTarget.value)}
+                        />
+                    </div>
+                {/if}
+                {#if loading}
+                    <Spinner size={14} />
+                {/if}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                {#if options.designations.length > 0}
+                    <select
+                        class="input h-9 w-full py-0 md:w-auto md:max-w-64"
+                        aria-label="Designation"
+                        value={filters.designation === null
+                            ? ''
+                            : String(filters.designation)}
+                        onchange={(e) => setDesignation(e.currentTarget.value)}
+                    >
+                        <option value="">All designations</option>
+                        {#each options.designations as designation (designation.id)}
+                            <option value={String(designation.id)}
+                                >{designation.name}</option
+                            >
+                        {/each}
+                    </select>
+                {/if}
+                <select
+                    class="input h-9 w-full py-0 md:w-auto"
+                    aria-label="Sort"
+                    value={filters.sort}
+                    onchange={(e) => setSort(e.currentTarget.value)}
+                >
+                    {#each SORTS as sort (sort.value)}
+                        <option value={sort.value}>{sort.label}</option>
+                    {/each}
+                </select>
                 {#if options.projects.length > 0 || options.programs.length > 0}
                     <select
-                        class="input h-7 w-auto max-w-64 py-0"
+                        class="input h-9 w-full py-0 md:w-auto md:max-w-64"
                         aria-label="Project or program"
                         value={scope}
                         onchange={(e) => setScope(e.currentTarget.value)}
@@ -452,15 +529,12 @@
                         {/if}
                     </select>
                 {/if}
-                {#if loading}
-                    <Spinner size={14} />
-                {/if}
             </div>
             {#if error}
-                <p role="alert" class="mt-1.5 text-xs text-danger">{error}</p>
+                <p role="alert" class="text-xs text-danger">{error}</p>
             {/if}
             {#if uncounted > 0}
-                <p class="mt-1.5 text-xs text-fg-muted">
+                <p class="text-xs text-fg-muted">
                     <span class="font-mono tabular-nums">{fmt(uncounted)}</span>
                     {uncounted === 1 ? 'commit is' : 'commits are'} still being counted.
                 </p>
@@ -480,11 +554,9 @@
                         project's Code tab.
                     </p>
                 {:else}
-                    <p class="mt-3 font-medium">
-                        No commits between {rangeLabel}.
-                    </p>
+                    <p class="mt-3 font-medium">No commits {rangeText}.</p>
                     <p class="mt-1 max-w-md text-[13px] text-fg-muted">
-                        Try a longer range. A commit counts for a person when
+                        Try a longer period. A commit counts for a person when
                         git signs it with the email they sign in with.
                     </p>
                 {/if}
@@ -521,35 +593,52 @@
                         >
                     {/if}
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[820px] text-[13px]">
-                        <thead>
+
+                <!-- From 768px: one row per person, bounded, scrolling under its head. -->
+                <div
+                    class="hidden max-h-[min(70vh,880px)] overflow-auto rounded-md border border-line md:block"
+                >
+                    <table class="w-full min-w-[880px] text-[13.5px]">
+                        <thead class="sticky top-0 z-10 bg-surface">
                             <tr class="border-b border-line text-left">
-                                <th class="w-8 py-1.5"
+                                {#if ranked}
+                                    <th
+                                        class="col-head w-12 py-2 pl-3 text-right"
+                                        >Rank</th
+                                    >
+                                {/if}
+                                <th class="w-11 py-2"
                                     ><span class="sr-only">Compare</span></th
                                 >
-                                {@render sortHead('name', 'Person', 'left')}
-                                {@render sortHead('commits', 'Commits')}
-                                {@render sortHead('active_days', 'Active days')}
-                                {@render sortHead('code', 'Code')}
-                                {@render sortHead('comments', 'Comments')}
-                                {@render sortHead('blank', 'Blank')}
-                                {@render sortHead('docs', 'Docs')}
-                                {@render sortHead(
-                                    'pull_requests',
-                                    'Pull requests',
-                                )}
-                                {@render sortHead('tests', 'Tests')}
-                                {@render sortHead('tasks', 'Tasks')}
+                                <th class="col-head py-2 pr-3">Person</th>
+                                <th class="col-head px-3 py-2 text-right"
+                                    >Commits</th
+                                >
+                                <th class="col-head px-3 py-2 text-right"
+                                    >Lines changed</th
+                                >
+                                <th class="col-head px-3 py-2 text-right"
+                                    >Files changed</th
+                                >
+                                <th class="col-head px-3 py-2 text-right"
+                                    >Tests</th
+                                >
+                                <th class="col-head px-3 py-2 text-right"
+                                    >Pull requests</th
+                                >
+                                <th class="col-head px-3 py-2 text-right"
+                                    >Repositories created</th
+                                >
+                                <th class="col-head py-2 pr-3 pl-3 text-right"
+                                    >Active days</th
+                                >
                             </tr>
                         </thead>
                         <tbody>
-                            {#each rows as person (person.user_id ?? 'unmatched')}
+                            {#each people as person (person.user_id ?? 'unmatched')}
                                 {@const id = person.user_id}
-                                {@const ticked =
-                                    id !== null && chosen.includes(id)}
                                 <tr
-                                    class={`border-b border-line-soft ${
+                                    class={`border-b border-line-soft last:border-0 ${
                                         id !== null && id === openId
                                             ? 'bg-accent-soft'
                                             : id !== null
@@ -558,172 +647,165 @@
                                     }`}
                                     onclick={(e) => onRowClick(e, person)}
                                 >
-                                    <td class="py-1.5">
+                                    {#if ranked}
+                                        <td
+                                            class="py-2 pl-3 text-right font-mono text-fg-muted tabular-nums"
+                                            >{person.rank ?? ''}</td
+                                        >
+                                    {/if}
+                                    <td class="py-1">
                                         {#if id !== null}
-                                            <label
-                                                class="flex h-7 w-7 cursor-pointer items-center justify-center"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    class="accent-accent"
-                                                    checked={ticked}
-                                                    disabled={!ticked &&
-                                                        chosen.length >=
-                                                            MAX_COMPARED}
-                                                    aria-label={`Compare ${person.name}`}
-                                                    title={!ticked &&
-                                                    chosen.length >=
-                                                        MAX_COMPARED
-                                                        ? `Compare at most ${MAX_COMPARED} people`
-                                                        : undefined}
-                                                    onchange={() => toggle(id)}
-                                                />
-                                            </label>
+                                            {@render compareBox(person, id)}
                                         {/if}
                                     </td>
-                                    <td class="py-1.5 pr-3">
-                                        {#if id !== null}
-                                            <button
-                                                type="button"
-                                                class="flex w-full min-w-0 items-center gap-2 text-left"
-                                                title={`See ${person.name}'s commits`}
-                                                onclick={() => (openId = id)}
-                                            >
-                                                <Avatar
-                                                    name={person.name}
-                                                    size="md"
-                                                />
-                                                <span class="min-w-0">
-                                                    <span
-                                                        class="block truncate font-medium hover:text-accent"
-                                                        >{person.name}</span
-                                                    >
-                                                    {#if person.designation}
-                                                        <span
-                                                            class="block truncate text-xs text-fg-muted"
-                                                            >{person.designation}</span
-                                                        >
-                                                    {/if}
-                                                </span>
-                                            </button>
-                                        {:else}
-                                            <div
-                                                class="flex min-w-0 items-center gap-2"
-                                            >
-                                                <Avatar name="?" size="md" />
-                                                <span class="min-w-0">
-                                                    <span
-                                                        class="block truncate text-fg-muted"
-                                                        >{person.name}</span
-                                                    >
-                                                    <span
-                                                        class="block truncate text-xs text-fg-faint"
-                                                        >Author emails on no
-                                                        SDOC Git account</span
-                                                    >
-                                                </span>
-                                            </div>
-                                        {/if}
+                                    <td class="py-2 pr-3">
+                                        {@render who(person)}
                                     </td>
                                     <td
                                         class={`px-3 text-right font-mono tabular-nums ${tone(person.commits)}`}
                                         >{fmt(person.commits)}</td
                                     >
+                                    <td class="px-3 text-right">
+                                        {@render lines(person)}
+                                    </td>
+                                    <td
+                                        class={`px-3 text-right font-mono tabular-nums ${tone(person.files_changed)}`}
+                                        >{fmt(person.files_changed)}</td
+                                    >
+                                    <td class="px-3 text-right">
+                                        {@render tests(person)}
+                                    </td>
+                                    <td class="px-3 text-right">
+                                        {@render pullRequests(person)}
+                                    </td>
+                                    <td
+                                        class={`px-3 text-right font-mono tabular-nums ${tone(person.repositories_created)}`}
+                                        >{fmt(person.repositories_created)}</td
+                                    >
                                     <td
                                         class={`px-3 text-right font-mono tabular-nums ${tone(person.active_days)}`}
                                         >{fmt(person.active_days)}</td
-                                    >
-                                    <td
-                                        class="px-3 text-right font-mono whitespace-nowrap tabular-nums"
-                                        ><span class={tone(person.code_added)}
-                                            >+{fmt(person.code_added)}</span
-                                        >
-                                        <span class="text-fg-muted"
-                                            >&minus;{fmt(
-                                                person.code_removed,
-                                            )}</span
-                                        ></td
-                                    >
-                                    <td
-                                        class="px-3 text-right font-mono whitespace-nowrap tabular-nums"
-                                        ><span
-                                            class={tone(person.comment_added)}
-                                            >+{fmt(person.comment_added)}</span
-                                        >
-                                        <span class="text-fg-muted"
-                                            >&minus;{fmt(
-                                                person.comment_removed,
-                                            )}</span
-                                        ></td
-                                    >
-                                    <td
-                                        class={`px-3 text-right font-mono tabular-nums ${tone(person.blank_added + person.blank_removed)}`}
-                                        title={`+${fmt(person.blank_added)} −${fmt(person.blank_removed)}`}
-                                        >{fmt(
-                                            person.blank_added +
-                                                person.blank_removed,
-                                        )}</td
-                                    >
-                                    <td
-                                        class={`px-3 text-right font-mono tabular-nums ${tone(person.docs_added + person.docs_removed)}`}
-                                        title={`+${fmt(person.docs_added)} −${fmt(person.docs_removed)}`}
-                                        >{fmt(
-                                            person.docs_added +
-                                                person.docs_removed,
-                                        )}</td
-                                    >
-                                    <td
-                                        class="px-3 text-right font-mono whitespace-nowrap tabular-nums"
-                                        title="Opened / merged"
-                                        ><span
-                                            class={tone(
-                                                person.pull_requests_opened,
-                                            )}
-                                            >{fmt(
-                                                person.pull_requests_opened,
-                                            )}</span
-                                        ><span class="text-fg-faint">
-                                            /
-                                        </span><span
-                                            class={tone(
-                                                person.pull_requests_merged,
-                                            )}
-                                            >{fmt(
-                                                person.pull_requests_merged,
-                                            )}</span
-                                        ></td
-                                    >
-                                    <td
-                                        class="px-3 text-right font-mono tabular-nums"
-                                        title="Commits whose tests passed / failed"
-                                        ><span
-                                            class={tone(person.checks_passed)}
-                                            >{fmt(person.checks_passed)}</span
-                                        ><span class="text-fg-faint">
-                                            /
-                                        </span><span
-                                            class={person.checks_failed > 0
-                                                ? 'text-danger'
-                                                : tone(0)}
-                                            >{fmt(person.checks_failed)}</span
-                                        ></td
-                                    >
-                                    <td
-                                        class={`pl-3 text-right font-mono tabular-nums ${tone(person.tasks)}`}
-                                        >{fmt(person.tasks)}</td
                                     >
                                 </tr>
                             {/each}
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Below 768px: a card per person, the four main figures, the rest behind More. -->
+                <ul
+                    class="panel max-h-[70vh] divide-y divide-line-soft overflow-y-auto md:hidden"
+                >
+                    {#each people as person (person.user_id ?? 'unmatched')}
+                        {@const id = person.user_id}
+                        {@const open = expanded.has(id)}
+                        <li
+                            class={`px-3 py-3 ${id !== null && id === openId ? 'bg-accent-soft' : ''}`}
+                        >
+                            <div class="flex items-center gap-2">
+                                {#if ranked}
+                                    <span
+                                        class="w-7 shrink-0 text-right font-mono text-fg-muted tabular-nums"
+                                        >{person.rank ?? ''}</span
+                                    >
+                                {/if}
+                                <div class="min-w-0 flex-1">
+                                    {@render who(person)}
+                                </div>
+                                {#if id !== null}
+                                    {@render compareBox(person, id)}
+                                {/if}
+                            </div>
+                            <dl
+                                class={`mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13.5px] ${ranked ? 'pl-9' : ''}`}
+                            >
+                                <div
+                                    class="flex items-baseline justify-between gap-2"
+                                >
+                                    <dt class="text-fg-muted">Commits</dt>
+                                    <dd
+                                        class={`font-mono tabular-nums ${tone(person.commits)}`}
+                                    >
+                                        {fmt(person.commits)}
+                                    </dd>
+                                </div>
+                                <div
+                                    class="flex items-baseline justify-between gap-2"
+                                >
+                                    <dt class="text-fg-muted">Lines</dt>
+                                    <dd>{@render lines(person)}</dd>
+                                </div>
+                                <div
+                                    class="flex items-baseline justify-between gap-2"
+                                >
+                                    <dt class="text-fg-muted">Tests</dt>
+                                    <dd>{@render tests(person)}</dd>
+                                </div>
+                                <div
+                                    class="flex items-baseline justify-between gap-2"
+                                >
+                                    <dt class="text-fg-muted">Repositories</dt>
+                                    <dd
+                                        class={`font-mono tabular-nums ${tone(person.repositories_created)}`}
+                                    >
+                                        {fmt(person.repositories_created)}
+                                    </dd>
+                                </div>
+                                {#if open}
+                                    <div
+                                        class="flex items-baseline justify-between gap-2"
+                                    >
+                                        <dt class="text-fg-muted">Files</dt>
+                                        <dd
+                                            class={`font-mono tabular-nums ${tone(person.files_changed)}`}
+                                        >
+                                            {fmt(person.files_changed)}
+                                        </dd>
+                                    </div>
+                                    <div
+                                        class="flex items-baseline justify-between gap-2"
+                                    >
+                                        <dt class="text-fg-muted">
+                                            Pull requests
+                                        </dt>
+                                        <dd>{@render pullRequests(person)}</dd>
+                                    </div>
+                                    <div
+                                        class="flex items-baseline justify-between gap-2"
+                                    >
+                                        <dt class="text-fg-muted">
+                                            Active days
+                                        </dt>
+                                        <dd
+                                            class={`font-mono tabular-nums ${tone(person.active_days)}`}
+                                        >
+                                            {fmt(person.active_days)}
+                                        </dd>
+                                    </div>
+                                {/if}
+                            </dl>
+                            <button
+                                type="button"
+                                class={`btn-ghost mt-1 h-9 px-2 text-xs text-fg-muted ${ranked ? 'ml-7' : '-ml-2'}`}
+                                aria-expanded={open}
+                                onclick={() => toggleMore(id)}
+                            >
+                                {open ? 'Less' : 'More'}
+                                <ChevronDown
+                                    class={`h-3.5 w-3.5 transition ${open ? 'rotate-180' : ''}`}
+                                />
+                            </button>
+                        </li>
+                    {/each}
+                </ul>
+
                 <p class="mt-1.5 text-xs text-fg-muted">
-                    Lines are added and removed. Code, comment and blank lines
-                    are a best guess from each file's language; generated files
-                    and merge commits are left out. Pull requests: opened /
-                    merged. Tests: commits whose tests passed / failed. Click a
-                    person to see their commits, or tick up to {MAX_COMPARED}
-                    to compare them.
+                    Lines are code lines added and removed, a best guess from
+                    each file's language; generated files and merge commits are
+                    left out. Tests: commits whose tests passed / failed. Pull
+                    requests: opened / merged. Repositories created: linked, or
+                    created here, in the period. Click a person to see their
+                    commits, or tick up to {MAX_COMPARED} to compare them.
                 </p>
             </section>
 

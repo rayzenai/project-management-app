@@ -38,13 +38,28 @@ export interface NavGroup {
     links: NavLink[];
 }
 
-/** The sidebar's pages, under Search (a button, not a link). */
-export function mainLinks(_options: { isSuperAdmin: boolean }): NavLink[] {
+/**
+ * The sidebar's pages, under Search (a button, not a link). Code activity
+ * joins them for anyone who uses git, and stays in the account menu too.
+ */
+export function mainLinks(options: {
+    gitEnabled: boolean;
+    isSuperAdmin: boolean;
+}): NavLink[] {
     // Phase 2 adds Overview here, for whoever runs something.
     return [
         { label: 'My work', href: '/workspace/my', icon: ListChecks },
         { label: 'Projects', href: '/workspace/projects', icon: FolderKanban },
         { label: 'People', href: '/workspace/team', icon: Users },
+        ...(options.gitEnabled
+            ? [
+                  {
+                      label: 'Code activity',
+                      href: '/workspace/reports/code',
+                      icon: GitCommitHorizontal,
+                  },
+              ]
+            : []),
     ];
 }
 

@@ -85,6 +85,9 @@ everyone below them.
 - A system people fill in for their boss and nothing comes back to them.
 - Pages that open on counters and charts instead of the work.
 - Ranking or shaming people by numbers.
+- The owner's exception (2026-11-03): the code activity report ranks people by
+  commits, lines changed, tests passed or active days, today and this week;
+  every other report stays by name.
 - Email people learn to ignore: more than one digest a day, a digest when
   nothing is waiting, or one email per small change.
 - Old links in emails, bookmarks and notifications that stop working.

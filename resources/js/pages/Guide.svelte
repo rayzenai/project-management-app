@@ -180,7 +180,7 @@
         ],
         [
             'Code activity',
-            "Code activity, in the menu under your name, counts each person's commits, active days, pull requests and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. Tests shows how many of their commits passed and failed their tests. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
+            "Code activity, in the sidebar and the menu under your name, counts each person's commits, active days, pull requests, the repositories they linked or created and the lines they added and removed, split into code, comments and blank lines (a best guess from each file's language). Generated files, such as lock files and build output, and merge commits are left out. Tests shows how many of their commits passed and failed their tests. Pick today, this week, last week, this month or your own dates, a designation, and the order: most commits, most lines changed, most tests passed, most active days, or by name. The filters stay in the link, so you can share it. You see your own commits; project managers see everyone's in their projects' repositories, program managers in their programs' and organizational admins in their whole office's.",
         ],
         [
             'Forge access',

@@ -496,20 +496,37 @@ commit's author is the user whose forge username it names.
 
 Query string, on both routes:
 
-- `from`, `to`: dates `YYYY-MM-DD`, both ends included; default the last 30
-  days ending today (`from` defaults to 29 days before `to`). 422 on `to`
-  when it is before `from` (`The end date can't be before the start date.`)
-  or the range has more than 366 days (`Choose a range of at most 366
-  days.`).
+- `period`: `today`, `week` (the default: from the first day of the caller's
+  week, as their organization's working days set it, Sunday without
+  attendance, to today), `last_week` (the 7 days before this week's first
+  day), `month` (from the 1st to today) or `custom`. Any other value is a
+  422 on `period`. Without `period`, a request with `from` or `to` is
+  `custom`, so links from before periods keep their range; any other period
+  leaves `from` and `to` aside.
+- `from`, `to` (only for `custom`): dates `YYYY-MM-DD`, both ends included;
+  default the last 30 days ending today (`from` defaults to 29 days before
+  `to`). 422 on `to` when it is before `from` (`The end date can't be before
+  the start date.`) or the range has more than 366 days (`Choose a range of
+  at most 366 days.`).
 - `project`, `program`: a slug, to narrow to that project's or program's
   repositories. One outside the caller's whole repositories, or a slug
   nothing has, is a 403.
+- `designation`: a designation id, to keep only the people whose member
+  holds it (the commits no one is matched to leave too). It must be one of
+  an organization in the caller's scope (every organization for a
+  super-admin; the one they administer, and their programs' and projects'
+  organizations, for anyone else; none for someone who sees only their own
+  commits): otherwise, or when no such designation exists, the same 422 on
+  `designation` (`Choose one of the designations listed.`).
+- `sort`: `commits` (the default), `lines` (code lines added plus removed),
+  `tests` (commits whose tests passed), `active_days` or `name`. Any other
+  value is a 422 on `sort`.
 - `members[]`: up to 4 user ids to compare (422 on `members` above 4).
 
 | Method | Path | Returns |
 | --- | --- | --- |
-| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, repositories, options }, filters { from, to, project, program, members } }`. `people`: one row per person, by name (case-insensitive; never ranked by a figure), the unmatched row last: `{ user_id, name, designation, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, checks_passed, checks_failed, pull_requests_opened, pull_requests_merged, tasks }` (`name` and `designation` are the person's in the People directory; `checks_passed` and `checks_failed` count their commits whose tests passed and failed, running and untested ones in neither; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to). For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `repositories`: how many linked repositories' code the caller may see (0: nothing linked yet, so no commit can count). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, for the filters |
-| GET | `/workspace/reports/code/people/{user}` | `{ data: [{ sha, message, repository, url, committed_at, code_added, code_removed, comment_added, comment_removed, stats_status, checks }] }`: that user's latest 50 counted commits in the range and the caller's scope, newest first; `message` is the first line, `repository` the `full_name`, `url` the commit on the forge, `stats_status` `ok`, `too_large`, `missing` or `null` (not counted yet). Someone outside the caller's scope, or no one, is `{ data: [] }`, never a 403 or 404 |
+| GET | `/workspace/reports/code` | `{ data: { range { from, to }, people, series, uncounted, repositories, options }, filters { period, from, to, project, program, designation, sort, members } }` (`from` and `to` in `filters` are the period's days, worked out from today for every period but `custom`). `people`: one row per person, ranked by `sort`'s figure, highest first, ties sharing a rank (1, 1, 3) and in name order; with `sort=name`, by name (case-insensitive) and every `rank` null; the unmatched row always last with `rank` null: `{ user_id, name, designation, rank, commits, active_days, repositories, files_changed, code_added, code_removed, comment_added, comment_removed, blank_added, blank_removed, docs_added, docs_removed, checks_passed, checks_failed, pull_requests_opened, pull_requests_merged, tasks, repositories_created, lines_changed }` (`name` and `designation` are the person's in the People directory; `checks_passed` and `checks_failed` count their commits whose tests passed and failed, running and untested ones in neither; `pull_requests_*` count pull requests opened and merged in the range, by author; `tasks` the tasks their commits are linked to; `repositories_created` the repositories they linked, or created through the tracker, in the range, in the projects of the caller's whole repositories plus the caller's own anywhere; `lines_changed` is `code_added + code_removed`). Someone with only pull requests or repositories created in the range has a row too. For a caller with whole repositories, the commits no one is matched to are one row with `user_id: null` and `name: "Not matched to anyone"`. `series`: for each of `members[]`, `{ user_id, days: [{ date, code_changed, commits }] }`, every day of the range (zero days included). `uncounted`: commits whose lines are still being counted (they are in `commits` already). `repositories`: how many linked repositories' code the caller may see (0: nothing linked yet, so no commit can count). `options`: the `projects` (`[{ slug, title, label }]`, `label` naming the program too: "General (Revenue)") and `programs` (`[{ slug, name }]`) in the caller's whole repositories that have a linked repository, the `designations` of the organizations in scope (`[{ id, name }]`, by rank then name; when they come from several organizations, `name` carries the organization: "Developer (SDOC)"), and the `periods` (`[{ value, label }]`: Today, This week, Last week, This month, Custom), for the filters |
+| GET | `/workspace/reports/code/people/{user}` | `{ data: [{ sha, message, repository, url, committed_at, code_added, code_removed, comment_added, comment_removed, stats_status, checks }] }`: that user's latest 50 counted commits in the period, the filters (a `designation` they don't hold gives none) and the caller's scope, newest first; `message` is the first line, `repository` the `full_name`, `url` the commit on the forge, `stats_status` `ok`, `too_large`, `missing` or `null` (not counted yet). Someone outside the caller's scope, or no one, is `{ data: [] }`, never a 403 or 404 |
 
 On the JSON API these are `/api/v1/workspace/reports/code…` (names
 `api.workspace.reports.code` and `api.workspace.reports.code.person`). On

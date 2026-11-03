@@ -2,11 +2,13 @@
 
 namespace App\Queries;
 
+use App\Models\Designation;
 use App\Models\GitCommit;
 use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\User;
 use App\Support\Git\Checks;
 use App\Support\WorkspaceAccess;
@@ -22,21 +24,31 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * The code activity report: per person, their commits, lines and pull
- * requests in a date range. It applies WorkspaceAccess::codeReportScope
- * (whole repositories of what the viewer runs, plus their own commits
- * wherever they are) and decides nothing about roles itself.
+ * The code activity report: per person, their commits, lines, tests, pull
+ * requests and repositories created in a date range, ranked by the figure
+ * the viewer sorts by (the owner's choice for this report only). It applies
+ * WorkspaceAccess::codeReportScope (whole repositories of what the viewer
+ * runs, plus their own commits wherever they are) and decides nothing about
+ * roles itself.
  *
  * Counts only commits that are not merges and are still reachable (a
  * rebased branch's old commits would count twice), by `committed_at`, which
  * is stored in the app's timezone, so a day is a local day.
  *
  * @phpstan-type Scope array{all: bool, organization_ids: list<int>, program_ids: list<int>, project_ids: list<int>, user_id: ?int}
- * @phpstan-type Filters array{from: CarbonImmutable, to: CarbonImmutable, project: ?Project, program: ?Program, members: list<int>}
+ * @phpstan-type Filters array{from: CarbonImmutable, to: CarbonImmutable, project: ?Project, program: ?Program, members: list<int>, designation: ?int, sort: string}
  */
 class CodeActivityQuery
 {
     public const UNMATCHED = 'Not matched to anyone';
+
+    /** The periods the report offers, by value. */
+    public const PERIODS = ['today' => 'Today', 'week' => 'This week', 'last_week' => 'Last week', 'month' => 'This month', 'custom' => 'Custom'];
+
+    public const SORTS = ['commits', 'lines', 'tests', 'active_days', 'name'];
+
+    /** The figure each sort ranks by; by name ranks no one. */
+    private const RANKED_BY = ['commits' => 'commits', 'lines' => 'lines_changed', 'tests' => 'checks_passed', 'active_days' => 'active_days'];
 
     private const COUNTS = ['code_added', 'code_removed', 'comment_added', 'comment_removed', 'blank_added', 'blank_removed', 'docs_added', 'docs_removed'];
 
@@ -45,7 +57,7 @@ class CodeActivityQuery
      *                            `repositories` counts the linked repositories whose code the viewer
      *                            may see, so an empty report can tell "nothing linked" from "no
      *                            commits".
-     * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, repositories: int, options: array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}}
+     * @return array{range: array{from: string, to: string}, people: list<array<string, mixed>>, series: list<array{user_id: int, days: list<array{date: string, code_changed: int, commits: int}>}>, uncounted: int, repositories: int, options: array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>, designations: list<array{id: int, name: string}>, periods: list<array{value: string, label: string}>}}
      */
     public function get(?Authenticatable $user, array $filters, ?int $organizationId = null): array
     {
@@ -129,8 +141,18 @@ class CodeActivityQuery
     }
 
     /**
-     * One row per person, by name (never ranked by a figure); the commits
-     * no user is matched to are one row, last, only for a viewer who sees
+     * Whether a designation filter is one of an organization in the
+     * viewer's scope (false for one that doesn't exist).
+     */
+    public function coversDesignation(?Authenticatable $user, int $designationId): bool
+    {
+        return $this->scopedDesignations(WorkspaceAccess::codeReportScope($user))->whereKey($designationId)->exists();
+    }
+
+    /**
+     * One row per person, ranked by the sort's figure (ties share a rank,
+     * then by name), or by name and unranked; the commits no user is
+     * matched to are one row, last and unranked, only for a viewer who sees
      * whole repositories.
      *
      * @param  Scope  $scope
@@ -180,6 +202,10 @@ class CodeActivityQuery
             $rows[$key] = ['pull_requests_opened' => (int) $row->opened, 'pull_requests_merged' => (int) $row->merged] + ($rows[$key] ?? []);
         }
 
+        foreach ($this->repositoriesCreated($scope, $filters) as $userId => $created) {
+            $rows[$userId] = ['repositories_created' => $created] + ($rows[$userId] ?? []);
+        }
+
         if (! $this->seesWholeRepositories($scope)) {
             unset($rows['']);
         }
@@ -196,12 +222,92 @@ class CodeActivityQuery
                 'user_id' => $key === '' ? null : (int) $key,
                 'name' => $name($key),
                 'designation' => $key === '' ? null : ($names[(int) $key]['designation'] ?? null),
-                ...array_fill_keys(['commits', 'active_days', 'repositories', 'files_changed', 'checks_passed', 'checks_failed', ...self::COUNTS, 'pull_requests_opened', 'pull_requests_merged', 'tasks'], 0),
+                'rank' => null,
+                ...array_fill_keys(['commits', 'active_days', 'repositories', 'files_changed', 'checks_passed', 'checks_failed', ...self::COUNTS, 'pull_requests_opened', 'pull_requests_merged', 'tasks', 'repositories_created'], 0),
                 ...$counts,
+                'lines_changed' => ($counts['code_added'] ?? 0) + ($counts['code_removed'] ?? 0),
             ];
         }
 
+        return $this->ranked($people, $filters['sort']);
+    }
+
+    /**
+     * The people (in name order, the unmatched row last) by the sort's
+     * figure, highest first; a stable sort keeps ties in name order, and
+     * they share the rank of the first of them (1, 1, 3).
+     *
+     * @param  list<array<string, mixed>>  $people
+     * @return list<array<string, mixed>>
+     */
+    private function ranked(array $people, string $sort): array
+    {
+        $figure = self::RANKED_BY[$sort] ?? null;
+
+        if ($figure === null) {
+            return $people;
+        }
+
+        usort($people, fn (array $a, array $b): int => ($a['user_id'] === null) <=> ($b['user_id'] === null) ?: $b[$figure] <=> $a[$figure]);
+
+        foreach ($people as $i => $person) {
+            if ($person['user_id'] === null) {
+                continue;
+            }
+
+            $people[$i]['rank'] = $i > 0 && $people[$i - 1][$figure] === $person[$figure] ? $people[$i - 1]['rank'] : $i + 1;
+        }
+
         return $people;
+    }
+
+    /**
+     * Repositories each person linked in the range, or created through the
+     * tracker (which links it): the `created` rows GitRepositoryObserver
+     * writes, in the projects of whole repositories plus the viewer's own
+     * wherever they are, as with commits.
+     *
+     * @param  Scope  $scope
+     * @param  Filters  $filters
+     * @return array<int, int> by user id
+     */
+    private function repositoriesCreated(array $scope, array $filters): array
+    {
+        $query = DB::table('project_activities')
+            ->where('subject_type', (new GitRepository)->getMorphClass())
+            ->where('action', ProjectActivity::ACTION_CREATED)
+            ->whereNotNull('user_id')
+            ->whereBetween('created_at', $this->between($filters))
+            ->where(function (QueryBuilder $q) use ($scope): void {
+                $q->whereIn('project_id', $this->scopedProjects(Project::query()->select('projects.id'), $scope));
+
+                if ($scope['user_id'] !== null) {
+                    $q->orWhere('user_id', $scope['user_id']);
+                }
+            });
+
+        if ($filters['project'] !== null) {
+            $query->where('project_id', $filters['project']->getKey());
+        }
+
+        if ($filters['program'] !== null) {
+            $query->whereIn('project_id', Project::query()
+                ->select('id')
+                ->where('program_id', $filters['program']->getKey())
+                ->where('organization_id', $filters['program']->organization_id));
+        }
+
+        if ($filters['designation'] !== null) {
+            $query->whereIn('user_id', $this->designated($filters['designation']));
+        }
+
+        $created = [];
+
+        foreach ($query->select('user_id')->selectRaw('count(distinct subject_id) as created')->groupBy('user_id')->get() as $row) {
+            $created[(int) $row->user_id] = (int) $row->created;
+        }
+
+        return $created;
     }
 
     /**
@@ -229,6 +335,7 @@ class CodeActivityQuery
                     $q->orWhere('users.id', $scope['user_id']);
                 }
             })
+            ->when($filters['designation'] !== null, fn (QueryBuilder $q) => $q->whereIn('users.id', $this->designated((int) $filters['designation'])))
             ->select('users.id as user_id')
             ->selectRaw('sum(case when git_pull_requests.opened_at between ? and ? then 1 else 0 end) as opened', $between)
             ->selectRaw('sum(case when git_pull_requests.merged_at between ? and ? then 1 else 0 end) as merged', $between)
@@ -281,9 +388,12 @@ class CodeActivityQuery
      * The projects and programs the viewer may filter by: in their whole
      * repositories, with a linked repository. A project's `label` names its
      * program too (Project::label()), since every program has a General.
+     * The designations of the organizations in scope, by rank then name (a
+     * name carries its organization when they come from several), and the
+     * periods.
      *
      * @param  Scope  $scope
-     * @return array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>}
+     * @return array{projects: list<array{slug: string, title: string, label: string}>, programs: list<array{slug: string, name: string}>, designations: list<array{id: int, name: string}>, periods: list<array{value: string, label: string}>}
      */
     private function options(array $scope): array
     {
@@ -303,7 +413,23 @@ class CodeActivityQuery
             ->get(['slug', 'name'])
             ->map(fn (Program $program): array => ['slug' => $program->slug, 'name' => $program->name]);
 
-        return ['projects' => array_values($projects->all()), 'programs' => array_values($programs->all())];
+        $designations = $this->scopedDesignations($scope)
+            ->with('organization:id,name')
+            ->orderBy('rank')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['id', 'name', 'organization_id']);
+        $several = $designations->pluck('organization_id')->unique()->count() > 1;
+
+        return [
+            'projects' => array_values($projects->all()),
+            'programs' => array_values($programs->all()),
+            'designations' => array_values($designations->map(fn (Designation $designation): array => [
+                'id' => $designation->id,
+                'name' => $several ? "{$designation->name} ({$designation->organization->name})" : $designation->name,
+            ])->all()),
+            'periods' => array_map(fn (string $value, string $label): array => ['value' => $value, 'label' => $label], array_keys(self::PERIODS), array_values(self::PERIODS)),
+        ];
     }
 
     /**
@@ -330,7 +456,42 @@ class CodeActivityQuery
 
         $this->filtered($query->getQuery(), 'git_commits.git_repository_id', $filters);
 
+        if ($filters['designation'] !== null) {
+            $query->whereIn('git_commits.user_id', $this->designated($filters['designation']));
+        }
+
         return $query;
+    }
+
+    /**
+     * The users whose member holds the designation.
+     *
+     * @return Builder<Member>
+     */
+    private function designated(int $designationId): Builder
+    {
+        return Member::query()->select('user_id')->where('designation_id', $designationId)->whereNotNull('user_id');
+    }
+
+    /**
+     * The designations of the organizations in scope: every one for a
+     * super-admin, else those of the organizations the viewer administers
+     * and of their programs' and projects' organizations (none for someone
+     * who sees only their own commits).
+     *
+     * @param  Scope  $scope
+     * @return Builder<Designation>
+     */
+    private function scopedDesignations(array $scope): Builder
+    {
+        if ($scope['all']) {
+            return Designation::query();
+        }
+
+        return Designation::query()->where(fn (Builder $q) => $q
+            ->whereIn('designations.organization_id', $scope['organization_ids'])
+            ->orWhereIn('designations.organization_id', Program::query()->select('organization_id')->whereIn('id', $scope['program_ids']))
+            ->orWhereIn('designations.organization_id', Project::query()->select('organization_id')->whereIn('id', $scope['project_ids'])));
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\SyncRepositoryAccess;
+use App\Models\Designation;
 use App\Models\GitCommit;
 use App\Models\GitConnection;
 use App\Models\GitPullRequest;
@@ -16,8 +17,11 @@ use App\Support\Git\GitAccess;
 use App\Support\WorkspaceAccess;
 use App\Support\WorkspaceOrganization;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 
@@ -25,8 +29,9 @@ use Inertia\Testing\AssertableInertia;
  * The code activity report (/workspace/reports/code): who committed what,
  * scoped to what each viewer runs. Two organizations with git: SDOC (a
  * Revenue program holding Tax Portal, and HR System outside any program)
- * and MoF (Budget). The default range is the last 30 days: 2026-09-29 to
- * 2026-10-28.
+ * and MoF (Budget). Today is Wednesday 2026-10-28: the default period, this
+ * week, runs from Sunday 2026-10-25, so most tests ask for `period=custom`,
+ * whose default range is the last 30 days (2026-09-29 to 2026-10-28).
  */
 
 beforeEach(function () {
@@ -136,6 +141,30 @@ function codeActivityCommit(GitRepository $repo, ?User $author, string $sha, str
     return $commit;
 }
 
+/** @return array<string, mixed> api.Repository as the forge answers for one it has just made */
+function codeActivityForgeRepository(string $name, int $id): array
+{
+    return [
+        'id' => $id,
+        'owner' => ['id' => 9, 'login' => 'sdoc', 'full_name' => 'SDOC', 'username' => 'sdoc'],
+        'name' => $name,
+        'full_name' => "sdoc/{$name}",
+        'description' => '',
+        'empty' => false,
+        'private' => true,
+        'fork' => false,
+        'mirror' => false,
+        'size' => 0,
+        'html_url' => "https://git.example/sdoc/{$name}",
+        'url' => "https://git.example/api/v1/repos/sdoc/{$name}",
+        'ssh_url' => "git@git.example:sdoc/{$name}.git",
+        'clone_url' => "https://git.example/sdoc/{$name}.git",
+        'default_branch' => 'main',
+        'archived' => false,
+        'permissions' => ['admin' => true, 'push' => true, 'pull' => true],
+    ];
+}
+
 /** @param  array<string, mixed>  $attributes */
 function codeActivityPullRequest(GitRepository $repo, int $number, ?string $author, string $openedAt, ?string $mergedAt = null, array $attributes = []): GitPullRequest
 {
@@ -173,37 +202,39 @@ function codeActivityPeople(array $report): array
 // ---- Who sees what ----
 
 it('shows a super-admin the people of every organization, by name, with the commits no one is matched to last', function () {
-    $report = codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code'));
+    $report = codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code?period=custom'));
 
     expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'Chandra Dev', 'Not matched to anyone']);
 });
 
-it('never ranks people by how much code they wrote: the order is by name, in any case', function () {
+it('lists people by name, in any case and unranked, when sorted by name', function () {
     $bina = codeActivityPerson($this->sdoc, 'bina Dev', team: $this->hr, gitUsername: 'bina');
     codeActivityCommit($this->hrRepo, $bina, 'n1', '2026-10-25 10:00:00', ['code_added' => 5000]);
     codeActivityCommit($this->hrRepo, null, 'u9', '2026-10-25 11:00:00', ['code_added' => 9000]);
 
-    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&sort=name'));
 
-    expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'bina Dev', 'Not matched to anyone']);
+    expect(collect($report['people'])->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'bina Dev', 'Not matched to anyone'])
+        ->and(collect($report['people'])->pluck('rank')->unique()->all())->toBe([null])
+        ->and($report['filters']['sort'])->toBe('name');
 });
 
 it('shows a super-admin switched to one organization only its people and repositories, as its admins see them', function () {
     WorkspaceOrganization::choose($this->boss, $this->mof->id);
 
-    $report = codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code'));
+    $report = codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code?period=custom'));
 
     expect(collect($report['people'])->pluck('name')->all())->toBe(['Chandra Dev'])
         ->and($report['repositories'])->toBe(1)
         ->and($this->actingAs($this->boss)->getJson("/workspace/reports/code/people/{$this->asha->id}")->json('data'))->toBe([]);
 
     // The app has no switch: it keeps every organization.
-    expect(collect($this->actingAs($this->boss, 'sanctum')->getJson('/api/v1/workspace/reports/code')->json('data.people'))->pluck('name')->all())
+    expect(collect($this->actingAs($this->boss, 'sanctum')->getJson('/api/v1/workspace/reports/code?period=custom')->json('data.people'))->pluck('name')->all())
         ->toBe(['Asha Dev', 'Bikash Dev', 'Chandra Dev', 'Not matched to anyone']);
 });
 
 it('shows an organizational admin only their organization, with the commits no one is matched to', function () {
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
 
     expect(array_keys($people))->toBe(['Asha Dev', 'Bikash Dev', 'Not matched to anyone'])
         ->and($people['Not matched to anyone']['user_id'])->toBeNull()
@@ -230,36 +261,36 @@ it('shows an organizational admin only their organization, with the commits no o
 });
 
 it('counts the linked repositories whose code the viewer may see, so an empty report can say none are linked', function () {
-    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['repositories'])->toBe(2)
-        ->and(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code'))['repositories'])->toBe(1);
+    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'))['repositories'])->toBe(2)
+        ->and(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code?period=custom'))['repositories'])->toBe(1);
 
     GitRepository::query()->delete();
 
-    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['repositories'])->toBe(0);
+    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'))['repositories'])->toBe(0);
 });
 
 it('shows an organizational admin of another organization nobody of this one', function () {
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code?period=custom')));
 
     expect(array_keys($people))->toBe(['Chandra Dev']);
 });
 
 it("shows a program manager only their programs' projects", function () {
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->programManager)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->programManager)->get('/workspace/reports/code?period=custom')));
 
     expect(array_keys($people))->toBe(['Asha Dev', 'Not matched to anyone']);
 });
 
 it('shows a project manager only the projects they manage', function () {
-    $tax = codeActivityPeople(codeActivityReport($this->actingAs($this->taxManager)->get('/workspace/reports/code')));
-    $hr = codeActivityPeople(codeActivityReport($this->actingAs($this->hrManager)->get('/workspace/reports/code')));
+    $tax = codeActivityPeople(codeActivityReport($this->actingAs($this->taxManager)->get('/workspace/reports/code?period=custom')));
+    $hr = codeActivityPeople(codeActivityReport($this->actingAs($this->hrManager)->get('/workspace/reports/code?period=custom')));
 
     expect(array_keys($tax))->toBe(['Asha Dev', 'Not matched to anyone'])
         ->and(array_keys($hr))->toBe(['Bikash Dev']);
 });
 
 it('shows a member only their own row, never the commits no one is matched to', function () {
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code?period=custom')));
 
     expect(array_keys($people))->toBe(['Asha Dev'])
         ->and($people['Asha Dev']['commits'])->toBe(2);
@@ -268,9 +299,9 @@ it('shows a member only their own row, never the commits no one is matched to', 
 it("counts a person's own commits wherever they are, and each repository's owners see only theirs", function () {
     codeActivityCommit($this->budgetRepo, $this->asha, 'a3', '2026-10-22 10:00:00', ['code_added' => 100]);
 
-    $own = codeActivityPeople(codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code')));
-    $sdoc = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
-    $mof = codeActivityPeople(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code')));
+    $own = codeActivityPeople(codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code?period=custom')));
+    $sdoc = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
+    $mof = codeActivityPeople(codeActivityReport($this->actingAs($this->mofAdmin)->get('/workspace/reports/code?period=custom')));
 
     expect($own['Asha Dev']['commits'])->toBe(3)
         ->and($own['Asha Dev']['repositories'])->toBe(2)
@@ -284,7 +315,7 @@ it('never reaches a project of another organization through a program id it carr
     $strayRepo = codeActivityRepository(GitConnection::query()->where('owner', 'mof')->firstOrFail(), $stray, 'stray', 4);
     codeActivityCommit($strayRepo, $this->chandra, 's1', '2026-10-22 10:00:00', ['code_added' => 9]);
 
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->programManager)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->programManager)->get('/workspace/reports/code?period=custom')));
 
     expect($people)->not->toHaveKey('Chandra Dev');
 });
@@ -337,7 +368,7 @@ it('leaves out merges and commits no branch holds any more', function () {
     codeActivityCommit($this->taxRepo, $this->asha, 'm1', '2026-10-25 10:00:00', ['is_merge' => true, 'stats_status' => 'merge', 'code_added' => 50]);
     codeActivityCommit($this->taxRepo, $this->asha, 'r1', '2026-10-25 11:00:00', ['unreachable_at' => '2026-10-26 10:00:00', 'code_added' => 60]);
 
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
 
     expect($people['Asha Dev']['commits'])->toBe(2)
         ->and($people['Asha Dev']['code_added'])->toBe(15);
@@ -347,8 +378,8 @@ it('counts only commits inside the range, both ends whole days', function () {
     codeActivityCommit($this->taxRepo, $this->asha, 'early', '2026-10-19 23:59:59', ['code_added' => 1000]);
     codeActivityCommit($this->taxRepo, $this->asha, 'old', '2026-09-28 23:59:59', ['code_added' => 2000]);
 
-    $default = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
-    $oneDay = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?from=2026-10-20&to=2026-10-20'));
+    $default = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
+    $oneDay = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&from=2026-10-20&to=2026-10-20'));
 
     expect($default['Asha Dev']['commits'])->toBe(3)
         ->and($default['Asha Dev']['code_added'])->toBe(1015)
@@ -357,16 +388,30 @@ it('counts only commits inside the range, both ends whole days', function () {
         ->and($oneDay['people'][0]['code_added'])->toBe(10);
 });
 
-it('echoes the range and filters it applied, defaulting to the last 30 days', function () {
-    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
+it('echoes the range and filters it applied, a custom period defaulting to the last 30 days', function () {
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'));
 
     expect($report['range'])->toBe(['from' => '2026-09-29', 'to' => '2026-10-28'])
-        ->and($report['filters'])->toEqual(['from' => '2026-09-29', 'to' => '2026-10-28', 'project' => null, 'program' => null, 'members' => []]);
+        ->and($report['filters'])->toEqual(['period' => 'custom', 'from' => '2026-09-29', 'to' => '2026-10-28', 'project' => null, 'program' => null, 'designation' => null, 'sort' => 'commits', 'members' => []]);
+});
+
+it('opens on this week, by commits', function () {
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
+
+    expect($report['range'])->toBe(['from' => '2026-10-25', 'to' => '2026-10-28'])
+        ->and($report['filters'])->toEqual(['period' => 'week', 'from' => '2026-10-25', 'to' => '2026-10-28', 'project' => null, 'program' => null, 'designation' => null, 'sort' => 'commits', 'members' => []])
+        ->and($report['options']['periods'])->toBe([
+            ['value' => 'today', 'label' => 'Today'],
+            ['value' => 'week', 'label' => 'This week'],
+            ['value' => 'last_week', 'label' => 'Last week'],
+            ['value' => 'month', 'label' => 'This month'],
+            ['value' => 'custom', 'label' => 'Custom'],
+        ]);
 });
 
 it('narrows to a project or a program inside the scope', function () {
-    $hr = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?project=hr-system'));
-    $revenue = codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?program={$this->program->slug}"));
+    $hr = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&project=hr-system'));
+    $revenue = codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?period=custom&program={$this->program->slug}"));
 
     expect(collect($hr['people'])->pluck('name')->all())->toBe(['Bikash Dev'])
         ->and($hr['filters']['project'])->toBe('hr-system')
@@ -390,8 +435,8 @@ it('counts pull requests opened and merged in the range, by author in any case',
     codeActivityPullRequest($this->taxRepo, 4, 'asha', '2026-08-01 10:00:00', '2026-08-02 10:00:00');
     codeActivityPullRequest($this->budgetRepo, 1, 'asha', '2026-10-25 10:00:00');
 
-    $sdoc = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
-    $own = codeActivityPeople(codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code')));
+    $sdoc = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
+    $own = codeActivityPeople(codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code?period=custom')));
 
     expect($sdoc['Asha Dev']['pull_requests_opened'])->toBe(2)
         ->and($sdoc['Asha Dev']['pull_requests_merged'])->toBe(2)
@@ -402,7 +447,7 @@ it('lists someone with pull requests in the range and no commits', function () {
     $dipa = codeActivityPerson($this->sdoc, 'Dipa Dev', team: $this->hr, gitUsername: 'dipa');
     codeActivityPullRequest($this->hrRepo, 7, 'dipa', '2026-10-25 10:00:00');
 
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->hrManager)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->hrManager)->get('/workspace/reports/code?period=custom')));
 
     expect($people['Dipa Dev'])->toMatchArray(['user_id' => $dipa->id, 'commits' => 0, 'pull_requests_opened' => 1]);
 });
@@ -418,7 +463,7 @@ it('counts the tasks their commits are linked to, not trashed ones', function ()
     $trashed->delete();
     codeActivityPullRequest($this->taxRepo, 1, 'asha', '2026-10-25 10:00:00')->tasks()->attach(Task::factory()->for($this->tax)->create()->id, ['git_repository_id' => $this->taxRepo->id]);
 
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
 
     expect($people['Asha Dev']['tasks'])->toBe(2);
 });
@@ -430,7 +475,7 @@ it("counts each person's commits whose tests passed and failed; running and unte
     codeActivityCommit($this->taxRepo, $this->asha, 'a4', '2026-10-22 10:00:00', ['checks_state' => Checks::RUNNING, 'checks' => []]);
     codeActivityCommit($this->taxRepo, $this->asha, 'a5', '2026-10-22 11:00:00', ['checks_state' => Checks::NONE, 'checks' => []]);
 
-    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
+    $people = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom')));
 
     expect($people['Asha Dev'])->toMatchArray(['commits' => 5, 'checks_passed' => 2, 'checks_failed' => 1])
         ->and($people['Bikash Dev'])->toMatchArray(['checks_passed' => 0, 'checks_failed' => 0]);
@@ -440,17 +485,18 @@ it('counts the commits in scope still waiting for their line counts', function (
     codeActivityCommit($this->taxRepo, $this->asha, 'w1', '2026-10-25 10:00:00', ['stats_status' => null, 'stats_computed_at' => null]);
     codeActivityCommit($this->budgetRepo, $this->chandra, 'w2', '2026-10-25 10:00:00', ['stats_status' => null, 'stats_computed_at' => null]);
 
-    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['uncounted'])->toBe(1)
-        ->and(codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code'))['uncounted'])->toBe(2)
-        ->and(codeActivityReport($this->actingAs($this->bikash)->get('/workspace/reports/code'))['uncounted'])->toBe(0);
+    expect(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'))['uncounted'])->toBe(1)
+        ->and(codeActivityReport($this->actingAs($this->boss)->get('/workspace/reports/code?period=custom'))['uncounted'])->toBe(2)
+        ->and(codeActivityReport($this->actingAs($this->bikash)->get('/workspace/reports/code?period=custom'))['uncounted'])->toBe(0);
 });
 
 it('offers the projects and programs in the scope that have repositories', function () {
     Project::factory()->create(['organization_id' => $this->sdoc->id, 'title' => 'No Code']);
 
-    $admin = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['options'];
-    $manager = codeActivityReport($this->actingAs($this->taxManager)->get('/workspace/reports/code'))['options'];
-    $member = codeActivityReport($this->actingAs($this->asha)->get('/workspace/reports/code'))['options'];
+    $filters = fn (User $viewer): array => Arr::only(codeActivityReport($this->actingAs($viewer)->get('/workspace/reports/code?period=custom'))['options'], ['projects', 'programs']);
+    $admin = $filters($this->sdocAdmin);
+    $manager = $filters($this->taxManager);
+    $member = $filters($this->asha);
 
     expect($admin)->toEqual([
         'projects' => [['slug' => 'hr-system', 'title' => 'HR System', 'label' => 'HR System'], ['slug' => 'tax-portal', 'title' => 'Tax Portal', 'label' => 'Tax Portal (Revenue)']],
@@ -464,7 +510,7 @@ it("names a program's General project with its program, so two Generals never lo
     $general = Project::factory()->create(['organization_id' => $this->sdoc->id, 'program_id' => $this->program->id, 'title' => 'General', 'slug' => 'general-revenue', 'key' => 'GR']);
     codeActivityRepository(GitConnection::query()->where('organization_id', $this->sdoc->id)->firstOrFail(), $general, 'gr-api', 4);
 
-    $options = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['options'];
+    $options = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'))['options'];
 
     expect(collect($options['projects'])->firstWhere('slug', 'general-revenue'))
         ->toEqual(['slug' => 'general-revenue', 'title' => 'General', 'label' => 'General (Revenue)']);
@@ -480,7 +526,7 @@ it('asks the same number of queries however many people there are', function () 
         DB::listen(function () use (&$queries): void {
             $queries++;
         });
-        codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
+        codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'));
 
         return $queries;
     };
@@ -500,10 +546,227 @@ it('asks the same number of queries however many people there are', function () 
     expect($after)->toBe($before);
 });
 
+// ---- Ranked, by period and designation ----
+
+it('ranks people by commits by default, ties sharing a rank', function () {
+    $dipa = codeActivityPerson($this->sdoc, 'Dipa Dev', team: $this->hr, gitUsername: 'dipa');
+    codeActivityCommit($this->hrRepo, $this->bikash, 'w1', '2026-10-26 10:00:00');
+    codeActivityCommit($this->hrRepo, $this->bikash, 'w2', '2026-10-27 10:00:00');
+    codeActivityCommit($this->hrRepo, $dipa, 'w3', '2026-10-25 10:00:00');
+    codeActivityCommit($this->hrRepo, $dipa, 'w4', '2026-10-28 09:00:00');
+    codeActivityCommit($this->taxRepo, $this->asha, 'w5', '2026-10-26 10:00:00');
+    foreach (['w6', 'w7', 'w8'] as $sha) {
+        codeActivityCommit($this->taxRepo, null, $sha, '2026-10-26 11:00:00');
+    }
+
+    // The default: this week (from Sunday 2026-10-25), by commits.
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'));
+
+    expect(collect($report['people'])->map(fn (array $p): array => [$p['name'], $p['commits'], $p['rank']])->all())->toBe([
+        ['Bikash Dev', 2, 1],
+        ['Dipa Dev', 2, 1],
+        ['Asha Dev', 1, 3],
+        // Last and unranked, whatever its count.
+        ['Not matched to anyone', 3, null],
+    ]);
+});
+
+it('ranks people by code lines changed, added plus removed', function () {
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&sort=lines'));
+
+    expect(collect($report['people'])->map(fn (array $p): array => [$p['name'], $p['lines_changed'], $p['rank']])->all())->toBe([
+        ['Asha Dev', 18, 1],
+        ['Bikash Dev', 3, 2],
+        ['Not matched to anyone', 8, null],
+    ])
+        ->and($report['filters']['sort'])->toBe('lines');
+});
+
+it('ranks people by commits whose tests passed, or by active days', function () {
+    GitCommit::query()->where('sha', 'b1')->update(['checks_state' => Checks::PASSED, 'checks' => '[]']);
+    GitCommit::query()->where('sha', 'a1')->update(['checks_state' => Checks::FAILED, 'checks' => '[]']);
+
+    $tests = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&sort=tests'));
+    $days = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&sort=active_days'));
+
+    expect(collect($tests['people'])->map(fn (array $p): array => [$p['name'], $p['checks_passed'], $p['rank']])->all())->toBe([
+        ['Bikash Dev', 1, 1],
+        ['Asha Dev', 0, 2],
+        ['Not matched to anyone', 0, null],
+    ])
+        ->and(collect($days['people'])->map(fn (array $p): array => [$p['name'], $p['active_days'], $p['rank']])->all())->toBe([
+            ['Asha Dev', 2, 1],
+            ['Bikash Dev', 1, 2],
+            ['Not matched to anyone', 1, null],
+        ]);
+});
+
+it('counts repositories a person linked or created in the range', function () {
+    Queue::fake();
+    $sdocGit = GitConnection::query()->where('owner', 'sdoc')->firstOrFail();
+    $mofGit = GitConnection::query()->where('owner', 'mof')->firstOrFail();
+
+    // Linked last week.
+    CarbonImmutable::setTestNow('2026-10-21 10:00:00');
+    $this->actingAs($this->taxManager);
+    codeActivityRepository($sdocGit, $this->tax, 'tp-old', 11);
+    CarbonImmutable::setTestNow('2026-10-28 10:00:00');
+
+    // Created through the tracker: made on the forge, then linked.
+    $forge = codeActivityForgeRepository('tp-web', 701);
+    Http::preventStrayRequests();
+    Http::fake([
+        'git.example/api/v1/orgs/sdoc/repos' => Http::response($forge, 201),
+        'git.example/api/v1/repos/sdoc/tp-web/branch_protections/main' => Http::response(['message' => 'The target couldn\'t be found.'], 404),
+        'git.example/api/v1/repos/sdoc/tp-web/branch_protections' => Http::response(['rule_name' => 'main', 'branch_name' => 'main'], 201),
+        'git.example/api/v1/repos/sdoc/tp-web/branches/main' => Http::response(['name' => 'main']),
+        'git.example/api/v1/repos/sdoc/tp-web' => Http::response($forge),
+        'git.example/api/v1/repos/sdoc/tp-web/collaborators*' => Http::response([]),
+    ]);
+    $this->actingAs($this->taxManager)->post('/workspace/projects/tax-portal/repositories/new', ['name' => 'tp-web'])->assertSessionHasNoErrors();
+
+    // Linked from the forge, and one in another organization's project.
+    $this->actingAs($this->taxManager);
+    codeActivityRepository($sdocGit, $this->tax, 'tp-docs', 12);
+    codeActivityRepository($mofGit, $this->budget, 'bu-web', 13);
+
+    $week = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code')));
+    $lastWeek = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=last_week')));
+    $hr = codeActivityPeople(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?project=hr-system')));
+    // Their own, wherever they are, as with commits.
+    $own = codeActivityPeople(codeActivityReport($this->actingAs($this->taxManager)->get('/workspace/reports/code')));
+
+    expect($week['Tara Manager'])->toMatchArray(['user_id' => $this->taxManager->id, 'repositories_created' => 2, 'commits' => 0])
+        ->and($lastWeek['Tara Manager']['repositories_created'])->toBe(1)
+        ->and($lastWeek['Asha Dev']['repositories_created'])->toBe(0)
+        ->and($hr)->not->toHaveKey('Tara Manager')
+        ->and($own['Tara Manager']['repositories_created'])->toBe(3);
+});
+
+it('filters by designation, offering the designations of the organizations in scope by rank', function () {
+    $senior = Designation::query()->where(['organization_id' => $this->sdoc->id, 'name' => 'Senior developer'])->firstOrFail();
+    $senior->update(['rank' => 20]);
+    $developer = Designation::query()->create(['organization_id' => $this->sdoc->id, 'name' => 'Developer', 'rank' => 30]);
+    $analyst = Designation::query()->create(['organization_id' => $this->sdoc->id, 'name' => 'Analyst', 'rank' => 30]);
+    Designation::query()->create(['organization_id' => $this->mof->id, 'name' => 'Budget officer', 'rank' => 10]);
+    WorkspaceAccess::memberFor($this->bikash)?->update(['designation_id' => $developer->id]);
+
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?period=custom&designation={$developer->id}"));
+    $drawer = $this->actingAs($this->sdocAdmin)->getJson("/workspace/reports/code/people/{$this->asha->id}?period=custom&designation={$developer->id}")->assertOk()->json('data');
+
+    // The commits no one is matched to have no designation.
+    expect(collect($report['people'])->pluck('name')->all())->toBe(['Bikash Dev'])
+        ->and($report['people'][0]['rank'])->toBe(1)
+        ->and($report['filters']['designation'])->toBe($developer->id)
+        ->and($drawer)->toBe([])
+        ->and($report['options']['designations'])->toBe([
+            ['id' => $senior->id, 'name' => 'Senior developer'],
+            ['id' => $analyst->id, 'name' => 'Analyst'],
+            ['id' => $developer->id, 'name' => 'Developer'],
+        ]);
+});
+
+it("refuses a designation of an organization outside the viewer's scope", function () {
+    $senior = Designation::query()->where(['organization_id' => $this->sdoc->id, 'name' => 'Senior developer'])->firstOrFail();
+    $mof = Designation::query()->create(['organization_id' => $this->mof->id, 'name' => 'Budget officer', 'rank' => 10]);
+
+    $outside = $this->actingAs($this->sdocAdmin)->getJson("/workspace/reports/code?designation={$mof->id}")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('designation')
+        ->assertJsonMissingPath('people');
+    $unknown = $this->actingAs($this->sdocAdmin)->getJson('/workspace/reports/code?designation=999999')->assertUnprocessable();
+
+    // The same words either way: a refusal never confirms a designation exists.
+    expect($outside->json('errors.designation'))->toBe($unknown->json('errors.designation'));
+
+    $this->actingAs($this->mofAdmin)->getJson("/workspace/reports/code?designation={$senior->id}")->assertUnprocessable();
+    // A member sees only their own commits, in no organization's whole.
+    $this->actingAs($this->asha)->getJson("/workspace/reports/code?designation={$senior->id}")->assertUnprocessable();
+    $this->actingAs($this->asha)->getJson("/workspace/reports/code/people/{$this->asha->id}?designation={$senior->id}")->assertUnprocessable();
+    $this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?designation={$mof->id}")->assertSessionHasErrors('designation');
+
+    // A project manager filters by their project's organization's; a super-admin by any.
+    $this->actingAs($this->taxManager)->get("/workspace/reports/code?designation={$senior->id}")->assertOk();
+    $this->actingAs($this->boss)->get("/workspace/reports/code?designation={$mof->id}")->assertOk();
+});
+
+it('resolves today, this week, last week and this month', function () {
+    CarbonImmutable::setTestNow('2026-11-04 10:00:00'); // a Wednesday
+    $filters = fn (string $query): array => codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?{$query}"))['filters'];
+
+    expect($filters('period=today'))->toMatchArray(['period' => 'today', 'from' => '2026-11-04', 'to' => '2026-11-04'])
+        ->and($filters('period=week'))->toMatchArray(['period' => 'week', 'from' => '2026-11-01', 'to' => '2026-11-04'])
+        ->and($filters(''))->toMatchArray(['period' => 'week', 'from' => '2026-11-01', 'to' => '2026-11-04'])
+        ->and($filters('period=last_week'))->toMatchArray(['period' => 'last_week', 'from' => '2026-10-25', 'to' => '2026-10-31'])
+        ->and($filters('period=month'))->toMatchArray(['period' => 'month', 'from' => '2026-11-01', 'to' => '2026-11-04'])
+        ->and($filters('period=custom&from=2026-10-01&to=2026-10-10'))->toMatchArray(['period' => 'custom', 'from' => '2026-10-01', 'to' => '2026-10-10'])
+        // A range without a period is a custom one, as links from before periods were.
+        ->and($filters('from=2026-10-01&to=2026-10-10'))->toMatchArray(['period' => 'custom', 'from' => '2026-10-01', 'to' => '2026-10-10'])
+        // Any other period leaves a stray range aside.
+        ->and($filters('period=today&from=2026-10-01&to=2026-10-10'))->toMatchArray(['period' => 'today', 'from' => '2026-11-04', 'to' => '2026-11-04']);
+
+    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=yesterday')->assertSessionHasErrors('period');
+    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?sort=loudest')->assertSessionHasErrors('sort');
+});
+
+it('asks the same number of queries for 2 people as for 6, ranked, by designation, with repositories created', function () {
+    // The fixtures queue repository access syncs; on the sync queue they run
+    // after a request, which would put their queries in the count.
+    Bus::fake([SyncRepositoryAccess::class]);
+    $developer = Designation::query()->create(['organization_id' => $this->sdoc->id, 'name' => 'Developer', 'rank' => 30]);
+    $sdocGit = GitConnection::query()->where('owner', 'sdoc')->firstOrFail();
+
+    $add = function (int $from, int $to) use ($developer, $sdocGit): void {
+        foreach (range($from, $to) as $i) {
+            $person = codeActivityPerson($this->sdoc, "Dev {$i}", team: $this->hr, gitUsername: "dev{$i}");
+            WorkspaceAccess::memberFor($person)?->update(['designation_id' => $developer->id]);
+            codeActivityCommit($this->hrRepo, $person, "d{$i}", '2026-10-26 10:00:00', ['code_added' => $i]);
+            codeActivityPullRequest($this->hrRepo, 100 + $i, "dev{$i}", '2026-10-26 10:00:00');
+            $this->actingAs($person);
+            codeActivityRepository($sdocGit, $this->hr, "hr-{$i}", 100 + $i);
+        }
+    };
+
+    $count = function () use ($developer): array {
+        $queries = 0;
+        DB::listen(function () use (&$queries): void {
+            $queries++;
+        });
+        $people = codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?sort=lines&designation={$developer->id}"))['people'];
+
+        return [$queries, count($people)];
+    };
+
+    $add(1, 2);
+    // The first request also fills the sidebar's cached maintenance count.
+    $count();
+    [$two, $twoPeople] = $count();
+    $add(3, 6);
+    [$six, $sixPeople] = $count();
+
+    expect([$twoPeople, $sixPeople])->toBe([2, 6])
+        ->and($six)->toBe($two);
+});
+
+it('shares gitEnabled, which shows Code activity in the sidebar', function () {
+    $noGit = codeActivityPerson(Organization::factory()->create(['name' => 'No git']), 'Out Sider');
+    $shared = function (User $user): bool {
+        $gitEnabled = null;
+        $this->actingAs($user)->get('/workspace/my')->assertInertia(function (AssertableInertia $page) use (&$gitEnabled): void {
+            $gitEnabled = $page->toArray()['props']['gitEnabled'];
+        });
+
+        return (bool) $gitEnabled;
+    };
+
+    expect($shared($this->asha))->toBeTrue()
+        ->and($shared($noGit))->toBeFalse();
+});
+
 // ---- Compare ----
 
 it('gives a daily series for each person compared, one entry per day in the range', function () {
-    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?members[]={$this->asha->id}&members[]={$this->bikash->id}"));
+    $report = codeActivityReport($this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?period=custom&members[]={$this->asha->id}&members[]={$this->bikash->id}"));
 
     $series = collect($report['series'])->keyBy('user_id');
     $asha = collect($series[$this->asha->id]['days'])->keyBy('date');
@@ -515,11 +778,11 @@ it('gives a daily series for each person compared, one entry per day in the rang
         ->and($asha['2026-10-20'])->toBe(['date' => '2026-10-20', 'code_changed' => 12, 'commits' => 1])
         ->and($asha['2026-10-21'])->toBe(['date' => '2026-10-21', 'code_changed' => 6, 'commits' => 1])
         ->and($report['filters']['members'])->toBe([$this->asha->id, $this->bikash->id])
-        ->and(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code'))['series'])->toBe([]);
+        ->and(codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom'))['series'])->toBe([]);
 });
 
 it('gives nothing but zeros for someone compared outside the scope', function () {
-    $report = codeActivityReport($this->actingAs($this->hrManager)->get("/workspace/reports/code?members[]={$this->asha->id}"));
+    $report = codeActivityReport($this->actingAs($this->hrManager)->get("/workspace/reports/code?period=custom&members[]={$this->asha->id}"));
 
     expect(collect($report['series'][0]['days'])->sum('code_changed'))->toBe(0)
         ->and(collect($report['series'][0]['days'])->sum('commits'))->toBe(0)
@@ -529,15 +792,15 @@ it('gives nothing but zeros for someone compared outside the scope', function ()
 it('compares at most four people', function () {
     $query = collect(range(1, 5))->map(fn (int $id) => "members[]={$id}")->implode('&');
 
-    $this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?{$query}")->assertSessionHasErrors('members');
+    $this->actingAs($this->sdocAdmin)->get("/workspace/reports/code?period=custom&{$query}")->assertSessionHasErrors('members');
 });
 
 it('takes a range of at most 366 days, its end not before its start', function () {
-    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?from=2025-10-29&to=2026-10-30')->assertSessionHasErrors('to');
-    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?from=2026-10-20&to=2026-10-19')->assertSessionHasErrors('to');
-    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?from=2026-02-30')->assertSessionHasErrors('from');
+    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&from=2025-10-29&to=2026-10-30')->assertSessionHasErrors('to');
+    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&from=2026-10-20&to=2026-10-19')->assertSessionHasErrors('to');
+    $this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&from=2026-02-30')->assertSessionHasErrors('from');
 
-    $year = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?from=2025-10-30&to=2026-10-30'));
+    $year = codeActivityReport($this->actingAs($this->sdocAdmin)->get('/workspace/reports/code?period=custom&from=2025-10-30&to=2026-10-30'));
 
     expect($year['range'])->toBe(['from' => '2025-10-30', 'to' => '2026-10-30']);
 });
@@ -545,7 +808,7 @@ it('takes a range of at most 366 days, its end not before its start', function (
 // ---- One person ----
 
 it("lists a person's commits in the scope, newest first, with the first line of each message", function () {
-    $commits = $this->actingAs($this->sdocAdmin)->getJson("/workspace/reports/code/people/{$this->asha->id}")->assertOk()->json('data');
+    $commits = $this->actingAs($this->sdocAdmin)->getJson("/workspace/reports/code/people/{$this->asha->id}?period=custom")->assertOk()->json('data');
 
     expect(collect($commits)->pluck('sha')->all())->toBe(['a2', 'a1'])
         ->and($commits[0])->toEqual([
@@ -564,17 +827,17 @@ it("lists a person's commits in the scope, newest first, with the first line of 
 });
 
 it('gives an empty list for a person outside the scope, or no one at all', function () {
-    $this->actingAs($this->hrManager)->getJson("/workspace/reports/code/people/{$this->asha->id}")->assertOk()->assertExactJson(['data' => []]);
-    $this->actingAs($this->bikash)->getJson("/workspace/reports/code/people/{$this->asha->id}")->assertOk()->assertExactJson(['data' => []]);
-    $this->actingAs($this->sdocAdmin)->getJson("/workspace/reports/code/people/{$this->chandra->id}")->assertOk()->assertExactJson(['data' => []]);
-    $this->actingAs($this->sdocAdmin)->getJson('/workspace/reports/code/people/999999')->assertOk()->assertExactJson(['data' => []]);
+    $this->actingAs($this->hrManager)->getJson("/workspace/reports/code/people/{$this->asha->id}?period=custom")->assertOk()->assertExactJson(['data' => []]);
+    $this->actingAs($this->bikash)->getJson("/workspace/reports/code/people/{$this->asha->id}?period=custom")->assertOk()->assertExactJson(['data' => []]);
+    $this->actingAs($this->sdocAdmin)->getJson("/workspace/reports/code/people/{$this->chandra->id}?period=custom")->assertOk()->assertExactJson(['data' => []]);
+    $this->actingAs($this->sdocAdmin)->getJson('/workspace/reports/code/people/999999?period=custom')->assertOk()->assertExactJson(['data' => []]);
 });
 
 it("keeps a person's drill-down to the range and the filters", function () {
     codeActivityCommit($this->budgetRepo, $this->asha, 'a3', '2026-10-22 10:00:00');
 
-    $own = $this->actingAs($this->asha)->getJson("/workspace/reports/code/people/{$this->asha->id}?from=2026-10-21&to=2026-10-28")->json('data');
-    $mof = $this->actingAs($this->mofAdmin)->getJson("/workspace/reports/code/people/{$this->asha->id}")->json('data');
+    $own = $this->actingAs($this->asha)->getJson("/workspace/reports/code/people/{$this->asha->id}?period=custom&from=2026-10-21&to=2026-10-28")->json('data');
+    $mof = $this->actingAs($this->mofAdmin)->getJson("/workspace/reports/code/people/{$this->asha->id}?period=custom")->json('data');
 
     expect(collect($own)->pluck('sha')->all())->toBe(['a3', 'a2'])
         ->and(collect($mof)->pluck('sha')->all())->toBe(['a3']);

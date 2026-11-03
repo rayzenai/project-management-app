@@ -691,6 +691,8 @@ export interface CodeActivityPerson {
     user_id: Id | null;
     name: string;
     designation: string | null;
+    /** 1-based by the chosen sort, ties sharing one; null by name and for the unmatched row. */
+    rank: number | null;
     commits: number;
     active_days: number;
     repositories: number;
@@ -709,6 +711,10 @@ export interface CodeActivityPerson {
     /** Their commits whose checks passed, and failed. */
     checks_passed: number;
     checks_failed: number;
+    /** Code lines added plus removed. */
+    lines_changed: number;
+    /** Repositories they linked, or created through the tracker, in the range. */
+    repositories_created: number;
 }
 
 export interface CodeActivityDay {
@@ -723,11 +729,21 @@ export interface CodeActivitySeries {
     days: CodeActivityDay[];
 }
 
+export type CodeActivityPeriod =
+    'today' | 'week' | 'last_week' | 'month' | 'custom';
+
+export type CodeActivitySort =
+    'commits' | 'lines' | 'tests' | 'active_days' | 'name';
+
 export interface CodeActivityFilters {
+    period: CodeActivityPeriod;
+    /** The period's days, resolved by the server. */
     from: string;
     to: string;
     project: string | null;
     program: string | null;
+    designation: Id | null;
+    sort: CodeActivitySort;
     members: Id[];
 }
 
@@ -735,6 +751,9 @@ export interface CodeActivityOptions {
     /** `label` names the program too: "General (Revenue)". */
     projects: { slug: string; title: string; label: string }[];
     programs: { slug: string; name: string }[];
+    /** The organizations in scope's designations, by rank then name. */
+    designations: { id: Id; name: string }[];
+    periods: { value: CodeActivityPeriod; label: string }[];
 }
 
 /** One commit in a person's drawer; `stats_status` null while it is being counted. */

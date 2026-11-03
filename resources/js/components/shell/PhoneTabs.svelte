@@ -61,8 +61,13 @@
         }
     });
 
+    // The sheet's groups already carry some (Code activity): once is enough.
     const extra = $derived(
-        links.filter((l) => !TABS.some((t) => t.href === l.href)),
+        links.filter(
+            (l) =>
+                !TABS.some((t) => t.href === l.href) &&
+                !groups.some((g) => g.links.some((gl) => gl.href === l.href)),
+        ),
     );
     // A project's pages, programs and tasks are all under Projects.
     const tab = $derived(

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Designation;
 use App\Models\GitCommit;
 use App\Models\GitConnection;
 use App\Models\GitRepository;
@@ -13,6 +14,8 @@ use Laravel\Sanctum\Sanctum;
 /*
  * The JSON twin of CodeActivityTest: the main cases through Sanctum. SDOC
  * has Tax Portal and HR System, MoF has Budget; all three have a repository.
+ * Today is Wednesday 2026-10-28 and every commit is last week's, so most
+ * cases ask for `period=custom` (the last 30 days).
  */
 
 beforeEach(function () {
@@ -101,10 +104,10 @@ function apiCodeActivityCommit(GitRepository $repo, ?User $author, string $sha, 
 
 it('reports a super-admin every organization and an organizational admin only theirs', function () {
     Sanctum::actingAs($this->boss, ['*']);
-    $boss = $this->getJson('/api/v1/workspace/reports/code')->assertOk();
+    $boss = $this->getJson('/api/v1/workspace/reports/code?period=custom')->assertOk();
 
     Sanctum::actingAs($this->sdocAdmin, ['*']);
-    $admin = $this->getJson('/api/v1/workspace/reports/code')->assertOk();
+    $admin = $this->getJson('/api/v1/workspace/reports/code?period=custom')->assertOk();
 
     expect(collect($boss->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'Chandra Dev', 'Not matched to anyone'])
         ->and(collect($admin->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev', 'Bikash Dev', 'Not matched to anyone'])
@@ -112,15 +115,15 @@ it('reports a super-admin every organization and an organizational admin only th
         ->and($admin->json('data.range'))->toBe(['from' => '2026-09-29', 'to' => '2026-10-28'])
         ->and($admin->json('data.uncounted'))->toBe(0)
         ->and($admin->json('data.options.projects'))->toEqual([['slug' => 'hr-system', 'title' => 'HR System', 'label' => 'HR System'], ['slug' => 'tax-portal', 'title' => 'Tax Portal', 'label' => 'Tax Portal']])
-        ->and($admin->json('filters'))->toEqual(['from' => '2026-09-29', 'to' => '2026-10-28', 'project' => null, 'program' => null, 'members' => []]);
+        ->and($admin->json('filters'))->toEqual(['period' => 'custom', 'from' => '2026-09-29', 'to' => '2026-10-28', 'project' => null, 'program' => null, 'designation' => null, 'sort' => 'commits', 'members' => []]);
 });
 
 it('reports a project manager their projects and a member only themselves', function () {
     Sanctum::actingAs($this->hrManager, ['*']);
-    $manager = $this->getJson('/api/v1/workspace/reports/code')->assertOk();
+    $manager = $this->getJson('/api/v1/workspace/reports/code?period=custom')->assertOk();
 
     Sanctum::actingAs($this->asha, ['*']);
-    $member = $this->getJson('/api/v1/workspace/reports/code')->assertOk();
+    $member = $this->getJson('/api/v1/workspace/reports/code?period=custom')->assertOk();
 
     expect(collect($manager->json('data.people'))->pluck('name')->all())->toBe(['Bikash Dev'])
         ->and(collect($member->json('data.people'))->pluck('name')->all())->toBe(['Asha Dev']);
@@ -144,7 +147,7 @@ it('validates the people compared and the range', function () {
     $this->getJson("/api/v1/workspace/reports/code?{$five}")->assertUnprocessable()->assertJsonValidationErrors('members');
     $this->getJson('/api/v1/workspace/reports/code?from=2025-10-29&to=2026-10-30')->assertUnprocessable()->assertJsonValidationErrors('to');
 
-    $two = $this->getJson("/api/v1/workspace/reports/code?members[]={$this->asha->id}&members[]={$this->bikash->id}")->assertOk();
+    $two = $this->getJson("/api/v1/workspace/reports/code?period=custom&members[]={$this->asha->id}&members[]={$this->bikash->id}")->assertOk();
 
     expect($two->json('data.series'))->toHaveCount(2)
         ->and($two->json('data.series.0.days'))->toHaveCount(30);
@@ -152,7 +155,7 @@ it('validates the people compared and the range', function () {
 
 it("lists a person's commits in the scope, and nothing for someone outside it", function () {
     Sanctum::actingAs($this->sdocAdmin, ['*']);
-    $asha = $this->getJson("/api/v1/workspace/reports/code/people/{$this->asha->id}")->assertOk();
+    $asha = $this->getJson("/api/v1/workspace/reports/code/people/{$this->asha->id}?period=custom")->assertOk();
 
     expect(collect($asha->json('data'))->pluck('sha')->all())->toBe(['a2', 'a1'])
         ->and($asha->json('data.1.message'))->toBe('TP-1 First')
@@ -162,4 +165,33 @@ it("lists a person's commits in the scope, and nothing for someone outside it", 
 
     Sanctum::actingAs($this->hrManager, ['*']);
     $this->getJson("/api/v1/workspace/reports/code/people/{$this->asha->id}")->assertOk()->assertExactJson(['data' => []]);
+});
+
+it('ranks by the chosen figure, filters by designation and resolves the period, as the web does', function () {
+    $developer = Designation::query()->create(['organization_id' => $this->sdoc->id, 'name' => 'Developer', 'rank' => 30]);
+    $mofOfficer = Designation::query()->create(['organization_id' => $this->mof->id, 'name' => 'Budget officer', 'rank' => 10]);
+    Member::query()->where('user_id', $this->bikash->id)->update(['designation_id' => $developer->id]);
+
+    Sanctum::actingAs($this->sdocAdmin, ['*']);
+    $lines = $this->getJson('/api/v1/workspace/reports/code?period=last_week&sort=lines')->assertOk();
+    $developers = $this->getJson("/api/v1/workspace/reports/code?period=last_week&designation={$developer->id}")->assertOk();
+
+    expect(collect($lines->json('data.people'))->map(fn (array $p): array => [$p['name'], $p['lines_changed'], $p['rank'], $p['repositories_created']])->all())->toBe([
+        ['Asha Dev', 15, 1, 0],
+        ['Bikash Dev', 3, 2, 0],
+        ['Not matched to anyone', 4, null, 0],
+    ])
+        ->and($lines->json('data.range'))->toBe(['from' => '2026-10-18', 'to' => '2026-10-24'])
+        ->and($lines->json('filters'))->toEqual(['period' => 'last_week', 'from' => '2026-10-18', 'to' => '2026-10-24', 'project' => null, 'program' => null, 'designation' => null, 'sort' => 'lines', 'members' => []])
+        ->and($lines->json('data.options.designations'))->toBe([['id' => $developer->id, 'name' => 'Developer']])
+        ->and(collect($lines->json('data.options.periods'))->pluck('value')->all())->toBe(['today', 'week', 'last_week', 'month', 'custom'])
+        ->and(collect($developers->json('data.people'))->pluck('name')->all())->toBe(['Bikash Dev'])
+        // This week has no commits yet.
+        ->and($this->getJson('/api/v1/workspace/reports/code')->assertOk()->json('data.people'))->toBe([]);
+
+    $this->getJson("/api/v1/workspace/reports/code?designation={$mofOfficer->id}")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('designation')
+        ->assertJsonMissingPath('data');
+    $this->getJson('/api/v1/workspace/reports/code?period=fortnight&sort=loudest')->assertUnprocessable()->assertJsonValidationErrors(['period', 'sort']);
 });

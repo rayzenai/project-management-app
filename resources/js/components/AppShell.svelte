@@ -144,7 +144,10 @@
     );
 
     const links = $derived(
-        mainLinks({ isSuperAdmin: Boolean(shared.isSuperAdmin) }),
+        mainLinks({
+            gitEnabled: Boolean(shared.gitEnabled),
+            isSuperAdmin: Boolean(shared.isSuperAdmin),
+        }),
     );
     const groups = $derived(
         accountGroups(office, {
