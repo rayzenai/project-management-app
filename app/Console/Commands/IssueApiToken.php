@@ -23,7 +23,8 @@ class IssueApiToken extends Command
 {
     public function handle(): int
     {
-        $email = (string) $this->argument('email');
+        // Stored lowercase (User::email), so typed in any case.
+        $email = mb_strtolower(trim((string) $this->argument('email')));
         $name = (string) $this->option('name');
 
         $user = User::query()->where('email', $email)->first();

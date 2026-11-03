@@ -105,7 +105,8 @@ never on its own), and that team's one leader is the project's **manager**.
 Office roles (senior dev, QA, ...) give no powers: they are the
 organization's designations (see Structure below). Five tiers:
 
-1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`).
+1. **Super-admin**: the `manage-workspace` Gate (emails in `PM_SUPER_ADMINS`,
+   lowercased by `config/project-management.php` like every stored email).
    Belongs to no organization unless given one (their own member can join
    one, like SDOC's Executive Director). Manages organizations and everything in them;
    the only one who can open a project's team to other organizations or make
@@ -296,7 +297,9 @@ Privilege-escalation protections — do not regress:
 - **Email case**: emails are stored trimmed and lowercase (the `email`
   mutators on `User` and `Member`), and both logins, `forgot-password` and
   `set-password` lowercase what was typed before looking it up
-  (`Requests\Concerns\LowercasesEmail`; the API login inline). The
+  (`Requests\Concerns\LowercasesEmail`; the API login and
+  `workspace:api-token` inline), and the `PM_SUPER_ADMINS` list is
+  lowercased in its config. The
   `2026_11_03_140000` migration lowercased the emails stored before, except
   rows of one table that differ only in case: it leaves those as they are
   and logs a `warning` with their ids (never merged or deleted); someone
@@ -408,8 +411,11 @@ only; scheduled commands read them:
   next minute retries); `deferred` (a 4xx at RCPT TO or after, such as a
   full mailbox) releases only that person's rows and goes on; `refused` (a
   5xx at RCPT TO or after, such as an unknown mailbox) keeps them handled,
-  never retried, with one `warning` naming the user id; anything else
-  keeps them handled too. A failure is reported once per run. The SMTP
+  never retried, with one `warning` naming the user id, unless the run's
+  first three sends were all refused (`App\Support\FirstRefusals`: a server
+  refusing everyone, like Postfix's "554 Relay access denied" at RCPT TO),
+  which is handled as unreachable (those three released, reported once,
+  the run stopped); anything else keeps them handled too. A failure is reported once per run. The SMTP
   mailer gives up after `MAIL_TIMEOUT` seconds (15). The migration marked
   every earlier notification handled.
 - `SendMorningEmails` (`workspace:send-morning-emails`, daily at
@@ -421,8 +427,10 @@ only; scheduled commands read them:
   `MorningMail` only when one list is not empty and records
   `email_digests (user_id, kind, sent_on)`, unique, so a rerun sends nothing
   twice. A refused address keeps the day claimed (one `warning` with the
-  user id); any other failed send gives it back; a deferred one goes on to
-  the next person; an unreachable server stops the run; any other error
+  user id), except that the run's first three sends all refused count as
+  unreachable (their days given back); any other failed send gives it
+  back; a deferred one goes on to the next person; an unreachable server
+  stops the run; any other error
   (one person's lists included) is caught per person, so the people after
   them still get theirs, and reported once per run.
 - Preferences: `user_preferences.email_notifications` (right away),

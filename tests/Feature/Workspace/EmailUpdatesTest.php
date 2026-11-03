@@ -340,6 +340,56 @@ it('gives back only the rows of a recipient the server puts off, goes on, and tr
     'a "try later" after DATA' => fn () => smtpReply(451, 'end of data'),
 ]);
 
+it('treats a server that refuses the first three sends as unreachable: gives them back, reports once and stops', function () {
+    Exceptions::fake();
+    Log::spy();
+    euAssign($this->member, $this->assigner);
+
+    foreach (['Rabin Ghimire', 'Asha Rai', 'Mina Rai'] as $name) {
+        $other = Member::factory()->linkedTo(User::factory()->create(['name' => $name]))->create();
+        euAssign($other, $this->assigner);
+    }
+
+    // Postfix's answer at RCPT TO when it won't relay for us: the same for everyone.
+    $relayDenied = true;
+    $asked = fakeMailServer(function () use (&$relayDenied): ?Throwable {
+        return $relayDenied ? smtpReply(554) : null;
+    });
+    euRunAt('2026-11-03 10:03:00');
+
+    expect($asked)->toHaveCount(3)
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(4);
+    Exceptions::assertReportedCount(1);
+    Log::shouldNotHaveReceived('warning');
+
+    $relayDenied = false;
+    euRunAt('2026-11-03 10:04:00');
+    expect($asked)->toHaveCount(7)
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(0);
+});
+
+it('counts refusals among the first sends as the recipients\' own once a send gets through', function () {
+    Exceptions::fake();
+    Log::spy();
+    euAssign($this->member, $this->assigner);
+
+    foreach (['Rabin Ghimire', 'Asha Rai', 'Mina Rai'] as $i => $name) {
+        Carbon::setTestNow('2026-11-03 10:00:'.(10 + $i * 10));
+        $other = Member::factory()->linkedTo(User::factory()->create(['name' => $name, 'email' => "person{$i}@example.test"]))->create();
+        euAssign($other, $this->assigner);
+    }
+
+    // Bibek and Rabin refused, Asha sent, Mina refused.
+    $refused = ['bibek@example.test', 'person0@example.test', 'person2@example.test'];
+    $asked = fakeMailServer(fn (string $to): ?Throwable => in_array($to, $refused, true) ? smtpReply(550) : null);
+    euRunAt('2026-11-03 10:03:00');
+
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'person0@example.test', 'person1@example.test', 'person2@example.test'])
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(0);
+    Exceptions::assertNothingReported();
+    Log::shouldHaveReceived('warning')->times(3);
+});
+
 it('keeps the rows handled when something other than the mail server breaks an email, reports it once and goes on', function () {
     Exceptions::fake();
     Log::spy();

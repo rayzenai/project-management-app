@@ -9,6 +9,7 @@ use App\Notifications\MadeProgramManager;
 use App\Notifications\MadeProjectManager;
 use App\Notifications\MentionedInComment;
 use App\Notifications\TaskAssigned;
+use App\Support\FirstRefusals;
 use App\Support\MailFailure;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
@@ -18,6 +19,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -35,8 +37,9 @@ use Throwable;
  * (the next minute tries again, and nobody waits on one timeout per
  * person); a "not now" for one recipient (deferred) gives back only their
  * rows and the run goes on; a refused address stays handled with one
- * warning naming the person, never tried again; any other failure stays
- * handled too. A failure is reported once per run, the rest counted in one
+ * warning naming the person, never tried again, unless the run's first
+ * sends were all refused (FirstRefusals: the server refusing everyone,
+ * handled as unreachable); any other failure stays handled too. A failure is reported once per run, the rest counted in one
  * warning.
  */
 class SendEmailUpdates extends Command
@@ -83,6 +86,8 @@ class SendEmailUpdates extends Command
         $deferred = 0;
         $failed = 0;
         $stopped = false;
+        /** @var FirstRefusals<array{user_id: int, claimed: list<string>, error: Throwable}> $firstRefusals */
+        $firstRefusals = new FirstRefusals;
 
         foreach ($ready as $userId => $rows) {
             $user = $users->get($userId);
@@ -114,19 +119,39 @@ class SendEmailUpdates extends Command
             try {
                 Mail::to($user)->send(new UpdatesMail($user, $items));
                 $sent++;
+                $firstRefusals->passed();
             } catch (Throwable $e) {
                 if (MailFailure::refused($e)) {
-                    // The server's last word on this address: the rows stay handled.
-                    Log::warning("workspace:send-email-updates: the mail server refused the update email to user #{$user->id} ({$e->getCode()}); it is not tried again.");
-                    $refused++;
+                    if (! $firstRefusals->hold(['user_id' => $user->id, 'claimed' => $claimed, 'error' => $e])) {
+                        // The server's last word on this address: the rows stay handled.
+                        $this->warnRefused($user->id, $e);
+                        $refused++;
 
-                    continue;
+                        continue;
+                    }
+
+                    if (! $firstRefusals->serverRefuses()) {
+                        continue;
+                    }
+
+                    // The first sends all refused: the server refuses the run
+                    // (relay or sender), not these people. As unreachable.
+                    foreach ($firstRefusals->take() as $held) {
+                        $this->release($held['claimed']);
+                    }
+
+                    report(new RuntimeException('workspace:send-email-updates: the mail server refused the first '.FirstRefusals::COUNT.' emails of the run, so it was stopped as if unreachable.', 0, $e));
+                    $failed++;
+                    $stopped = true;
+
+                    break;
                 }
 
                 if (MailFailure::deferred($e)) {
                     // "Not now" for this person only: theirs wait, the rest go on.
                     $this->release($claimed);
                     $deferred++;
+                    $firstRefusals->passed();
 
                     continue;
                 }
@@ -142,6 +167,12 @@ class SendEmailUpdates extends Command
                     break;
                 }
             }
+        }
+
+        // Refusals held among the first sends that were the recipients' own after all.
+        foreach ($firstRefusals->take() as $held) {
+            $this->warnRefused($held['user_id'], $held['error']);
+            $refused++;
         }
 
         if ($failed > 1) {
@@ -201,6 +232,11 @@ class SendEmailUpdates extends Command
                 ->whereNull('read_at')
                 ->update(['email_handled_at' => $at]) === 1)
             ->all());
+    }
+
+    private function warnRefused(int $userId, Throwable $e): void
+    {
+        Log::warning("workspace:send-email-updates: the mail server refused the update email to user #{$userId} ({$e->getCode()}); it is not tried again.");
     }
 
     /**

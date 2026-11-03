@@ -6,6 +6,7 @@ use App\Mail\MorningMail;
 use App\Models\EmailDigest;
 use App\Models\User;
 use App\Queries\MorningEmailQuery;
+use App\Support\FirstRefusals;
 use App\Support\MailFailure;
 use App\Support\WorkingDays;
 use App\Support\WorkspaceAccess;
@@ -13,6 +14,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -26,7 +28,8 @@ use Throwable;
  * (MailFailure) keeps the claim, with one warning naming the person; any
  * other failed send gives it back, so a rerun that day can send it. A "not
  * now" for one recipient (deferred) gives back only their day and the run
- * goes on; when the mail server can't be reached the run stops there.
+ * goes on; when the mail server can't be reached, or refuses the run's
+ * first sends all alike (FirstRefusals), the run stops there.
  * Anything else that
  * breaks one person's email (their lists included) never stops the run for
  * the people after them. A failure is reported once per run, the rest
@@ -45,11 +48,39 @@ class SendMorningEmails extends Command
         $counts = ['sent' => 0, 'already' => 0, 'refused' => 0, 'deferred' => 0];
         $failed = 0;
         $stopped = false;
+        /** @var FirstRefusals<array{user_id: int, error: Throwable}> $firstRefusals */
+        $firstRefusals = new FirstRefusals;
 
         foreach (User::query()->with('preferences')->lazyById(200) as $user) {
             try {
                 $outcome = $this->morning($user, $query, $now, $pretend);
             } catch (Throwable $e) {
+                if (MailFailure::refused($e)) {
+                    if (! $firstRefusals->hold(['user_id' => $user->id, 'error' => $e])) {
+                        // The server's last word on this address: the day stays claimed.
+                        $this->warnRefused($user->id, $e);
+                        $counts['refused']++;
+
+                        continue;
+                    }
+
+                    if (! $firstRefusals->serverRefuses()) {
+                        continue;
+                    }
+
+                    // The first sends all refused: the server refuses the run
+                    // (relay or sender), not these people. As unreachable.
+                    foreach ($firstRefusals->take() as $held) {
+                        $this->giveBack($held['user_id'], $now);
+                    }
+
+                    report(new RuntimeException('workspace:send-morning-emails: the mail server refused the first '.FirstRefusals::COUNT.' emails of the run, so it was stopped as if unreachable.', 0, $e));
+                    $failed++;
+                    $stopped = true;
+
+                    break;
+                }
+
                 if ($failed++ === 0) {
                     report($e);
                 }
@@ -66,6 +97,16 @@ class SendMorningEmails extends Command
             if ($outcome !== null) {
                 $counts[$outcome]++;
             }
+
+            if ($outcome === 'sent' || $outcome === 'deferred') {
+                $firstRefusals->passed();
+            }
+        }
+
+        // Refusals held among the first sends that were the recipients' own after all.
+        foreach ($firstRefusals->take() as $held) {
+            $this->warnRefused($held['user_id'], $held['error']);
+            $counts['refused']++;
         }
 
         if ($failed > 1) {
@@ -83,12 +124,13 @@ class SendMorningEmails extends Command
 
     /**
      * One person's morning email: `sent` (or, pretending, would be),
-     * `already` sent today, `refused` or `deferred` by the mail server, or
-     * null when they get none today.
+     * `already` sent today, `deferred` by the mail server (the day given
+     * back), or null when they get none today.
      *
-     * @return 'sent'|'already'|'refused'|'deferred'|null
+     * @return 'sent'|'already'|'deferred'|null
      *
-     * @throws Throwable whatever else stopped it, the day given back
+     * @throws Throwable a refusal (MailFailure::refused) with the day still
+     *                   claimed, or whatever else stopped it, the day given back
      */
     private function morning(User $user, MorningEmailQuery $query, CarbonImmutable $now, bool $pretend): ?string
     {
@@ -129,17 +171,10 @@ class SendMorningEmails extends Command
             Mail::to($user)->send($mail);
         } catch (Throwable $e) {
             if (MailFailure::refused($e)) {
-                // The server's last word on this address: the day stays claimed.
-                Log::warning("workspace:send-morning-emails: the mail server refused the morning email to user #{$user->id} ({$e->getCode()}); it is not sent again today.");
-
-                return 'refused';
+                throw $e;
             }
 
-            EmailDigest::query()
-                ->where('user_id', $user->id)
-                ->where('kind', EmailDigest::MORNING)
-                ->whereDate('sent_on', $now->toDateString())
-                ->delete();
+            $this->giveBack($user->id, $now);
 
             if (MailFailure::deferred($e)) {
                 // "Not now" for this person only: their day is free again, the rest go on.
@@ -150,5 +185,20 @@ class SendMorningEmails extends Command
         }
 
         return 'sent';
+    }
+
+    /** Frees the person's day, unsent, so a rerun that day can send it. */
+    private function giveBack(int $userId, CarbonImmutable $now): void
+    {
+        EmailDigest::query()
+            ->where('user_id', $userId)
+            ->where('kind', EmailDigest::MORNING)
+            ->whereDate('sent_on', $now->toDateString())
+            ->delete();
+    }
+
+    private function warnRefused(int $userId, Throwable $e): void
+    {
+        Log::warning("workspace:send-morning-emails: the mail server refused the morning email to user #{$userId} ({$e->getCode()}); it is not sent again today.");
     }
 }

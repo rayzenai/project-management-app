@@ -60,3 +60,14 @@ it('fails for an unknown user', function () {
         ->expectsOutputToContain('No user with email')
         ->assertFailed();
 });
+
+it('finds the user however the email argument is typed', function () {
+    $user = User::factory()->create(['email' => 'bot@example.com']);
+
+    expect(Artisan::call('workspace:api-token', ['email' => ' Bot@Example.COM', '--name' => 'crm-sync']))->toBe(0)
+        ->and($user->tokens()->where('name', 'crm-sync')->count())->toBe(1);
+
+    Artisan::call('workspace:api-token', ['email' => 'BOT@example.com', '--name' => 'crm-sync', '--revoke' => true]);
+
+    expect($user->tokens()->count())->toBe(0);
+});

@@ -416,6 +416,31 @@ it('gives back the day of a recipient the server puts off, and goes on to the re
         ->and(EmailDigest::query()->count())->toBe(2);
 });
 
+it('treats a server that refuses the first three sends as unreachable: gives their days back, reports once and stops', function () {
+    Exceptions::fake();
+    Log::spy();
+    morningTask('Collect revenue and expense data', '2026-10-31');
+    morningSecondPerson();
+    morningSecondPerson('Asha Rai', 'asha@example.test');
+    morningSecondPerson('Mina Rai', 'mina.rai@example.test');
+    $relayDenied = true;
+    $asked = fakeMailServer(function () use (&$relayDenied): ?Throwable {
+        return $relayDenied ? smtpReply(554) : null;
+    });
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    expect($asked)->toHaveCount(3)
+        ->and(EmailDigest::query()->count())->toBe(0);
+    Exceptions::assertReportedCount(1);
+    Log::shouldNotHaveReceived('warning');
+
+    $relayDenied = false;
+    morningRunAt('2026-11-02 09:30:00');
+    expect($asked)->toHaveCount(7)
+        ->and(EmailDigest::query()->count())->toBe(4);
+});
+
 it('stops at a reply before RCPT TO, as at an unreachable server', function () {
     Exceptions::fake();
     morningSecondPerson();

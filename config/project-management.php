@@ -47,13 +47,15 @@ return [
     | Emails of users who hold the `manage-workspace` ability — they create and
     | delete teams, manage every member, and archive any project. AppServiceProvider
     | registers the `manage-workspace` Gate from this list. Comma-separated via
-    | the PM_SUPER_ADMINS env var.
+    | the PM_SUPER_ADMINS env var, lowercased like every stored email
+    | (User::email), so the Gate, WorkspaceAccess::isSuperAdminEmail and
+    | WorkspaceSuperadminSeeder all match an entry typed with capitals.
     |
     */
 
     'super_admins' => array_values(array_filter(array_map(
         'trim',
-        explode(',', (string) env('PM_SUPER_ADMINS', '')),
+        explode(',', mb_strtolower((string) env('PM_SUPER_ADMINS', ''))),
     ))),
 
     /*
