@@ -25,6 +25,7 @@
         RepositoryCandidate,
     } from '../../lib/types';
     import ChecksMark from '../ChecksMark.svelte';
+    import FailedChecks from '../FailedChecks.svelte';
     import Popover from '../Popover.svelte';
     import Spinner from '../Spinner.svelte';
     import RepositoryAccess from './RepositoryAccess.svelte';
@@ -604,6 +605,10 @@
                                 : 'No pushes yet'}</span
                         >
                     </div>
+                    <FailedChecks
+                        checks={repository.main_checks}
+                        class="mt-1"
+                    />
                     {#if git.can_manage && accessOpen.has(repository.id)}
                         <RepositoryAccess
                             {repository}

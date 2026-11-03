@@ -8,6 +8,7 @@
     } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
     import ChecksMark from '../ChecksMark.svelte';
+    import FailedChecks from '../FailedChecks.svelte';
 
     /**
      * One person's latest commits in the report's range and filters
@@ -276,6 +277,10 @@
                                     {/if}
                                 </span>
                             </a>
+                            <FailedChecks
+                                checks={commit.checks}
+                                class="-mt-1.5 px-5 pb-2.5"
+                            />
                         </li>
                     {/each}
                 </ul>
