@@ -269,7 +269,12 @@ Branding section covers moving old accounts onto an offered SDOC theme.
   `filters/{OrganizationSelect,ScopeSelects,DayPicker}` and `work/RangePicker`
   share filter UI. Reuse these instead of adding page-local copies.
 - `ChecksMark` shows commit/PR/protected-branch test results in Code, task code
-  and code activity. Repository rows show `main_checks` and protection;
+  and code activity. `FailedChecks` lists failed check names beneath repository
+  rows in `project/CodeView` (`main_checks`) and commits in
+  `reports/PersonCommitsDrawer` (`checks`), linking to forge job logs when a
+  check URL is available, otherwise showing plain text. It renders only when
+  the overall result and individual checks are failed.
+  Repository rows show `main_checks` and protection;
   Maintenance lists failing/unprotected/untested protected branches and forge
   defaults moved away from them. The Guide
   covers organogram, attendance, work and protected-main/testing workflows.
