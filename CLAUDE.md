@@ -407,7 +407,11 @@ only; scheduled commands read them:
   assigned since their last digest and still on their list); it sends one
   `MorningMail` only when one list is not empty and records
   `email_digests (user_id, kind, sent_on)`, unique, so a rerun sends nothing
-  twice.
+  twice. A refused address keeps the day claimed (one `warning` with the
+  user id); any other failed send gives it back; an unreachable server
+  stops the run; any other error (one person's lists included) is caught
+  per person, so the people after them still get theirs, and reported once
+  per run.
 - Preferences: `user_preferences.email_notifications` (right away),
   `email_morning`, `email_weekly` (not sent yet), all default on, through
   `User::emailPreferences()`; the web page `/workspace/settings/emails`

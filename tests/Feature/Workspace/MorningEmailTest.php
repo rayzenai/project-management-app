@@ -341,25 +341,87 @@ it('sends and records nothing with --pretend', function () {
     Mail::assertSent(MorningMail::class, 1);
 });
 
-it('gives the day back when the mail server fails, and reports it once a run', function () {
+/** Rabin, on the team, with an open task late since Saturday. */
+function morningSecondPerson(string $name = 'Rabin Ghimire', string $email = 'rabin@example.test'): Member
+{
+    $other = User::factory()->create(['name' => $name, 'email' => $email]);
+    $member = Member::factory()->linkedTo($other)->create(['organization_id' => test()->project->organization_id]);
+    test()->project->ensureTeam()->members()->attach($member->id);
+    morningTask("{$name}'s checklist", '2026-10-31', on: $member);
+
+    return $member;
+}
+
+it('stops at the first failure to reach the mail server, gives that day back and reports it once', function () {
     Exceptions::fake();
     Log::spy();
-    $other = User::factory()->create(['name' => 'Rabin Ghimire']);
-    $otherMember = Member::factory()->linkedTo($other)->create(['organization_id' => $this->project->organization_id]);
-    $this->project->ensureTeam()->members()->attach($otherMember->id);
+    morningSecondPerson();
     morningTask('Collect revenue and expense data', '2026-10-31');
-    morningTask('Server room checklist', '2026-10-31', on: $otherMember);
-    breakMailTransport();
+    $asked = breakMailTransport();
 
     morningRunAt('2026-11-02 09:00:00');
 
-    expect(EmailDigest::query()->count())->toBe(0);
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test'])
+        ->and(EmailDigest::query()->count())->toBe(0);
     Exceptions::assertReportedCount(1);
-    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, '1 more'));
+    Log::shouldNotHaveReceived('warning');
 
     Mail::fake();
     morningRunAt('2026-11-02 09:30:00');
     Mail::assertSent(MorningMail::class, 2);
+});
+
+it('keeps a refused person\'s day: one warning with the person, not sent again that day, and goes on', function () {
+    Exceptions::fake();
+    Log::spy();
+    morningSecondPerson();
+    morningTask('Collect revenue and expense data', '2026-10-31');
+    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? mailRefusal() : null);
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test'])
+        ->and(EmailDigest::query()->count())->toBe(2);
+    Exceptions::assertNothingReported();
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, "user #{$this->user->id}")
+        && str_contains($message, '550')
+        && ! str_contains($message, 'bibek@example.test'));
+
+    morningRunAt('2026-11-02 09:30:00');
+    expect($asked)->toHaveCount(2);
+});
+
+it('goes on to everyone else when one person\'s lists break, and reports it once a run', function () {
+    Exceptions::fake();
+    Log::spy();
+    morningTask('Collect revenue and expense data', '2026-10-31');
+    $rabin = morningSecondPerson();
+    morningSecondPerson('Asha Rai', 'asha@example.test');
+
+    // A row the app can't read, for Bibek and Rabin (before Asha by id).
+    DB::table('project_assignments')->whereIn('member_id', [$this->member->id, $rabin->id])->update(['personal_due_at' => 'not a date']);
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    Mail::assertSent(MorningMail::class, 1);
+    Mail::assertSent(MorningMail::class, fn (MorningMail $mail) => $mail->hasTo('asha@example.test'));
+    Exceptions::assertReportedCount(1);
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, '1 more'));
+    expect(EmailDigest::query()->count())->toBe(1);
+});
+
+it('gives the day back when something other than the mail server breaks the email', function () {
+    Exceptions::fake();
+    morningTask('Collect revenue and expense data', '2026-10-31');
+    morningSecondPerson();
+    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? new LogicException('A broken template') : null);
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    expect($asked)->toHaveCount(2)
+        ->and(EmailDigest::query()->pluck('user_id')->all())->not->toContain($this->user->id)
+        ->and(EmailDigest::query()->count())->toBe(1);
+    Exceptions::assertReportedCount(1);
 });
 
 it('runs at the morning hour without overlapping', function () {
