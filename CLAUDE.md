@@ -480,7 +480,9 @@ the organizational admin switch and the program and project manager pickers.
   (`projects` with `member_ids`, `organization_id` and `can_add_people` =
   `canManageRosterOfProject`, no query per project; `organizationPeople` (`PersonRef`s), the active
   people of the viewer's organization for whoever runs a team in it or may
-  start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`),
+  start its General, else `[]`; `startGeneral`; `team`; `currentMemberId`;
+  `lastProjectId`, where the add field starts: the project of the newer of
+  the caller's newest created task and newest team joined),
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
   `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`, the sidebar's
@@ -492,7 +494,11 @@ the organizational admin switch and the program and project manager pickers.
   and open to-dos; the caller's own date (`personal_due_at`) places a row
   before the task's, a snoozed task sits only in Snoozed, and rows act through
   `PATCH /workspace/assignments/{id}` (star, snooze, own date) and the
-  existing task routes. A web mutation answers with a success flash toast; a
+  existing task routes. Its `joined` (teams the caller was put on in the
+  last 14 days by someone else, at most 5, with `added_by` from the
+  `TeamMembershipObserver` activity row) shows above the groups
+  (`mywork/JoinedProjects.svelte`), so someone added to a project with no
+  tasks is told where they land. A web mutation answers with a success flash toast; a
   caller that already shows its own sends the `X-Workspace-Quiet` header
   (`lib/toast.svelte.ts`'s `QUIET`) to skip it (errors always flash). The
   organization switch's, notifications' and old links' fallbacks all land

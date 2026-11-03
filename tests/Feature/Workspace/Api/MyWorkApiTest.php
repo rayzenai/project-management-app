@@ -55,6 +55,22 @@ it('answers with the My work payload', function () {
         ->and($json['groups'][1]['rows'][0]['kind'])->toBe('subtask');
 });
 
+it('lists the projects the caller was added to lately, as the web does', function () {
+    Sanctum::actingAs($this->user);
+
+    $json = $this->getJson('/api/v1/workspace/my-work')
+        ->assertOk()
+        ->assertJsonStructure(['joined' => [['project' => ['id', 'slug', 'title', 'code', 'label'], 'role', 'joined_at', 'added_by']]])
+        ->json();
+
+    expect($json['joined'])->toBe([[
+        'project' => ['id' => $this->project->id, 'slug' => $this->project->slug, 'title' => $this->project->title, 'code' => 'MW', 'label' => $this->project->title],
+        'role' => 'member',
+        'joined_at' => CarbonImmutable::parse('2026-11-04 10:00:00')->toIso8601String(),
+        'added_by' => null,
+    ]]);
+});
+
 it('adds done work when asked', function () {
     Sanctum::actingAs($this->user);
 

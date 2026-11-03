@@ -424,6 +424,120 @@ it('follows the organization switch on the web only', function () {
         ->and(collect(myGroupKeys($api, 'tomorrow'))->sort()->values()->all())->toBe(collect($tasks)->map(fn (Task $task) => "task-{$task->id}")->sort()->values()->all());
 });
 
+/**
+ * Puts the member on the project's team at `$at`, added by `$by` (nobody
+ * signed in when null), as the observer records it.
+ */
+function joinTeam(Project $project, string $at, ?User $by = null, string $role = 'member'): void
+{
+    $now = CarbonImmutable::now();
+    CarbonImmutable::setTestNow($at);
+    $by === null ? auth()->forgetUser() : test()->actingAs($by);
+    $project->ensureTeam()->members()->attach(test()->member->id, ['role' => $role]);
+    auth()->forgetUser();
+    CarbonImmutable::setTestNow($now);
+}
+
+it('lists projects the user was added to in the last 14 days', function () {
+    $kiran = User::factory()->create(['name' => 'Kiran Timsina']);
+    $program = Program::factory()->create(['organization_id' => $this->project->organization_id, 'name' => 'Digital']);
+    $added = Project::factory()->create(['organization_id' => $this->project->organization_id, 'program_id' => $program->id, 'key' => 'OAS', 'title' => 'Office Automation System']);
+    $managed = Project::factory()->create(['organization_id' => $this->project->organization_id, 'title' => 'Archive']);
+    $old = Project::factory()->create(['organization_id' => $this->project->organization_id]);
+    $archived = Project::factory()->create(['organization_id' => $this->project->organization_id, 'archived_at' => '2026-11-03 12:00:00']);
+    $ownProject = Project::factory()->create(['organization_id' => $this->project->organization_id]);
+    $foreign = Project::factory()->create(['organization_id' => Organization::factory()->create()->id, 'title' => 'Shared']);
+    $foreign->ensureTeam()->forceFill(['is_cross_organization' => true])->save();
+
+    joinTeam($added, '2026-11-02 09:00:00', $kiran);
+    joinTeam($managed, '2026-11-03 12:00:00', $kiran, 'leader');
+    joinTeam($old, '2026-10-15 09:00:00', $kiran);
+    joinTeam($archived, '2026-11-02 09:00:00', $kiran);
+    // They made it and manage it themselves: not news to them.
+    joinTeam($ownProject, '2026-11-03 15:00:00', $this->user, 'leader');
+    joinTeam($foreign, '2026-11-01 09:00:00', $kiran);
+
+    $joined = myWorkPage()['joined'];
+
+    expect(array_column(array_column($joined, 'project'), 'id'))->toBe([$this->project->id, $managed->id, $added->id, $foreign->id])
+        // Roads: put on its team with nobody signed in, so nobody to name.
+        ->and($joined[0]['added_by'])->toBeNull()
+        ->and($joined[1])->toBe([
+            'project' => ['id' => $managed->id, 'slug' => $managed->slug, 'title' => 'Archive', 'code' => $managed->code, 'label' => 'Archive'],
+            'role' => 'leader',
+            'joined_at' => CarbonImmutable::parse('2026-11-03 12:00:00')->toIso8601String(),
+            'added_by' => 'Kiran Timsina',
+        ])
+        ->and($joined[2])->toBe([
+            'project' => ['id' => $added->id, 'slug' => $added->slug, 'title' => 'Office Automation System', 'code' => 'OAS', 'label' => 'Office Automation System (Digital)'],
+            'role' => 'member',
+            'joined_at' => CarbonImmutable::parse('2026-11-02 09:00:00')->toIso8601String(),
+            'added_by' => 'Kiran Timsina',
+        ])
+        ->and($joined[3]['project']['title'])->toBe('Shared');
+});
+
+it('names who added them only from this membership, keeps the five newest and follows the organization switch', function () {
+    $kiran = User::factory()->create(['name' => 'Kiran Timsina']);
+    $asha = User::factory()->create(['name' => 'Asha']);
+    $again = Project::factory()->create(['organization_id' => $this->project->organization_id]);
+    joinTeam($again, '2026-11-01 09:00:00', $kiran);
+    $this->actingAs($kiran);
+    $again->ensureTeam()->members()->detach($this->member->id);
+    auth()->forgetUser();
+    // Back on it, put there by nobody signed in: Kiran's old add is not this one.
+    joinTeam($again, '2026-11-03 09:00:00');
+
+    $byAsha = collect(range(1, 5))->map(function (int $i) use ($asha): Project {
+        $project = Project::factory()->create(['organization_id' => $this->project->organization_id]);
+        joinTeam($project, "2026-11-02 0{$i}:00:00", $asha);
+
+        return $project;
+    });
+
+    $joined = app(MyWorkQuery::class)->get($this->user);
+
+    expect(array_column(array_column($joined['joined'], 'project'), 'id'))->toBe([$this->project->id, $again->id, ...$byAsha->reverse()->take(3)->pluck('id')->all()])
+        ->and($joined['joined'][1]['added_by'])->toBeNull()
+        ->and($joined['joined'][2]['added_by'])->toBe('Asha');
+
+    // A super-admin switched to another organization sees none of these.
+    config(['project-management.super_admins' => [$this->user->email]]);
+    WorkspaceOrganization::choose($this->user, Organization::factory()->create()->id);
+    WorkspaceAccess::flush();
+
+    expect(myWorkPage()['joined'])->toBe([]);
+});
+
+it('keeps the joined list to one query whatever the count', function () {
+    $kiran = User::factory()->create(['name' => 'Kiran Timsina']);
+    $program = Program::factory()->create(['organization_id' => $this->project->organization_id]);
+    $count = function (int $memberships) use ($kiran, $program): int {
+        foreach (range(1, $memberships) as $i) {
+            $project = Project::factory()->create(['organization_id' => $this->project->organization_id, 'program_id' => $program->id]);
+            joinTeam($project, "2026-11-03 0{$i}:00:00", $kiran);
+        }
+
+        WorkspaceAccess::flush();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $payload = app(MyWorkQuery::class)->get($this->user->fresh());
+        DB::disableQueryLog();
+
+        expect(collect($payload['joined'])->where('added_by', 'Kiran Timsina'))->not->toBeEmpty();
+
+        return count(DB::getQueryLog());
+    };
+
+    expect($count(1))->toBe($count(3));
+});
+
+it('has no joined list without a member', function () {
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+
+    expect(app(MyWorkQuery::class)->get($boss)['joined'])->toBe([]);
+});
+
 it('sends /workspace to My work, keeping the query string', function () {
     $this->actingAs($this->user)->get('/workspace')->assertRedirect('/workspace/my');
     $this->actingAs($this->user)->get('/workspace?done=1')->assertRedirect('/workspace/my?done=1');

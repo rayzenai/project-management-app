@@ -4,10 +4,13 @@ namespace App\Queries;
 
 use App\Models\Member;
 use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\ProjectAssignment;
 use App\Models\Subtask;
 use App\Models\Task;
 use App\Models\TaskComment;
+use App\Models\Team;
+use App\Models\TeamMembership;
 use App\Models\User;
 use App\Support\BikramSambat;
 use App\Support\MentionParser;
@@ -33,12 +36,17 @@ use Illuminate\Support\Str;
  * a snoozed one only Snoozed. Tomorrow is the next working day and Coming
  * up runs to the end of next week (WorkingDays).
  *
+ * Beside the list, `joined`: the project teams they were put on lately, so
+ * someone added to a project with no tasks yet is told where they land.
+ *
  * @phpstan-type MyWorkPerson array{id: int, name: string}
  * @phpstan-type MyWorkUpdate array{author: string, body: string, at: string|null}
- * @phpstan-type MyWorkTask array{id: int, slug: string, number: int, code: string, title: string, status: string, priority: string, deadline_at: string|null, completed_at: string|null, project: array{id: int, slug: string, title: string, code: string, label: string}}
+ * @phpstan-type MyWorkTask array{id: int, slug: string, number: int, code: string, title: string, status: string, priority: string, deadline_at: string|null, completed_at: string|null, project: MyWorkProject}
  * @phpstan-type MyWorkRow array{kind: 'task'|'subtask', key: string, assignment: array{id: int, is_focused: bool, snoozed_until: string|null, personal_due_at: string|null}|null, task: MyWorkTask, subtask: array{id: int, body: string, due_at: string, is_done: bool}|null, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: MyWorkUpdate|null}
  * @phpstan-type MyWorkGroup array{key: string, label: string, rows: list<MyWorkRow>}
- * @phpstan-type MyWorkPayload array{today: array{date: string, label: string, bs: string|null, tomorrow: string}, groups: list<MyWorkGroup>}
+ * @phpstan-type MyWorkProject array{id: int, slug: string, title: string, code: string, label: string}
+ * @phpstan-type MyWorkJoined array{project: MyWorkProject, role: 'leader'|'member', joined_at: string, added_by: string|null}
+ * @phpstan-type MyWorkPayload array{today: array{date: string, label: string, bs: string|null, tomorrow: string}, groups: list<MyWorkGroup>, joined: list<MyWorkJoined>}
  */
 final class MyWorkQuery
 {
@@ -62,6 +70,12 @@ final class MyWorkQuery
 
     /** Sorts an undated row after every dated one. */
     private const NO_DATE = '9999-12-31';
+
+    /** A team joined this many days back is still news. */
+    private const JOINED_DAYS = 14;
+
+    /** At most this many joined projects. */
+    private const JOINED_LIMIT = 5;
 
     /**
      * `$organizationId` (the web's super-admin switch) keeps it to that
@@ -161,7 +175,78 @@ final class MyWorkQuery
                 'tomorrow' => $nextWorkingDay->toDateString(),
             ],
             'groups' => $groups,
+            'joined' => $member === null ? [] : $this->joined($user, $member, $projectIds, $today),
         ];
+    }
+
+    /**
+     * The teams of those projects the member was put on in the last
+     * JOINED_DAYS, newest first, with who put them there when the activity
+     * log knows it (the row TeamMembershipObserver::created wrote for this
+     * membership). Teams they joined themselves, such as a project they made
+     * and manage, are left out. One query for the memberships and their
+     * adder, one for the projects (and their programs) and one for the
+     * adders' names, whatever the count.
+     *
+     * @param  Builder<Project>  $projectIds
+     * @return list<MyWorkJoined>
+     */
+    private function joined(User $user, Member $member, Builder $projectIds, CarbonImmutable $today): array
+    {
+        $addedBy = ProjectActivity::query()
+            ->select('user_id')
+            ->where('subject_type', (new Team)->getMorphClass())
+            ->whereColumn('project_activities.subject_id', 'member_team.team_id')
+            ->where('action', ProjectActivity::ACTION_CREATED)
+            ->where('changes->member_id', $member->id)
+            ->whereColumn('project_activities.created_at', '>=', 'member_team.created_at')
+            ->orderBy('id')
+            ->limit(1);
+
+        $memberships = TeamMembership::query()
+            ->join('project_team', 'project_team.team_id', '=', 'member_team.team_id')
+            ->where('member_team.member_id', $member->id)
+            ->where('member_team.created_at', '>=', $today->subDays(self::JOINED_DAYS))
+            ->whereIn('project_team.project_id', $projectIds)
+            ->select(['member_team.role', 'member_team.created_at', 'project_team.project_id'])
+            ->addSelect(['added_by_id' => $addedBy])
+            ->orderByDesc('member_team.created_at')
+            ->orderByDesc('member_team.id')
+            ->get()
+            ->map(function (TeamMembership $membership): array {
+                $addedById = $membership->getAttribute('added_by_id');
+
+                return [
+                    'project_id' => (int) $membership->getAttribute('project_id'),
+                    'manages' => $membership->role === 'leader',
+                    'joined_at' => CarbonImmutable::parse($membership->getAttribute('created_at'))->toIso8601String(),
+                    'added_by_id' => $addedById === null ? null : (int) $addedById,
+                ];
+            })
+            ->reject(fn (array $membership): bool => $membership['added_by_id'] === $user->id)
+            ->take(self::JOINED_LIMIT)
+            ->values();
+
+        if ($memberships->isEmpty()) {
+            return [];
+        }
+
+        $projects = Project::query()->with('program:id,name')->findMany($memberships->pluck('project_id'))->keyBy('id');
+        $adderIds = $memberships->pluck('added_by_id')->filter()->unique()->values()->all();
+        $adders = $adderIds === [] ? new Collection : User::query()->whereKey($adderIds)->get(['id', 'name'])->keyBy('id');
+
+        $joined = [];
+
+        foreach ($memberships as $membership) {
+            $joined[] = [
+                'project' => $this->project($projects[$membership['project_id']]),
+                'role' => $membership['manages'] ? 'leader' : 'member',
+                'joined_at' => $membership['joined_at'],
+                'added_by' => $membership['added_by_id'] === null ? null : $adders->get($membership['added_by_id'])?->name,
+            ];
+        }
+
+        return $joined;
     }
 
     /**
@@ -266,13 +351,21 @@ final class MyWorkQuery
             'priority' => $task->priority ?? 'medium',
             'deadline_at' => $task->deadline_at?->toDateString(),
             'completed_at' => $task->completed_at?->toIso8601String(),
-            'project' => [
-                'id' => $project->id,
-                'slug' => $project->slug,
-                'title' => $project->title,
-                'code' => $project->code,
-                'label' => $project->label(),
-            ],
+            'project' => $this->project($project),
+        ];
+    }
+
+    /**
+     * @return MyWorkProject
+     */
+    private function project(Project $project): array
+    {
+        return [
+            'id' => $project->id,
+            'slug' => $project->slug,
+            'title' => $project->title,
+            'code' => $project->code,
+            'label' => $project->label(),
         ];
     }
 

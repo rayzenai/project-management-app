@@ -7,9 +7,10 @@ use App\Models\User;
 use Inertia\Testing\AssertableInertia;
 
 /*
- * The add field starts on the project the person last added a task to
- * (`quickAddContext.lastProjectId`), among the projects it offers them:
- * ones they can see that are not archived.
+ * The add field starts on the project the person last added a task to, or
+ * was last added to, whichever is newer (`quickAddContext.lastProjectId`),
+ * among the projects it offers them: ones they can see that are not
+ * archived.
  */
 
 beforeEach(function () {
@@ -59,4 +60,25 @@ it('is never a project you can no longer see or that was archived', function () 
     $open->forceFill(['archived_at' => now()])->save();
 
     ($this->lastProjectIs)(null);
+});
+
+it('is the project you were just added to when you have created no task', function () {
+    $project = Project::factory()->create(['title' => 'Office Automation System']);
+    $this->travelTo(now()->subDay(), fn () => $project->ensureTeam()->members()->attach($this->member->id, ['role' => 'member']));
+
+    ($this->lastProjectIs)($project->id);
+});
+
+it('is the newer of the task you created and the team you joined', function () {
+    $joined = Project::factory()->create(['title' => 'Joined']);
+    $elsewhere = Project::factory()->public()->create(['title' => 'Elsewhere']);
+
+    $this->travelTo(now()->subDays(3), fn () => $joined->ensureTeam()->members()->attach($this->member->id, ['role' => 'member']));
+    $task = Task::factory()->for($elsewhere)->create(['created_by' => $this->user->id, 'created_at' => now()->subDay()]);
+
+    ($this->lastProjectIs)($elsewhere->id);
+
+    $task->forceFill(['created_at' => now()->subDays(5)])->save();
+
+    ($this->lastProjectIs)($joined->id);
 });

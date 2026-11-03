@@ -9,6 +9,7 @@ use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectNote;
 use App\Models\Task;
+use App\Models\TeamMembership;
 use App\Models\User;
 use App\Models\WorkspaceNote;
 use App\Queries\Attendance\MyAttendanceQuery;
@@ -18,9 +19,11 @@ use App\Services\ResolveThemeTokens;
 use App\Support\Git\GitAccess;
 use App\Support\OfficeLinks;
 use App\Support\WorkspaceAccess;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection as SupportCollection;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -131,13 +134,9 @@ class ShareWorkspaceData
                         ->all()
                     : [],
                 'startGeneral' => $startGeneral,
-                // The add field starts where the person last added a task,
-                // among the projects it offers them.
-                'lastProjectId' => Task::query()
-                    ->where('created_by', $user->getAuthIdentifier())
-                    ->whereIn('project_id', $projects->pluck('id'))
-                    ->latest()->latest('id')
-                    ->value('project_id'),
+                // The add field starts where the person last added a task or
+                // was last added to a team, among the projects it offers them.
+                'lastProjectId' => $this->lastProjectId($user, $projects->pluck('id')),
                 'team' => Member::query()->visibleTo($request->user())->active()->orderBy('name')
                     ->get(['id', 'name', 'email', 'user_id'])
                     ->map(fn (Member $m): array => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email, 'user_id' => $m->user_id])
@@ -252,5 +251,34 @@ class ShareWorkspaceData
         });
 
         return $next($request);
+    }
+
+    /**
+     * The project of the newer of the newest task the user created and the
+     * newest team their member joined, among `$projectIds`; a tie goes to
+     * the task. Two queries, whatever the number of projects.
+     *
+     * @param  SupportCollection<int, mixed>  $projectIds
+     */
+    private function lastProjectId(User $user, SupportCollection $projectIds): ?int
+    {
+        $task = Task::query()
+            ->where('created_by', $user->id)
+            ->whereIn('project_id', $projectIds)
+            ->latest()->latest('id')
+            ->first(['project_id', 'created_at']);
+        $member = WorkspaceAccess::memberFor($user);
+        $joined = $member === null ? null : TeamMembership::query()
+            ->join('project_team', 'project_team.team_id', '=', 'member_team.team_id')
+            ->where('member_team.member_id', $member->id)
+            ->whereIn('project_team.project_id', $projectIds)
+            ->orderByDesc('member_team.created_at')->orderByDesc('member_team.id')
+            ->first(['project_team.project_id', 'member_team.created_at']);
+
+        if ($joined !== null && ($task === null || $task->created_at < CarbonImmutable::parse($joined->getAttribute('created_at')))) {
+            return (int) $joined->getAttribute('project_id');
+        }
+
+        return $task?->project_id;
     }
 }

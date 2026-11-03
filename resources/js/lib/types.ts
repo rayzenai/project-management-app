@@ -770,7 +770,10 @@ export interface QuickAddContext {
     organizationPeople?: PersonRef[];
     /** The viewer is an organizational admin whose organization has no project yet: offer "General". */
     startGeneral?: boolean;
-    /** The project of the newest task the viewer created, among `projects`; the add field starts there. */
+    /**
+     * The project of the newer of the newest task the viewer created and the
+     * newest team they joined, among `projects`; the add field starts there.
+     */
     lastProjectId: number | null;
 }
 
@@ -902,6 +905,20 @@ export interface MyWorkGroup {
     rows: MyWorkRow[];
 }
 
+/**
+ * A project team the person was put on in the last 14 days (newest first,
+ * at most 5); never one they joined themselves.
+ */
+export interface MyWorkJoined {
+    project: MyWorkRow['task']['project'];
+    /** `leader`: they manage it. */
+    role: 'leader' | 'member';
+    /** ISO 8601. */
+    joined_at: string;
+    /** Who put them on it, when the activity log knows. */
+    added_by: string | null;
+}
+
 /** The My work page (MyWorkQuery::get). Empty groups are left out. */
 export interface MyWorkPayload {
     /**
@@ -910,4 +927,5 @@ export interface MyWorkPayload {
      */
     today: { date: string; label: string; bs: string | null; tomorrow: string };
     groups: MyWorkGroup[];
+    joined: MyWorkJoined[];
 }

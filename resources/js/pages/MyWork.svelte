@@ -4,6 +4,7 @@
     import { onMount } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../components/AppShell.svelte';
+    import JoinedProjects from '../components/mywork/JoinedProjects.svelte';
     import MyWorkRow from '../components/mywork/MyWorkRow.svelte';
     import QuickAddBar from '../components/QuickAddBar.svelte';
     import { peek } from '../lib/peek.svelte';
@@ -18,8 +19,11 @@
      * My work: everyone's landing page, one list of their own work grouped
      * by when it is due (MyWorkQuery). Later folds away when it is long, No
      * date and Snoozed start folded; each fold is remembered on this device.
+     * Projects you were just added to sit above them, under the add field.
      */
-    let { today, groups }: MyWorkPayload = $props();
+    let { today, groups, joined }: MyWorkPayload = $props();
+
+    let quickAdd = $state<{ addTo: (projectId: number) => void } | null>(null);
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
     const context = $derived(shared.quickAddContext ?? null);
@@ -130,6 +134,7 @@
 
         <div class="mt-4 px-5 sm:mt-[22px] sm:px-0">
             <QuickAddBar
+                bind:this={quickAdd}
                 projects={context?.projects ?? []}
                 team={context?.team ?? []}
                 currentMemberId={context?.currentMemberId ?? null}
@@ -137,9 +142,16 @@
             />
         </div>
 
+        <JoinedProjects
+            {joined}
+            onAdd={(projectId) => quickAdd?.addTo(projectId)}
+        />
+
         {#if !waiting}
             <p class="mt-8 px-5 text-[15px] text-fg-muted sm:px-0">
-                Nothing waiting for you.
+                {joined.length > 0
+                    ? 'Nothing assigned to you yet.'
+                    : 'Nothing waiting for you.'}
             </p>
         {/if}
 

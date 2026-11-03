@@ -543,6 +543,12 @@
         tokenInput?.focus();
     }
 
+    /** Files the next task under this project and puts the caret in the field. */
+    export function chooseProject(projectId: number): void {
+        form.project_id = projectId;
+        tokenInput?.focus();
+    }
+
     /**
      * One task as Enter took it. Where the form stays open (the add field,
      * "Create another") it clears for the next task the moment Enter is
