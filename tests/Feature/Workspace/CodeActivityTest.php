@@ -622,6 +622,8 @@ it('counts repositories a person linked or created in the range', function () {
         'git.example/api/v1/repos/sdoc/tp-web/branches/main' => Http::response(['name' => 'main']),
         'git.example/api/v1/repos/sdoc/tp-web' => Http::response($forge),
         'git.example/api/v1/repos/sdoc/tp-web/collaborators*' => Http::response([]),
+        // The admin's notice of repositories no project links (none here).
+        'git.example/api/v1/orgs/sdoc/repos?*' => Http::response([]),
     ]);
     $this->actingAs($this->taxManager)->post('/workspace/projects/tax-portal/repositories/new', ['name' => 'tp-web'])->assertSessionHasNoErrors();
 

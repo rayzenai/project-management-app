@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Workspace;
 
 use App\Http\Requests\CodeActivityRequest;
 use App\Queries\CodeActivityQuery;
+use App\Queries\UnlinkedRepositoriesQuery;
 use App\Support\WorkspaceOrganization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
@@ -12,14 +13,19 @@ use Inertia\Response;
 
 /**
  * The code activity report: who committed what, within what the viewer
- * runs (CodeActivityQuery), and one person's commits for its drawer.
+ * runs (CodeActivityQuery), and one person's commits for its drawer. For
+ * whoever administers the organization in view, the forge repositories no
+ * project links yet (`unlinked`, UnlinkedRepositoriesQuery).
  */
 class CodeActivityController extends Controller
 {
-    public function index(CodeActivityRequest $request, CodeActivityQuery $query): Response
+    public function index(CodeActivityRequest $request, CodeActivityQuery $query, UnlinkedRepositoriesQuery $unlinked): Response
     {
-        return Inertia::render('Reports/CodeActivity', $query->get($request->user(), $request->filters(), WorkspaceOrganization::chosen($request->user())) + [
+        $organizationId = WorkspaceOrganization::chosen($request->user());
+
+        return Inertia::render('Reports/CodeActivity', $query->get($request->user(), $request->filters(), $organizationId) + [
             'filters' => $request->appliedFilters(),
+            'unlinked' => $unlinked->forViewer($request->user(), $organizationId),
         ]);
     }
 

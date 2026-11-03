@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia, router } from '@inertiajs/svelte';
-    import { Check, ChevronRight } from '@lucide/svelte';
+    import { Check, ChevronRight, FolderGit2 } from '@lucide/svelte';
     import { SvelteSet } from 'svelte/reactivity';
     import AppShell from '../../components/AppShell.svelte';
     import Avatar from '../../components/Avatar.svelte';
@@ -18,7 +18,9 @@
      * What needs looking at in an organization: one row per project,
      * program or person with everything wrong with it, linked to where it is
      * fixed. The checks that found nothing are listed at the end, so the
-     * page says what it looked at.
+     * page says what it looked at. Repositories on the forge no project
+     * links are one compact notice, linked to Code activity where they are
+     * linked.
      */
     let {
         maintenance,
@@ -55,9 +57,11 @@
     const report = $derived.by(() => {
         const sections: Section[] = [];
         const passed: string[] = [];
+        /** Repositories on the forge no project links (null: not checked). */
+        let unlinked = 0;
 
         if (!maintenance) {
-            return { sections, passed };
+            return { sections, passed, unlinked };
         }
 
         const m = maintenance;
@@ -283,13 +287,31 @@
             section('code', 'Code', ['repository', 'repositories'], code);
         }
 
-        return { sections, passed };
+        // Only an organization with git, and a forge that answered.
+        if (m.repositories_unlinked !== null) {
+            unlinked = m.repositories_unlinked;
+
+            if (unlinked === 0) {
+                passed.push(
+                    'Repositories on the forge not linked to a project',
+                );
+            }
+        }
+
+        return { sections, passed, unlinked };
     });
 
     const summary = $derived(
-        report.sections
-            .map((s) => plural(s.rows.length, s.noun[0], s.noun[1]))
-            .join(', '),
+        [
+            ...report.sections.map((s) =>
+                plural(s.rows.length, s.noun[0], s.noun[1]),
+            ),
+            ...(report.unlinked > 0
+                ? [
+                      `${plural(report.unlinked, 'repository', 'repositories')} on the forge`,
+                  ]
+                : []),
+        ].join(', '),
     );
 
     function pickOrganization(organizationId: Id) {
@@ -334,12 +356,33 @@
     {:else}
         <div class="max-w-3xl space-y-8">
             <p class="text-[13px] text-fg-muted">
-                {#if report.sections.length === 0}
+                {#if summary === ''}
                     Nothing to look at in {maintenance.organization.name}.
                 {:else}
                     To look at in {maintenance.organization.name}: {summary}.
                 {/if}
             </p>
+
+            {#if report.unlinked > 0}
+                <a
+                    href={`/workspace/reports/code?organization=${maintenance.organization.id}`}
+                    use:inertia
+                    class="panel flex items-start gap-2.5 px-3 py-2.5 text-[13px] text-fg transition hover:bg-hover"
+                >
+                    <FolderGit2 class="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" />
+                    <span class="min-w-0 flex-1">
+                        {plural(report.unlinked, 'repository', 'repositories')} on
+                        the forge {report.unlinked === 1 ? "isn't" : "aren't"} linked
+                        to a project, so {report.unlinked === 1
+                            ? 'its'
+                            : 'their'} commits don't count.
+                        <span class="font-medium text-accent">Link them</span>
+                    </span>
+                    <ChevronRight
+                        class="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-faint"
+                    />
+                </a>
+            {/if}
 
             {#each report.sections as section (section.key)}
                 <section>

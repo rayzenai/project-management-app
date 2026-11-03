@@ -5,6 +5,7 @@ namespace App\Queries\Maintenance;
 use App\Models\AttendanceNetwork;
 use App\Models\AttendancePlace;
 use App\Models\AttendanceSetting;
+use App\Models\GitConnection;
 use App\Models\GitRepository;
 use App\Models\Member;
 use App\Models\Organization;
@@ -14,6 +15,7 @@ use App\Models\ProjectActivity;
 use App\Models\Task;
 use App\Queries\MainChecksQuery;
 use App\Queries\Structure\PersonRef;
+use App\Queries\UnlinkedRepositoriesQuery;
 use App\Support\Git\Checks;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,7 +42,11 @@ use Illuminate\Support\Facades\Cache;
  *   branch fails its checks or isn't protected by the tracker's rule
  *   (MainBranch), that have run no tests yet (nothing merges there until
  *   they have), or whose default branch was changed on the forge away from
- *   the branch the tracker protects (work merged there skips the rule).
+ *   the branch the tracker protects (work merged there skips the rule);
+ * - how many repositories of its forge organization no project links
+ *   (`repositories_unlinked`, null without git or when the forge can't
+ *   say), from UnlinkedRepositoriesQuery's cached list, so working the
+ *   count out again asks the forge no more than that cache allows.
  *
  * A constant number of queries, however big the organization. The
  * sidebar's count (count()) is cached for COUNT_TTL_SECONDS per
@@ -48,7 +54,10 @@ use Illuminate\Support\Facades\Cache;
  */
 final class MaintenanceQuery
 {
-    public function __construct(private MainChecksQuery $mainChecks) {}
+    public function __construct(
+        private MainChecksQuery $mainChecks,
+        private UnlinkedRepositoriesQuery $unlinked,
+    ) {}
 
     public const QUIET_DAYS = 30;
 
@@ -76,6 +85,7 @@ final class MaintenanceQuery
      *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
      *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
      *     repositories_default_branch_changed: list<array{full_name: string, slug: string, label: string, default_branch: string, protected_branch: string}>,
+     *     repositories_unlinked: int|null,
      * }
      */
     public function get(int $organizationId): array
@@ -103,6 +113,7 @@ final class MaintenanceQuery
             ...$this->peopleChecks($people),
             'attendance_without_office' => $this->attendanceWithoutOffice($organizationId),
             ...$this->codeChecks($projects),
+            'repositories_unlinked' => $this->unlinkedRepositories($organizationId),
         ];
 
         Cache::put(self::countKey($organizationId), self::countOf($report), self::COUNT_TTL_SECONDS);
@@ -140,7 +151,8 @@ final class MaintenanceQuery
             + count($report['programs_without_manager'])
             + $rows(['people_off_projects', 'people_without_designation', 'people_reporting_to_inactive', 'people_outside_organogram', 'people_without_login'], 'id')
             + ($report['attendance_without_office'] ? 1 : 0)
-            + $rows(['repositories_failing_main', 'repositories_unprotected', 'repositories_without_tests', 'repositories_default_branch_changed'], 'full_name');
+            + $rows(['repositories_failing_main', 'repositories_unprotected', 'repositories_without_tests', 'repositories_default_branch_changed'], 'full_name')
+            + ($report['repositories_unlinked'] ?? 0);
     }
 
     /**
@@ -296,6 +308,23 @@ final class MaintenanceQuery
                 ->map(fn (GitRepository $r): array => [...$ref($r), 'default_branch' => $r->default_branch, 'protected_branch' => $r->protected_branch])
                 ->all()),
         ];
+    }
+
+    /**
+     * How many repositories of the organization's forge organization no
+     * project links; null without git, or when the forge can't say.
+     */
+    private function unlinkedRepositories(int $organizationId): ?int
+    {
+        $connection = GitConnection::query()->where('organization_id', $organizationId)->first();
+
+        if ($connection === null) {
+            return null;
+        }
+
+        $found = $this->unlinked->for($connection);
+
+        return $found['unavailable'] ? null : count($found['repositories']);
     }
 
     private function attendanceWithoutOffice(int $organizationId): bool

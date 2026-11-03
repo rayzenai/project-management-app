@@ -49,6 +49,7 @@ use App\Http\Controllers\Workspace\TaskSearchController;
 use App\Http\Controllers\Workspace\TeamController;
 use App\Http\Controllers\Workspace\TeamMemberController;
 use App\Http\Controllers\Workspace\TeamProgressController;
+use App\Http\Controllers\Workspace\UnlinkedRepositoryController;
 use App\Http\Controllers\Workspace\WorkController;
 use App\Http\Controllers\Workspace\WorkspaceNoteController;
 use App\Http\Middleware\EnsureCanSignIn;
@@ -179,6 +180,10 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
         // Code activity: who committed what, within what each viewer runs.
         Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
         Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
+        // A forge repository no project links (Code activity's notice): a new project for it.
+        Route::post('/git/connections/{connection}/repositories/{forgeId}/project', [UnlinkedRepositoryController::class, 'createProject'])
+            ->whereNumber('forgeId')
+            ->name('git.repositories.project');
 
         // What needs looking at in an organization.
         Route::get('/maintenance', [MaintenanceController::class, 'index'])->name('maintenance');

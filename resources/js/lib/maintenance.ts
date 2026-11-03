@@ -44,6 +44,11 @@ export interface Maintenance {
         default_branch: string;
         protected_branch: string;
     })[];
+    /**
+     * Repositories on its forge organization no project links, so their
+     * commits count nowhere; null without git, or when the forge can't say.
+     */
+    repositories_unlinked: number | null;
 }
 
 export interface RepositoryRef {

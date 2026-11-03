@@ -552,6 +552,52 @@ Inertia page `Reports/CodeActivity`, whose props are `data`'s fields plus
 `filters`; `/workspace/reports/code/people/{user}` (name
 `workspace.reports.code.person`) answers the same JSON.
 
+### Repositories no project links
+
+A repository made straight on the forge counts nowhere until it is linked
+to a project. `GET /workspace/reports/code` also answers `unlinked` (beside
+`data` and `filters`; a prop of the web page), filled only for whoever
+administers an organization with git (`canSeeUnlinkedRepositories`: its
+organizational admins and super-admins; `[]` for everyone else, and the
+forge is never asked for them):
+
+```json
+"unlinked": [{
+  "connection": { "id": 1, "organization": { "id": 1, "name": "SDOC" } },
+  "unavailable": false,
+  "repositories": [{
+    "forge_id": 41, "full_name": "sdoc/ird-prize", "name": "ird-prize",
+    "description": "The IRD prize draw", "html_url": "https://git.sdoc.gov.np/sdoc/ird-prize",
+    "updated_at": "2026-11-03T09:10:00+05:45",
+    "suggested_title": "IRD Prize", "suggested_key": "IP"
+  }],
+  "projects": [{ "id": 3, "slug": "tax-portal", "title": "Tax Portal", "program": "Revenue", "organization_id": 1 }],
+  "programs": [{ "id": 2, "name": "Revenue" }]
+}]
+```
+
+One entry per such organization (a super-admin gets every one, by name; on
+the web, the one their workspace is switched to). `repositories` are the
+forge organization's repositories no project links, archived ones left out,
+newest activity first; the forge's list is kept 5 minutes and read again
+whenever one of its repositories is linked or unlinked. `unavailable` is
+true, with no repositories, when the forge couldn't list them (kept 5
+minutes too). `suggested_title` (the name's words title-cased, a first word
+of 2 to 4 letters as an acronym) and `suggested_key` (`ProjectKeys`, free in
+the organization) start the new project's form; `projects` are the
+organization's active projects the caller may link to (the existing
+`POST /workspace/projects/{slug}/repositories` with `full_name`), and
+`programs` those a new project may join.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/workspace/git/connections/{connection}/repositories/{forgeId}/project` | `title` (required, max 255), `key` (optional, 1 to 10 letters, upper-cased, free in the organization: else 422 `That key is already used in this organization.`; without one the title suggests it), `program_id` (optional, one of the organization's programs: else 422 `That program belongs to another organization.`) | 201 `{ message, data: { project, repository } }`: the project, made in the connection's organization, not public, managed by the caller when they are an active person of it, and the repository linked to it (its history is read right after). `message`: `Created IRD Prize and linked sdoc/ird-prize. Its earlier commits are being read now.` The forge is asked again first: a repository already linked, moved to another forge organization, archived or gone answers 422 `That repository is no longer waiting to be linked.`; when the link fails (the forge can't be read) nothing is created and the 422 says why. 403 for anyone who doesn't both create projects and administer the connection's organization (a project or program manager, a member, another organization's admin) |
+
+On the JSON API it is `/api/v1/workspace/git/connections/…/project` (name
+`api.workspace.git.repositories.project`); on the web (name
+`workspace.git.repositories.project`) it redirects back with a
+`workspace_flash`, errors on the field or `__global`.
+
 ## Members *(create/edit/delete: organizational admin of their organization or super-admin)*
 
 `POST /workspace/members` takes `name`, `email` (required, not already a login in any case: `Deepak@x` is taken when `deepak@x` has one, and the same on `PATCH`),
@@ -797,7 +843,8 @@ Every list is empty when all is well:
     "repositories": 4,
     "repositories_failing_main": [{ "full_name": "sdoc/tp-api", "slug": "tax-portal", "label": "Tax Portal" }],
     "repositories_unprotected": [],
-    "repositories_without_tests": []
+    "repositories_without_tests": [],
+    "repositories_unlinked": 3
   }
 }
 ```
@@ -826,6 +873,10 @@ Every list is empty when all is well:
   another branch than the protected one (each row adds `default_branch` and
   `protected_branch`): work merged into the new default skips the rule.
   `slug` and `label` are the project's.
+- `repositories_unlinked`: how many repositories of the organization's
+  forge organization no project links (each counted in
+  `maintenance_count`), from the same 5-minute list as Code activity's
+  `unlinked`; null without git, or when the forge couldn't say.
 
 The web page is `GET /workspace/maintenance` (name `workspace.maintenance`):
 the viewer's organization, and a super-admin picks one with
@@ -1129,6 +1180,13 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Repositories no project links.**
+
+- `GET /workspace/reports/code` adds `unlinked` (see Repositories no project
+  links under Code activity).
+- New: `POST /workspace/git/connections/{connection}/repositories/{forgeId}/project`.
+- Maintenance adds `repositories_unlinked`, counted in `maintenance_count`.
 
 **The top bar's to-do list.**
 

@@ -167,6 +167,8 @@ role fields: whoever administers the organization), `canViewProject` (twin of
 `canPublishProject`, `canViewProjectCode`, `canManageProjectRepositories`,
 `canManageRepositoryAccess` (give, change and remove a repository's grants:
 whoever passes `canManageProjectRepositories`),
+`canSeeUnlinkedRepositories` (a connection's forge repositories no project
+links, and "New project for it": whoever administers its organization),
 `canGrantRepositoryAccessTo` (who may be given access: never a maintainer,
 an inactive or deleted person or someone with no organization; an
 organizational admin gives it to their organization's people and the team,
@@ -794,6 +796,20 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   every filter in the URL; a card per person below `md`) and
   `/workspace/reports/code/people/{user}`; API
   `/api/v1/workspace/reports/code[/people/{user}]`.
+- **Repositories no project links** (made straight on the forge, so their
+  commits count nowhere): `UnlinkedRepositoriesQuery` (`for`: the forge
+  organization's repositories minus those linked by `forge_id`, archived
+  left out, newest activity first; the forge's answer, a failure too, cached
+  `TTL_SECONDS` (300) per connection and forgotten by `GitRepositoryObserver`
+  on every link and unlink; `find` asks the forge afresh for a write;
+  `forViewer` adds suggested titles and keys, the linkable projects and the
+  programs). Shown, for whoever passes `canSeeUnlinkedRepositories`, as
+  Code activity's `unlinked` notice (`components/reports/UnlinkedRepositories.svelte`:
+  "Link to a project" through `ProjectPicker` and the existing link route,
+  "New project for it" through `POST /workspace/git/connections/{connection}/repositories/{forgeId}/project`,
+  `CreateProjectForRepositoryService`: `CreateProjectService` plus
+  `LinkRepositoryService` in one transaction, nothing made when the link
+  fails) and as Maintenance's `repositories_unlinked`.
 - **UI**: the Code tab's New repository and Access (grants and maintainers),
   the sidebar's Code activity (shown with git). Keep the Guide in step:
   developers commit with the email they sign in with (sign-in gives the forge
@@ -1003,7 +1019,9 @@ Shared building blocks (reach for these before writing anything new):
   hold, projects quiet for `QUIET_DAYS`, programs with no active manager,
   active people on no project, with no designation, reporting to someone
   deactivated, outside the organogram or with no login, and attendance on
-  with no office network or place. A new check is one more list there, in
+  with no office network or place, and the forge's repositories no project
+  links (`repositories_unlinked`, a count from `UnlinkedRepositoriesQuery`'s
+  cached list). A new check is one more list there, in
   `countOf`, and in the page's `report`. The sidebar's count
   (`OfficeLinks`' `maintenance_count`, `MaintenanceQuery::count`) is cached
   `COUNT_TTL_SECONDS` per organization and every full read refreshes it, so

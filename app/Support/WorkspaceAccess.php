@@ -590,6 +590,16 @@ class WorkspaceAccess
     }
 
     /**
+     * See the repositories of a connection's forge organization that no
+     * project links, and make a project for one (UnlinkedRepositoriesQuery):
+     * whoever administers the connection's organization, while it has git.
+     */
+    public static function canSeeUnlinkedRepositories(?Authenticatable $user, GitConnection $connection): bool
+    {
+        return $connection->exists && self::administers($user, $connection->organization_id);
+    }
+
+    /**
      * Give people access to a linked repository, change it and take it
      * away: whoever may link the project's repositories.
      */

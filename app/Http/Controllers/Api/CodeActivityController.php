@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\CodeActivityRequest;
 use App\Queries\CodeActivityQuery;
+use App\Queries\UnlinkedRepositoriesQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 
@@ -12,11 +13,12 @@ use Illuminate\Routing\Controller;
  */
 class CodeActivityController extends Controller
 {
-    public function index(CodeActivityRequest $request, CodeActivityQuery $query): JsonResponse
+    public function index(CodeActivityRequest $request, CodeActivityQuery $query, UnlinkedRepositoriesQuery $unlinked): JsonResponse
     {
         return response()->json([
             'data' => $query->get($request->user(), $request->filters()),
             'filters' => $request->appliedFilters(),
+            'unlinked' => $unlinked->forViewer($request->user()),
         ]);
     }
 

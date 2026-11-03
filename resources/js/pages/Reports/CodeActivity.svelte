@@ -11,6 +11,7 @@
     } from '../../components/reports/DailyCodeChart.svelte';
     import type { ChartSeries } from '../../components/reports/DailyCodeChart.svelte';
     import PersonCommitsDrawer from '../../components/reports/PersonCommitsDrawer.svelte';
+    import UnlinkedRepositoriesNotice from '../../components/reports/UnlinkedRepositories.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import type {
         Checks,
@@ -21,6 +22,7 @@
         CodeActivitySeries,
         CodeActivitySort,
         Id,
+        UnlinkedRepositories,
     } from '../../lib/types';
 
     /**
@@ -29,7 +31,8 @@
      * by the figure chosen (or by name). Every filter lives in the URL, so
      * "this week, Developers, by commits" is a link. Tick up to four people
      * to compare them side by side, with their code lines per day; click a
-     * person for their commits.
+     * person for their commits. Whoever administers the organization sees
+     * the forge repositories no project links first, to link them.
      */
     let {
         people,
@@ -38,6 +41,7 @@
         repositories,
         options,
         filters,
+        unlinked = [],
     }: {
         people: CodeActivityPerson[];
         series: CodeActivitySeries[];
@@ -46,6 +50,8 @@
         repositories: number;
         options: CodeActivityOptions;
         filters: CodeActivityFilters;
+        /** The forge repositories no project links, for an organization's administrators. */
+        unlinked?: UnlinkedRepositories[];
     } = $props();
 
     const MAX_COMPARED = 4;
@@ -435,6 +441,8 @@
     {/snippet}
 
     <div class="space-y-6">
+        <UnlinkedRepositoriesNotice notices={unlinked} />
+
         <!-- Filters, above everything they scope. -->
         <div class="space-y-2">
             <div class="flex flex-wrap items-center gap-2">
@@ -550,8 +558,9 @@
                     <p class="mt-3 font-medium">No repositories linked yet.</p>
                     <p class="mt-1 max-w-md text-[13px] text-fg-muted">
                         Only commits in a repository linked to a project count
-                        here. Create one, or link one from the forge, on the
-                        project's Code tab.
+                        here. {unlinked.some((n) => n.repositories.length > 0)
+                            ? "Link one of those above to a project, or create one on a project's Code tab."
+                            : "Create one, or link one from the forge, on the project's Code tab."}
                     </p>
                 {:else}
                     <p class="mt-3 font-medium">No commits {rangeText}.</p>

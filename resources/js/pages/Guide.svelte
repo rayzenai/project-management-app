@@ -170,7 +170,7 @@
     const code = [
         [
             'Link a repository',
-            "On the project's Code tab, its manager, its program's manager or an organizational admin picks Link repository and chooses one of the office's repositories on the forge. Its main branch is protected from then on, as a new repository's is. Unlink stops following it; the repository stays on the forge.",
+            "On the project's Code tab, its manager, its program's manager or an organizational admin picks Link repository and chooses one of the office's repositories on the forge. Its main branch is protected from then on, as a new repository's is. Unlink stops following it; the repository stays on the forge. Repositories made straight on the forge count nowhere until linked: organizational admins see them at the top of Code activity, each with Link to a project and New project for it, and Needs attention counts them.",
         ],
         [
             'Repository access',

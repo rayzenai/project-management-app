@@ -47,6 +47,7 @@ use App\Http\Controllers\Api\TaskSearchController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TeamMemberController;
 use App\Http\Controllers\Api\ThemeController;
+use App\Http\Controllers\Api\UnlinkedRepositoryController;
 use App\Http\Controllers\Api\WorkController;
 use App\Http\Controllers\Api\WorkspaceNoteController;
 use App\Http\Middleware\EnsureCanSignIn;
@@ -154,6 +155,10 @@ Route::prefix('v1')->name('api.')->group(function () {
             // Code activity
             Route::get('/reports/code', [CodeActivityController::class, 'index'])->name('reports.code');
             Route::get('/reports/code/people/{user}', [CodeActivityController::class, 'person'])->whereNumber('user')->name('reports.code.person');
+            // A forge repository no project links: a new project for it.
+            Route::post('/git/connections/{connection}/repositories/{forgeId}/project', [UnlinkedRepositoryController::class, 'createProject'])
+                ->whereNumber('forgeId')
+                ->name('git.repositories.project');
 
             // What needs looking at in an organization.
             Route::get('/organizations/{organization}/maintenance', [MaintenanceController::class, 'show'])->name('maintenance');

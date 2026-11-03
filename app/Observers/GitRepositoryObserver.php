@@ -5,15 +5,19 @@ namespace App\Observers;
 use App\Models\GitRepository;
 use App\Models\Project;
 use App\Models\ProjectActivity;
+use App\Queries\UnlinkedRepositoriesQuery;
 use App\Services\ProjectActivityRecorder;
 
 /**
- * Linking and unlinking a repository go into its project's activity.
+ * Linking and unlinking a repository go into its project's activity, and
+ * send the forge's list of unlinked repositories to be read again.
  */
 class GitRepositoryObserver
 {
     public function created(GitRepository $repository): void
     {
+        UnlinkedRepositoriesQuery::forget($repository->git_connection_id);
+
         ProjectActivityRecorder::recordForProject(
             project: $repository->project,
             subject: $repository,
@@ -24,6 +28,8 @@ class GitRepositoryObserver
 
     public function deleted(GitRepository $repository): void
     {
+        UnlinkedRepositoriesQuery::forget($repository->git_connection_id);
+
         $project = Project::query()->find($repository->project_id);
 
         if ($project === null) {

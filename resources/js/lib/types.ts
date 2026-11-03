@@ -781,6 +781,31 @@ export interface QuickAddProject extends ProjectSummary {
     can_add_people?: boolean;
 }
 
+/** A forge repository no project links (UnlinkedRepositoriesQuery). */
+export interface UnlinkedRepository {
+    forge_id: number;
+    full_name: string;
+    name: string;
+    description: string | null;
+    html_url: string | null;
+    updated_at: string | null;
+    /** What a new project for it starts as: its title and key. */
+    suggested_title: string;
+    suggested_key: string;
+}
+
+/** One forge organization's repositories no project links, on Code activity. */
+export interface UnlinkedRepositories {
+    connection: { id: Id; organization: OrganizationOption };
+    /** The forge couldn't list them just now. */
+    unavailable: boolean;
+    repositories: UnlinkedRepository[];
+    /** The projects one may be linked to (the project picker's). */
+    projects: QuickAddProject[];
+    /** The programs a new project for one may join. */
+    programs: { id: Id; name: string }[];
+}
+
 export interface QuickAddContext {
     projects: QuickAddProject[];
     /** The organizations of `projects`, by name: the project picker's dropdown. */
