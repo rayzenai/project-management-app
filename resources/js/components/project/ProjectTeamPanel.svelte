@@ -97,7 +97,7 @@
     {/if}
 
     {#if team.members.length > 0}
-        <ul class="max-w-3xl border-t border-line">
+        <ul class="border-t border-line">
             {#each team.members as member (member.id)}
                 <li
                     class={`row gap-2.5 px-1 py-1.5 ${member.is_active ? '' : 'opacity-60'}`}

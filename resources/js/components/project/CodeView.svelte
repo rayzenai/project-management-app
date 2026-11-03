@@ -290,7 +290,7 @@
     }
 </script>
 
-<section class="max-w-3xl">
+<section>
     <div class="flex items-start justify-between gap-3">
         <div>
             <h2 class="section-title mb-1">

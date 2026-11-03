@@ -77,7 +77,7 @@
     }
 </script>
 
-<div class="mt-2 max-w-xl">
+<div class="mt-2">
     <label for="{uid}-q" class="sr-only">Add someone to {team.name}</label>
     <div class="relative">
         <Search

@@ -316,16 +316,25 @@
                 Add task
             </button>
         </div>
-        {#if team}
-            <!-- A new project starts by gathering its team. -->
-            <div class="border-t border-line px-6 py-7 lg:px-8">
-                <ProjectTeamPanel {team} projectTitle={project.title} />
-            </div>
-        {/if}
-        {#if git}
-            <!-- Its repositories can be linked before there is any task. -->
-            <div class="border-t border-line px-6 py-7 lg:px-8">
-                <CodeView {project} {git} />
+        {#if team || git}
+            <!-- A new project starts by gathering its team and linking its
+                 repositories: side by side on wide screens, each filling
+                 its half. -->
+            <div
+                class={`grid border-t border-line ${team && git ? 'xl:grid-cols-2' : ''}`}
+            >
+                {#if team}
+                    <div class="min-w-0 px-6 py-7 lg:px-8">
+                        <ProjectTeamPanel {team} projectTitle={project.title} />
+                    </div>
+                {/if}
+                {#if git}
+                    <div
+                        class={`min-w-0 px-6 py-7 lg:px-8 ${team ? 'border-t border-line xl:border-t-0 xl:border-l' : ''}`}
+                    >
+                        <CodeView {project} {git} />
+                    </div>
+                {/if}
             </div>
         {/if}
     {:else}
