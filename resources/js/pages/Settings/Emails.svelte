@@ -10,7 +10,9 @@
     /**
      * Emails: which emails this person gets, reached from the account menu
      * and from the foot of every email. Each switch saves on its own
-     * (PATCH /workspace/preferences) and says so beside its name.
+     * (PATCH /workspace/preferences) and says so beside its name. The weekly
+     * brief (`email_weekly`) is stored but has no switch here until phase 2
+     * sends it.
      */
     let {
         emails,
@@ -34,12 +36,6 @@
             field: 'email_morning',
             label: 'Morning email',
             detail: `On working days at ${at}, only when something is waiting for you.`,
-        },
-        {
-            key: 'weekly',
-            field: 'email_weekly',
-            label: 'Weekly brief',
-            detail: 'For people who run something, on the first working day of the week.',
         },
     ]);
 

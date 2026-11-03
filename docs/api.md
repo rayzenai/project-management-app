@@ -70,7 +70,8 @@ booleans, all on by default: `email_notifications` is the right-away email
 grouped into one mail a few minutes after the first), `email_morning` is the
 morning email (on the person's working days, at `PM_MORNING_EMAIL_AT`, default
 09:00, only when something is late, due today or new), and `email_weekly` is
-stored for the weekly brief, which is not sent yet. Emails are sent by
+stored for the weekly brief, which is not sent yet (the web page shows no
+switch for it until it is). Emails are sent by
 scheduled commands, never inside an API request; a link in one only opens the
 app.
 

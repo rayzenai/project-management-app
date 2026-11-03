@@ -421,8 +421,9 @@ only; scheduled commands read them:
   per person, so the people after them still get theirs, and reported once
   per run.
 - Preferences: `user_preferences.email_notifications` (right away),
-  `email_morning`, `email_weekly` (not sent yet), all default on, through
-  `User::emailPreferences()`; the web page `/workspace/settings/emails`
+  `email_morning`, `email_weekly` (not sent yet, so the Emails page shows
+  no switch for it until phase 2; the column and the API field stay), all
+  default on, through `User::emailPreferences()`; the web page `/workspace/settings/emails`
   (`Settings/Emails`) and `PATCH /workspace/preferences` or
   `/api/v1/user/preferences`. Mail views share `emails/layout.blade.php`
   (tables and inline styles) and carry one link into the app; no link
