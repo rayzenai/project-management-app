@@ -876,7 +876,9 @@ Every list is empty when all is well:
 - `repositories_unlinked`: how many repositories of the organization's
   forge organization no project links (each counted in
   `maintenance_count`), from the same 5-minute list as Code activity's
-  `unlinked`; null without git, or when the forge couldn't say.
+  `unlinked`; null without git, or when the forge couldn't say. This page
+  may ask the forge for the list; `maintenance_count` never does: it counts
+  them only while Code activity or this page has the list cached.
 
 The web page is `GET /workspace/maintenance` (name `workspace.maintenance`):
 the viewer's organization, and a super-admin picks one with

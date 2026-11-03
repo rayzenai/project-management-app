@@ -250,7 +250,11 @@ it('lets the manager, the office admin and a super-admin link a repository', fun
 })->with(['manager', 'office admin', 'super-admin']);
 
 it('lets the manager, the office admin and a super-admin search candidates and unlink', function (string $role) {
-    Http::fake(['git.example/api/v1/orgs/sdoc/repos*' => repoPage([])]);
+    Http::fake([
+        'git.example/api/v1/orgs/sdoc/repos*' => repoPage([]),
+        // Unlinking gives the forge its own issue tracker back.
+        'git.example/api/v1/repos/sdoc/app' => Http::response(repoForge()),
+    ]);
     // On the team before the link: joining a team with repositories syncs their access.
     $this->actingAs(repoActor($role, $this->project));
     $repo = repoLinked($this->project, $this->connection);

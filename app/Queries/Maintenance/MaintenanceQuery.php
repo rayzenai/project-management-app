@@ -45,12 +45,35 @@ use Illuminate\Support\Facades\Cache;
  *   the branch the tracker protects (work merged there skips the rule);
  * - how many repositories of its forge organization no project links
  *   (`repositories_unlinked`, null without git or when the forge can't
- *   say), from UnlinkedRepositoriesQuery's cached list, so working the
- *   count out again asks the forge no more than that cache allows.
+ *   say), through UnlinkedRepositoriesQuery's five-minute list: the page
+ *   may ask the forge for it, the sidebar's count never does.
  *
  * A constant number of queries, however big the organization. The
  * sidebar's count (count()) is cached for COUNT_TTL_SECONDS per
  * organization, and every full read refreshes it.
+ *
+ * @phpstan-type Report array{
+ *     organization: array{id: int, name: string},
+ *     quiet_days: int,
+ *     projects_without_manager: list<array{slug: string, label: string, manager: array{id: int, name: string, designation: string|null}|null}>,
+ *     projects_without_people: list<array{slug: string, label: string}>,
+ *     unassigned_tasks: list<array{slug: string, label: string, count: int}>,
+ *     tasks_with_inactive_people: list<array{slug: string, label: string, count: int}>,
+ *     quiet_projects: list<array{slug: string, label: string, last_activity_at: string}>,
+ *     programs_without_manager: list<array{slug: string, name: string, manager: array{id: int, name: string, designation: string|null}|null}>,
+ *     people_off_projects: list<array{id: int, name: string, designation: string|null}>,
+ *     people_without_designation: list<array{id: int, name: string, designation: string|null}>,
+ *     people_reporting_to_inactive: list<array{id: int, name: string, designation: string|null, reports_to: array{id: int, name: string, designation: string|null}}>,
+ *     people_outside_organogram: list<array{id: int, name: string, designation: string|null}>,
+ *     people_without_login: list<array{id: int, name: string, designation: string|null}>,
+ *     attendance_without_office: bool,
+ *     repositories: int,
+ *     repositories_failing_main: list<array{full_name: string, slug: string, label: string}>,
+ *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
+ *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
+ *     repositories_default_branch_changed: list<array{full_name: string, slug: string, label: string, default_branch: string, protected_branch: string}>,
+ *     repositories_unlinked: int|null,
+ * }
  */
 final class MaintenanceQuery
 {
@@ -65,30 +88,33 @@ final class MaintenanceQuery
     public const COUNT_TTL_SECONDS = 300;
 
     /**
-     * @return array{
-     *     organization: array{id: int, name: string},
-     *     quiet_days: int,
-     *     projects_without_manager: list<array{slug: string, label: string, manager: array{id: int, name: string, designation: string|null}|null}>,
-     *     projects_without_people: list<array{slug: string, label: string}>,
-     *     unassigned_tasks: list<array{slug: string, label: string, count: int}>,
-     *     tasks_with_inactive_people: list<array{slug: string, label: string, count: int}>,
-     *     quiet_projects: list<array{slug: string, label: string, last_activity_at: string}>,
-     *     programs_without_manager: list<array{slug: string, name: string, manager: array{id: int, name: string, designation: string|null}|null}>,
-     *     people_off_projects: list<array{id: int, name: string, designation: string|null}>,
-     *     people_without_designation: list<array{id: int, name: string, designation: string|null}>,
-     *     people_reporting_to_inactive: list<array{id: int, name: string, designation: string|null, reports_to: array{id: int, name: string, designation: string|null}}>,
-     *     people_outside_organogram: list<array{id: int, name: string, designation: string|null}>,
-     *     people_without_login: list<array{id: int, name: string, designation: string|null}>,
-     *     attendance_without_office: bool,
-     *     repositories: int,
-     *     repositories_failing_main: list<array{full_name: string, slug: string, label: string}>,
-     *     repositories_unprotected: list<array{full_name: string, slug: string, label: string}>,
-     *     repositories_without_tests: list<array{full_name: string, slug: string, label: string}>,
-     *     repositories_default_branch_changed: list<array{full_name: string, slug: string, label: string, default_branch: string, protected_branch: string}>,
-     *     repositories_unlinked: int|null,
-     * }
+     * @return Report
      */
     public function get(int $organizationId): array
+    {
+        return $this->report($organizationId, askForge: true);
+    }
+
+    /**
+     * How many rows the page shows: each project, program and person with
+     * something to look at once, attendance, and each repository on the
+     * forge no project links. Cached (see the class). Worked out again, it
+     * never asks the forge: the unlinked repositories come from the list
+     * Code activity or this page cached, none counting as 0.
+     */
+    public function count(int $organizationId): int
+    {
+        $cached = Cache::get(self::countKey($organizationId));
+
+        return is_int($cached) ? $cached : self::countOf($this->report($organizationId, askForge: false));
+    }
+
+    /**
+     * get()'s report; refreshes the cached count.
+     *
+     * @return Report
+     */
+    private function report(int $organizationId, bool $askForge): array
     {
         $organization = Organization::query()->findOrFail($organizationId, ['id', 'name']);
         $projects = Project::query()
@@ -113,23 +139,12 @@ final class MaintenanceQuery
             ...$this->peopleChecks($people),
             'attendance_without_office' => $this->attendanceWithoutOffice($organizationId),
             ...$this->codeChecks($projects),
-            'repositories_unlinked' => $this->unlinkedRepositories($organizationId),
+            'repositories_unlinked' => $this->unlinkedRepositories($organizationId, $askForge),
         ];
 
         Cache::put(self::countKey($organizationId), self::countOf($report), self::COUNT_TTL_SECONDS);
 
         return $report;
-    }
-
-    /**
-     * How many rows the page shows: each project, program and person with
-     * something to look at once, and attendance. Cached (see the class).
-     */
-    public function count(int $organizationId): int
-    {
-        $cached = Cache::get(self::countKey($organizationId));
-
-        return is_int($cached) ? $cached : self::countOf($this->get($organizationId));
     }
 
     private static function countKey(int $organizationId): string
@@ -312,9 +327,10 @@ final class MaintenanceQuery
 
     /**
      * How many repositories of the organization's forge organization no
-     * project links; null without git, or when the forge can't say.
+     * project links; null without git, when the forge can't say, or (not
+     * asking the forge) when no list is cached.
      */
-    private function unlinkedRepositories(int $organizationId): ?int
+    private function unlinkedRepositories(int $organizationId, bool $askForge): ?int
     {
         $connection = GitConnection::query()->where('organization_id', $organizationId)->first();
 
@@ -322,9 +338,9 @@ final class MaintenanceQuery
             return null;
         }
 
-        $found = $this->unlinked->for($connection);
+        $found = $askForge ? $this->unlinked->for($connection) : $this->unlinked->cached($connection);
 
-        return $found['unavailable'] ? null : count($found['repositories']);
+        return $found === null || $found['unavailable'] ? null : count($found['repositories']);
     }
 
     private function attendanceWithoutOffice(int $organizationId): bool

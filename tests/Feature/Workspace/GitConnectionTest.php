@@ -418,6 +418,8 @@ it('replaces the webhook and deletes the old one when the host or the owner chan
 
 it('unlinks the repositories of the old forge when the host or the owner changes, and says how many', function (string $baseUrl, string $owner, string $message, int $left) {
     Http::fake([
+        // Re-pointing gives each old repository its forge issue tracker back.
+        'git.example.test/api/v1/repos/sdoc/*' => Http::response([]),
         '*/api/v1/user' => Http::response(['id' => 7, 'login' => 'sdoc-bot']),
         '*/permissions' => Http::response(['is_owner' => true]),
         '*/hooks/77' => Http::response(['id' => 77]),

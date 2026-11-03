@@ -15,6 +15,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Queries\Maintenance\MaintenanceQuery;
 use App\Support\Git\Checks;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia;
 
 /*
@@ -25,6 +26,8 @@ use Inertia\Testing\AssertableInertia;
 
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
+    // A forge organization holding no repository a project doesn't link.
+    Http::fake(['*/api/v1/orgs/*/repos?*' => Http::response([])]);
 
     $this->org = Organization::factory()->create(['name' => 'SDOC']);
     $this->otherOrg = Organization::factory()->create(['name' => 'MoF']);

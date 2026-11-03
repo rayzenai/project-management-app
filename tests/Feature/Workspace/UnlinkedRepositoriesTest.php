@@ -507,6 +507,27 @@ it("counts the forge's unlinked repositories on Maintenance, from the cached lis
         ->and(unlinkedListings())->toBe(2);
 });
 
+it("never asks the forge for the sidebar's count: it reads only the cached list, none counting as 0", function () {
+    unlinkedFakeForge();
+    $maintenance = app(MaintenanceQuery::class);
+
+    // Nothing cached: the check counts nothing, and no page's sidebar asks the forge.
+    $before = $maintenance->count($this->sdoc->id);
+    Cache::forget("maintenance-count:{$this->sdoc->id}");
+    $this->actingAs($this->admin)->get('/workspace/my')->assertOk();
+    Cache::forget("maintenance-count:{$this->sdoc->id}");
+    $this->actingAs($this->admin, 'sanctum')->getJson('/api/v1/user')->assertOk()->assertJsonPath('office.maintenance_count', $before);
+    Http::assertNothingSent();
+
+    // Code activity reads the forge and fills the list; the count, worked
+    // out again, takes it from there.
+    $this->actingAs($this->admin)->get('/workspace/reports/code')->assertOk();
+    Cache::forget("maintenance-count:{$this->sdoc->id}");
+
+    expect($maintenance->count($this->sdoc->id))->toBe($before + 4)
+        ->and(unlinkedListings())->toBe(1);
+});
+
 it('leaves the check out without git, and when the forge cannot list the repositories', function () {
     Http::fake(['git.example/*' => Http::response([], 500)]);
     $maintenance = app(MaintenanceQuery::class);

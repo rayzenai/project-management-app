@@ -37,6 +37,11 @@ use Inertia\Testing\AssertableInertia;
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
     CarbonImmutable::setTestNow('2026-10-28 10:00:00');
+    // No forge here: joining a team with repositories queues their access
+    // sync, and an administrator's report lists the forge's unlinked
+    // repositories (none).
+    Bus::fake([SyncRepositoryAccess::class]);
+    Http::fake(['git.example/api/v1/orgs/*/repos?*' => Http::response([])]);
 
     $this->sdoc = Organization::factory()->create(['name' => 'SDOC', 'slug' => 'sdoc']);
     $this->mof = Organization::factory()->create(['name' => 'MoF', 'slug' => 'mof']);
@@ -622,8 +627,6 @@ it('counts repositories a person linked or created in the range', function () {
         'git.example/api/v1/repos/sdoc/tp-web/branches/main' => Http::response(['name' => 'main']),
         'git.example/api/v1/repos/sdoc/tp-web' => Http::response($forge),
         'git.example/api/v1/repos/sdoc/tp-web/collaborators*' => Http::response([]),
-        // The admin's notice of repositories no project links (none here).
-        'git.example/api/v1/orgs/sdoc/repos?*' => Http::response([]),
     ]);
     $this->actingAs($this->taxManager)->post('/workspace/projects/tax-portal/repositories/new', ['name' => 'tp-web'])->assertSessionHasNoErrors();
 

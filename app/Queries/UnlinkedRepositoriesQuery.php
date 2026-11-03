@@ -22,7 +22,8 @@ use Illuminate\Support\Facades\Cache;
  * The forge's list is cached per connection for TTL_SECONDS, a failure too
  * (so a forge that is down is asked at most once per TTL), and forgotten
  * whenever a repository of the connection is linked or unlinked
- * (GitRepositoryObserver). Linked ones are taken off at every read, so a
+ * (GitRepositoryObserver). Only the pages that show it ask the forge
+ * (for()); the sidebar's Maintenance count reads the cache alone (cached()). Linked ones are taken off at every read, so a
  * cached list never offers a repository linked since. A write never trusts
  * the cache: find() asks the forge.
  *
@@ -34,6 +35,9 @@ class UnlinkedRepositoriesQuery
     public const TTL_SECONDS = 300;
 
     /**
+     * Asks the forge when the list isn't cached, and caches its answer. Only
+     * the pages that show the list call this (Code activity, Maintenance).
+     *
      * @return array{unavailable: bool, repositories: list<Unlinked>}
      */
     public function for(GitConnection $connection): array
@@ -47,12 +51,21 @@ class UnlinkedRepositoriesQuery
             }
         });
 
-        $linked = array_flip($this->linkedForgeIds($connection));
+        return $this->withoutLinked($connection, $forge);
+    }
 
-        return [
-            'unavailable' => $forge['unavailable'],
-            'repositories' => array_values(array_filter($forge['repositories'], fn (array $repository): bool => ! isset($linked[$repository['forge_id']]))),
-        ];
+    /**
+     * The cached list only, never the forge: null when nothing is cached.
+     * For the sidebar's Maintenance count, which runs on every page.
+     *
+     * @return array{unavailable: bool, repositories: list<Unlinked>}|null
+     */
+    public function cached(GitConnection $connection): ?array
+    {
+        /** @var array{unavailable: bool, repositories: list<Unlinked>}|null $forge */
+        $forge = Cache::get(self::key((int) $connection->id));
+
+        return is_array($forge) ? $this->withoutLinked($connection, $forge) : null;
     }
 
     /**
@@ -219,6 +232,20 @@ class UnlinkedRepositoriesQuery
             'description' => ForgeShapes::string($repository, 'description'),
             'html_url' => ForgeShapes::string($repository, 'html_url'),
             'updated_at' => ForgeShapes::string($repository, 'updated_at'),
+        ];
+    }
+
+    /**
+     * @param  array{unavailable: bool, repositories: list<Unlinked>}  $forge
+     * @return array{unavailable: bool, repositories: list<Unlinked>}
+     */
+    private function withoutLinked(GitConnection $connection, array $forge): array
+    {
+        $linked = array_flip($this->linkedForgeIds($connection));
+
+        return [
+            'unavailable' => $forge['unavailable'],
+            'repositories' => array_values(array_filter($forge['repositories'], fn (array $repository): bool => ! isset($linked[$repository['forge_id']]))),
         ];
     }
 

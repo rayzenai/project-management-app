@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\SyncRepositoryAccess;
 use App\Models\Designation;
 use App\Models\GitCommit;
 use App\Models\GitConnection;
@@ -9,6 +10,8 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 
 /*
@@ -21,6 +24,11 @@ use Laravel\Sanctum\Sanctum;
 beforeEach(function () {
     config(['project-management.super_admins' => ['boss@example.com']]);
     CarbonImmutable::setTestNow('2026-10-28 10:00:00');
+    // No forge here: joining a team with repositories queues their access
+    // sync, and an administrator's report lists the forge's unlinked
+    // repositories (none).
+    Bus::fake([SyncRepositoryAccess::class]);
+    Http::fake(['git.example/api/v1/orgs/*/repos?*' => Http::response([])]);
 
     $this->sdoc = Organization::factory()->create(['name' => 'SDOC', 'slug' => 'sdoc']);
     $this->mof = Organization::factory()->create(['name' => 'MoF', 'slug' => 'mof']);

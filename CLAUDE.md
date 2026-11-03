@@ -803,7 +803,9 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   `TTL_SECONDS` (300) per connection and forgotten by `GitRepositoryObserver`
   on every link and unlink; `find` asks the forge afresh for a write;
   `forViewer` adds suggested titles and keys, the linkable projects and the
-  programs). Shown, for whoever passes `canSeeUnlinkedRepositories`, as
+  programs; `cached` reads the cache alone, for the sidebar's count). Only
+  Code activity, the Maintenance page and the link and create actions ask
+  the forge. Shown, for whoever passes `canSeeUnlinkedRepositories`, as
   Code activity's `unlinked` notice (`components/reports/UnlinkedRepositories.svelte`:
   "Link to a project" through `ProjectPicker` and the existing link route,
   "New project for it" through `POST /workspace/git/connections/{connection}/repositories/{forgeId}/project`,
@@ -1020,8 +1022,9 @@ Shared building blocks (reach for these before writing anything new):
   active people on no project, with no designation, reporting to someone
   deactivated, outside the organogram or with no login, and attendance on
   with no office network or place, and the forge's repositories no project
-  links (`repositories_unlinked`, a count from `UnlinkedRepositoriesQuery`'s
-  cached list). A new check is one more list there, in
+  links (`repositories_unlinked`, a count through `UnlinkedRepositoriesQuery`:
+  the page may ask the forge, the sidebar's count reads only the cached list,
+  none counting as 0). A new check is one more list there, in
   `countOf`, and in the page's `report`. The sidebar's count
   (`OfficeLinks`' `maintenance_count`, `MaintenanceQuery::count`) is cached
   `COUNT_TTL_SECONDS` per organization and every full read refreshes it, so
@@ -1074,5 +1077,7 @@ unicode glyph icons (Lucide only), no mono-uppercase eyebrow labels.
   `Task::labelForStatus`, dates, "none"), never a stored key or timestamp.
 - New polymorphic subjects go in the morph map in `AppServiceProvider`.
 - Tests: `tests/Feature/Workspace/**` (web), `tests/Feature/Workspace/Api/**`
-  (API), `tests/Unit`. Any change to `WorkspaceAccess` or a service gets happy +
+  (API), `tests/Unit`. No test reaches the network: `Tests\TestCase::setUp`
+  calls `Http::preventStrayRequests()`, so fake every forge call a test
+  makes (a job it queues included, or `Bus::fake` that job). Any change to `WorkspaceAccess` or a service gets happy +
   failure + privilege-escalation tests.

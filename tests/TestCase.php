@@ -5,6 +5,7 @@ namespace Tests;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -15,6 +16,10 @@ abstract class TestCase extends BaseTestCase
         // The memos live for one request in production; a test is one too.
         // Ids repeat across tests, so a memo keyed by id must not survive.
         WorkspaceAccess::flush();
+
+        // No test reaches the network: a call nothing fakes fails the test
+        // (StrayRequestException) instead of trying the real host.
+        Http::preventStrayRequests();
     }
 
     /**
