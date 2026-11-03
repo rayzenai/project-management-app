@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
 
 /*
  * Right-away email: everything given to someone inside a few minutes goes
@@ -277,10 +278,13 @@ it('stops the run at the first failure to reach the mail server, giving back onl
     'a timeout' => fn () => new TransportException('Connection to "smtp.example.test:587" timed out.'),
     'TLS' => fn () => new TransportException('Unable to connect with STARTTLS.'),
     'a refused login' => fn () => new TransportException('Failed to authenticate on SMTP server with username "no-reply".', 535),
-    'a "try later" reply' => fn () => mailRefusal(451),
+    'a 4xx before RCPT TO' => fn () => smtpReply(451, 'MAIL FROM'),
+    'a 5xx before RCPT TO' => fn () => smtpReply(530, 'MAIL FROM'),
+    '"too busy" at the greeting' => fn () => smtpReply(421, 'greeting'),
+    'a 421 at RCPT TO: the server closing' => fn () => smtpReply(421),
 ]);
 
-it('treats a refused address as handled: one warning with the person, never tried again, and goes on', function () {
+it('treats a refused address as handled: one warning with the person, never tried again, and goes on', function (UnexpectedResponseException $refusal) {
     Exceptions::fake();
     Log::spy();
     euAssign($this->member, $this->assigner);
@@ -288,21 +292,53 @@ it('treats a refused address as handled: one warning with the person, never trie
     $rabin = Member::factory()->linkedTo(User::factory()->create(['name' => 'Rabin Ghimire', 'email' => 'rabin@example.test']))->create();
     euAssign($rabin, $this->assigner);
 
-    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? mailRefusal() : null);
+    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? $refusal : null);
     euRunAt('2026-11-03 10:03:00');
 
     expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test'])
         ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(0);
     Exceptions::assertNothingReported();
     Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, "user #{$this->user->id}")
-        && str_contains($message, '550')
+        && str_contains($message, (string) $refusal->getCode())
         && ! str_contains($message, 'bibek@example.test'));
 
     // The same unread rows, a minute later: nothing is sent again.
     euRunAt('2026-11-03 10:04:00');
     euRunAt('2026-11-03 10:30:00');
     expect($asked)->toHaveCount(2);
-});
+})->with([
+    'an unknown mailbox at RCPT TO' => fn () => smtpReply(550),
+    'a message rejected after DATA' => fn () => smtpReply(554, 'end of data'),
+]);
+
+it('gives back only the rows of a recipient the server puts off, goes on, and tries them again next run', function (UnexpectedResponseException $notNow) {
+    Exceptions::fake();
+    Log::spy();
+    euAssign($this->member, $this->assigner);
+    Carbon::setTestNow('2026-11-03 10:00:10');
+    $rabin = Member::factory()->linkedTo(User::factory()->create(['name' => 'Rabin Ghimire', 'email' => 'rabin@example.test']))->create();
+    euAssign($rabin, $this->assigner);
+
+    $full = true;
+    $asked = fakeMailServer(function (string $to) use (&$full, $notNow): ?Throwable {
+        return $full && $to === 'bibek@example.test' ? $notNow : null;
+    });
+    euRunAt('2026-11-03 10:03:00');
+
+    // Rabin, after Bibek, still got his; only Bibek's row waits.
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test'])
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->pluck('notifiable_id')->all())->toBe([$this->user->id]);
+    Exceptions::assertNothingReported();
+    Log::shouldNotHaveReceived('warning');
+
+    $full = false;
+    euRunAt('2026-11-03 10:04:00');
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test', 'bibek@example.test'])
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(0);
+})->with([
+    'a full mailbox at RCPT TO' => fn () => smtpReply(452),
+    'a "try later" after DATA' => fn () => smtpReply(451, 'end of data'),
+]);
 
 it('keeps the rows handled when something other than the mail server breaks an email, reports it once and goes on', function () {
     Exceptions::fake();

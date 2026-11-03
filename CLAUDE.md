@@ -400,13 +400,18 @@ only; scheduled commands read them:
   read in the app first, or taken by an overlapping run, is never sent; the
   claim is the "handled" mark even when nothing is sent (right away off, or
   `canSignIn` false). Delivery is at most once. `App\Support\MailFailure`
-  sorts a failed send: `unreachable` (no connection, a timeout, TLS, a
-  refused login, a 4xx "try later") releases that person's claimed rows and
-  stops the run (the next minute retries); `refused` (a 5xx, such as an
-  unknown mailbox) keeps them handled, never retried, with one `warning`
-  naming the user id; anything else keeps them handled too. A failure is
-  reported once per run. The SMTP mailer gives up after `MAIL_TIMEOUT`
-  seconds (15). The migration marked every earlier notification handled.
+  sorts a failed send by the stage the server answered at (Symfony names
+  none: RCPT TO alone expects "250/251/252", and a `> RCPT TO:` in the
+  exception's debug transcript means at or after it): `unreachable` (no
+  connection, a timeout, TLS, a refused login, any 4xx or 5xx before RCPT
+  TO, a 421) releases that person's claimed rows and stops the run (the
+  next minute retries); `deferred` (a 4xx at RCPT TO or after, such as a
+  full mailbox) releases only that person's rows and goes on; `refused` (a
+  5xx at RCPT TO or after, such as an unknown mailbox) keeps them handled,
+  never retried, with one `warning` naming the user id; anything else
+  keeps them handled too. A failure is reported once per run. The SMTP
+  mailer gives up after `MAIL_TIMEOUT` seconds (15). The migration marked
+  every earlier notification handled.
 - `SendMorningEmails` (`workspace:send-morning-emails`, daily at
   `emails.morning_at`, `PM_MORNING_EMAIL_AT`, default 09:00): for each person
   who has it on, may sign in and has a working day today
@@ -416,10 +421,10 @@ only; scheduled commands read them:
   `MorningMail` only when one list is not empty and records
   `email_digests (user_id, kind, sent_on)`, unique, so a rerun sends nothing
   twice. A refused address keeps the day claimed (one `warning` with the
-  user id); any other failed send gives it back; an unreachable server
-  stops the run; any other error (one person's lists included) is caught
-  per person, so the people after them still get theirs, and reported once
-  per run.
+  user id); any other failed send gives it back; a deferred one goes on to
+  the next person; an unreachable server stops the run; any other error
+  (one person's lists included) is caught per person, so the people after
+  them still get theirs, and reported once per run.
 - Preferences: `user_preferences.email_notifications` (right away),
   `email_morning`, `email_weekly` (not sent yet, so the Emails page shows
   no switch for it until phase 2; the column and the API field stay), all

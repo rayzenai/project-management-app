@@ -30,12 +30,14 @@ use Throwable;
  * conditional update per row, so an overlapping run never sends it again.
  * Someone who turned right-away email off, or can no longer sign in, has
  * their rows marked handled with no email, so turning it on later never
- * sends old news. When the mail server can't be reached (MailFailure) the
- * claim is given back and the run stops there: the next minute tries again,
- * and nobody waits on one timeout per person. A refused address stays
- * handled with one warning naming the person, never tried again; any other
- * failure stays handled too. A failure is reported once per run, the rest
- * counted in one warning.
+ * sends old news. A failed send is sorted by MailFailure: when the mail
+ * server can't be reached the claim is given back and the run stops there
+ * (the next minute tries again, and nobody waits on one timeout per
+ * person); a "not now" for one recipient (deferred) gives back only their
+ * rows and the run goes on; a refused address stays handled with one
+ * warning naming the person, never tried again; any other failure stays
+ * handled too. A failure is reported once per run, the rest counted in one
+ * warning.
  */
 class SendEmailUpdates extends Command
 {
@@ -78,6 +80,7 @@ class SendEmailUpdates extends Command
         $sent = 0;
         $skipped = 0;
         $refused = 0;
+        $deferred = 0;
         $failed = 0;
         $stopped = false;
 
@@ -120,12 +123,20 @@ class SendEmailUpdates extends Command
                     continue;
                 }
 
+                if (MailFailure::deferred($e)) {
+                    // "Not now" for this person only: theirs wait, the rest go on.
+                    $this->release($claimed);
+                    $deferred++;
+
+                    continue;
+                }
+
                 if ($failed++ === 0) {
                     report($e);
                 }
 
                 if (MailFailure::unreachable($e)) {
-                    DB::table('notifications')->whereIn('id', $claimed)->update(['email_handled_at' => null]);
+                    $this->release($claimed);
                     $stopped = true;
 
                     break;
@@ -137,8 +148,8 @@ class SendEmailUpdates extends Command
             Log::warning('workspace:send-email-updates: '.($failed - 1).' more update emails failed to send after the one reported.');
         }
 
-        if ($pretend || $sent + $skipped + $refused + $failed > 0) {
-            $this->info(($pretend ? '[pretend] ' : '')."Update emails sent: {$sent}, skipped: {$skipped}, refused: {$refused}, failed: {$failed}.");
+        if ($pretend || $sent + $skipped + $refused + $deferred + $failed > 0) {
+            $this->info(($pretend ? '[pretend] ' : '')."Update emails sent: {$sent}, skipped: {$skipped}, refused: {$refused}, deferred: {$deferred}, failed: {$failed}.");
         }
 
         if ($stopped) {
@@ -190,6 +201,16 @@ class SendEmailUpdates extends Command
                 ->whereNull('read_at')
                 ->update(['email_handled_at' => $at]) === 1)
             ->all());
+    }
+
+    /**
+     * Gives claimed rows back, unsent, for the next run.
+     *
+     * @param  list<string>  $ids
+     */
+    private function release(array $ids): void
+    {
+        DB::table('notifications')->whereIn('id', $ids)->update(['email_handled_at' => null]);
     }
 
     /** @param  array<array-key, mixed>  $data */

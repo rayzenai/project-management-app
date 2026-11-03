@@ -24,8 +24,10 @@ use Throwable;
  * The day is claimed first (an EmailDigest row, unique per person, kind and
  * day), so a second run the same day sends nothing. A refused address
  * (MailFailure) keeps the claim, with one warning naming the person; any
- * other failed send gives it back, so a rerun that day can send it. When
- * the mail server can't be reached the run stops there. Anything else that
+ * other failed send gives it back, so a rerun that day can send it. A "not
+ * now" for one recipient (deferred) gives back only their day and the run
+ * goes on; when the mail server can't be reached the run stops there.
+ * Anything else that
  * breaks one person's email (their lists included) never stops the run for
  * the people after them. A failure is reported once per run, the rest
  * counted in one warning.
@@ -40,7 +42,7 @@ class SendMorningEmails extends Command
     {
         $pretend = (bool) $this->option('pretend');
         $now = CarbonImmutable::now();
-        $counts = ['sent' => 0, 'already' => 0, 'refused' => 0];
+        $counts = ['sent' => 0, 'already' => 0, 'refused' => 0, 'deferred' => 0];
         $failed = 0;
         $stopped = false;
 
@@ -70,7 +72,7 @@ class SendMorningEmails extends Command
             Log::warning('workspace:send-morning-emails: '.($failed - 1).' more morning emails failed after the one reported.');
         }
 
-        $this->info(($pretend ? '[pretend] ' : '')."Morning emails sent: {$counts['sent']}, already sent today: {$counts['already']}, refused: {$counts['refused']}, failed: {$failed}.");
+        $this->info(($pretend ? '[pretend] ' : '')."Morning emails sent: {$counts['sent']}, already sent today: {$counts['already']}, refused: {$counts['refused']}, deferred: {$counts['deferred']}, failed: {$failed}.");
 
         if ($stopped) {
             $this->warn('The mail server could not be reached; stopped. Run it again today to send the rest.');
@@ -81,10 +83,10 @@ class SendMorningEmails extends Command
 
     /**
      * One person's morning email: `sent` (or, pretending, would be),
-     * `already` sent today, `refused` by the mail server, or null when they
-     * get none today.
+     * `already` sent today, `refused` or `deferred` by the mail server, or
+     * null when they get none today.
      *
-     * @return 'sent'|'already'|'refused'|null
+     * @return 'sent'|'already'|'refused'|'deferred'|null
      *
      * @throws Throwable whatever else stopped it, the day given back
      */
@@ -138,6 +140,11 @@ class SendMorningEmails extends Command
                 ->where('kind', EmailDigest::MORNING)
                 ->whereDate('sent_on', $now->toDateString())
                 ->delete();
+
+            if (MailFailure::deferred($e)) {
+                // "Not now" for this person only: their day is free again, the rest go on.
+                return 'deferred';
+            }
 
             throw $e;
         }

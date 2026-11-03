@@ -113,10 +113,34 @@ function breakMailTransport(): ArrayObject
 }
 
 /**
- * The server's lasting "no" to one message: a 5xx reply at RCPT TO, as for
- * a mistyped or closed mailbox.
+ * The mail server's reply `$code` to one step of sending a message, as
+ * Symfony's SMTP transport throws it: the replies it expected in the
+ * message, and the commands sent so far in its debug transcript (as
+ * MailFailure reads them). Steps: `greeting`, `MAIL FROM`, `RCPT TO`,
+ * `DATA` and `end of data`.
  */
-function mailRefusal(int $code = 550): UnexpectedResponseException
+function smtpReply(int $code, string $at = 'RCPT TO'): UnexpectedResponseException
 {
-    return new UnexpectedResponseException("Expected response code \"250/251/252\" but got code \"{$code}\", with message \"{$code} 5.1.1 User unknown\".", $code);
+    $steps = [
+        'greeting' => [null, '220'],
+        'MAIL FROM' => ['MAIL FROM:<no-reply@example.test>', '250'],
+        'RCPT TO' => ['RCPT TO:<someone@example.test>', '250/251/252'],
+        'DATA' => ['DATA', '354'],
+        'end of data' => ['.', '250'],
+    ];
+    $debug = '';
+
+    foreach ($steps as $step => [$command, $expected]) {
+        $debug .= ($command === null ? '' : "[2026-11-03T10:03:00.000000+05:45] > {$command}\n")
+            .'[2026-11-03T10:03:00.000000+05:45] < '.($step === $at ? "{$code} No" : explode('/', $expected)[0].' OK')."\r\n";
+
+        if ($step === $at) {
+            $refusal = new UnexpectedResponseException("Expected response code \"{$expected}\" but got code \"{$code}\", with message \"{$code} No\".", $code);
+            $refusal->appendDebug($debug);
+
+            return $refusal;
+        }
+    }
+
+    throw new InvalidArgumentException("No SMTP step {$at}.");
 }

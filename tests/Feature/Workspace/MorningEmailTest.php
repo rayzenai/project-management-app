@@ -376,7 +376,7 @@ it('keeps a refused person\'s day: one warning with the person, not sent again t
     Log::spy();
     morningSecondPerson();
     morningTask('Collect revenue and expense data', '2026-10-31');
-    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? mailRefusal() : null);
+    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? smtpReply(550) : null);
 
     morningRunAt('2026-11-02 09:00:00');
 
@@ -389,6 +389,44 @@ it('keeps a refused person\'s day: one warning with the person, not sent again t
 
     morningRunAt('2026-11-02 09:30:00');
     expect($asked)->toHaveCount(2);
+});
+
+it('gives back the day of a recipient the server puts off, and goes on to the rest', function () {
+    Exceptions::fake();
+    Log::spy();
+    morningSecondPerson();
+    morningTask('Collect revenue and expense data', '2026-10-31');
+    $full = true;
+    $asked = fakeMailServer(function (string $to) use (&$full): ?Throwable {
+        return $full && $to === 'bibek@example.test' ? smtpReply(452) : null;
+    });
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test'])
+        ->and(EmailDigest::query()->pluck('user_id')->all())->not->toContain($this->user->id)
+        ->and(EmailDigest::query()->count())->toBe(1);
+    Exceptions::assertNothingReported();
+    Log::shouldNotHaveReceived('warning');
+
+    // Run again that day: Bibek's goes, Rabin's is not sent twice.
+    $full = false;
+    morningRunAt('2026-11-02 09:30:00');
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test', 'bibek@example.test'])
+        ->and(EmailDigest::query()->count())->toBe(2);
+});
+
+it('stops at a reply before RCPT TO, as at an unreachable server', function () {
+    Exceptions::fake();
+    morningSecondPerson();
+    morningTask('Collect revenue and expense data', '2026-10-31');
+    $asked = fakeMailServer(fn (): Throwable => smtpReply(530, 'MAIL FROM'));
+
+    morningRunAt('2026-11-02 09:00:00');
+
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test'])
+        ->and(EmailDigest::query()->count())->toBe(0);
+    Exceptions::assertReportedCount(1);
 });
 
 it('goes on to everyone else when one person\'s lists break, and reports it once a run', function () {
