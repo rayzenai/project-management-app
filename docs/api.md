@@ -172,6 +172,13 @@ an integer from 1 to 2147483647.
 | DELETE | `/workspace/assignments/{assignment}` |
 | POST | `/workspace/assignments/{assignment}/restore` |
 
+**Updating an assignment** (`PATCH`): `role` and `priority` take anyone who
+can view the task's project. The personal fields (`is_focused`,
+`snoozed_until`, `personal_progress`, `personal_due_at`,
+`personal_status_note`) take only the assignment's own person, while active
+(not even a super-admin changes someone else's); anyone else gets 403, for
+the whole request, when the body carries any of them.
+
 **Who may be assigned** (here and on quick add): anyone on the project's
 team (or, for a public project without a team, any active person of its
 organization), as always; and, for whoever runs the team (its manager, its
