@@ -3,6 +3,8 @@
 use App\Http\Middleware\EnsureCanSignIn;
 use App\Models\Member;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Testing\AssertableInertia;
 
@@ -141,4 +143,49 @@ it('signs a deactivated person out on the way to the forge', function () {
         ->assertRedirect('/workspace/login');
 
     $this->assertGuest();
+});
+
+it('keeps the next person signed in on a browser whose last person was deleted while signed in', function () {
+    $gone = User::factory()->create(['email' => 'gone@example.com', 'password' => Hash::make('gone-pass')]);
+    $next = User::factory()->create(['email' => 'next@example.com', 'password' => Hash::make('next-pass')]);
+
+    // Signed in: the session now holds the gone person's password hash.
+    $this->post('/workspace/login', ['email' => 'gone@example.com', 'password' => 'gone-pass'])->assertRedirect();
+    $this->get('/workspace/my')->assertOk();
+    expect(session()->has('password_hash_web'))->toBeTrue();
+
+    // Deleted meanwhile: the browser is a guest, the hash is still there.
+    $gone->delete();
+    Auth::forgetGuards();
+    $this->get('/workspace/my')->assertRedirect('/workspace/login');
+
+    $this->post('/workspace/login', ['email' => 'next@example.com', 'password' => 'next-pass'])->assertRedirect('/workspace/my');
+
+    // The next request, with the user read afresh as production does.
+    Auth::forgetGuards();
+    $this->get('/workspace/my')->assertOk();
+    $this->assertAuthenticatedAs($next);
+});
+
+it('keeps someone signed in who sets their password on a browser whose last person was deleted while signed in', function () {
+    $gone = User::factory()->create(['email' => 'gone@example.com', 'password' => Hash::make('gone-pass')]);
+    $next = User::factory()->create(['email' => 'next@example.com']);
+    Member::factory()->linkedTo($next)->create();
+
+    $this->post('/workspace/login', ['email' => 'gone@example.com', 'password' => 'gone-pass'])->assertRedirect();
+    $this->get('/workspace/my')->assertOk();
+    $gone->delete();
+    Auth::forgetGuards();
+
+    $this->post('/workspace/set-password', [
+        'kind' => 'reset',
+        'email' => 'next@example.com',
+        'token' => Password::broker('users')->createToken($next),
+        'password' => 'new-password-1',
+        'password_confirmation' => 'new-password-1',
+    ])->assertRedirect(route('workspace.my'));
+
+    Auth::forgetGuards();
+    $this->get('/workspace/my')->assertOk();
+    $this->assertAuthenticatedAs($next);
 });

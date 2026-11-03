@@ -27,6 +27,10 @@ class AuthController extends Controller
     {
         $request->authenticate();
 
+        // A person deleted while signed in left their password hash in this
+        // browser's session; AuthenticateSession would read it as the new
+        // person's changed password and sign them out once.
+        $request->session()->forget('password_hash_web');
         $request->session()->regenerate();
 
         $redirect = redirect()->intended(route('workspace.my'));

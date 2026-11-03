@@ -67,6 +67,9 @@ class PasswordController extends Controller
         $user = $result->data;
 
         Auth::login($user);
+        // As at sign-in (AuthController::store): no earlier person's
+        // password hash may sign this one out.
+        $request->session()->forget('password_hash_web');
         $request->session()->regenerate();
 
         return redirect()->route('workspace.my')
