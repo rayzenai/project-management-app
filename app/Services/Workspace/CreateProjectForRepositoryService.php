@@ -19,7 +19,9 @@ use Throwable;
  * "New project for it": a project made for a forge repository no project
  * links, and the repository linked to it, in one transaction. The forge is
  * asked first (never the cached list): a repository no longer waiting to be
- * linked is refused. The project is made by CreateProjectService in the
+ * linked is refused, and the cached list forgotten so its row goes. The
+ * link must be of that very repository (a rename can hand its name to
+ * another). The project is made by CreateProjectService in the
  * connection's organization, not public, managed by the caller when they
  * are an active person of that organization (a super-admin who isn't
  * leaves it without a manager, as Maintenance then says); the link is
@@ -50,7 +52,7 @@ class CreateProjectForRepositoryService
         }
 
         if ($repository === null) {
-            return ServiceResult::failure(self::NOT_WAITING, 422);
+            return $this->notWaiting($connection);
         }
 
         $member = WorkspaceAccess::memberFor($actor);
@@ -85,6 +87,14 @@ class CreateProjectForRepositoryService
                 return $linked;
             }
 
+            // The link reads the repository by name: renamed meanwhile, the
+            // name now belongs to another one, which is not the one asked for.
+            if ($linked->data->forge_id !== $forgeId) {
+                DB::rollBack();
+
+                return $this->notWaiting($connection);
+            }
+
             DB::commit();
         } catch (Throwable $e) {
             DB::rollBack();
@@ -100,5 +110,16 @@ class CreateProjectForRepositoryService
             ['project' => $project, 'repository' => $linked->data],
             trim("Created {$project->title} and linked {$linked->data->full_name}. Its earlier commits are being read now. {$more}"),
         );
+    }
+
+    /**
+     * The cached list still offers it: read the forge again next time, so
+     * the stale row goes.
+     */
+    private function notWaiting(GitConnection $connection): ServiceResult
+    {
+        UnlinkedRepositoriesQuery::forget((int) $connection->id);
+
+        return ServiceResult::failure(self::NOT_WAITING, 422);
     }
 }

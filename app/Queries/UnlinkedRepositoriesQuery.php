@@ -27,7 +27,27 @@ use Illuminate\Support\Facades\Cache;
  * cached list never offers a repository linked since. A write never trusts
  * the cache: find() asks the forge.
  *
- * @phpstan-type Unlinked array{forge_id: int, full_name: string, name: string, description: ?string, html_url: ?string, updated_at: ?string}
+ * @phpstan-type Unlinked array{
+ *     forge_id: int,
+ *     full_name: string,
+ *     name: string,
+ *     description: ?string,
+ *     html_url: ?string,
+ *     updated_at: ?string,
+ * }
+ * @phpstan-type Notice array{
+ *     connection: array{id: int, organization: array{id: int, name: string}},
+ *     unavailable: bool,
+ *     repositories: list<array<string, mixed>>,
+ *     projects: list<array{
+ *         id: int,
+ *         slug: string,
+ *         title: string,
+ *         program: ?string,
+ *         organization_id: int,
+ *     }>,
+ *     programs: list<array{id: int, name: string}>,
+ * }
  */
 class UnlinkedRepositoriesQuery
 {
@@ -76,7 +96,7 @@ class UnlinkedRepositoriesQuery
      * each connection the projects it may be linked to and the programs a
      * new project may join.
      *
-     * @return list<array{connection: array{id: int, organization: array{id: int, name: string}}, unavailable: bool, repositories: list<array<string, mixed>>, projects: list<array{id: int, slug: string, title: string, program: ?string, organization_id: int}>, programs: list<array{id: int, name: string}>}>
+     * @return list<Notice>
      */
     public function forViewer(?Authenticatable $user, ?int $organizationId = null): array
     {
@@ -97,6 +117,8 @@ class UnlinkedRepositoriesQuery
             $organization = (int) $connection->organization_id;
             $found = $this->for($connection);
             $waiting = $found['repositories'] !== [];
+            // The organization's keys loaded once, however many repositories wait.
+            $taken = $waiting ? ProjectKeys::takenIn($organization) : [];
 
             $notices[] = [
                 'connection' => [
@@ -104,13 +126,13 @@ class UnlinkedRepositoriesQuery
                     'organization' => ['id' => $organization, 'name' => $connection->organization->name],
                 ],
                 'unavailable' => $found['unavailable'],
-                'repositories' => array_map(function (array $repository) use ($organization): array {
+                'repositories' => array_map(function (array $repository) use ($taken): array {
                     $title = self::titleFor($repository['name']);
 
                     return [
                         ...$repository,
                         'suggested_title' => $title,
-                        'suggested_key' => ProjectKeys::unique($organization, ProjectKeys::suggest($title)),
+                        'suggested_key' => ProjectKeys::firstFree(ProjectKeys::suggest($title), $taken),
                     ];
                 }, $found['repositories']),
                 'projects' => $waiting ? $this->linkableProjects($user, $organization) : [],

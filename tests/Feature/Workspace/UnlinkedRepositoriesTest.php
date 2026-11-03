@@ -7,14 +7,17 @@ use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
+use App\Models\ProjectKeyAlias;
 use App\Models\User;
 use App\Queries\Maintenance\MaintenanceQuery;
 use App\Queries\UnlinkedRepositoriesQuery;
+use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use App\Support\WorkspaceOrganization;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
@@ -320,6 +323,42 @@ it("gives Code activity the organization's unlinked repositories, with what a ne
     expect(unlinkedListings())->toBe(1);
 });
 
+it('suggests each key as ProjectKeys::unique would, in the same number of queries however many repositories wait', function () {
+    Project::factory()->create(['organization_id' => $this->sdoc->id, 'title' => 'Old Prize', 'key' => 'IP']);
+    ProjectKeyAlias::query()->create(['project_id' => $this->tax->id, 'organization_id' => $this->sdoc->id, 'key' => 'RS']);
+    $rows = [];
+    Http::fake(['git.example/api/v1/orgs/sdoc/repos*' => function (Request $request) use (&$rows) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+        return Http::response(($query['page'] ?? '1') === '1' ? $rows : []);
+    }]);
+    $read = function (array $repositories) use (&$rows): array {
+        $rows = $repositories;
+        Cache::flush();
+        WorkspaceAccess::flush();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $notices = app(UnlinkedRepositoriesQuery::class)->forViewer($this->admin);
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return [$notices[0]['repositories'], $queries];
+    };
+
+    [, $few] = $read(array_slice(unlinkedForgeList(), 0, 2));
+    [$many, $manyQueries] = $read([
+        ...unlinkedForgeList(),
+        ...array_map(fn (int $i): array => unlinkedForgeRepository(600 + $i, "ird-tool-{$i}"), range(1, 6)),
+    ]);
+
+    expect($manyQueries)->toBe($few)
+        ->and(array_column($many, 'suggested_key', 'name'))->toEqual(collect($many)
+        ->mapWithKeys(fn (array $r): array => [$r['name'] => ProjectKeys::unique($this->sdoc->id, ProjectKeys::suggest($r['suggested_title']))])
+        ->all())
+        // IP is a project's key and RS an old key: each is the next one free.
+        ->and(array_column($many, 'suggested_key', 'name'))->toMatchArray(['ird-prize' => 'IPB', 'runner-smoke' => 'RSB', 'sdoc' => 'S']);
+});
+
 it('gives a super-admin every organization on "All organizations", and the one they switched to', function () {
     unlinkedFakeForge();
 
@@ -346,6 +385,18 @@ it('gives Code activity no unlinked repositories, and never asks the forge, for 
 
     Http::assertNothingSent();
 })->with(['manager', 'programManager', 'member']);
+
+it("gives another organization's admin only their own organization's entry, never SDOC's repositories", function () {
+    unlinkedFakeForge();
+
+    $unlinked = $this->actingAs($this->outsideAdmin)->get('/workspace/reports/code')->assertOk()->viewData('page')['props']['unlinked'];
+
+    expect(array_column(array_column($unlinked, 'connection'), 'id'))->toBe([$this->mofConnection->id])
+        ->and($unlinked[0]['repositories'])->toBe([])
+        ->and(json_encode($unlinked))->not->toContain('ird-prize')
+        ->and(json_encode($unlinked))->not->toContain('sdoc/')
+        ->and(unlinkedListings('sdoc'))->toBe(0);
+});
 
 it('says the forge could not be read rather than failing the page', function () {
     Http::fake(['git.example/*' => Http::response([], 502)]);
@@ -441,13 +492,32 @@ it('refuses a repository that is no longer waiting to be linked', function (stri
     }
     unlinkedFakeForge($stubs);
     $projects = Project::query()->count();
+    $query = app(UnlinkedRepositoriesQuery::class);
+    $query->for($this->connection);
 
     $this->actingAs($this->admin)
         ->post("/workspace/git/connections/{$this->connection->id}/repositories/502/project", ['title' => 'IRD Prize'])
         ->assertSessionHasErrors(['__global' => 'That repository is no longer waiting to be linked.']);
 
-    expect(Project::query()->count())->toBe($projects);
+    // The cached list that offered it is forgotten: the forge is read again.
+    $query->for($this->connection);
+    expect(Project::query()->count())->toBe($projects)
+        ->and(unlinkedListings())->toBe(2);
 })->with(['linked meanwhile', 'in another forge organization', 'gone from the forge', 'archived']);
+
+it('creates nothing when the name now belongs to another repository (renamed meanwhile)', function () {
+    Queue::fake();
+    unlinkedFakeForge(['git.example/api/v1/repos/sdoc/ird-prize' => Http::response(unlinkedForgeRepository(777, 'ird-prize'))]);
+    $projects = Project::query()->count();
+
+    $this->actingAs($this->admin)
+        ->post("/workspace/git/connections/{$this->connection->id}/repositories/502/project", ['title' => 'IRD Prize'])
+        ->assertSessionHasErrors(['__global' => 'That repository is no longer waiting to be linked.']);
+
+    expect(Project::query()->count())->toBe($projects)
+        ->and(GitRepository::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
 
 it("refuses a project manager, a program manager, a member and another organization's admin", function (string $who) {
     unlinkedFakeForge();

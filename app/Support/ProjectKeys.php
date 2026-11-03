@@ -66,6 +66,45 @@ final class ProjectKeys
     }
 
     /**
+     * Every key taken in an organization, current and old, as a set: so
+     * several keys can be suggested with two queries (firstFree), not two
+     * per key.
+     *
+     * @return array<string, true>
+     */
+    public static function takenIn(int $organizationId): array
+    {
+        $taken = [];
+
+        foreach ([Project::class, ProjectKeyAlias::class] as $model) {
+            foreach ($model::query()->where('organization_id', $organizationId)->pluck('key') as $key) {
+                if (is_string($key) && $key !== '') {
+                    $taken[strtoupper($key)] = true;
+                }
+            }
+        }
+
+        return $taken;
+    }
+
+    /**
+     * unique()'s answer against a set takenIn() loaded, with no query.
+     *
+     * @param  array<string, true>  $taken
+     */
+    public static function firstFree(string $base, array $taken): string
+    {
+        $base = strtoupper($base);
+        $key = $base;
+
+        for ($n = 0; isset($taken[$key]); $n++) {
+            $key = self::variant($base, $n);
+        }
+
+        return $key;
+    }
+
+    /**
      * The n-th alternative to a taken key: B..Z (n 0-24), then BA, BB, ...
      * Capped at ten characters by trimming the base.
      */

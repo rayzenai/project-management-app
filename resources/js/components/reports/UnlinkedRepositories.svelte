@@ -4,6 +4,7 @@
     import { tick } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { plural } from '../../lib/format';
+    import { suggestProjectKey } from '../../lib/projectKey';
     import type {
         Id,
         UnlinkedRepositories,
@@ -85,7 +86,9 @@
     // ---- New project for it ----
     let creating = $state<string | null>(null);
     let title = $state('');
+    /** What the person typed as the key; until they do, it follows the title. */
     let projectKey = $state('');
+    let keyEdited = $state(false);
     let programId = $state('');
     let errors = $state<Record<string, string>>({});
     let sheetEl = $state<HTMLElement | null>(null);
@@ -103,13 +106,32 @@
         return null;
     });
 
+    /**
+     * The key the title suggests: the server's (free in the organization)
+     * for the title it suggested, else the title's initials (the server
+     * makes them unique when the form is sent without a key).
+     */
+    const suggestedKey = $derived.by(() => {
+        const repository = creatingRow?.repository;
+
+        if (!repository) {
+            return '';
+        }
+
+        return title.trim() === repository.suggested_title
+            ? repository.suggested_key
+            : suggestProjectKey(title);
+    });
+    const shownKey = $derived(keyEdited ? projectKey : suggestedKey);
+
     function startCreating(
         notice: UnlinkedRepositories,
         repository: UnlinkedRepository,
     ) {
         creating = rowKey(notice, repository);
         title = repository.suggested_title;
-        projectKey = repository.suggested_key;
+        projectKey = '';
+        keyEdited = false;
         programId = '';
         errors = {};
         failure = null;
@@ -146,7 +168,11 @@
             `/workspace/git/connections/${notice.connection.id}/repositories/${repository.forge_id}/project`,
             {
                 title: title.trim(),
-                key: projectKey.trim() === '' ? null : projectKey.trim(),
+                // Untouched (or cleared), the server suggests it from the title.
+                key:
+                    keyEdited && projectKey.trim() !== ''
+                        ? projectKey.trim()
+                        : null,
                 program_id: programId === '' ? null : Number(programId),
             },
             {
@@ -224,11 +250,15 @@
                 autocapitalize="characters"
                 autocomplete="off"
                 spellcheck="false"
-                bind:value={projectKey}
+                value={shownKey}
+                oninput={(e) => {
+                    keyEdited = true;
+                    projectKey = e.currentTarget.value;
+                }}
             />
             <p class="mt-1 text-xs text-fg-muted">
                 Tasks are written <span class="font-mono"
-                    >{projectKey.trim().toUpperCase() || 'KEY'}-12</span
+                    >{shownKey.trim().toUpperCase() || 'KEY'}-12</span
                 > in commits and branches.
             </p>
             {#if errors.key}

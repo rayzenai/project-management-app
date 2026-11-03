@@ -90,9 +90,4 @@ class CreateProjectForRepositoryRequest extends FormRequest
 
         return $connection instanceof GitConnection ? $connection : null;
     }
-
-    public function forgeId(): int
-    {
-        return (int) $this->route('forgeId');
-    }
 }

@@ -806,12 +806,19 @@ Runbook: `docs/forgejo.md` section 13. API: `docs/api.md`.
   programs; `cached` reads the cache alone, for the sidebar's count). Only
   Code activity, the Maintenance page and the link and create actions ask
   the forge. Shown, for whoever passes `canSeeUnlinkedRepositories`, as
-  Code activity's `unlinked` notice (`components/reports/UnlinkedRepositories.svelte`:
-  "Link to a project" through `ProjectPicker` and the existing link route,
-  "New project for it" through `POST /workspace/git/connections/{connection}/repositories/{forgeId}/project`,
-  `CreateProjectForRepositoryService`: `CreateProjectService` plus
-  `LinkRepositoryService` in one transaction, nothing made when the link
-  fails) and as Maintenance's `repositories_unlinked`.
+  Code activity's `unlinked` notice
+  (`components/reports/UnlinkedRepositories.svelte`: "Link to a project"
+  through `ProjectPicker` and the existing link route; "New project for
+  it" through `POST /workspace/git/connections/{connection}/repositories/`
+  `{forgeId}/project`, `CreateProjectForRepositoryService`:
+  `CreateProjectService` plus `LinkRepositoryService` in one transaction,
+  nothing made when the link fails or links another repository than the
+  one asked for; a repository no longer waiting is a 422 that forgets the
+  cached list) and as Maintenance's `repositories_unlinked`. Suggested
+  keys come from `ProjectKeys::takenIn` and `firstFree` (the
+  organization's keys loaded once, `unique`'s answer); in the form the
+  Key follows the Title (`lib/projectKey.ts`, the twin of
+  `ProjectKeys::suggest`) until the person edits it.
 - **UI**: the Code tab's New repository and Access (grants and maintainers),
   the sidebar's Code activity (shown with git). Keep the Guide in step:
   developers commit with the email they sign in with (sign-in gives the forge
@@ -1079,5 +1086,6 @@ unicode glyph icons (Lucide only), no mono-uppercase eyebrow labels.
 - Tests: `tests/Feature/Workspace/**` (web), `tests/Feature/Workspace/Api/**`
   (API), `tests/Unit`. No test reaches the network: `Tests\TestCase::setUp`
   calls `Http::preventStrayRequests()`, so fake every forge call a test
-  makes (a job it queues included, or `Bus::fake` that job). Any change to `WorkspaceAccess` or a service gets happy +
-  failure + privilege-escalation tests.
+  makes (a job it queues included, or `Bus::fake` that job). Any change to
+  `WorkspaceAccess` or a service gets happy + failure + privilege-escalation
+  tests.
