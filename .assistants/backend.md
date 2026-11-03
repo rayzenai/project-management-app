@@ -446,6 +446,10 @@ The one-time timestamp migration converts existing UTC wall-clock values.
   organization ownership with `Services/Git/ForgejoClient` before saving. HTTPS
   is required except on loopback; one forge organization connects to one office.
   `OrganizationResource.git` exposes only base URL, owner and URL to super-admins.
+  `ForgejoClient::for` turns a token encrypted under another `APP_KEY` into a
+  reported status-0 `ForgejoException`, so every caller treats it as an
+  unreachable forge; `GitConnection::readableToken` lets failure logging scrub a
+  readable token without throwing again or exposing one it cannot decrypt.
 - OIDC: Passport + `jeremy379/laravel-openid-connect` (replaces Passport's provider;
   Passport auto-discovery/routes disabled). `routes/web.php` registers authenticated
   `/oauth/authorize` behind `EnsureCanSignIn` then `EnsureCanUseGit`, and sessionless, throttled

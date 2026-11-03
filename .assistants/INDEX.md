@@ -1,6 +1,6 @@
 # .assistants — project map
 
-- **generated-from:** `e930ae30e04ca783ae50d1223799ca9a2d7a8635`
+- **generated-from:** `aa706d7f98d5d3e9545632a106ea1aa43eec20b9`
 
 Agent-readable map of this repo. Read alongside `CLAUDE.md` (binding rules);
 these files are orientation, not rules.

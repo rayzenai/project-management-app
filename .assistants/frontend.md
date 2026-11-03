@@ -150,7 +150,8 @@ a copyable branch name and linked PRs, branches and commits. Board cards
 show `has_pull_request`. Code data is access-gated by the backend; public-project
 visibility alone does not expose the Code tab. `lib/types.ts` holds Program,
 Git repository/grant/access, code-activity report, PR/task-code and shared
-program/git context shapes.
+program/git context shapes. On an empty project view, Team and Repositories use
+the full available width and sit side by side from `xl` when both are present.
 Repository rows show the fixed `protected_branch` and warn when the forge's
 `default_branch` moved away from it, because work merged into the new default
 skips the tracker's rule.
