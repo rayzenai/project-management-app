@@ -21,11 +21,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PersonalTodo extends Model
 {
+    /** Its owner (`user_id`) and `done_at` are set by the services only. */
     protected $fillable = [
-        'user_id',
         'title',
         'due_on',
-        'done_at',
     ];
 
     /**

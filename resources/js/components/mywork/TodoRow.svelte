@@ -22,8 +22,8 @@
      * One of your private to-dos on My work ("Just for me"): the circle
      * ticks it done (one toast, with Undo), the title is plain text, "Only
      * you" stands where a task's project would, then its date. Its menu
-     * moves it into a project as a task, changes its date or deletes it.
-     * Nobody else ever sees it.
+     * moves it into a project as a task, changes its date or deletes it
+     * (in Done, only deletes it). Nobody else ever sees it.
      */
     let {
         row,
@@ -67,6 +67,8 @@
 
     let optimistic = $state<boolean | null>(null);
     const checked = $derived(optimistic ?? todo.done_at !== null);
+    /** A second click while the first is on its way would undo it. */
+    let toggling = false;
 
     let menuOpen = $state(false);
     let moving = $state(false);
@@ -93,10 +95,15 @@
 
     /** Done, or open again from Done: the page says which itself. */
     function toggle(): void {
+        if (toggling) {
+            return;
+        }
+
         const next = !checked;
         const title = todo.title;
         const target = url;
 
+        toggling = true;
         optimistic = next;
         router.patch(
             target,
@@ -119,7 +126,10 @@
                               }
                             : {},
                     ),
-                onFinish: () => (optimistic = null),
+                onFinish: () => {
+                    toggling = false;
+                    optimistic = null;
+                },
             },
         );
     }
@@ -168,7 +178,7 @@
 </script>
 
 <div
-    class={`group flex min-h-[44px] items-start gap-[14px] border-b border-line-soft py-3 pl-5 transition hover:bg-hover sm:-mx-[10px] sm:gap-3 sm:rounded-lg sm:border-0 sm:px-[10px] sm:py-[10px] ${inDone ? 'pr-5' : 'pr-2'}`}
+    class="group flex min-h-[44px] items-start gap-[14px] border-b border-line-soft py-3 pr-2 pl-5 transition hover:bg-hover sm:-mx-[10px] sm:gap-3 sm:rounded-lg sm:border-0 sm:px-[10px] sm:py-[10px]"
 >
     <span
         class="flex size-[24px] shrink-0 items-center justify-center sm:mt-[3px] sm:size-[18px]"
@@ -230,23 +240,21 @@
         >
     </div>
 
-    <!-- The menu's place is kept on every row, so the dates line up. -->
-    <span
-        bind:this={menuWrap}
-        class={`shrink-0 sm:-my-[4px] sm:w-[32px] ${inDone ? 'max-sm:hidden' : ''}`}
-    >
-        {#if !inDone}
-            <Popover
-                bind:open={menuOpen}
-                align="right"
-                triggerLabel={`Options for ${todo.title}`}
-                triggerClass={`btn-icon size-[44px] sm:size-[32px] ${menuOpen ? 'bg-hover text-fg' : 'pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100'}`}
-                panelClass="w-64"
-            >
-                {#snippet trigger()}
-                    <Ellipsis class="size-4" />
-                {/snippet}
+    <!-- The menu's place is kept on every row, so the dates line up. A
+         done to-do's menu only deletes it. -->
+    <span bind:this={menuWrap} class="shrink-0 sm:-my-[4px] sm:w-[32px]">
+        <Popover
+            bind:open={menuOpen}
+            align="right"
+            triggerLabel={`Options for ${todo.title}`}
+            triggerClass={`btn-icon size-[44px] sm:size-[32px] ${menuOpen ? 'bg-hover text-fg' : 'pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100'}`}
+            panelClass="w-64"
+        >
+            {#snippet trigger()}
+                <Ellipsis class="size-4" />
+            {/snippet}
 
+            {#if !inDone}
                 <button
                     type="button"
                     data-popover-item
@@ -294,17 +302,17 @@
                 {/if}
 
                 <div class="my-1 border-t border-line-soft"></div>
+            {/if}
 
-                <button
-                    type="button"
-                    data-popover-item
-                    class="menu-item hover:text-danger"
-                    onclick={remove}
-                >
-                    <Trash2 class="size-4 shrink-0" />
-                    Delete
-                </button>
-            </Popover>
-        {/if}
+            <button
+                type="button"
+                data-popover-item
+                class="menu-item hover:text-danger"
+                onclick={remove}
+            >
+                <Trash2 class="size-4 shrink-0" />
+                Delete
+            </button>
+        </Popover>
     </span>
 </div>

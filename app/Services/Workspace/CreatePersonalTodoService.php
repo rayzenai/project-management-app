@@ -22,11 +22,9 @@ class CreatePersonalTodoService
         }
 
         try {
-            $todo = PersonalTodo::create([
-                'user_id' => $owner->getAuthIdentifier(),
-                'title' => $title,
-                'due_on' => $dueOn,
-            ]);
+            $todo = new PersonalTodo(['title' => $title, 'due_on' => $dueOn]);
+            $todo->user_id = (int) $owner->getAuthIdentifier();
+            $todo->save();
 
             return ServiceResult::success($todo->fresh(), 'Added to your to-dos.');
         } catch (Throwable $e) {

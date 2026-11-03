@@ -8,6 +8,7 @@ use App\Support\QuickAddParser;
 use App\Support\ServiceResult;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -172,10 +173,10 @@ final readonly class QuickAddDispatcher
 
     /**
      * The caller's own private to-do: date words set its date (a picked one
-     * wins), priority words are dropped, an @word for the caller is taken
-     * out. Naming anyone else, by @word or by pick, needs a project. An
-     *
-     * @word that is nobody the caller can see stays in the title.
+     * wins) and priority words are dropped. Naming anyone else needs a
+     * project: a picked person, or a name after the at sign that fits any
+     * active person the caller can see but them. A name that fits only the
+     * caller is taken out, and one that fits nobody stays in the title.
      *
      * @param  list<Token>  $tokens
      * @param  list<int>  $explicitAssigneeIds
@@ -194,11 +195,15 @@ final readonly class QuickAddDispatcher
                 $consumed[] = $token;
             } elseif ($token['type'] === 'assignee') {
                 $needle = mb_strtolower($token['value']);
+                $fitsOthers = Member::query()->visibleTo($user)->active()
+                    ->when($member !== null, fn (Builder $q) => $q->whereKeyNot($member?->id))
+                    ->whereRaw('LOWER(name) LIKE ?', [$needle.'%'])
+                    ->exists();
 
-                if ($member !== null && str_starts_with(mb_strtolower($member->name), $needle)) {
-                    $consumed[] = $token;
-                } elseif (Member::query()->visibleTo($user)->active()->whereRaw('LOWER(name) LIKE ?', [$needle.'%'])->exists()) {
+                if ($fitsOthers) {
                     $someoneElse = true;
+                } elseif ($member !== null && str_starts_with(mb_strtolower($member->name), $needle)) {
+                    $consumed[] = $token;
                 }
             }
         }

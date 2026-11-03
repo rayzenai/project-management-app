@@ -309,8 +309,8 @@ it('leaves your own to-dos out of today', function () {
 });
 
 it('leaves private to-dos out, and sends nothing for them alone', function () {
-    PersonalTodo::create(['user_id' => $this->user->id, 'title' => 'Pay the electricity bill', 'due_on' => '2026-11-02']);
-    PersonalTodo::create(['user_id' => $this->user->id, 'title' => 'Renew the licence', 'due_on' => '2026-10-30']);
+    PersonalTodo::forceCreate(['user_id' => $this->user->id, 'title' => 'Pay the electricity bill', 'due_on' => '2026-11-02']);
+    PersonalTodo::forceCreate(['user_id' => $this->user->id, 'title' => 'Renew the licence', 'due_on' => '2026-10-30']);
 
     morningRunAt('2026-11-02 09:00:00');
 

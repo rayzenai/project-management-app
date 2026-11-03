@@ -40,7 +40,7 @@ afterEach(fn () => CarbonImmutable::setTestNow());
 /** @param  array<string, mixed>  $attributes */
 function apiTodoOf(User $user, array $attributes = []): PersonalTodo
 {
-    return PersonalTodo::create(['user_id' => $user->id, 'title' => 'Call the office', ...$attributes]);
+    return PersonalTodo::forceCreate(['user_id' => $user->id, 'title' => 'Call the office', ...$attributes]);
 }
 
 /** @return list<string> every row key of `$user`'s My work, done included */
@@ -93,6 +93,16 @@ it('refuses a personal add that names someone else', function () {
 
     expect(PersonalTodo::query()->exists())->toBeFalse()
         ->and(Task::query()->where('title', 'like', 'Collect the forms%')->exists())->toBeFalse();
+});
+
+it('refuses a personal add whose title is only a date word', function () {
+    Sanctum::actingAs($this->user);
+
+    $this->postJson('/api/v1/workspace/quick-add', ['title' => 'भोलि !high', 'personal' => true])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'Title is required.');
+
+    expect(PersonalTodo::query()->exists())->toBeFalse();
 });
 
 it('lets only the owner see or change a to-do', function () {

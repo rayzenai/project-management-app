@@ -46,7 +46,7 @@ afterEach(fn () => CarbonImmutable::setTestNow());
 /** @param  array<string, mixed>  $attributes */
 function todoOf(User $user, array $attributes = []): PersonalTodo
 {
-    return PersonalTodo::create(['user_id' => $user->id, 'title' => 'Call the office', ...$attributes]);
+    return PersonalTodo::forceCreate(['user_id' => $user->id, 'title' => 'Call the office', ...$attributes]);
 }
 
 /** @return array<string, list<array<string, mixed>>> My work's rows by group, as `$user` sees them */
@@ -117,6 +117,50 @@ it('lets a personal add name only the caller', function () {
         ->assertSessionHasNoErrors();
 
     expect(PersonalTodo::query()->orderBy('id')->pluck('title')->all())->toBe(['Read the report', 'Work @home']);
+});
+
+it('takes an @word for the caller only when it fits nobody else', function () {
+    $ramesh = User::factory()->create(['name' => 'Ramesh Adhikari']);
+    $rameshMember = Member::factory()->linkedTo($ramesh)->create(['organization_id' => $this->org->id, 'name' => 'Ramesh Adhikari']);
+    $ram = Member::factory()->create(['organization_id' => $this->org->id, 'name' => 'Ram Bahadur']);
+    $this->project->ensureTeam()->members()->attach([$rameshMember->id, $ram->id]);
+
+    $this->actingAs($ramesh)->post('/workspace/quick-add', ['title' => 'Sign the letter @ram', 'personal' => true])
+        ->assertSessionHasErrors(['project_id' => 'Pick a project to give it to someone.']);
+    $this->actingAs($ramesh)->post('/workspace/quick-add', ['title' => 'Sign the letter @rames', 'personal' => true])
+        ->assertSessionHasNoErrors();
+
+    expect(PersonalTodo::query()->pluck('title')->all())->toBe(['Sign the letter']);
+});
+
+it('makes a to-do, never General, when personal comes with start_general', function () {
+    $emptyOrg = Organization::factory()->create();
+    $admin = User::factory()->create();
+    Member::factory()->linkedTo($admin)->create(['organization_id' => $emptyOrg->id, 'is_office_admin' => true]);
+
+    expect(WorkspaceAccess::canStartGeneralProject($admin))->toBeTrue();
+
+    $this->actingAs($admin)->post('/workspace/quick-add', ['title' => 'Plan the week', 'personal' => true, 'start_general' => true])
+        ->assertSessionHasNoErrors();
+
+    expect(PersonalTodo::query()->where('user_id', $admin->id)->pluck('title')->all())->toBe(['Plan the week'])
+        ->and(Project::query()->where('organization_id', $emptyOrg->id)->exists())->toBeFalse();
+});
+
+it('refuses a personal add whose title is only a date word', function () {
+    $this->actingAs($this->user)->post('/workspace/quick-add', ['title' => 'भोलि', 'personal' => true])
+        ->assertSessionHasErrors(['__global' => 'Title is required.']);
+
+    expect(PersonalTodo::query()->exists())->toBeFalse();
+});
+
+it('deletes a person\'s to-dos with their login', function () {
+    todoOf($this->user);
+    $theirs = todoOf($this->colleagueUser);
+
+    $this->user->delete();
+
+    expect(PersonalTodo::query()->pluck('id')->all())->toBe([$theirs->id]);
 });
 
 it('refuses a personal add that names someone else', function (array $fields) {
@@ -341,7 +385,8 @@ it('keeps to-dos whatever organization a super-admin switched to', function () {
 
 it('reads to-dos in one query however many there are', function () {
     $count = function (int $todos): int {
-        foreach (range(1, $todos) as $i) {
+        // range(1, 0) would be [1, 0]: none means none.
+        foreach ($todos === 0 ? [] : range(1, $todos) as $i) {
             todoOf($this->user, ['title' => "Item {$i}", 'due_on' => $i % 2 === 0 ? '2026-11-05' : null]);
             todoOf($this->user, ['title' => "Done {$i}", 'done_at' => '2026-11-03 09:00:00']);
         }
@@ -356,11 +401,12 @@ it('reads to-dos in one query however many there are', function () {
     };
 
     $none = $count(0);
-    PersonalTodo::query()->delete();
     $one = $count(1);
     PersonalTodo::query()->delete();
 
-    expect($one)->toBe($count(4))->and($one)->toBeLessThanOrEqual($none + 1);
+    expect(PersonalTodo::query()->count())->toBe(0)
+        ->and($one)->toBe($count(4))
+        ->and($one)->toBe($none);
 });
 
 // ---- Where quick add starts ----
