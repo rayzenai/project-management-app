@@ -11,23 +11,25 @@
      * date. Only the person on the assignment changes these (Task 3), and on
      * My work that is always the viewer. Days are the office's Y-m-d. The
      * menu says what it did itself (a star says nothing: the filled star
-     * is the answer), so the server stays quiet.
+     * is the answer), so the server stays quiet. "Tomorrow" is the next
+     * working day, as in the Tomorrow group.
      */
     let {
         assignment,
         title,
         today,
+        tomorrow,
     }: {
         assignment: NonNullable<MyWorkRow['assignment']>;
         title: string;
         today: string;
+        tomorrow: string;
     } = $props();
 
     let open = $state(false);
     let snoozeDate = $state('');
     let ownDate = $state('');
 
-    const tomorrow = $derived(shiftDay(today, 1));
     const snoozed = $derived(
         assignment.snoozed_until !== null && assignment.snoozed_until > today,
     );
@@ -138,7 +140,7 @@
                 id={`snooze-${assignment.id}`}
                 type="date"
                 class="input min-w-0 flex-1"
-                min={tomorrow}
+                min={shiftDay(today, 1)}
                 required
                 bind:value={snoozeDate}
                 onkeydown={keepKeys}

@@ -38,7 +38,7 @@ use Illuminate\Support\Str;
  * @phpstan-type MyWorkTask array{id: int, slug: string, number: int, code: string, title: string, status: string, priority: string, deadline_at: string|null, completed_at: string|null, project: array{id: int, slug: string, title: string, code: string, label: string}}
  * @phpstan-type MyWorkRow array{kind: 'task'|'subtask', key: string, assignment: array{id: int, is_focused: bool, snoozed_until: string|null, personal_due_at: string|null}|null, task: MyWorkTask, subtask: array{id: int, body: string, due_at: string, is_done: bool}|null, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: MyWorkUpdate|null}
  * @phpstan-type MyWorkGroup array{key: string, label: string, rows: list<MyWorkRow>}
- * @phpstan-type MyWorkPayload array{today: array{date: string, label: string, bs: string|null}, groups: list<MyWorkGroup>}
+ * @phpstan-type MyWorkPayload array{today: array{date: string, label: string, bs: string|null, tomorrow: string}, groups: list<MyWorkGroup>}
  */
 final class MyWorkQuery
 {
@@ -156,6 +156,9 @@ final class MyWorkQuery
                 'date' => $today->toDateString(),
                 'label' => $today->format('l, j F'),
                 'bs' => BikramSambat::short($today),
+                // The next working day: what "Tomorrow" and "snooze until
+                // tomorrow" mean (Sunday, on a Friday without attendance).
+                'tomorrow' => $nextWorkingDay->toDateString(),
             ],
             'groups' => $groups,
         ];

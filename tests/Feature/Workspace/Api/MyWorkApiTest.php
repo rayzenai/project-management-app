@@ -40,7 +40,7 @@ it('answers with the My work payload', function () {
     $json = $this->getJson('/api/v1/workspace/my-work')
         ->assertOk()
         ->assertJsonStructure([
-            'today' => ['date', 'label', 'bs'],
+            'today' => ['date', 'label', 'bs', 'tomorrow'],
             'groups' => [['key', 'label', 'rows' => [[
                 'kind', 'key', 'assignment', 'subtask', 'due', 'days_late', 'people', 'latest_update',
                 'task' => ['id', 'slug', 'number', 'code', 'title', 'status', 'priority', 'deadline_at', 'completed_at', 'project' => ['id', 'slug', 'title', 'code', 'label']],

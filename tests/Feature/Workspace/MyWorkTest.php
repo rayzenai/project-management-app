@@ -106,7 +106,7 @@ it('places tasks by their date', function () {
     $payload = myWorkPage();
     $groups = myGroups($payload);
 
-    expect($payload['today'])->toBe(['date' => '2026-11-04', 'label' => 'Wednesday, 4 November', 'bs' => 'कार्तिक १८'])
+    expect($payload['today'])->toBe(['date' => '2026-11-04', 'label' => 'Wednesday, 4 November', 'bs' => 'कार्तिक १८', 'tomorrow' => '2026-11-05'])
         ->and(array_column($payload['groups'], 'key'))->toBe(['today', 'tomorrow', 'coming_up', 'later', 'no_date'])
         ->and(array_column($payload['groups'], 'label'))->toBe(['Today', 'Tomorrow', 'Coming up', 'Later', 'No date'])
         ->and(myGroupKeys($payload, 'today'))->toBe(["task-{$late->id}", "task-{$today->id}"])
@@ -387,7 +387,9 @@ it("treats Friday's tomorrow as Sunday", function () {
 
     $payload = myWorkPage();
 
-    expect(myGroupKeys($payload, 'tomorrow'))->toBe(["task-{$saturday->id}", "task-{$sunday->id}"])
+    // "Snooze until tomorrow" on a Friday wakes it on Sunday, too.
+    expect($payload['today']['tomorrow'])->toBe('2026-11-08')
+        ->and(myGroupKeys($payload, 'tomorrow'))->toBe(["task-{$saturday->id}", "task-{$sunday->id}"])
         ->and(myGroupKeys($payload, 'coming_up'))->toBe(["task-{$monday->id}"]);
 });
 

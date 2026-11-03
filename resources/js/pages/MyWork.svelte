@@ -184,7 +184,12 @@
                 {#if open}
                     <div id={`rows-${group.key}`}>
                         {#each group.rows as row (row.key)}
-                            <MyWorkRow {row} {group} today={today.date} />
+                            <MyWorkRow
+                                {row}
+                                {group}
+                                today={today.date}
+                                tomorrow={today.tomorrow}
+                            />
                         {/each}
                     </div>
                 {/if}

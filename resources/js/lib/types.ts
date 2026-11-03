@@ -902,7 +902,10 @@ export interface MyWorkGroup {
 
 /** The My work page (MyWorkQuery::get). Empty groups are left out. */
 export interface MyWorkPayload {
-    /** The office's today: Y-m-d, "Monday, 2 November" and its Bikram Sambat date. */
-    today: { date: string; label: string; bs: string | null };
+    /**
+     * The office's today: Y-m-d, "Monday, 2 November" and its Bikram Sambat
+     * date; `tomorrow` is the next working day (Y-m-d), as the Tomorrow group.
+     */
+    today: { date: string; label: string; bs: string | null; tomorrow: string };
     groups: MyWorkGroup[];
 }

@@ -21,7 +21,14 @@
         row,
         group,
         today,
-    }: { row: MyWorkRow; group: MyWorkGroup; today: string } = $props();
+        tomorrow,
+    }: {
+        row: MyWorkRow;
+        group: MyWorkGroup;
+        today: string;
+        /** The next working day (MyWorkPayload's `today.tomorrow`). */
+        tomorrow: string;
+    } = $props();
 
     /** Kept in a constant: a bare ' · ' at the start of a block loses its spaces. */
     const DOT = ' · ';
@@ -215,7 +222,7 @@
         class={`shrink-0 sm:-my-[4px] sm:w-[32px] ${menu ? '' : 'max-sm:hidden'}`}
     >
         {#if menu}
-            <RowMenu assignment={menu} {title} {today} />
+            <RowMenu assignment={menu} {title} {today} {tomorrow} />
         {/if}
     </span>
 </div>
