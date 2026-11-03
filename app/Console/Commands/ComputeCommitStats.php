@@ -168,7 +168,7 @@ class ComputeCommitStats extends Command
 
         if ($e->status === 0) {
             $context['url'] = $repo->gitConnection->base_url;
-            $context['cause'] = $e->causeMessage((string) $repo->gitConnection->token);
+            $context['cause'] = $e->causeMessage($repo->gitConnection->readableToken());
         }
 
         Log::warning('Counting a commit failed.', $context);

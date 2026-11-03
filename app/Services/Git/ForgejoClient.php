@@ -7,6 +7,7 @@ use App\Models\GitWebhookDelivery;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Closure;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -22,9 +23,24 @@ class ForgejoClient
         private readonly string $token,
     ) {}
 
+    /**
+     * @throws ForgejoException when the connection's token can't be read
+     *                          (sealed with another APP_KEY, such as a copy
+     *                          of production's database), so every caller
+     *                          treats it as a forge it can't reach
+     */
     public static function for(GitConnection $connection): self
     {
-        return new self($connection->base_url, $connection->token);
+        try {
+            $token = $connection->decryptedToken();
+        } catch (DecryptException $e) {
+            // Reported: in production it means the APP_KEY changed.
+            report($unusable = new ForgejoException("The forge connection's token can't be read with this app key; set the connection again.", 0, $e));
+
+            throw $unusable;
+        }
+
+        return new self($connection->base_url, $token);
     }
 
     /**

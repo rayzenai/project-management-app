@@ -300,7 +300,7 @@ class ReconcileGit extends Command
 
         if ($e->status === 0) {
             $context['url'] = $connection->base_url;
-            $context['cause'] = $e->causeMessage((string) $connection->token);
+            $context['cause'] = $e->causeMessage($connection->readableToken());
         }
 
         Log::warning('A git reconcile step failed.', $context);

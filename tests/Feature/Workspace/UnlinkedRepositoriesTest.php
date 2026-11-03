@@ -409,6 +409,21 @@ it('says the forge could not be read rather than failing the page', function () 
             ->where('unlinked.0.repositories', []));
 });
 
+it("says the forge could not be read when the connection's token was sealed with another app key", function () {
+    // A copy of production's database on a machine with its own APP_KEY.
+    DB::table('git_connections')->where('id', $this->connection->id)->update(['token' => 'sealed-elsewhere']);
+    Http::fake();
+
+    $this->actingAs($this->admin)
+        ->get('/workspace/reports/code')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('unlinked.0.unavailable', true)
+            ->where('unlinked.0.repositories', []));
+
+    Http::assertNothingSent();
+});
+
 // New project for it
 
 it('creates a project for the repository, managed by the caller, and links the repository to it', function () {

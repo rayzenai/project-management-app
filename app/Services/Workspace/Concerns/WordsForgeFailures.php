@@ -17,7 +17,7 @@ trait WordsForgeFailures
     private function forgeFailure(ForgejoException $e, GitConnection $connection): ServiceResult
     {
         if ($e->status === 0) {
-            Log::warning('Forge unreachable.', ['url' => $connection->base_url, 'cause' => $e->causeMessage($connection->token)]);
+            Log::warning('Forge unreachable.', ['url' => $connection->base_url, 'cause' => $e->causeMessage($connection->readableToken())]);
         }
 
         return $e->status === 0 || $e->status >= 500

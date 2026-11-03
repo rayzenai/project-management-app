@@ -70,7 +70,7 @@ class SyncForgeOwners implements ShouldQueue
             $context = ['owner' => $this->gitConnection->owner, 'status' => $e->status];
             if ($e->status === 0) {
                 $context['url'] = $this->gitConnection->base_url;
-                $context['cause'] = $e->causeMessage((string) $this->gitConnection->token);
+                $context['cause'] = $e->causeMessage($this->gitConnection->readableToken());
             }
             Log::warning("Couldn't sync the forge organization's owners.", $context);
         }

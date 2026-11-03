@@ -264,7 +264,7 @@ class RepositoryAccess
         if ($e->status === 0) {
             $connection = $repository->gitConnection;
             $context['url'] = $connection->base_url;
-            $context['cause'] = $e->causeMessage((string) $connection->token);
+            $context['cause'] = $e->causeMessage($connection->readableToken());
         }
 
         Log::warning("Couldn't sync a forge repository's access.", $context);

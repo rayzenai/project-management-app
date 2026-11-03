@@ -187,7 +187,7 @@ class RepositorySync
             Log::warning("Couldn't set the forge link back.", array_filter([
                 'repository' => $repo->full_name,
                 'status' => $e->status,
-                'cause' => $e->causeMessage($connection->token),
+                'cause' => $e->causeMessage($connection->readableToken()),
             ], fn (int|string $value): bool => $value !== ''));
 
             return false;

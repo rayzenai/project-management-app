@@ -99,7 +99,7 @@ class LinkRepositoryService
 
             if ($e->status === 0) {
                 $context['url'] = $connection->base_url;
-                $context['cause'] = $e->causeMessage($connection->token);
+                $context['cause'] = $e->causeMessage($connection->readableToken());
             }
 
             Log::warning("Couldn't import a forge repository's collaborators.", $context);

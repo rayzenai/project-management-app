@@ -91,7 +91,7 @@ class ComputeCommitChecks extends Command
 
         if ($e->status === 0) {
             $context['url'] = $repository->gitConnection->base_url;
-            $context['cause'] = $e->causeMessage((string) $repository->gitConnection->token);
+            $context['cause'] = $e->causeMessage($repository->gitConnection->readableToken());
         }
 
         Log::warning("Reading a commit's checks failed.", $context);

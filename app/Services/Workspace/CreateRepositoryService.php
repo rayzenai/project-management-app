@@ -74,7 +74,7 @@ class CreateRepositoryService
 
             if ($e->status === 0) {
                 $context['url'] = $connection->base_url;
-                $context['cause'] = $e->causeMessage($connection->token);
+                $context['cause'] = $e->causeMessage($connection->readableToken());
             }
 
             Log::warning("Couldn't protect a new forge repository's main branch.", $context);

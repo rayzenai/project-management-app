@@ -207,7 +207,7 @@ class RemoveFromForgeService
         $context = [...$where, 'status' => $e->status];
         if ($e->status === 0) {
             $context['url'] = $connection->base_url;
-            $context['cause'] = $e->causeMessage((string) $connection->token);
+            $context['cause'] = $e->causeMessage($connection->readableToken());
         }
 
         return $context;

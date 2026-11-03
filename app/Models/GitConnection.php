@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -78,5 +79,31 @@ class GitConnection extends Model
     public function url(): string
     {
         return rtrim($this->base_url, '/').'/'.$this->owner;
+    }
+
+    /**
+     * The bot token, decrypted.
+     *
+     * @throws DecryptException when it was sealed with another APP_KEY (a
+     *                          copy of production's database on another
+     *                          machine, or a rotated key)
+     */
+    public function decryptedToken(): string
+    {
+        return (string) $this->token;
+    }
+
+    /**
+     * The token for scrubbing it out of a forge error message; empty when it
+     * can't be read with this app key (ForgejoClient::for already refused to
+     * use it then), so logging a failure never fails itself.
+     */
+    public function readableToken(): string
+    {
+        try {
+            return $this->decryptedToken();
+        } catch (DecryptException) {
+            return '';
+        }
     }
 }
