@@ -342,7 +342,7 @@ it('places open to-dos on My work by their date', function () {
             'assignment' => null,
             'task' => null,
             'subtask' => null,
-            'todo' => ['id' => $today->id, 'title' => 'Pay the bill', 'due_on' => '2026-11-04', 'done_at' => null],
+            'todo' => ['id' => $today->id, 'title' => 'Pay the bill', 'due_on' => '2026-11-04', 'started_at' => null, 'done_at' => null],
             'due' => '2026-11-04',
             'days_late' => 0,
             'people' => [],

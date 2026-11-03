@@ -1,7 +1,12 @@
+<script lang="ts" module>
+    /** The new rows already shown: quick add's flash is read once. */
+    const shown: string[] = [];
+</script>
+
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
     import { ChevronDown, ChevronRight } from '@lucide/svelte';
-    import { onMount } from 'svelte';
+    import { onMount, tick } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../components/AppShell.svelte';
     import JoinedProjects from '../components/mywork/JoinedProjects.svelte';
@@ -22,6 +27,8 @@
      * date and Snoozed start folded; each fold is remembered on this device.
      * Projects you were just added to sit above them, under the add field.
      * Your private to-dos ("Just for me") sit among the tasks by their date.
+     * Nothing you add disappears: the row quick add just made (its flash's
+     * `created_key`) opens its folded group, is scrolled to and glows once.
      */
     let { today, groups, joined }: MyWorkPayload = $props();
 
@@ -80,6 +87,48 @@
             /* nothing to remember it in; this visit still works */
         }
     }
+
+    /** The row just added, while it glows. */
+    let fresh = $state<string | null>(null);
+
+    $effect(() => {
+        const key = shared.flash?.created_key;
+
+        if (!key || shown.includes(key)) {
+            return;
+        }
+
+        shown.push(key);
+        const group = groups.find((g) => g.rows.some((r) => r.key === key));
+
+        if (!group) {
+            return; // on others only, or on nobody: not on this list
+        }
+
+        if (!isOpen(group)) {
+            // Opened for this visit; the fold the person chose stays saved.
+            opened.set(group.key, true);
+        }
+
+        fresh = key;
+        setTimeout(() => {
+            if (fresh === key) {
+                fresh = null;
+            }
+        }, 1600);
+
+        void tick().then(() => {
+            const row = document.querySelector(
+                `[data-row-key="${CSS.escape(key)}"]`,
+            );
+            const box = row?.getBoundingClientRect();
+
+            // Clear of the sticky top bar and a phone's tab bar.
+            if (row && box && (box.top < 56 || box.bottom > innerHeight - 72)) {
+                row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        });
+    });
 
     function toggleDone(): void {
         router.get('/workspace/my', showingDone ? {} : { done: 1 }, {
@@ -200,16 +249,21 @@
                 {#if open}
                     <div id={`rows-${group.key}`}>
                         {#each group.rows as row (row.key)}
-                            {#if row.kind === 'todo'}
-                                <TodoRow {row} {group} today={today.date} />
-                            {:else}
-                                <MyWorkRow
-                                    {row}
-                                    {group}
-                                    today={today.date}
-                                    tomorrow={today.tomorrow}
-                                />
-                            {/if}
+                            <div
+                                data-row-key={row.key}
+                                class={fresh === row.key ? 'fresh' : ''}
+                            >
+                                {#if row.kind === 'todo'}
+                                    <TodoRow {row} {group} today={today.date} />
+                                {:else}
+                                    <MyWorkRow
+                                        {row}
+                                        {group}
+                                        today={today.date}
+                                        tomorrow={today.tomorrow}
+                                    />
+                                {/if}
+                            </div>
                         {/each}
                     </div>
                 {/if}
@@ -217,3 +271,21 @@
         {/each}
     </div>
 </AppShell>
+
+<style>
+    /* The row just added: the accent's soft ground, fading out. */
+    .fresh > :global(*) {
+        animation: fresh-row 1.5s ease-in;
+    }
+
+    @keyframes fresh-row {
+        0%,
+        30% {
+            background-color: var(--ws-accent-soft);
+        }
+
+        100% {
+            background-color: transparent;
+        }
+    }
+</style>

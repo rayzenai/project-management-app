@@ -70,6 +70,7 @@ it('adds a private to-do from quick add with a date word', function () {
         'id' => $todo->id,
         'title' => 'Call the office',
         'due_on' => '2026-11-05',
+        'started_at' => null,
         'done_at' => null,
         'created_at' => CarbonImmutable::now()->toIso8601String(),
     ])->and($todo->user_id)->toBe($this->user->id)
@@ -196,7 +197,7 @@ it('lists open to-dos as rows of My work', function () {
         'assignment' => null,
         'task' => null,
         'subtask' => null,
-        'todo' => ['id' => $todo->id, 'title' => 'Call the office', 'due_on' => '2026-11-04', 'done_at' => null],
+        'todo' => ['id' => $todo->id, 'title' => 'Call the office', 'due_on' => '2026-11-04', 'started_at' => null, 'done_at' => null],
         'due' => '2026-11-04',
         'days_late' => 0,
         'people' => [],

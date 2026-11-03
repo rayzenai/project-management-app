@@ -14,6 +14,7 @@ use App\Models\TeamMembership;
 use App\Models\User;
 use App\Models\WorkspaceNote;
 use App\Queries\Attendance\MyAttendanceQuery;
+use App\Queries\PersonalTodosQuery;
 use App\Queries\Structure\OrganizationChoicesQuery;
 use App\Queries\Structure\PersonRef;
 use App\Services\ResolveThemeTokens;
@@ -46,6 +47,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   visible in one place. Empty while the user has task notes turned off.
  * - `features` — the optional features (task notes, contacts) the user turned
  *   on in Settings. Screens hide what is off.
+ * - `todoCount` — the user's open private to-dos (To do and Doing), the
+ *   number beside the top bar's to-do button (PersonalTodosQuery::openCount).
  * - `gitEnabled` — whether the user may use git anywhere (GitAccess), so the
  *   Guide shows its Code section only to them.
  * - `clock` — the user's day for the top bar's clock button
@@ -221,6 +224,8 @@ class ShareWorkspaceData
         ]);
 
         Inertia::share('unreadNotifications', fn (): int => $request->user()?->unreadNotifications()->count() ?? 0);
+
+        Inertia::share('todoCount', fn (): int => $request->user() instanceof User ? PersonalTodosQuery::openCount($request->user()) : 0);
 
         Inertia::share('flash', fn (): ?array => $request->session()->get('workspace_flash'));
 

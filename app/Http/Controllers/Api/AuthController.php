@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Middleware\EnsureCanSignIn;
 use App\Models\Member;
 use App\Models\User;
+use App\Queries\PersonalTodosQuery;
 use App\Support\Git\GitAccess;
 use App\Support\LoginThrottle;
 use App\Support\OfficeLinks;
@@ -117,6 +118,8 @@ class AuthController extends Controller
             'attendance_enabled' => WorkspaceAccess::canPunch($user),
             // The twin of the web's office prop: the office pages the user may open.
             'office' => OfficeLinks::for($user),
+            // The twin of the web's todoCount: open private to-dos (To do and Doing).
+            'todo_count' => PersonalTodosQuery::openCount($user),
         ];
     }
 }

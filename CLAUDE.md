@@ -346,18 +346,28 @@ Every role decision goes through `WorkspaceAccess`. Never re-implement inline.
   card onto another links them.
 - **Subtask** — personal (`user_id`). **PersonalTodo** — a private to-do
   ("Just for me", `personal_todos`: `user_id`, `title`, `due_on`,
-  `done_at`): its owner's alone on every surface
+  `started_at` ("doing" while set and not done), `done_at`, soft deletes):
+  its owner's alone on every surface
   (`WorkspaceAccess::ownsPersonalTodo`; `PersonalTodoRequest` answers anyone
   else, a super-admin included, with the 404 of a missing one, word for
   word). Made by quick add's `personal: true` (`QuickAddDispatcher`: date
   words set `due_on`, priority words are dropped, naming anyone else is 422
   `Pick a project to give it to someone.` on `project_id`, a `#token` naming
   a project they may add to still makes a task); `PATCH|DELETE
-  /workspace/todos/{todo}`; `POST .../move` turns it into a task through
+  /workspace/todos/{todo}` (PATCH `doing` sets or clears `started_at`;
+  done keeps it); a delete goes to the trash for `PersonalTodo::TRASH_DAYS`
+  (7, then `workspace:prune-trashed`) so `POST .../restore` (the Undo) can
+  bring it back; `POST .../move` turns it into a task through
   `QuickAddDispatcher::fileTitle` (quick add's refusals and default-to-self)
-  and deletes it in one transaction. Shown on My work and nowhere else
-  (never in the morning email, counts, reports, activity or
-  notifications; no morph map entry). **Member** — a person in one organization
+  and force-deletes it in one transaction. Read through
+  `App\Queries\PersonalTodosQuery` (`for`: Doing, To do, the last week's
+  Done, in one query; `openCount`: the top bar's number), served as JSON
+  by `GET /workspace/todos` (web and API). Shown on My work and in the top
+  bar's to-do list (`components/todos/TodoPanel.svelte`: a popover from
+  `md`, a bottom sheet below, `T` toggles it; its changes go one at a time,
+  as Inertia visits with `only: groups, todoCount, flash`, then it fetches
+  the list again) and nowhere else (never in the morning email, reports,
+  activity or notifications; no morph map entry). **Member** — a person in one organization
   (a super-admin's own member may have none), `is_office_admin`; optionally linked to
   a `User` (`Member::forUser` `firstOrCreate`s — never call it in authorization).
   `scopeAssignableFor(Project)` is who is assignable as things stand;
@@ -505,7 +515,8 @@ the organizational admin switch and the program and project manager pickers.
   `lastProjectId`, where the add field starts: the project of the newer of
   the caller's newest created task and newest team joined),
   `workspaceNotes`, `taskNotes`, `appearance`, `themeCatalogue`,
-  `unreadNotifications`, `flash`, `isSuperAdmin`, `ledTeamIds`,
+  `unreadNotifications`, `todoCount` (open private to-dos, one count),
+  `flash`, `isSuperAdmin`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`, the sidebar's
   Programs group), `organizationSwitch` (a super-admin's, see Structure).
   Add cross-cutting web context there. `/` and `/workspace` redirect to
@@ -521,7 +532,10 @@ the organizational admin switch and the program and project manager pickers.
   last 14 days by someone else, at most 5, with `added_by` from the
   `TeamMembershipObserver` activity row) shows above the groups
   (`mywork/JoinedProjects.svelte`), so someone added to a project with no
-  tasks is told where they land. A web mutation answers with a success flash toast; a
+  tasks is told where they land. Quick add's web answer flashes
+  `created_key` (`todo-12`, `task-34`): My work opens the folded group
+  the new row landed in (for this visit only), scrolls to it and lets it
+  glow once, so nothing added disappears. A web mutation answers with a success flash toast; a
   caller that already shows its own sends the `X-Workspace-Quiet` header
   (`lib/toast.svelte.ts`'s `QUIET`) to skip it (errors always flash). The
   organization switch's, notifications' and old links' fallbacks all land
@@ -529,7 +543,7 @@ the organizational admin switch and the program and project manager pickers.
 - **API** (`routes/api.php`, prefix `api/v1`, names `api.*`): `POST login`
   → token; `Api\AuthController::userPayload` is the token-auth twin of
   `ShareWorkspaceData` (`is_super_admin`, `is_office_admin`, `led_team_ids`,
-  `managed_program_ids`, `features`, `git_enabled`, ...). External systems
+  `managed_program_ids`, `features`, `git_enabled`, `todo_count`, ...). External systems
   get tokens via `workspace:api-token`.
   Add cross-cutting API context to `userPayload`. My work is
   `GET /api/v1/workspace/my-work` (same `MyWorkQuery`, every organization);
@@ -1016,7 +1030,10 @@ the single source of mode.
 
 Primitives: `StatusGlyph` (the status icon: ring / dashed ring / amber half
 disc / green check / red cross), `PriorityBars`, `Avatar` (squircle initials),
-`ProgressRing`. Pages wrap themselves in `AppShell` and provide the 44px top
+`ProgressRing`. `Popover` portals its panel to `<body>`; a Popover opened
+inside another's panel registers its panel with the outer one (context),
+so a press in it doesn't close the outer, and a press on a toast
+(`[data-toasts]`) closes none. Pages wrap themselves in `AppShell` and provide the 44px top
 bar through its `bar` snippet (breadcrumb left, actions right); `flush` drops
 the content padding for full-bleed registers and boards.
 

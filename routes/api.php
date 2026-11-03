@@ -88,9 +88,11 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::post('/quick-add', QuickAddController::class)->name('quick-add');
 
             // Private to-dos: their owner's alone (PersonalTodoRequest).
+            Route::get('/todos', [PersonalTodoController::class, 'index'])->name('todos.index');
             Route::patch('/todos/{todo}', [PersonalTodoController::class, 'update'])->name('todos.update');
             Route::delete('/todos/{todo}', [PersonalTodoController::class, 'destroy'])->name('todos.destroy');
             Route::post('/todos/{todo}/move', [PersonalTodoController::class, 'move'])->name('todos.move');
+            Route::post('/todos/{todo}/restore', [PersonalTodoController::class, 'restore'])->name('todos.restore')->withTrashed();
 
             // Organizations (super-admin)
             Route::get('/organizations', [OrganizationController::class, 'index'])->name('organizations.index');

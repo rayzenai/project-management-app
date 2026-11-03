@@ -5,6 +5,7 @@
 </script>
 
 <div
+    data-toasts
     class="pointer-events-none fixed inset-x-0 bottom-[calc(72px+env(safe-area-inset-bottom))] z-[70] flex flex-col items-center gap-2 px-4 md:bottom-5"
 >
     {#each toast.items as item (item.id)}

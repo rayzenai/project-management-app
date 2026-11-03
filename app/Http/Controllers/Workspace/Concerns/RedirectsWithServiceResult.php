@@ -20,9 +20,12 @@ trait RedirectsWithServiceResult
     public const QUIET_HEADER = 'X-Workspace-Quiet';
 
     /**
+     * `$createdKey` names the row a success made (`todo-12`, `task-34`), so
+     * the page can find it after the reload (My work opens its group).
+     *
      * @param  array{label: string, url: string}|null  $undo
      */
-    protected function redirectWithResult(ServiceResult $result, string $successRoute = '', ?string $defaultRoute = null, ?array $undo = null): RedirectResponse
+    protected function redirectWithResult(ServiceResult $result, string $successRoute = '', ?string $defaultRoute = null, ?array $undo = null, ?string $createdKey = null): RedirectResponse
     {
         $flash = [
             'success' => $result->success,
@@ -31,6 +34,10 @@ trait RedirectsWithServiceResult
 
         if ($result->success && $undo !== null) {
             $flash['undo'] = $undo;
+        }
+
+        if ($result->success && $createdKey !== null) {
+            $flash['created_key'] = $createdKey;
         }
 
         if ($result->success) {

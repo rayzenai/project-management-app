@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Workspace;
 
 use App\Http\Controllers\Workspace\Concerns\RedirectsWithServiceResult;
 use App\Http\Requests\QuickAddTaskRequest;
+use App\Models\PersonalTodo;
 use App\Models\Task;
 use App\Services\Workspace\QuickAddDispatcher;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +51,11 @@ class QuickAddController extends Controller
             }
         }
 
-        return $this->redirectWithResult($result);
+        // My work finds the new row by its key, and shows it even in a folded group.
+        return $this->redirectWithResult($result, createdKey: match (true) {
+            $task instanceof Task => "task-{$task->id}",
+            $task instanceof PersonalTodo => "todo-{$task->id}",
+            default => null,
+        });
     }
 }

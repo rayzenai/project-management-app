@@ -2,9 +2,10 @@
     import { page, router } from '@inertiajs/svelte';
     import {
         CalendarX,
-        Check,
         Ellipsis,
         FolderInput,
+        Play,
+        Square,
         Trash2,
     } from '@lucide/svelte';
     import { dueLabel, shortDay } from '../../lib/dates';
@@ -17,13 +18,15 @@
     } from '../../lib/types';
     import Popover from '../Popover.svelte';
     import ProjectPicker from '../ProjectPicker.svelte';
+    import TodoCircle from '../todos/TodoCircle.svelte';
 
     /**
      * One of your private to-dos on My work ("Just for me"): the circle
-     * ticks it done (one toast, with Undo), the title is plain text, "Only
-     * you" stands where a task's project would, then its date. Its menu
-     * moves it into a project as a task, changes its date or deletes it
-     * (in Done, only deletes it). Nobody else ever sees it.
+     * ticks it done (one toast, with Undo) and is half filled while you
+     * work on it, the title is plain text, "Only you" stands where a task's
+     * project would, then its date. Its menu starts or stops it, moves it
+     * into a project as a task, changes its date or deletes it (with Undo;
+     * in Done, it only deletes it). Nobody else ever sees it.
      */
     let {
         row,
@@ -67,6 +70,7 @@
 
     let optimistic = $state<boolean | null>(null);
     const checked = $derived(optimistic ?? todo.done_at !== null);
+    const doing = $derived(todo.started_at !== null);
     /** A second click while the first is on its way would undo it. */
     let toggling = false;
 
@@ -149,11 +153,25 @@
         );
     }
 
-    function remove(): void {
+    /** Start working on it, or stop: the circle says which. */
+    function setDoing(next: boolean): void {
         menuOpen = false;
-        router.delete(url, {
+        router.patch(url, { doing: next }, quietly);
+    }
+
+    function remove(): void {
+        const target = url;
+
+        menuOpen = false;
+        router.delete(target, {
             ...quietly,
-            onSuccess: () => toast.show('To-do deleted.'),
+            onSuccess: () =>
+                toast.show('To-do deleted.', {
+                    undo: {
+                        run: () =>
+                            router.post(`${target}/restore`, {}, quietly),
+                    },
+                }),
         });
     }
 
@@ -183,22 +201,12 @@
     <span
         class="flex size-[24px] shrink-0 items-center justify-center sm:mt-[3px] sm:size-[18px]"
     >
-        <button
-            type="button"
-            role="checkbox"
-            aria-checked={checked}
-            aria-label={checked
-                ? `Mark "${todo.title}" not done`
-                : `Mark "${todo.title}" done`}
-            class={`relative flex size-[24px] items-center justify-center rounded-full border-[1.5px] transition before:absolute before:-inset-[10px] before:content-[''] sm:size-[18px] sm:before:-inset-[13px] ${
-                checked
-                    ? 'border-success bg-success text-white'
-                    : 'border-fg-faint text-transparent hover:border-success hover:text-success'
-            }`}
+        <TodoCircle
+            title={todo.title}
+            done={checked}
+            {doing}
             onclick={toggle}
-        >
-            <Check class="size-[14px] sm:size-[11px]" strokeWidth={3} />
-        </button>
+        />
     </span>
 
     <div class="relative flex min-w-0 flex-1 items-start gap-3">
@@ -255,6 +263,20 @@
             {/snippet}
 
             {#if !inDone}
+                <button
+                    type="button"
+                    data-popover-item
+                    class="menu-item"
+                    onclick={() => setDoing(!doing)}
+                >
+                    {#if doing}
+                        <Square class="size-4 shrink-0" />
+                        Stop
+                    {:else}
+                        <Play class="size-4 shrink-0" />
+                        Start
+                    {/if}
+                </button>
                 <button
                     type="button"
                     data-popover-item

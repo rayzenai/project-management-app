@@ -46,7 +46,7 @@ use Illuminate\Support\Str;
  * @phpstan-type MyWorkUpdate array{author: string, body: string, at: string|null}
  * @phpstan-type MyWorkTask array{id: int, slug: string, number: int, code: string, title: string, status: string, priority: string, deadline_at: string|null, completed_at: string|null, project: MyWorkProject}
  * @phpstan-type MyWorkTaskRow array{kind: 'task'|'subtask', key: string, assignment: array{id: int, is_focused: bool, snoozed_until: string|null, personal_due_at: string|null}|null, task: MyWorkTask, subtask: array{id: int, body: string, due_at: string, is_done: bool}|null, todo: null, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: MyWorkUpdate|null}
- * @phpstan-type MyWorkTodoRow array{kind: 'todo', key: string, assignment: null, task: null, subtask: null, todo: array{id: int, title: string, due_on: string|null, done_at: string|null}, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: null}
+ * @phpstan-type MyWorkTodoRow array{kind: 'todo', key: string, assignment: null, task: null, subtask: null, todo: array{id: int, title: string, due_on: string|null, started_at: string|null, done_at: string|null}, due: string|null, days_late: int, people: list<MyWorkPerson>, latest_update: null}
  * @phpstan-type MyWorkRow MyWorkTaskRow|MyWorkTodoRow
  * @phpstan-type MyWorkGroup array{key: string, label: string, rows: list<MyWorkRow>}
  * @phpstan-type MyWorkProject array{id: int, slug: string, title: string, code: string, label: string}
@@ -371,7 +371,13 @@ final class MyWorkQuery
             'assignment' => null,
             'task' => null,
             'subtask' => null,
-            'todo' => ['id' => $todo->id, 'title' => $todo->title, 'due_on' => $due, 'done_at' => $todo->done_at?->toIso8601String()],
+            'todo' => [
+                'id' => $todo->id,
+                'title' => $todo->title,
+                'due_on' => $due,
+                'started_at' => $todo->started_at?->toIso8601String(),
+                'done_at' => $todo->done_at?->toIso8601String(),
+            ],
             'due' => $due,
             'days_late' => 0,
             'people' => [],

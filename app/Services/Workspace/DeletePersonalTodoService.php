@@ -7,8 +7,9 @@ use App\Support\ServiceResult;
 use Throwable;
 
 /**
- * Deletes a private to-do for good: it is its owner's alone, so there is no
- * trash to keep it in.
+ * Deletes a private to-do into its owner's trash, where its Undo can bring
+ * it back (POST .../restore) until workspace:prune-trashed removes it after
+ * PersonalTodo::TRASH_DAYS.
  */
 class DeletePersonalTodoService
 {

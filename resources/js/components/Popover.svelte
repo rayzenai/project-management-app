@@ -1,4 +1,10 @@
+<script lang="ts" module>
+    /** The context key of the panels opened from inside a panel. */
+    const NESTED = Symbol('popover-nested');
+</script>
+
 <script lang="ts">
+    import { getContext, setContext } from 'svelte';
     import type { Snippet } from 'svelte';
 
     let {
@@ -79,6 +85,37 @@
             `max-height:${Math.round(Math.max(flip ? above : below, 120))}px;`;
     }
 
+    /**
+     * A popover opened from inside this one's panel (a row's menu) sits on
+     * <body> too, so a press in it would look like a press outside: it
+     * registers its panel here. A toast's Undo leaves an open panel open.
+     */
+    const parent = getContext<Set<HTMLElement> | undefined>(NESTED);
+    const nested = new Set<HTMLElement>();
+    setContext(NESTED, nested);
+
+    $effect(() => {
+        const mine = panel;
+
+        if (!parent || !mine) {
+            return;
+        }
+
+        parent.add(mine);
+
+        return () => {
+            parent.delete(mine);
+        };
+    });
+
+    function within(target: Node): boolean {
+        return (
+            [...nested].some((child) => child.contains(target)) ||
+            (target instanceof Element &&
+                target.closest('[data-toasts]') !== null)
+        );
+    }
+
     function items(): HTMLElement[] {
         return Array.from(
             panel?.querySelectorAll<HTMLElement>('[data-popover-item]') ?? [],
@@ -107,7 +144,8 @@
 
             if (
                 wrapper?.contains(target) !== true &&
-                panel?.contains(target) !== true
+                panel?.contains(target) !== true &&
+                !within(target)
             ) {
                 open = false;
             }

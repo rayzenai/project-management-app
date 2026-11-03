@@ -24,6 +24,7 @@ class PersonalTodoResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'due_on' => $this->due_on?->toDateString(),
+            'started_at' => $this->started_at?->toIso8601String(),
             'done_at' => $this->done_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

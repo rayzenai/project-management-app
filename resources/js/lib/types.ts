@@ -804,6 +804,8 @@ export interface Flash {
     success?: boolean;
     message?: string | null;
     undo?: { label: string; url: string };
+    /** The row quick add just made ("todo-12", "task-34"): My work shows it. */
+    created_key?: string;
 }
 
 export interface AuthUser extends User {
@@ -843,6 +845,8 @@ export interface SharedProps {
     managedProgramIds?: Id[];
     managedPrograms?: ProgramRef[];
     unreadNotifications?: number;
+    /** Your open private to-dos (To do and Doing): the top bar's count. */
+    todoCount?: number;
     themeCatalogue?: ThemeCatalogue;
     features?: Features;
     /** The user may use git somewhere (GitAccess): the Guide's Code section. */
@@ -926,6 +930,30 @@ export interface MyWorkTaskRow {
     latest_update: { author: string; body: string; at: string | null } | null;
 }
 
+/** A private to-do ("Just for me"): its owner's alone (PersonalTodosQuery). */
+export interface PersonalTodo {
+    id: Id;
+    title: string;
+    /** Y-m-d. */
+    due_on: string | null;
+    /** ISO 8601: being worked on ("doing") while it is not done. */
+    started_at: string | null;
+    /** ISO 8601. */
+    done_at: string | null;
+}
+
+/** The top bar's to-do list (GET /workspace/todos). */
+export interface PersonalTodoLists {
+    /** The office's today, Y-m-d. */
+    today: string;
+    /** Started, not done; the oldest start first. */
+    doing: PersonalTodo[];
+    /** Neither; by date, undated last. */
+    open: PersonalTodo[];
+    /** Done in the last 7 days, the newest first, at most 20. */
+    done: PersonalTodo[];
+}
+
 /** One of your private to-dos ("Just for me"): yours alone, on no task. */
 export interface MyWorkTodoRow {
     kind: 'todo';
@@ -934,13 +962,11 @@ export interface MyWorkTodoRow {
     assignment: null;
     task: null;
     subtask: null;
-    /** `due_on` is Y-m-d; `done_at` ISO 8601, set in the Done group. */
-    todo: {
-        id: Id;
-        title: string;
-        due_on: string | null;
-        done_at: string | null;
-    };
+    /**
+     * `due_on` is Y-m-d; `started_at` ISO 8601 while you work on it
+     * ("doing"); `done_at` ISO 8601, set in the Done group.
+     */
+    todo: PersonalTodo;
     due: string | null;
     /** Always 0: a to-do is never late itself. */
     days_late: number;

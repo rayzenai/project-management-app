@@ -19,6 +19,7 @@
     import TaskPeek from './TaskPeek.svelte';
     import ThemeToggle from './ThemeToggle.svelte';
     import Toasts from './Toasts.svelte';
+    import TodoPanel from './todos/TodoPanel.svelte';
     import WorkspaceNotesBoard from './WorkspaceNotesBoard.svelte';
 
     /**
@@ -61,6 +62,7 @@
     );
     const programs = $derived(shared.managedPrograms ?? []);
     const noteCount = $derived(shared.workspaceNotes?.length ?? 0);
+    const todoCount = $derived(shared.todoCount ?? 0);
 
     const COLLAPSE_KEY = 'workspace.sidebar.collapsed';
 
@@ -90,6 +92,7 @@
 
     let lastFlash = $state<string | null>(null);
     let settingsOpen = $state(false);
+    let todosOpen = $state(false);
 
     $effect(() => {
         const message = flash?.message ?? null;
@@ -191,6 +194,7 @@
             palette.isOpen ||
             notesBoard.open ||
             settingsOpen ||
+            todosOpen ||
             peek.target !== null,
     );
 
@@ -221,6 +225,10 @@
             } else if (settingsOpen) {
                 e.preventDefault();
                 settingsOpen = false;
+            } else if (todosOpen) {
+                // The focus left the to-do list (its row was deleted).
+                e.preventDefault();
+                todosOpen = false;
             }
 
             return;
@@ -238,11 +246,19 @@
             return;
         }
 
-        if (isEditable(e.target) || overlayOpen) {
+        if (isEditable(e.target) || e.metaKey || e.ctrlKey || e.altKey) {
             return;
         }
 
-        if (e.metaKey || e.ctrlKey || e.altKey) {
+        // The to-do list: T opens it, and closes it again from inside.
+        if ((e.key === 't' || e.key === 'T') && (todosOpen || !overlayOpen)) {
+            e.preventDefault();
+            todosOpen = !todosOpen;
+
+            return;
+        }
+
+        if (overlayOpen) {
             return;
         }
 
@@ -319,6 +335,7 @@
                 <div class="flex-1 truncate font-medium">{title}</div>
             {/if}
             <ClockButton />
+            <TodoPanel bind:open={todosOpen} count={todoCount} />
             <button
                 type="button"
                 class={`btn-ghost shrink-0 ${notesBoard.open ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}

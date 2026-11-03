@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Member;
+use App\Models\PersonalTodo;
 use App\Models\ProjectAssignment;
 use App\Models\ProjectContact;
 use App\Models\ProjectNote;
@@ -11,6 +12,7 @@ use App\Models\Task;
 use App\Models\TaskComment;
 use App\Models\Team;
 use App\Models\WorkspaceNote;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 
 class PruneTrashedWorkspaceModels extends Command
@@ -33,22 +35,11 @@ class PruneTrashedWorkspaceModels extends Command
         $total = 0;
 
         foreach ($this->models as $model) {
-            $count = 0;
-
-            foreach ($model::onlyTrashed()->where('deleted_at', '<', $cutoff)->cursor() as $row) {
-                if (! $pretend) {
-                    $row->forceDelete();
-                }
-
-                $count++;
-            }
-
-            if ($count > 0) {
-                $this->line(class_basename($model).": {$count}");
-            }
-
-            $total += $count;
+            $total += $this->prune($model, $cutoff, $pretend);
         }
+
+        // A deleted private to-do is kept only for its Undo.
+        $total += $this->prune(PersonalTodo::class, now()->subDays(PersonalTodo::TRASH_DAYS), $pretend);
 
         if ($pretend) {
             $this->info("[pretend] Would prune {$total} trashed row(s).");
@@ -57,5 +48,27 @@ class PruneTrashedWorkspaceModels extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @param  class-string  $model
+     */
+    private function prune(string $model, CarbonInterface $cutoff, bool $pretend): int
+    {
+        $count = 0;
+
+        foreach ($model::onlyTrashed()->where('deleted_at', '<', $cutoff)->cursor() as $row) {
+            if (! $pretend) {
+                $row->forceDelete();
+            }
+
+            $count++;
+        }
+
+        if ($count > 0) {
+            $this->line(class_basename($model).": {$count}");
+        }
+
+        return $count;
     }
 }

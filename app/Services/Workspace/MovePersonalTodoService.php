@@ -37,7 +37,8 @@ class MovePersonalTodoService
                     return $filed;
                 }
 
-                $todo->delete();
+                // For good: no Undo may bring it back beside its task.
+                $todo->forceDelete();
 
                 return ServiceResult::success($filed->data, "Moved to {$filed->data->project->label()}.");
             });
