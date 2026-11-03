@@ -77,7 +77,7 @@
         ],
         [
             'Email',
-            'When a task is given to you, you are mentioned or you join a project, you get one short email with a link. On working days at 9:00 you get a morning email listing what is late, due today or new, and none when nothing is waiting. Nothing in an email changes anything; the link only opens the workspace. Turn either off under Emails in the menu.',
+            'When a task is given to you, you are mentioned or you join a project, you get one short email with a link. On working days, in the morning, at 9:00, you get an email listing what is late, due today or new, and none when nothing is waiting. Nothing in an email changes anything; the link only opens the workspace. Turn either off under Emails in the menu.',
         ],
         [
             'Forgot your password?',

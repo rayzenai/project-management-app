@@ -465,3 +465,15 @@ it('renders the greeting, the day, each list and the way to change it', function
     $mail->assertSeeInText('From Mina Thapa · due Thu 5 Nov');
     $mail->assertSeeInText(url('/workspace/settings/emails'));
 });
+
+it('names the configured hour in its footer, never a fixed 9:00', function () {
+    config(['project-management.emails.morning_at' => '08:30']);
+    morningTask('Server room checklist', '2026-11-02');
+
+    $today = CarbonImmutable::parse('2026-11-02 08:30:00');
+    $mail = new MorningMail($this->user, $today, app(MorningEmailQuery::class)->for($this->user, $today));
+
+    expect($mail->render())->toContain('You get this on working days at 8:30, only when something is waiting for you.')
+        ->not->toContain('9:00');
+    $mail->assertSeeInText('You get this on working days at 8:30, only when something is waiting for you.');
+});
