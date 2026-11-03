@@ -391,9 +391,14 @@ only; scheduled commands read them:
   `UPDATE ... WHERE email_handled_at IS NULL AND read_at IS NULL`, so a row
   read in the app first, or taken by an overlapping run, is never sent; the
   claim is the "handled" mark even when nothing is sent (right away off, or
-  `canSignIn` false). Delivery is at most once; a thrown send releases the
-  claimed rows for the next run, and a failure is reported once per run. The
-  migration marked every earlier notification handled.
+  `canSignIn` false). Delivery is at most once. `App\Support\MailFailure`
+  sorts a failed send: `unreachable` (no connection, a timeout, TLS, a
+  refused login, a 4xx "try later") releases that person's claimed rows and
+  stops the run (the next minute retries); `refused` (a 5xx, such as an
+  unknown mailbox) keeps them handled, never retried, with one `warning`
+  naming the user id; anything else keeps them handled too. A failure is
+  reported once per run. The SMTP mailer gives up after `MAIL_TIMEOUT`
+  seconds (15). The migration marked every earlier notification handled.
 - `SendMorningEmails` (`workspace:send-morning-emails`, daily at
   `emails.morning_at`, `PM_MORNING_EMAIL_AT`, default 09:00): for each person
   who has it on, may sign in and has a working day today

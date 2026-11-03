@@ -12,12 +12,14 @@ use App\Notifications\MentionedInComment;
 use App\Notifications\TaskAssigned;
 use App\Notifications\TaskStatusChanged;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Mail\MailManager;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 /*
  * Right-away email: everything given to someone inside a few minutes goes
@@ -253,7 +255,7 @@ it('keeps the rows for the next run when the mail server fails', function () {
     Mail::assertSent(UpdatesMail::class, 1);
 });
 
-it('reports a mail outage once a run, and counts the rest in one warning', function () {
+it('stops the run at the first failure to reach the mail server, giving back only what it took', function (Throwable $failure) {
     Exceptions::fake();
     Log::spy();
 
@@ -262,12 +264,72 @@ it('reports a mail outage once a run, and counts the rest in one warning', funct
         euAssign($other, $this->assigner);
     }
 
-    breakMailTransport();
+    $asked = fakeMailServer(fn (): Throwable => $failure);
     euRunAt('2026-11-03 10:03:00');
 
+    // One try, not one per person: the next minute tries again.
+    expect($asked)->toHaveCount(1)
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(3);
+    Exceptions::assertReportedCount(1);
+    Log::shouldNotHaveReceived('warning');
+})->with([
+    'no connection' => fn () => new TransportException('Connection could not be established with host "smtp.example.test:587"'),
+    'a timeout' => fn () => new TransportException('Connection to "smtp.example.test:587" timed out.'),
+    'TLS' => fn () => new TransportException('Unable to connect with STARTTLS.'),
+    'a refused login' => fn () => new TransportException('Failed to authenticate on SMTP server with username "no-reply".', 535),
+    'a "try later" reply' => fn () => mailRefusal(451),
+]);
+
+it('treats a refused address as handled: one warning with the person, never tried again, and goes on', function () {
+    Exceptions::fake();
+    Log::spy();
+    euAssign($this->member, $this->assigner);
+    Carbon::setTestNow('2026-11-03 10:00:10');
+    $rabin = Member::factory()->linkedTo(User::factory()->create(['name' => 'Rabin Ghimire', 'email' => 'rabin@example.test']))->create();
+    euAssign($rabin, $this->assigner);
+
+    $asked = fakeMailServer(fn (string $to): ?Throwable => $to === 'bibek@example.test' ? mailRefusal() : null);
+    euRunAt('2026-11-03 10:03:00');
+
+    expect($asked->getArrayCopy())->toBe(['bibek@example.test', 'rabin@example.test'])
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(0);
+    Exceptions::assertNothingReported();
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, "user #{$this->user->id}")
+        && str_contains($message, '550')
+        && ! str_contains($message, 'bibek@example.test'));
+
+    // The same unread rows, a minute later: nothing is sent again.
+    euRunAt('2026-11-03 10:04:00');
+    euRunAt('2026-11-03 10:30:00');
+    expect($asked)->toHaveCount(2);
+});
+
+it('keeps the rows handled when something other than the mail server breaks an email, reports it once and goes on', function () {
+    Exceptions::fake();
+    Log::spy();
+
+    foreach (['Rabin Ghimire', 'Asha Rai', 'Mina Rai'] as $name) {
+        $other = Member::factory()->linkedTo(User::factory()->create(['name' => $name]))->create();
+        euAssign($other, $this->assigner);
+    }
+
+    $asked = fakeMailServer(fn (): Throwable => new LogicException('A broken template'));
+    euRunAt('2026-11-03 10:03:00');
+
+    expect($asked)->toHaveCount(3)
+        ->and(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(0);
     Exceptions::assertReportedCount(1);
     Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, '2 more'));
-    expect(DB::table('notifications')->whereNull('email_handled_at')->count())->toBe(3);
+});
+
+it('gives up on a mail server that stops answering after 15 seconds, or MAIL_TIMEOUT', function () {
+    // A real SMTP mailer, as production builds it (the tests' is faked).
+    $timeout = fn (): float => (new MailManager(app()))->mailer('smtp')->getSymfonyTransport()->getStream()->getTimeout();
+
+    expect($timeout())->toBe(15.0);
+
+    config(['mail.mailers.smtp.timeout' => 5.0]);
+    expect($timeout())->toBe(5.0);
 });
 
 it('indexes the notifications the scan reads', function () {

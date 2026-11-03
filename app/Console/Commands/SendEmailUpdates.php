@@ -9,6 +9,7 @@ use App\Notifications\MadeProgramManager;
 use App\Notifications\MadeProjectManager;
 use App\Notifications\MentionedInComment;
 use App\Notifications\TaskAssigned;
+use App\Support\MailFailure;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -26,12 +27,15 @@ use Throwable;
  * `updates_max_wait_minutes` (config project-management.emails).
  *
  * Every row is claimed (`email_handled_at`) before the email goes, one
- * conditional update per row, so an overlapping run never sends it again; a
- * failed send gives the claim back for the next run. Someone who turned
- * right-away email off, or can no longer sign in, has their rows marked
- * handled with no email, so turning it on later never sends old news. A
- * mail outage is reported once per run, the other failures counted in one
- * warning.
+ * conditional update per row, so an overlapping run never sends it again.
+ * Someone who turned right-away email off, or can no longer sign in, has
+ * their rows marked handled with no email, so turning it on later never
+ * sends old news. When the mail server can't be reached (MailFailure) the
+ * claim is given back and the run stops there: the next minute tries again,
+ * and nobody waits on one timeout per person. A refused address stays
+ * handled with one warning naming the person, never tried again; any other
+ * failure stays handled too. A failure is reported once per run, the rest
+ * counted in one warning.
  */
 class SendEmailUpdates extends Command
 {
@@ -73,7 +77,9 @@ class SendEmailUpdates extends Command
         $users = User::query()->with('preferences')->whereKey($ready->keys())->get()->keyBy('id');
         $sent = 0;
         $skipped = 0;
+        $refused = 0;
         $failed = 0;
+        $stopped = false;
 
         foreach ($ready as $userId => $rows) {
             $user = $users->get($userId);
@@ -106,14 +112,24 @@ class SendEmailUpdates extends Command
                 Mail::to($user)->send(new UpdatesMail($user, $items));
                 $sent++;
             } catch (Throwable $e) {
-                DB::table('notifications')->whereIn('id', $claimed)->update(['email_handled_at' => null]);
+                if (MailFailure::refused($e)) {
+                    // The server's last word on this address: the rows stay handled.
+                    Log::warning("workspace:send-email-updates: the mail server refused the update email to user #{$user->id} ({$e->getCode()}); it is not tried again.");
+                    $refused++;
 
-                // An outage fails every send: report the first, count the rest.
-                if ($failed === 0) {
+                    continue;
+                }
+
+                if ($failed++ === 0) {
                     report($e);
                 }
 
-                $failed++;
+                if (MailFailure::unreachable($e)) {
+                    DB::table('notifications')->whereIn('id', $claimed)->update(['email_handled_at' => null]);
+                    $stopped = true;
+
+                    break;
+                }
             }
         }
 
@@ -121,8 +137,12 @@ class SendEmailUpdates extends Command
             Log::warning('workspace:send-email-updates: '.($failed - 1).' more update emails failed to send after the one reported.');
         }
 
-        if ($pretend || $sent + $skipped + $failed > 0) {
-            $this->info(($pretend ? '[pretend] ' : '')."Update emails sent: {$sent}, skipped: {$skipped}, failed: {$failed}.");
+        if ($pretend || $sent + $skipped + $refused + $failed > 0) {
+            $this->info(($pretend ? '[pretend] ' : '')."Update emails sent: {$sent}, skipped: {$skipped}, refused: {$refused}, failed: {$failed}.");
+        }
+
+        if ($stopped) {
+            $this->warn('The mail server could not be reached; the rest wait for the next run.');
         }
 
         return self::SUCCESS;
