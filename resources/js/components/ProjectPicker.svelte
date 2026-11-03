@@ -644,6 +644,7 @@
         <Popover
             bind:open
             role="dialog"
+            label="Choose a project"
             triggerLabel={`Project: ${label}`}
             {triggerClass}
             wrapperClass={field ? 'w-full' : 'min-w-0 max-w-full'}
@@ -680,7 +681,7 @@
                     bind:this={sheetEl}
                     role="dialog"
                     aria-modal="true"
-                    aria-label="Project"
+                    aria-label="Choose a project"
                     tabindex="-1"
                     class="popover absolute inset-x-0 bottom-0 rounded-b-none pb-[env(safe-area-inset-bottom)] focus:outline-none"
                     style={sheetHeight > 0

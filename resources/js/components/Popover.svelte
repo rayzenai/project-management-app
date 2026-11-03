@@ -13,6 +13,7 @@
         role = 'menu',
         triggerClass = '',
         triggerLabel,
+        label,
         panelClass = '',
         wrapperClass = '',
         trigger,
@@ -23,6 +24,8 @@
         role?: 'menu' | 'listbox' | 'dialog';
         triggerClass?: string;
         triggerLabel?: string;
+        /** The panel's accessible name (a dialog needs one). */
+        label?: string;
         panelClass?: string;
         /** Added to the wrapper (`w-full` for a trigger that fills its row). */
         wrapperClass?: string;
@@ -247,6 +250,7 @@
             bind:this={panel}
             use:portal
             {role}
+            aria-label={label}
             tabindex="-1"
             class={`popover fixed z-50 min-w-44 overflow-auto px-1 ${panelClass}`}
             style={placement}

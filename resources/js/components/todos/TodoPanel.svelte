@@ -196,7 +196,7 @@
 
         change(todo.id, { done_at: now() });
         patch(todo.id, { done: true }, () =>
-            toast.show('To-do done.', {
+            toast.show(`Completed "${todo.title}"`, {
                 undo: {
                     run: () => {
                         change(todo.id, { done_at: null });
@@ -556,6 +556,7 @@
             bind:open
             role="dialog"
             align="right"
+            label="To-dos"
             triggerLabel={label}
             {triggerClass}
             panelClass="w-[380px] max-w-[calc(100vw-16px)]"

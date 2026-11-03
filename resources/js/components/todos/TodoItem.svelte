@@ -13,8 +13,10 @@
      * filled while you work on it), the title edits in place (Enter saves,
      * Escape cancels), the date sits under it (red once past), and on the
      * right, always on touch and on hover with a mouse: Start or Stop, Delete
-     * and a menu (Change date, Move to a project, Delete). A done one only
-     * opens again or deletes. The list does the saving.
+     * and a menu (Change date, Move to a project, Delete). With a mouse they
+     * take no room: the title keeps the full width and they show over the
+     * row's right end, on its own ground. A done one only opens again or
+     * deletes. The list does the saving.
      */
     let {
         todo,
@@ -145,15 +147,18 @@
         }
     }
 
+    /** With a mouse: shown on hover or focus, kept while its menu is open, gone while editing. */
     const reveal = $derived(
-        menuOpen
-            ? ''
-            : 'pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100',
+        editing
+            ? 'pointer-fine:hidden'
+            : menuOpen || moving
+              ? ''
+              : 'pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100',
     );
 </script>
 
 <div
-    class="group flex min-h-[48px] items-start gap-3 rounded-md px-2 py-3 transition hover:bg-hover sm:min-h-[44px]"
+    class="todo-row group relative flex min-h-[48px] items-start gap-3 rounded-md px-2 py-3 transition hover:bg-hover sm:min-h-[44px]"
 >
     <span class="flex h-[24px] shrink-0 items-center sm:h-[20px]">
         <TodoCircle title={todo.title} {done} {doing} onclick={ontoggle} />
@@ -195,7 +200,7 @@
             <button
                 bind:this={titleButton}
                 type="button"
-                class="block w-full rounded-sm text-left text-[15px] leading-[24px] break-words text-fg sm:text-[14px] sm:leading-[20px]"
+                class="block w-fit max-w-full rounded-sm text-left text-[15px] leading-[24px] break-words text-fg sm:text-[14px] sm:leading-[20px]"
                 aria-label={`Edit "${todo.title}"`}
                 onclick={edit}>{todo.title}</button
             >
@@ -209,7 +214,9 @@
         {/if}
     </div>
 
-    <div class={`-my-[10px] flex shrink-0 items-center sm:-my-[4px] ${reveal}`}>
+    <div
+        class={`actions -my-[10px] flex shrink-0 items-center sm:-my-[4px] ${reveal}`}
+    >
         {#if !done}
             <button
                 type="button"
@@ -306,3 +313,37 @@
         {/if}
     </div>
 </div>
+
+<style>
+    /* With a mouse the actions sit over the row's right end on the row's
+       own ground (the panel's, or the hover's), fading in over the title's
+       last letters, and a press beside them still reaches the title. */
+    @media (pointer: fine) {
+        .actions {
+            position: absolute;
+            inset-block: 0;
+            right: 0;
+            margin-block: 0;
+            padding-inline: 24px 8px;
+            border-radius: 0 0.375rem 0.375rem 0;
+            background: linear-gradient(
+                to right,
+                transparent,
+                var(--ws-raised) 24px
+            );
+            pointer-events: none;
+        }
+
+        .actions > :global(*) {
+            pointer-events: auto;
+        }
+
+        .todo-row:hover .actions {
+            background: linear-gradient(
+                to right,
+                transparent,
+                var(--ws-hover) 24px
+            );
+        }
+    }
+</style>

@@ -1030,7 +1030,8 @@ the single source of mode.
 
 Primitives: `StatusGlyph` (the status icon: ring / dashed ring / amber half
 disc / green check / red cross), `PriorityBars`, `Avatar` (squircle initials),
-`ProgressRing`. `Popover` portals its panel to `<body>`; a Popover opened
+`ProgressRing`. `Popover` portals its panel to `<body>` (`label` names
+it; a dialog needs one); a Popover opened
 inside another's panel registers its panel with the outer one (context),
 so a press in it doesn't close the outer, and a press on a toast
 (`[data-toasts]`) closes none. Pages wrap themselves in `AppShell` and provide the 44px top
