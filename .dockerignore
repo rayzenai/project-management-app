@@ -17,3 +17,5 @@ tests
 dumps
 # The forge's own image (Dokploy application git-forgejo)
 forgejo
+# The editor's own image (Dokploy application docs-onlyoffice)
+onlyoffice
