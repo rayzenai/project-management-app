@@ -161,13 +161,16 @@
                 align="right"
                 label="Upload a file"
                 triggerClass="btn"
+                triggerLabel="Upload"
                 panelClass="w-72"
             >
                 {#snippet trigger()}
                     {#if uploading}
                         <Spinner size={14} label="Uploading" />Uploading
                     {:else}
-                        <Upload class="h-3.5 w-3.5" />Upload
+                        <Upload class="h-3.5 w-3.5" /><span
+                            class="hidden sm:inline">Upload</span
+                        >
                     {/if}
                 {/snippet}
                 <div class="p-1.5">

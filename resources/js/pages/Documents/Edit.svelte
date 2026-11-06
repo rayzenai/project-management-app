@@ -144,7 +144,7 @@
 
 <AppShell flush>
     {#snippet bar()}
-        <div class="flex min-w-0 items-center gap-1.5 text-[13px]">
+        <div class="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]">
             <a
                 href={back.href}
                 use:inertia

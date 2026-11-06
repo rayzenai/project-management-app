@@ -250,16 +250,13 @@
             onkeydown={onKeydown}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="{uid}-title"
+            aria-label={`Share ${doc.title}`}
             tabindex="-1"
         >
             <div
                 class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-line px-4"
             >
-                <h2
-                    id="{uid}-title"
-                    class="truncate text-[15px] font-semibold text-fg"
-                >
+                <h2 class="truncate text-[15px] font-semibold text-fg">
                     Share {doc.title}
                 </h2>
                 <button
@@ -408,11 +405,8 @@
                                             setOrganization(e.currentTarget)}
                                     >
                                         <option value="">Off</option>
-                                        {#each LEVELS as level (level.value)}
-                                            <option value={level.value}
-                                                >{level.label}</option
-                                            >
-                                        {/each}
+                                        <option value="view">Can view</option>
+                                        <option value="edit">Can edit</option>
                                     </select>
                                 </li>
                             {/if}

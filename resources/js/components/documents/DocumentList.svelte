@@ -35,15 +35,12 @@
         documents,
         showWhere = false,
         moveTargets = [],
-        organizationName = null,
     }: {
         documents: DocumentItem[];
         /** Say where each lives (the Documents page; the tab is one project). */
         showWhere?: boolean;
         /** Projects a personal document can move into. */
         moveTargets?: ProjectChoice[];
-        /** The viewer's organization, for "Everyone in SDOC". */
-        organizationName?: string | null;
     } = $props();
 
     const uid = $props.id();
@@ -68,6 +65,9 @@
     let moveError = $state<string | null>(null);
     let sharing = $state<DocumentItem | null>(null);
     let shareOpen = $state(false);
+    // The row whose menu is open: a choice closes it, so nothing it opens
+    // (a form under the row) sits behind it.
+    let menuFor = $state<number | null>(null);
 
     // Versions, loaded when a row's list is opened.
     const versions = new SvelteMap<
@@ -111,10 +111,23 @@
             : `Shared by ${document.owner?.name ?? 'someone'}`;
     }
 
+    /** The line under the title: where, kind, last change, whole office. */
+    function details(document: DocumentItem): string {
+        return [
+            showWhere ? where(document) : null,
+            document.kind,
+            edited(document),
+            document.organization_access ? 'Whole office' : null,
+        ]
+            .filter((part) => part !== null)
+            .join(' · ');
+    }
+
     const canRename = (document: DocumentItem): boolean =>
         document.access === 'edit' && !document.frozen;
 
     async function startRename(document: DocumentItem) {
+        menuFor = null;
         renamingId = document.id;
         renameTitle = document.title;
         await tick();
@@ -144,6 +157,7 @@
     }
 
     function startMove(document: DocumentItem) {
+        menuFor = null;
         movingId = document.id;
         moveTo = moveTargets[0]?.slug ?? '';
         moveError = null;
@@ -168,11 +182,14 @@
     }
 
     function share(document: DocumentItem) {
+        menuFor = null;
         sharing = document;
         shareOpen = true;
     }
 
     async function toggleVersions(document: DocumentItem) {
+        menuFor = null;
+
         if (versions.has(document.id)) {
             versions.delete(document.id);
 
@@ -206,6 +223,7 @@
     }
 
     function trash(document: DocumentItem) {
+        menuFor = null;
         router.delete(url(document), {
             preserveScroll: true,
             preserveState: true,
@@ -270,16 +288,20 @@
                             {/if}
                         </div>
                         <p class="truncate text-xs text-fg-muted">
-                            {#if showWhere}{where(document)} ·
-                            {/if}{document.kind} · {edited(
-                                document,
-                            )}{#if document.organization_access}
-                                · Everyone in {organizationName ?? 'the office'}
-                            {/if}
+                            {details(document)}
                         </p>
                     {/if}
                 </div>
                 <Popover
+                    bind:open={
+                        () => menuFor === document.id,
+                        (open) =>
+                            (menuFor = open
+                                ? document.id
+                                : menuFor === document.id
+                                  ? null
+                                  : menuFor)
+                    }
                     align="right"
                     triggerClass="btn-icon shrink-0"
                     triggerLabel={`More for ${document.title}`}
