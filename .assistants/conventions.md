@@ -67,6 +67,10 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
 - Personal assignment fields (star, snooze, progress/status note and own due date)
   require `WorkspaceAccess::ownsAssignment`, in addition to ordinary assignment
   update access. Private `PersonalTodo` rows always require `ownsPersonalTodo`.
+- Document visibility and capability checks belong in `WorkspaceAccess`;
+  `documentAccess` and `Document::scopeVisibleTo` are predicate/query twins.
+  Sharing stays inside `documentOrganizationId`, and a personal document whose
+  owner is inactive is frozen rather than reassigned or deleted.
 
 ## Frontend
 
@@ -105,11 +109,13 @@ afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
 only web/scheduler.
 
 ONLYOFFICE is another separate Dokploy app, built from `onlyoffice/`; its
-runbook is `docs/onlyoffice.md`. Project documents are enabled only when the
+runbook is `docs/onlyoffice.md`. Documents are enabled only when the
 editor URL and a shared JWT secret of at least 32 characters are configured.
 Production uses the `documents` disk backed by RustFS's `tasks-documents`
 bucket. `DocumentFiles` is the sole file-write path: every saved version gets
 a new object, and the app never overwrites, purges or deletes document files.
+Project and personal documents use the same immutable store; moving or sharing
+one changes metadata and access only, never its stored versions.
 `ops/rustfs/setup-documents.sh` owns the no-delete bucket user and policy.
 
 Section 14 covers four bounded Forgejo runners, protected main and checks.

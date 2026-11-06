@@ -191,13 +191,21 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - Repository link/create/access-sync tests cover fixing `protected_branch` at
   link time, forcing tracker-created repositories to `main`, keeping the rule
   there after forge default drift and exposing both branches in resources/UI.
-- `DocumentsTest` covers disabled/configured visibility, team/program/admin and
-  tenant gates, public-project refusal, blank/uploaded files, file validation,
-  paired API responses, rename/trash/restore/download/version history, immutable
-  creator deletion rights, project activity, signed/JWT-protected editor file
-  and callback routes, editor-config expiry/history clearing, saved-file host/
-  hash handling, error-status saves, stale sessions and retry responses.
-  It fakes every editor HTTP call; no test reaches ONLYOFFICE or RustFS.
+- `DocumentsTest` retains project-home and editor coverage: disabled/configured
+  access, team/program/admin and tenant gates, blank/uploaded files, validation,
+  rename/trash/restore/download/version history, project activity, signed/JWT
+  file/callback routes, editor-config expiry/history clearing, saved-file host/
+  hash handling, error saves, stale sessions and retry responses.
+  `DocumentsAccessTest` is the `documentAccess`/`Document::scopeVisibleTo`
+  matrix: personal ownership, organization access, effective shares, highest
+  level, organization moves, frozen owners, project sharing powers and the
+  personal-document/login deletion constraint. `DocumentsLibraryTest` covers
+  read-only/editable opens, frozen trash, old-link redirects, filters/order/
+  cursor pagination, project/personal create/upload/trash, organization switch,
+  API parity and one-way moves. `DocumentsSharingTest` covers organization and
+  named-person sharing, privacy-preserving outsider errors/candidates, frozen/
+  trashed refusals, activity, notifications/right-away email and web/API parity.
+  These tests fake every editor HTTP call; none reaches ONLYOFFICE or RustFS.
 
 ## Running
 

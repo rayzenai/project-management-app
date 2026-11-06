@@ -12,6 +12,7 @@ Single Inertia entry `resources/js/app.ts`; single root view
 `Organizations/Index` (super-admin tenant CRUD + Git connection controls),
 `Projects/Index` (program groups, then unprogrammed projects by manager),
 `Projects/Show` (list/board/people/code/documents views via `components/project/`),
+`Documents/Index` (the filterable workspace document library) and
 `Documents/Edit` (full-height embedded ONLYOFFICE editor),
 `Tasks/Show`, `Team/Index` (organization-aware People directory),
 `Projects/Progress` (workload, Gantt, activity; polls every 15s while visible),
@@ -27,6 +28,7 @@ programs, projects and the account button; `[` collapses it. Below `md`,
 `PhoneTabs` gives My work, Projects, Updates and Me. `AccountMenu` is a desktop
 popover/phone bottom sheet grouped as You, Office, Reports and Admin, with
 Appearance and Sign out; `lib/navigation.ts` owns all capability-filtered links.
+The main sidebar adds Documents while shared `documentsEnabled` is true.
 When shared, `OrganizationSwitcher` is in the sidebar/account sheet and narrows
 sidebar projects plus My work, Projects, activity and Code activity; quick add
 and single project/program pages stay organization-wide.
@@ -158,15 +160,20 @@ the full available width and sit side by side from `xl` when both are present.
 Repository rows show the fixed `protected_branch` and warn when the forge's
 `default_branch` moved away from it, because work merged into the new default
 skips the tracker's rule.
-Documents: `project/DocumentsView` is present only when the backend supplies a
-non-null `documents` payload. It creates blank Word/Excel/PowerPoint files,
-uploads matching Office files, opens the editor, renames, downloads any saved
-version, and lazily loads version history and the never-emptied trash. New blank
-files open directly in `Documents/Edit`; uploads remain on the tab. The editor
-page loads ONLYOFFICE's `api.js`, hands it the server-signed config unchanged,
-fills the content area under `AppShell`, reloads on `onRequestRefreshFile`, and
-offers the current download when the editor is unreachable. The session page is
-kept only in encrypted Inertia history, which sign-out clears.
+Documents: `Documents/Index` lists every document the viewer may open, newest
+first, with ownership/access/project/type/search filters, cursor-based Show
+more, creation/upload destination and trash. `project/DocumentsView` is present
+only when the backend supplies a non-null payload and reuses the same
+`documents/{DocumentList,DocumentTrash,NewDocument}` components for one project.
+Rows show their home and view/edit/frozen state, open Share when allowed, move
+an owned personal document one way into a usable project, rename, download and
+load version history. `documents/ShareDialog` controls organization-wide
+view/edit and named-person shares. New blank files open directly in
+`Documents/Edit`; uploads stay on the list. The editor opens read-only or editable
+from the server's access level, loads ONLYOFFICE's `api.js`, hands it the signed
+config unchanged, reloads on `onRequestRefreshFile`, and offers the current
+download when the editor is unreachable. It also exposes Share where permitted.
+The session page is kept only in encrypted Inertia history, which sign-out clears.
 Reports: `Reports/CodeActivity` offers today/week/last-week/month/custom periods,
 project/program/designation filters, ranking by commits/lines/tests/active days
 (or unranked name order), and compares up to four people. It shows

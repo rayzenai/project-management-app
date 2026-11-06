@@ -161,7 +161,12 @@ task creator while they can still view its project),
 `canGrantRepositoryAccessTo` (query twin: `RepositoryAccessCandidatesQuery`),
 `repositoryMaintainerIds`, `codeReportScope` (applied by `CodeActivityQuery`),
 `ledTeamIds`,
-`managedProgramIds`, `managesProgramOf`, `canManagePrograms`, `canViewProgram`.
+`managedProgramIds`, `managesProgramOf`, `canManagePrograms`, `canViewProgram`,
+`canUseProjectDocuments`, `documentAccess` (query twin:
+`Document::scopeVisibleTo`), `documentOwnerActive`, `isDocumentFrozen`,
+`documentOrganizationId`, `canCreatePersonalDocuments`, `canShareDocument`,
+`canShareDocumentWith` (query twin: `DocumentShareCandidatesQuery`),
+`isShareEffective`, `canDeleteDocument`, `canMoveDocument`.
 `Project::scopeVisibleTo` and `Program::scopeVisibleTo` are query twins of their
 view predicates; `Team` and `Member` also expose `visibleTo`. Project/team/member
 scopes reach program projects through `Project::inPrograms`, checking both the
@@ -378,23 +383,47 @@ in the same transaction; a selected manager keeps their leader role.
 ## Documents / ONLYOFFICE
 
 Documents exist only while `config('documents.enabled')` has an editor URL and
-a shared JWT secret. `Document` belongs to a project, is soft-deleted but never
-purged, and points at its current `version`/`editor_key`; `DocumentVersion`
-keeps every created, uploaded or edited file as a distinct object on the
-`documents` disk. `DocumentTypes` is the one `docx|xlsx|pptx` list and
-`DocumentFiles` is the only write path, so versions are never overwritten or
-deleted. Production maps that disk to RustFS; local development uses
-`storage/app/documents`.
+a shared JWT secret. `Document` belongs either to a project or, through
+`owner_id`, to the login that made a personal document; deleting a login that
+owns one is refused. `organization_access` is `view|edit|null`.
+`DocumentShare` stores one `view|edit` permission per document/member.
+`DocumentVersion` keeps every created, uploaded or edited file as a distinct
+object on the `documents` disk. `DocumentTypes` is the one
+`docx|xlsx|pptx` list and `DocumentFiles` is the only write path, so versions
+are never overwritten or deleted. Production maps that disk to RustFS; local
+development uses `storage/app/documents`.
 
-`WorkspaceAccess::canUseProjectDocuments` admits the project's active team,
-active program manager, organizational admins and super-admins, but not other
-viewers of a public project. It gates listing, opening, editing, creating,
-uploading, renaming, versions and downloads. `canDeleteDocument` mirrors task
-deletion: project runners or the creator while they still have document access.
-Shared `DocumentsRequest` subclasses serve paired web/API controllers and
-`ProjectDocumentsQuery`; `ProjectShowQuery.documents` is null when disabled or
-forbidden. The API's document `show` includes the same editor config as the web
-page.
+`WorkspaceAccess::documentAccess` returns the highest `edit|view|null` level
+from the document's home, organization access and an effective share.
+`Document::scopeVisibleTo` is its list-query twin. A project's home admits its
+active team, active program manager, organizational admins and super-admins,
+but not other public-project viewers. A personal document belongs only to its
+active owner until shared; if that owner becomes inactive it is frozen,
+read-only for super-admins and hidden from everyone else. Shares stay inside
+`documentOrganizationId` (the project's organization or the owner's current
+one), and only an active person there is effective. `DocumentResource` exposes
+`access`, `frozen`, `can_delete`, `can_share` and `can_move`.
+
+`DocumentLibraryQuery` powers web `/workspace/documents` and API
+`/api/v1/workspace/documents`: filters `all|mine|shared|organization|projects`,
+project/type/title filters, 50-row cursor pagination, project choices and trash.
+The web query follows the super-admin organization switch; the API does not.
+`ProjectDocumentsQuery` supplies the project tab. All document editor, version,
+download, rename, trash, restore, move and sharing routes now live under
+`documents/{document}`; old project-document editor links redirect there.
+`DocumentRequest` opens a document at its computed level, including frozen
+trash for a super-admin, and `DocumentSharingQuery` /
+`DocumentShareCandidatesQuery` feed the Share dialog without exposing emails.
+
+`CreateDocumentService` creates personal or project documents. A personal
+document's active owner may move it one way into any project whose documents
+they may use; `MoveDocumentService` keeps its immutable versions and shares,
+and closes organization access when the destination is in another organization.
+`DocumentSharingService` changes organization access and shares without touching
+`updated_at`; only a new effective share sends `DocumentShared`, also handled by
+right-away email. Project-document changes are audited by
+`DocumentObserver`/`DocumentShareObserver`/`DocumentVersionObserver`; personal
+documents write no project activity.
 
 `DocumentEditorQuery` builds and HS256-signs the complete ONLYOFFICE config:
 expiring signed file URL, signed callback URL, shared editor key, viewer id/name
@@ -404,15 +433,14 @@ web middleware and accepts the signed routes only with the editor's
 operation-specific JWT. `SaveEditedDocumentService` fetches saves only from the
 configured editor host, caps them at 100 MB, deduplicates by SHA-256, preserves
 error-status saves with a warning, and advances the editor key when a session ends;
-failures tell the editor to retry. `DocumentObserver` and
-`DocumentVersionObserver` own project activity for rename/trash/restore and
-created/uploaded/saved versions, crediting the editor's last user where known.
+failures tell the editor to retry; saved versions credit the editor's last user
+where known.
 
 ## Notifications
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
 `MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam`,
-`MadeProjectManager` and `MadeProgramManager` share
+`MadeProjectManager`, `MadeProgramManager` and `DocumentShared` share
 `Concerns\BuildsWorkspaceNotification`; stable payload
 `{kind, title, action, body, task, actor, url}` (`action` short-form,
 `body` long sentence). Dispatched from observers (assignment created;
@@ -424,10 +452,11 @@ and a URL to the project's People tab. `NotificationIndexQuery` groups both
 under the `team` filter/count on both surfaces. `ProgramObserver` sends
 `made_program_manager` for appointments/handovers except to the actor, with
 `task: null`, `program {slug, name}` and the program URL; also in the Teams filter.
+`DocumentShared` carries `document {id, title}` and opens the shared document.
 
 Scheduled email reads these database notifications; the notifications themselves
 remain synchronous `database` channel only. `SendEmailUpdates` claims unread,
-unhandled assignment/mention/team/manager rows from the last 24 hours and groups
+unhandled assignment/mention/team/manager/document-share rows from the last 24 hours and groups
 them per person after a two-minute quiet period or five-minute maximum wait.
 Claims use `notifications.email_handled_at`, so read or concurrently claimed
 rows are not mailed. `SendMorningEmails` uses `MorningEmailQuery`/`MyWorkQuery`
