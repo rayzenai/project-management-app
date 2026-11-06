@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Document;
+use App\Models\DocumentShare;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
+use App\Support\WorkspaceAccess;
 use Firebase\JWT\JWT;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\MailManager;
@@ -204,4 +206,46 @@ function docsEditedFile(): string
     $zip->close();
 
     return (string) file_get_contents($path);
+}
+
+/**
+ * A document as the create service makes one (no file): personal when
+ * $project is null, owned by $by.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function docsMake(User $by, ?Project $project = null, string $title = 'Notes', array $attributes = []): Document
+{
+    $document = new Document(['project_id' => $project?->id, 'title' => $title, 'file_type' => 'docx']);
+    $document->owner_id = $project === null ? $by->id : null;
+    $document->version = 1;
+    $document->editor_key = Document::newEditorKey();
+    $document->size = 100;
+    $document->created_by = $by->id;
+    $document->updated_by = $by->id;
+    $document->forceFill($attributes)->save();
+
+    return $document;
+}
+
+/** Shares $document with $user's person. */
+function docsShare(Document $document, User $user, string $permission = 'edit'): DocumentShare
+{
+    return DocumentShare::query()->create([
+        'document_id' => $document->id,
+        'member_id' => WorkspaceAccess::memberFor($user)?->id,
+        'permission' => $permission,
+        'shared_by' => $document->owner_id ?? $document->created_by,
+    ]);
+}
+
+/**
+ * Changes $user's person and forgets every memo, as a new request would.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function docsUpdatePerson(User $user, array $attributes): void
+{
+    WorkspaceAccess::memberFor($user)?->update($attributes);
+    WorkspaceAccess::flush();
 }

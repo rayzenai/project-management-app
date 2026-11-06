@@ -20,7 +20,7 @@ class DeleteDocumentRequest extends FormRequest
 
         return $project instanceof Project
             && $document instanceof Document
-            && WorkspaceAccess::canDeleteDocument($this->user(), $document, $project);
+            && WorkspaceAccess::canDeleteDocument($this->user(), $document);
     }
 
     /**

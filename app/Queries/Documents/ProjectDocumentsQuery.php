@@ -47,7 +47,7 @@ class ProjectDocumentsQuery
 
         return array_values($documents
             ->map(fn (Document $document): array => (new DocumentResource($document))
-                ->withCanDelete(WorkspaceAccess::canDeleteDocument($viewer, $document, $project))
+                ->withCanDelete(WorkspaceAccess::canDeleteDocument($viewer, $document))
                 ->resolve())
             ->all());
     }
@@ -63,7 +63,7 @@ class ProjectDocumentsQuery
 
         return [
             'document' => (new DocumentResource($document))
-                ->withCanDelete(WorkspaceAccess::canDeleteDocument($viewer, $document, $project))
+                ->withCanDelete(WorkspaceAccess::canDeleteDocument($viewer, $document))
                 ->resolve(),
             'versions' => array_values(DocumentVersionResource::collection($document->versions()->with('user:id,name')->get())->resolve()),
         ];

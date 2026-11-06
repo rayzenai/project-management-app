@@ -294,6 +294,47 @@ class Project extends Model
     }
 
     /**
+     * Projects whose documents the user may use: the twin of
+     * WorkspaceAccess::canUseProjectDocuments (scopeCodeVisibleTo without the
+     * git condition). Keep them in step.
+     *
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeDocumentsVisibleTo(Builder $query, ?Authenticatable $user): Builder
+    {
+        if (! config('documents.enabled') || $user === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if (WorkspaceAccess::isSuperAdmin($user)) {
+            return $query;
+        }
+
+        $member = WorkspaceAccess::memberFor($user);
+
+        // An office admin is an active member too.
+        if ($member === null || ! $member->is_active) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($user);
+        $programIds = WorkspaceAccess::managedProgramIds($user);
+
+        return $query->where(function (Builder $q) use ($member, $adminOrganizationId, $programIds): void {
+            $q->whereHas('teams.members', fn (Builder $m): Builder => $m->where('members.id', $member->getKey()));
+
+            if ($adminOrganizationId !== null) {
+                $q->orWhere('organization_id', $adminOrganizationId);
+            }
+
+            if ($programIds !== []) {
+                $q->orWhere(fn (Builder $program): Builder => self::inPrograms($program, $programIds, $member));
+            }
+        });
+    }
+
+    /**
      * Projects whose code (linked repositories, and the branches, commits
      * and pull requests on their tasks) the user may see: in an organization
      * with git, those whose team they are on (any role, while active), those

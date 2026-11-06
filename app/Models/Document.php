@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -134,6 +136,100 @@ class Document extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(DocumentVersion::class)->orderByDesc('version');
+    }
+
+    /**
+     * The documents the user may open: exactly those where
+     * WorkspaceAccess::documentAccess is not null (its twin; keep them in
+     * step). Trashed ones too when the caller asks for them.
+     *
+     * @param  Builder<Document>  $query
+     * @return Builder<Document>
+     */
+    public function scopeVisibleTo(Builder $query, ?Authenticatable $user): Builder
+    {
+        if (! config('documents.enabled') || $user === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $userId = (int) $user->getAuthIdentifier();
+        $superAdmin = WorkspaceAccess::isSuperAdmin($user);
+        $member = WorkspaceAccess::memberFor($user);
+        $activeMember = $member !== null && $member->is_active ? $member : null;
+
+        return $query->where(function (Builder $q) use ($user, $userId, $superAdmin, $activeMember): void {
+            // A project's documents, for whoever may use them.
+            $q->whereIn('documents.project_id', Project::query()->documentsVisibleTo($user)->select('projects.id'));
+
+            // Their own personal documents, while they are active.
+            if ($superAdmin || $activeMember !== null) {
+                $q->orWhere(fn (Builder $own): Builder => $own->whereNull('documents.project_id')->where('documents.owner_id', $userId));
+            }
+
+            // Opened to their organization, or shared with them.
+            if ($activeMember !== null && $activeMember->organization_id !== null) {
+                $memberId = $activeMember->id;
+
+                $q->orWhere(fn (Builder $shared): Builder => $shared
+                    ->where(fn (Builder $f): Builder => self::whereNotFrozen($f))
+                    ->where(fn (Builder $o): Builder => self::whereInOrganization($o, (int) $activeMember->organization_id))
+                    ->where(fn (Builder $w): Builder => $w
+                        ->whereNotNull('documents.organization_access')
+                        ->orWhereHas('shares', fn (Builder $share): Builder => $share->where('document_shares.member_id', $memberId))));
+            }
+
+            // Frozen documents, read-only, for super-admins.
+            if ($superAdmin) {
+                $q->orWhere(fn (Builder $frozen): Builder => $frozen
+                    ->whereNull('documents.project_id')
+                    ->whereNot(fn (Builder $f): Builder => self::whereNotFrozen($f)));
+            }
+        });
+    }
+
+    /**
+     * Documents of an organization (WorkspaceAccess::documentOrganizationId):
+     * a project's of the project's, a personal one of its owner's now.
+     *
+     * @param  Builder<Document>  $query
+     * @return Builder<Document>
+     */
+    public static function whereInOrganization(Builder $query, int $organizationId): Builder
+    {
+        return $query
+            ->where(fn (Builder $project): Builder => $project
+                ->whereNotNull('documents.project_id')
+                ->whereHas('project', fn (Builder $p): Builder => $p->where('projects.organization_id', $organizationId)))
+            ->orWhere(fn (Builder $personal): Builder => $personal
+                ->whereNull('documents.project_id')
+                ->whereExists(Member::query()
+                    ->select('members.id')
+                    ->whereColumn('members.user_id', 'documents.owner_id')
+                    ->where('members.organization_id', $organizationId)
+                    ->toBase()));
+    }
+
+    /**
+     * Not frozen (WorkspaceAccess::isDocumentFrozen): a project's document, or
+     * a personal one whose owner is a super-admin or an active person.
+     *
+     * @param  Builder<Document>  $query
+     * @return Builder<Document>
+     */
+    private static function whereNotFrozen(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('documents.project_id')
+            ->orWhereExists(Member::query()
+                ->select('members.id')
+                ->whereColumn('members.user_id', 'documents.owner_id')
+                ->where('members.is_active', true)
+                ->toBase())
+            ->orWhereExists(User::query()
+                ->select('users.id')
+                ->whereColumn('users.id', 'documents.owner_id')
+                ->whereIn('users.email', (array) config('project-management.super_admins', []))
+                ->toBase());
     }
 
     /** A fresh id for the editor: everyone editing one version shares it. */

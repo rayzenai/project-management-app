@@ -7,14 +7,15 @@ use App\Models\ProjectActivity;
 use App\Services\ProjectActivityRecorder;
 
 /**
- * A document's rename, trash and restore go into its project's activity.
+ * A project document's rename, trash and restore go into its project's
+ * activity; a personal document writes none.
  * Its versions (created, uploaded, saved) are DocumentVersionObserver's.
  */
 class DocumentObserver
 {
     public function updated(Document $document): void
     {
-        if (! $document->wasChanged('title')) {
+        if ($document->project === null || ! $document->wasChanged('title')) {
             return;
         }
 
@@ -32,6 +33,10 @@ class DocumentObserver
 
     public function deleted(Document $document): void
     {
+        if ($document->project === null) {
+            return;
+        }
+
         ProjectActivityRecorder::recordForProject(
             project: $document->project,
             subject: $document,
@@ -47,6 +52,10 @@ class DocumentObserver
 
     public function restored(Document $document): void
     {
+        if ($document->project === null) {
+            return;
+        }
+
         ProjectActivityRecorder::recordForProject(
             project: $document->project,
             subject: $document,

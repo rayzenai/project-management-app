@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\AttendanceSetting;
 use App\Models\Document;
+use App\Models\DocumentShare;
 use App\Models\GitConnection;
 use App\Models\GitRepository;
 use App\Models\LeaveRequest;
@@ -69,6 +70,9 @@ class WorkspaceAccess
     /** @var array<int, bool> organization id => whether its attendance is on */
     private static array $attendanceMemo = [];
 
+    /** @var \WeakMap<Authenticatable, array<int, bool>>|null project id => canUseProjectDocuments */
+    private static ?\WeakMap $projectDocumentsMemo = null;
+
     public static function flush(): void
     {
         self::$ledTeamIdsMemo = null;
@@ -76,6 +80,7 @@ class WorkspaceAccess
         self::$memberMemo = null;
         self::$gitMemo = [];
         self::$attendanceMemo = [];
+        self::$projectDocumentsMemo = null;
         OrgChart::flush();
     }
 
@@ -549,21 +554,38 @@ class WorkspaceAccess
     }
 
     // ---- Documents ----
-    // Only while the editor is configured (config/documents.php).
+    // Only while the editor is configured (config/documents.php). A document
+    // belongs to a project or, personal, to its owner; organization access
+    // and shares open it to more people
+    // (docs/superpowers/specs/2026-11-06-documents-workspace-design.md).
 
     /**
      * A project's documents (see, open, edit, create, upload, rename, their
      * versions): the same people as its code without the git condition.
      * Whoever administers its organization, and, while active, its program's
      * manager and everyone on its team. Not other viewers of a public
-     * project: documents are for the people doing the work.
+     * project: documents are for the people doing the work. Twin of
+     * Project::scopeDocumentsVisibleTo.
      */
     public static function canUseProjectDocuments(?Authenticatable $user, Project $project): bool
     {
-        if (! config('documents.enabled')) {
+        if (! config('documents.enabled') || $user === null) {
             return false;
         }
 
+        self::$projectDocumentsMemo ??= new \WeakMap;
+        $memo = self::$projectDocumentsMemo[$user] ?? [];
+
+        if (! array_key_exists($project->id, $memo)) {
+            $memo[$project->id] = self::usesProjectDocuments($user, $project);
+            self::$projectDocumentsMemo[$user] = $memo;
+        }
+
+        return $memo[$project->id];
+    }
+
+    private static function usesProjectDocuments(Authenticatable $user, Project $project): bool
+    {
         if (self::administers($user, $project->organization_id)) {
             return true;
         }
@@ -582,13 +604,172 @@ class WorkspaceAccess
     }
 
     /**
-     * Move a document to the trash and bring it back: whoever runs its
-     * project (canManageProjectAccess), or the person who created it while
-     * they may still use the project's documents. The twin of canDeleteTask.
+     * What the person may do with a document: Document::ACCESS_EDIT (open in
+     * edit mode, rename, versions, download), ACCESS_VIEW (open read-only,
+     * versions, download) or null. The highest of: its home (a project's
+     * documents for whoever passes canUseProjectDocuments; a personal one for
+     * its owner while active), organization access for every active person
+     * of the document's organization, and a share to the person while they
+     * are active and in that organization. A frozen document (a personal one
+     * whose owner left) opens read-only for super-admins and for nobody
+     * else. The trash is the requests' to check. Twin of
+     * Document::scopeVisibleTo.
      */
-    public static function canDeleteDocument(?Authenticatable $user, Document $document, Project $project): bool
+    public static function documentAccess(?Authenticatable $user, Document $document): ?string
     {
-        if (! config('documents.enabled')) {
+        if (! config('documents.enabled') || $user === null) {
+            return null;
+        }
+
+        if ($document->isPersonal()) {
+            if (! self::documentOwnerActive($document)) {
+                return self::isSuperAdmin($user) ? Document::ACCESS_VIEW : null;
+            }
+
+            if ($document->owner_id === (int) $user->getAuthIdentifier()) {
+                return Document::ACCESS_EDIT;
+            }
+        } elseif ($document->project !== null && self::canUseProjectDocuments($user, $document->project)) {
+            return Document::ACCESS_EDIT;
+        }
+
+        $member = self::memberFor($user);
+        $organizationId = self::documentOrganizationId($document);
+
+        if ($member === null || ! $member->is_active || $organizationId === null || $member->organization_id !== $organizationId) {
+            return null;
+        }
+
+        $levels = array_filter([
+            $document->organization_access,
+            DocumentShare::query()->where('document_id', $document->id)->where('member_id', $member->id)->value('permission'),
+        ], fn (mixed $level): bool => is_string($level));
+
+        if (in_array(Document::ACCESS_EDIT, $levels, true)) {
+            return Document::ACCESS_EDIT;
+        }
+
+        return in_array(Document::ACCESS_VIEW, $levels, true) ? Document::ACCESS_VIEW : null;
+    }
+
+    /**
+     * A personal document's owner may still use it: a super-admin, or a
+     * person whose record is active. False for a project document.
+     */
+    public static function documentOwnerActive(Document $document): bool
+    {
+        if (! $document->isPersonal() || $document->owner === null) {
+            return false;
+        }
+
+        if (self::isSuperAdmin($document->owner)) {
+            return true;
+        }
+
+        $member = self::memberFor($document->owner);
+
+        return $member !== null && $member->is_active;
+    }
+
+    /**
+     * Frozen: a personal document whose owner left. It stays as it was, for
+     * super-admins to read ("remain as they are as proofs that only
+     * superadmins can access").
+     */
+    public static function isDocumentFrozen(Document $document): bool
+    {
+        return $document->isPersonal() && ! self::documentOwnerActive($document);
+    }
+
+    /**
+     * The organization a document opens to and is shared within: its
+     * project's, or its owner's organization now (a personal document goes
+     * with its owner).
+     */
+    public static function documentOrganizationId(Document $document): ?int
+    {
+        if (! $document->isPersonal()) {
+            return $document->project?->organization_id;
+        }
+
+        $organizationId = $document->owner === null ? null : self::memberFor($document->owner)?->organization_id;
+
+        return $organizationId === null ? null : (int) $organizationId;
+    }
+
+    /** Make a personal document: an active person, or a super-admin. */
+    public static function canCreatePersonalDocuments(?Authenticatable $user): bool
+    {
+        if (! config('documents.enabled') || $user === null) {
+            return false;
+        }
+
+        $member = self::memberFor($user);
+
+        return self::isSuperAdmin($user) || ($member !== null && $member->is_active);
+    }
+
+    /**
+     * Open a document to the organization and give it to people: a personal
+     * document's owner, a project document's canDeleteDocument people (whoever
+     * runs the project, or its maker). Never while it is trashed or frozen.
+     */
+    public static function canShareDocument(?Authenticatable $user, Document $document): bool
+    {
+        if (! config('documents.enabled') || $user === null || $document->trashed()) {
+            return false;
+        }
+
+        return self::canDeleteDocument($user, $document);
+    }
+
+    /**
+     * Whom a document may be shared with: an active person of its
+     * organization, never a personal document's owner. Twin of
+     * DocumentShareCandidatesQuery.
+     */
+    public static function canShareDocumentWith(Document $document, Member $member): bool
+    {
+        $organizationId = self::documentOrganizationId($document);
+
+        return $member->is_active
+            && $organizationId !== null
+            && (int) $member->organization_id === $organizationId
+            && ! ($document->isPersonal() && $member->user_id !== null && $member->user_id === $document->owner_id);
+    }
+
+    /**
+     * Whether a stored share gives anything now: the person is active and in
+     * the document's organization, and the document isn't frozen.
+     */
+    public static function isShareEffective(DocumentShare $share): bool
+    {
+        $document = $share->document;
+
+        return ! self::isDocumentFrozen($document) && self::canShareDocumentWith($document, $share->member);
+    }
+
+    /**
+     * Move a document to the trash and bring it back. A project's: whoever
+     * runs it (canManageProjectAccess), or the person who made it while they
+     * may still use the project's documents (the twin of canDeleteTask). A
+     * personal one: its owner while active.
+     */
+    public static function canDeleteDocument(?Authenticatable $user, Document $document): bool
+    {
+        if (! config('documents.enabled') || $user === null) {
+            return false;
+        }
+
+        $userId = (int) $user->getAuthIdentifier();
+
+        if ($document->isPersonal()) {
+            return $document->owner_id === $userId && self::documentOwnerActive($document);
+        }
+
+        $project = $document->project;
+
+        if ($project === null) {
             return false;
         }
 
@@ -596,10 +777,24 @@ class WorkspaceAccess
             return true;
         }
 
-        return $user !== null
-            && $document->created_by !== null
-            && $document->created_by === (int) $user->getAuthIdentifier()
+        return $document->created_by !== null
+            && $document->created_by === $userId
             && self::canUseProjectDocuments($user, $project);
+    }
+
+    /**
+     * Move a personal document into a project: its owner while active, not
+     * from the trash. The project must be one whose documents they may use
+     * (MoveDocumentRequest).
+     */
+    public static function canMoveDocument(?Authenticatable $user, Document $document): bool
+    {
+        return config('documents.enabled')
+            && $user !== null
+            && $document->isPersonal()
+            && ! $document->trashed()
+            && $document->owner_id === (int) $user->getAuthIdentifier()
+            && self::documentOwnerActive($document);
     }
 
     // ---- Code (git) ----

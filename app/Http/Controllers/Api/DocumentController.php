@@ -107,7 +107,7 @@ class DocumentController extends Controller
         }
 
         $payload = (new DocumentResource($document->loadMissing(['creator:id,name', 'updater:id,name'])))
-            ->withCanDelete(WorkspaceAccess::canDeleteDocument(request()->user(), $document, $project))
+            ->withCanDelete(WorkspaceAccess::canDeleteDocument(request()->user(), $document))
             ->resolve();
 
         return $this->respondWithResult($result, $payload, $status);

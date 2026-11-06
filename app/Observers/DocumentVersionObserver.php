@@ -16,6 +16,11 @@ class DocumentVersionObserver
     public function created(DocumentVersion $version): void
     {
         $document = $version->document;
+
+        if ($document->project === null) {
+            return;
+        }
+
         $title = ProjectActivityRecorder::truncate($document->title);
 
         $description = match ($version->source) {
