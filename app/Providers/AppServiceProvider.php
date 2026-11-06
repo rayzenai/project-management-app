@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Document;
+use App\Models\DocumentShare;
 use App\Models\DocumentVersion;
 use App\Models\GitBranch;
 use App\Models\GitCommit;
@@ -25,6 +26,7 @@ use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Observers\DocumentObserver;
+use App\Observers\DocumentShareObserver;
 use App\Observers\DocumentVersionObserver;
 use App\Observers\GitPullRequestObserver;
 use App\Observers\GitRepositoryGrantObserver;
@@ -166,6 +168,7 @@ class AppServiceProvider extends ServiceProvider
         GitPullRequest::observe(GitPullRequestObserver::class);
         Document::observe(DocumentObserver::class);
         DocumentVersion::observe(DocumentVersionObserver::class);
+        DocumentShare::observe(DocumentShareObserver::class);
     }
 
     /**

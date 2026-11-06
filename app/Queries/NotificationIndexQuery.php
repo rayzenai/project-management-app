@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Models\User;
 use App\Notifications\AddedToProjectTeam;
+use App\Notifications\DocumentShared;
 use App\Notifications\MadeProgramManager;
 use App\Notifications\MadeProjectManager;
 use App\Notifications\MentionedInComment;
@@ -32,6 +33,7 @@ class NotificationIndexQuery
         'mention' => [MentionedInComment::class],
         'deadline' => [TaskDeadlineDue::class],
         'team' => [AddedToProjectTeam::class, MadeProjectManager::class, MadeProgramManager::class],
+        'documents' => [DocumentShared::class],
     ];
 
     /**

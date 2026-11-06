@@ -7,6 +7,7 @@
         CalendarClock,
         Check,
         CircleDot,
+        FileText,
         UserCheck,
         UserPlus,
         Users,
@@ -117,6 +118,7 @@
         team_added: Users,
         made_manager: UserCheck,
         made_program_manager: UserCheck,
+        document_shared: FileText,
     };
 
     const TYPE_CHIPS = [
@@ -126,6 +128,7 @@
         { key: 'mention', label: 'Mentions' },
         { key: 'deadline', label: 'Deadlines' },
         { key: 'team', label: 'Teams' },
+        { key: 'documents', label: 'Documents' },
     ];
 
     /**

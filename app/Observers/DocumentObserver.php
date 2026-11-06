@@ -7,28 +7,47 @@ use App\Models\ProjectActivity;
 use App\Services\ProjectActivityRecorder;
 
 /**
- * A project document's rename, trash and restore go into its project's
- * activity; a personal document writes none.
+ * A project document's rename, organization access, trash and restore go
+ * into its project's activity; a personal document writes none. Its shares
+ * are DocumentShareObserver's.
  * Its versions (created, uploaded, saved) are DocumentVersionObserver's.
  */
 class DocumentObserver
 {
     public function updated(Document $document): void
     {
-        if ($document->project === null || ! $document->wasChanged('title')) {
+        $project = $document->project;
+
+        if ($project === null) {
             return;
         }
 
-        $from = ProjectActivityRecorder::truncate((string) $document->getOriginal('title'));
-        $to = ProjectActivityRecorder::truncate($document->title);
+        $title = ProjectActivityRecorder::truncate($document->title);
 
-        ProjectActivityRecorder::recordForProject(
-            project: $document->project,
-            subject: $document,
-            action: ProjectActivity::ACTION_UPDATED,
-            description: "Renamed document {$from} to {$to}",
-            changes: ['title' => ['from' => $document->getOriginal('title'), 'to' => $document->title]],
-        );
+        if ($document->wasChanged('title')) {
+            $from = ProjectActivityRecorder::truncate((string) $document->getOriginal('title'));
+
+            ProjectActivityRecorder::recordForProject(
+                project: $project,
+                subject: $document,
+                action: ProjectActivity::ACTION_UPDATED,
+                description: "Renamed document {$from} to {$title}",
+                changes: ['title' => ['from' => $document->getOriginal('title'), 'to' => $document->title]],
+            );
+        }
+
+        if ($document->wasChanged('organization_access')) {
+            $organization = (string) $project->organization?->name;
+
+            ProjectActivityRecorder::recordForProject(
+                project: $project,
+                subject: $document,
+                action: ProjectActivity::ACTION_UPDATED,
+                description: $document->organization_access === null
+                    ? "Closed document {$title} to the organization"
+                    : "Opened document {$title} to everyone in {$organization} (".DocumentShareObserver::can($document->organization_access).')',
+            );
+        }
     }
 
     public function deleted(Document $document): void

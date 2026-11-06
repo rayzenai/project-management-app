@@ -16,6 +16,7 @@ use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\DesignationController;
 use App\Http\Controllers\Workspace\DocumentController;
 use App\Http\Controllers\Workspace\DocumentLibraryController;
+use App\Http\Controllers\Workspace\DocumentSharingController;
 use App\Http\Controllers\Workspace\EmailSettingsController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\GuideController;
@@ -205,6 +206,15 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
         Route::patch('/documents/{document}', [DocumentController::class, 'update'])->whereNumber('document')->name('documents.update');
         Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->whereNumber('document')->name('documents.destroy');
         Route::post('/documents/{document}/restore', [DocumentController::class, 'restore'])->whereNumber('document')->withTrashed()->name('documents.restore');
+
+        // Who has a document beyond its home: everyone in its organization
+        // and chosen people (WorkspaceAccess::canShareDocument).
+        Route::get('/documents/{document}/sharing', [DocumentSharingController::class, 'show'])->whereNumber('document')->name('documents.sharing.show');
+        Route::get('/documents/{document}/sharing/candidates', [DocumentSharingController::class, 'candidates'])->whereNumber('document')->name('documents.sharing.candidates');
+        Route::put('/documents/{document}/sharing/organization', [DocumentSharingController::class, 'organization'])->whereNumber('document')->name('documents.sharing.organization');
+        Route::post('/documents/{document}/shares', [DocumentSharingController::class, 'store'])->whereNumber('document')->name('documents.shares.store');
+        Route::patch('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'update'])->whereNumber(['document', 'share'])->scopeBindings()->name('documents.shares.update');
+        Route::delete('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'destroy'])->whereNumber(['document', 'share'])->scopeBindings()->name('documents.shares.destroy');
 
         // Who may pull and push a linked repository (its maintainers and grants).
         Route::scopeBindings()->group(function () {
