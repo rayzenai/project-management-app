@@ -25,6 +25,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `todoCount`, `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`,
+  `documentsEnabled`,
   `office` (`OfficeLinks` capabilities/count), `clock` (`MyAttendanceQuery`),
   `organizationSwitch` (`OrganizationChoicesQuery::switcher`). Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
@@ -34,7 +35,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and organizational-admin
   context plus `features: {task_notes, contacts}`, `managed_program_ids`,
-  `git_enabled`, `office` (`OfficeLinks`) and `todo_count`. Cross-cutting API context
+  `git_enabled`, `documents_enabled`, `office` (`OfficeLinks`) and `todo_count`. Cross-cutting API context
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
@@ -373,6 +374,39 @@ in the same transaction; a selected manager keeps their leader role.
   numbers. The `2026_10_31_190000` migration rewords reconstructable old rows.
   **WorkspaceNote** — personal stickies.
   **ProjectAssignment/Note/Contact, TaskComment** — task children.
+
+## Documents / ONLYOFFICE
+
+Documents exist only while `config('documents.enabled')` has an editor URL and
+a shared JWT secret. `Document` belongs to a project, is soft-deleted but never
+purged, and points at its current `version`/`editor_key`; `DocumentVersion`
+keeps every created, uploaded or edited file as a distinct object on the
+`documents` disk. `DocumentTypes` is the one `docx|xlsx|pptx` list and
+`DocumentFiles` is the only write path, so versions are never overwritten or
+deleted. Production maps that disk to RustFS; local development uses
+`storage/app/documents`.
+
+`WorkspaceAccess::canUseProjectDocuments` admits the project's active team,
+active program manager, organizational admins and super-admins, but not other
+viewers of a public project. It gates listing, opening, editing, creating,
+uploading, renaming, versions and downloads. `canDeleteDocument` mirrors task
+deletion: project runners or the creator while they still have document access.
+Shared `DocumentsRequest` subclasses serve paired web/API controllers and
+`ProjectDocumentsQuery`; `ProjectShowQuery.documents` is null when disabled or
+forbidden. The API's document `show` includes the same editor config as the web
+page.
+
+`DocumentEditorQuery` builds and HS256-signs the complete ONLYOFFICE config:
+expiring signed file URL, signed callback URL, shared editor key, viewer id/name
+(never email), and disabled AI/plugins/macros/chat. The editor page encrypts
+Inertia history; sign-out clears it. `DocumentServerController` is outside the
+web middleware and accepts the signed routes only with the editor's
+operation-specific JWT. `SaveEditedDocumentService` fetches saves only from the
+configured editor host, caps them at 100 MB, deduplicates by SHA-256, preserves
+error-status saves with a warning, and advances the editor key when a session ends;
+failures tell the editor to retry. `DocumentObserver` and
+`DocumentVersionObserver` own project activity for rename/trash/restore and
+created/uploaded/saved versions, crediting the editor's last user where known.
 
 ## Notifications
 

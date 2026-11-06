@@ -11,7 +11,8 @@ Single Inertia entry `resources/js/app.ts`; single root view
 `?tab=activity`),
 `Organizations/Index` (super-admin tenant CRUD + Git connection controls),
 `Projects/Index` (program groups, then unprogrammed projects by manager),
-`Projects/Show` (list/board/people/code views via `components/project/`),
+`Projects/Show` (list/board/people/code/documents views via `components/project/`),
+`Documents/Edit` (full-height embedded ONLYOFFICE editor),
 `Tasks/Show`, `Team/Index` (organization-aware People directory),
 `Projects/Progress` (workload, Gantt, activity; polls every 15s while visible),
 `Programs/Show` (project summary, workload, Gantt and activity across active
@@ -40,7 +41,9 @@ when shared `gitEnabled` is true. `GuideQuery` supplies the reader's accessible
 forges (own organization first) and forge username; `CommandBlock` makes its
 setup/clone/branch/workflow examples copyable. It walks from first forge sign-in
 through repository creation/import, every change, runners, secrets, checks and
-the protected-branch merge rule. Keep it aligned with changes to how people work.
+the protected-branch merge rule. Its Documents section appears when shared
+`documentsEnabled` is true and explains collaborative editing, versions and
+access. Keep it aligned with changes to how people work.
 
 ## Key components (`resources/js/components`)
 
@@ -155,6 +158,15 @@ the full available width and sit side by side from `xl` when both are present.
 Repository rows show the fixed `protected_branch` and warn when the forge's
 `default_branch` moved away from it, because work merged into the new default
 skips the tracker's rule.
+Documents: `project/DocumentsView` is present only when the backend supplies a
+non-null `documents` payload. It creates blank Word/Excel/PowerPoint files,
+uploads matching Office files, opens the editor, renames, downloads any saved
+version, and lazily loads version history and the never-emptied trash. New blank
+files open directly in `Documents/Edit`; uploads remain on the tab. The editor
+page loads ONLYOFFICE's `api.js`, hands it the server-signed config unchanged,
+fills the content area under `AppShell`, reloads on `onRequestRefreshFile`, and
+offers the current download when the editor is unreachable. The session page is
+kept only in encrypted Inertia history, which sign-out clears.
 Reports: `Reports/CodeActivity` offers today/week/last-week/month/custom periods,
 project/program/designation filters, ranking by commits/lines/tests/active days
 (or unranked name order), and compares up to four people. It shows

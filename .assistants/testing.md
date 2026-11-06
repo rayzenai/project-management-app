@@ -191,6 +191,13 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - Repository link/create/access-sync tests cover fixing `protected_branch` at
   link time, forcing tracker-created repositories to `main`, keeping the rule
   there after forge default drift and exposing both branches in resources/UI.
+- `DocumentsTest` covers disabled/configured visibility, team/program/admin and
+  tenant gates, public-project refusal, blank/uploaded files, file validation,
+  paired API responses, rename/trash/restore/download/version history, immutable
+  creator deletion rights, project activity, signed/JWT-protected editor file
+  and callback routes, editor-config expiry/history clearing, saved-file host/
+  hash handling, error-status saves, stale sessions and retry responses.
+  It fakes every editor HTTP call; no test reaches ONLYOFFICE or RustFS.
 
 ## Running
 

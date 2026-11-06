@@ -103,6 +103,15 @@ rollback drops them. Access-sync jobs also use `afterCommit`, read repositories
 afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
 `tasks-queue` and switching all services to Redis; `deploy.sh` still deploys
 only web/scheduler.
+
+ONLYOFFICE is another separate Dokploy app, built from `onlyoffice/`; its
+runbook is `docs/onlyoffice.md`. Project documents are enabled only when the
+editor URL and a shared JWT secret of at least 32 characters are configured.
+Production uses the `documents` disk backed by RustFS's `tasks-documents`
+bucket. `DocumentFiles` is the sole file-write path: every saved version gets
+a new object, and the app never overwrites, purges or deletes document files.
+`ops/rustfs/setup-documents.sh` owns the no-delete bucket user and policy.
+
 Section 14 covers four bounded Forgejo runners, protected main and checks.
 Runner jobs, forge data and forge Postgres live on separate logical volumes
 (`runner-jobs`, `forge-data`, `forge-db`) so a runaway job cannot fill the
