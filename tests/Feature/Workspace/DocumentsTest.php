@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\TestResponse;
+use Inertia\Support\SessionKey;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Sanctum\Sanctum;
 
@@ -238,13 +239,19 @@ it('hands the editor a signed config that names the person without their email',
         ->where('editor.config.editorConfig.customization.plugins', false)
         ->where('editor.config.document.permissions.chat', false));
 
-    $config = $response->viewData('page')['props']['editor']['config'];
+    $page = $response->viewData('page');
+    $config = $page['props']['editor']['config'];
     $token = $config['token'];
     unset($config['token']);
 
-    // The token is the whole config, signed with the shared secret.
+    // The token is the whole config, signed with the shared secret, and it
+    // expires with the file link.
     $claims = json_decode((string) json_encode(JWT::decode($token, new Key(DOCS_SECRET, 'HS256'))), true);
+    expect($claims['exp'] - $claims['iat'])->toBe(60 * 60);
+    unset($claims['iat'], $claims['exp']);
     expect($claims)->toEqual($config)
+        // Kept in the browser's history only encrypted.
+        ->and($page['encryptHistory'])->toBeTrue()
         ->and(json_encode($config))->not->toContain($this->member->email)
         ->and($config['document']['url'])->toContain('/documents/'.$document->id.'/file/1?expires=')
         ->and($config['editorConfig']['callbackUrl'])->toContain('/documents/'.$document->id.'/callback?signature=');
@@ -325,7 +332,21 @@ it('does nothing for a session already saved, editing or closed unchanged', func
     'saved already' => [2, true],
     'editing' => [1, false],
     'closed with no changes' => [4, false],
-    'the editor failed to build it' => [3, false],
+]);
+
+it('keeps what the editor sends after an error building it, like any save', function (int $status, bool $endsSession) {
+    $document = docsCreate($this->project, $this->member);
+    $key = $document->editor_key;
+    Http::fake(['https://docs.example/*' => Http::response(docsEditedFile())]);
+
+    docsCallback($document, ['key' => $key, 'status' => $status, 'url' => 'https://docs.example/cache/out.docx', 'users' => [(string) $this->member->id]])
+        ->assertExactJson(['error' => 0]);
+
+    expect($document->fresh()->version)->toBe(2)
+        ->and($document->fresh()->editor_key !== $key)->toBe($endsSession);
+})->with([
+    'everyone closed it (3)' => [3, true],
+    'a forced save (7)' => [7, false],
 ]);
 
 it('refuses a saved file that is not on the editor itself', function (string $url) {
@@ -469,6 +490,12 @@ it('lets the creator and whoever runs the project move a document to the trash, 
         ->and($mine->fresh()->deleted_by)->toBeNull()
         ->and(ProjectActivity::query()->where('description', 'Moved document Mine to the trash')->exists())->toBeTrue()
         ->and(ProjectActivity::query()->where('description', 'Restored document Mine')->exists())->toBeTrue();
+});
+
+it('clears the history the editor page was kept in when its person signs out', function () {
+    $this->actingAs($this->member)->post('/workspace/logout');
+
+    expect(session(SessionKey::CLEAR_HISTORY))->toBeTrue();
 });
 
 it('lets a creator who left the team trash nothing', function () {

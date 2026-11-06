@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\URL;
  * and its config, signed as `token` with the shared secret so the editor
  * trusts nothing the browser changed. The file link expires; the save link
  * does not (the editor reports a save after everyone has closed it). The
- * person is named by id and name, never email.
+ * token expires with the file link: a page brought back from the browser's
+ * history later (after a sign-out, say) can't open the editor again, while
+ * an editor already open keeps its own session. The person is named by id
+ * and name, never email.
  */
 class DocumentEditorQuery
 {
@@ -75,7 +78,8 @@ class DocumentEditorQuery
             ],
         ];
 
-        $config['token'] = EditorToken::sign($config);
+        $minutes = (int) config('documents.file_link_minutes');
+        $config['token'] = EditorToken::sign($config + ['iat' => now()->timestamp, 'exp' => now()->addMinutes($minutes)->timestamp]);
 
         return [
             'server_url' => (string) config('documents.server_url'),

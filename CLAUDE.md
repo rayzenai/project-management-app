@@ -917,14 +917,17 @@ Spec: `docs/superpowers/specs/2026-11-05-documents-design.md`. Runbook:
   HS256, the shared secret): the file URL (a temporary signed route), the
   callback URL (a signed route), `editor_key`, the person's id and name
   (never email), and the customization (AI tools, plugins, macros, chat
-  off). `DocumentServerController` answers the editor's two calls, outside
+  off); the token expires with the file link, and the page is kept in
+  history only encrypted (cleared on sign-out). `DocumentServerController` answers the editor's two calls, outside
   the `web` group: the file (signed URL plus a `download` JWT) and the
   callback (signed URL plus a `callback` JWT; the token's `payload` is the
-  truth, never the body). `SaveEditedDocumentService` keeps status 2 and 6
-  saves as the next version (refusing a file URL off the editor's own
-  host, at most 100 MB, the same file twice is not a version), gives status
-  2 a new `editor_key`, ignores a key the document no longer has, and
-  answers a failure so the editor asks again.
+  truth, never the body). `SaveEditedDocumentService` keeps status 2, 3, 6
+  and 7 saves as the next version (3 and 7 with a warning; refusing a file
+  URL off the editor's own host, at most 100 MB, the same file twice is not
+  a version), gives 2 and 3 (session over) a new `editor_key`, ignores a
+  key the document no longer has, never logs the editor's file link, and
+  answers a failure so the editor asks again. The page reloads on the
+  editor's `onRequestRefreshFile`.
 - **Activity**: `DocumentObserver` (renamed, trashed, restored) and
   `DocumentVersionObserver` (created, uploaded, saved, credited to the
   editor's last user through `ProjectActivityRecorder`'s `actorId`).

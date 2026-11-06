@@ -102,7 +102,17 @@
                     height: '100%',
                     events: {
                         onAppReady: () => (status = 'ready'),
-                        onError: () => (status = 'failed'),
+                        // Once it runs, the editor shows its own errors;
+                        // this page's only covers one that never started.
+                        onError: () => {
+                            if (status === 'loading') {
+                                status = 'failed';
+                            }
+                        },
+                        // The session it was opened for has been saved (a
+                        // page brought back from history, a laptop waking
+                        // up): open the saved file afresh.
+                        onRequestRefreshFile: () => window.location.reload(),
                     },
                 });
             })

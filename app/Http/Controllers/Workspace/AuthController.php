@@ -59,6 +59,9 @@ class AuthController extends Controller
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+        // Pages kept encrypted in history (a document's editor) can't be
+        // brought back by the next person at this browser.
+        Inertia::clearHistory();
 
         return Inertia::location(route('workspace.login'));
     }

@@ -261,11 +261,16 @@
         }
     }
 
+    /** Who last changed it; a document never saved since is "Added". */
     function edited(document: ProjectDocument): string {
-        const who = document.updated_by?.name;
-        const when = formatTimeAgo(document.updated_at);
+        const added = document.version === 1;
+        const who = (added ? document.created_by : document.updated_by)?.name;
+        const verb = added ? 'Added' : 'Edited';
+        const when = formatTimeAgo(
+            added ? document.created_at : document.updated_at,
+        );
 
-        return who ? `Edited ${when} by ${who}` : `Edited ${when}`;
+        return who ? `${verb} ${when} by ${who}` : `${verb} ${when}`;
     }
 
     function downloadUrl(document: ProjectDocument, version: number): string {

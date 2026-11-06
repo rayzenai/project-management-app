@@ -19,20 +19,25 @@ use Throwable;
  *
  *   1 editing, 4 closed with no changes: nothing to do.
  *   2 everyone closed it, 6 a forced save: fetch the saved file from the
- *     editor's own host and keep it as the next version. Status 2 also gives
- *     the document a new editor key, so the next session opens the saved
- *     file; status 6 keeps it, because people are still editing.
- *   3, 7 the editor could not build the file: logged, nothing saved.
+ *     editor's own host and keep it as the next version.
+ *   3 and 7 are 2 and 6 where the editor hit an error building the file:
+ *     kept the same way (ONLYOFFICE's own integrations do), with a warning,
+ *     because the earlier versions are all still there.
+ *   2 and 3 end the session: the document gets a new editor key, so the next
+ *   session opens the saved file. 6 and 7 keep it: people are still editing.
  *
  * A key the document no longer has is a report about a session already
- * saved, answered as done. A failure is a failure result, so the editor asks
- * again. The same file twice in a row is not a new version.
+ * saved, answered as done (and logged when it carried a file). A failure is
+ * a failure result, so the editor asks again. The same file twice in a row
+ * is not a new version.
  */
 class SaveEditedDocumentService
 {
-    public const STATUS_READY = 2;
+    /** The session is over: everyone closed it. */
+    private const ENDS_SESSION = [2, 3];
 
-    public const STATUS_FORCE_SAVED = 6;
+    /** A forced save while people keep editing. */
+    private const KEEPS_SESSION = [6, 7];
 
     /**
      * @param  array<string, mixed>  $payload
@@ -41,17 +46,19 @@ class SaveEditedDocumentService
     {
         $status = (int) ($payload['status'] ?? 0);
 
-        if (in_array($status, [3, 7], true)) {
-            Log::warning('Documents: the editor could not save a document', ['document_id' => $document->id, 'status' => $status]);
-
+        if (! in_array($status, [...self::ENDS_SESSION, ...self::KEEPS_SESSION], true)) {
             return ServiceResult::success(['saved' => false]);
         }
 
-        if (! in_array($status, [self::STATUS_READY, self::STATUS_FORCE_SAVED], true)) {
-            return ServiceResult::success(['saved' => false]);
+        if (in_array($status, [3, 7], true)) {
+            Log::warning('Documents: the editor hit an error building a saved document; keeping what it sent', ['document_id' => $document->id, 'status' => $status]);
         }
 
         if (($payload['key'] ?? null) !== $document->editor_key) {
+            if (isset($payload['url'])) {
+                Log::warning('Documents: dropped a save for a session already saved', ['document_id' => $document->id, 'status' => $status]);
+            }
+
             return ServiceResult::success(['saved' => false]);
         }
 
@@ -70,7 +77,13 @@ class SaveEditedDocumentService
 
             $saved = DB::transaction(fn (): bool => $this->keep($document->id, $payload, $status, (string) $temp));
         } catch (Throwable $e) {
-            report($e);
+            // Not report($e): a connection error names the editor's signed
+            // link to the file, which is a key to the document.
+            Log::warning('Documents: couldn\'t keep a save; the editor will send it again', [
+                'document_id' => $document->id,
+                'status' => $status,
+                'error' => $e::class.': '.preg_replace('#https?://\S+#', '[link]', $e->getMessage()),
+            ]);
 
             return ServiceResult::failure("Couldn't save the document.", 502);
         } finally {
@@ -117,7 +130,7 @@ class SaveEditedDocumentService
             $document->updated_by = $userId ?? $document->updated_by;
         }
 
-        if ($status === self::STATUS_READY) {
+        if (in_array($status, self::ENDS_SESSION, true)) {
             $document->editor_key = Document::newEditorKey();
         }
 

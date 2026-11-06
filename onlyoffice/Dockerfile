@@ -26,8 +26,9 @@ ENV JWT_ENABLED=true \
     JWT_HEADER=Authorization \
     JWT_IN_BODY=false \
     WOPI_ENABLED=false \
-    # No demo app (it edits files without signing in), no welcome page, no
-    # bundled plugins (several send text to outside services).
+    # No demo app (it edits files without signing in), no bundled plugins
+    # (several send text to outside services). 10.0 still answers /welcome/
+    # with a bare status page (its name and "running"), whatever this says.
     EXAMPLE_ENABLED=false \
     WELCOME_PAGE_ENABLED=false \
     PLUGINS_ENABLED=false \

@@ -59,6 +59,10 @@ class DocumentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        // The page carries a signed editor config: kept in history only
+        // encrypted, unreadable once its person signs out (AuthController).
+        Inertia::encryptHistory();
+
         return Inertia::render('Documents/Edit', [
             'project' => (new ProjectResource($project))->resolve(),
             ...$documents->show($document, $project, $user),

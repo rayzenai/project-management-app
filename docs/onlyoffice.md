@@ -76,8 +76,10 @@ secrets are in the gitignored `.env.sdoc`; never print them.
   and `ALLOW_PRIVATE_IP_ADDRESS` stays false. The tracker in turn fetches a
   saved file only from the editor's own host.
 - **Off:** the demo app (`EXAMPLE_ENABLED`, it edits files without signing
-  in), the welcome page, bundled plugins, the public Document Builder and
-  conversion APIs, WOPI. In each editor config: AI tools, plugins, macros
+  in; `/example/` answers 502), bundled plugins, the public Document Builder
+  and conversion APIs (404), WOPI. `WELCOME_PAGE_ENABLED` is false, yet 10.0
+  still answers `/` and `/welcome/` with a bare status page (the product's
+  name and whether it runs); nothing about this installation. In each editor config: AI tools, plugins, macros
   (several 10.0 fixes were macro sandbox escapes) and chat.
 - `start.sh` refuses to start without the three variables (the image would
   otherwise invent a JWT secret nobody knows).
@@ -121,9 +123,11 @@ font name, so it looks right again wherever Kalimati is installed.
 Bump the tag in `onlyoffice/Dockerfile` to an exact release, read that
 release's changelog (`ONLYOFFICE/DocumentServer` CHANGELOG.md: "Behavior
 change" lines, the token and `externalRequest` settings), push, and deploy
-`docs-onlyoffice`. Stop-first means open editors disconnect for the restart;
-the editor keeps unsaved changes as "forgotten" files in its cache across a
-shutdown. Deploy outside office hours.
+`docs-onlyoffice`. Stop-first means open editors disconnect for the restart.
+On a clean shutdown the editor puts each open document's unsaved changes
+aside as a "forgotten" file in its cache (the rustfs volume), so the
+service has a two-minute stop grace period to do it; this is still a
+disruption, so deploy outside office hours.
 
 ## When something is off
 
