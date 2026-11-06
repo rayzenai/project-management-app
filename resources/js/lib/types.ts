@@ -1119,6 +1119,27 @@ export interface DocumentLibrary {
     trashed_count: number;
 }
 
+/** One person a document is shared with (DocumentShareResource). */
+export interface DocumentShareItem {
+    id: number;
+    member: PersonRef;
+    permission: DocumentAccess;
+    /** False while they are inactive or outside the document's organization. */
+    effective: boolean;
+}
+
+/** Who has a document, for its Share dialog (DocumentSharingQuery). */
+export interface DocumentSharing {
+    home: {
+        type: 'project' | 'personal';
+        project: { slug: string; title: string } | null;
+    };
+    /** Null for a document with no organization to open to. */
+    organization: { id: number; name: string } | null;
+    organization_access: DocumentAccess | null;
+    shares: DocumentShareItem[];
+}
+
 /** The editor page's project: null for a personal document. */
 export interface DocumentProject {
     slug: string;

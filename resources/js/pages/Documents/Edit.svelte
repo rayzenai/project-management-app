@@ -1,7 +1,8 @@
 <script lang="ts">
     import { inertia } from '@inertiajs/svelte';
-    import { Download } from '@lucide/svelte';
+    import { Download, Users } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
+    import ShareDialog from '../../components/documents/ShareDialog.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import type {
         DocumentEditor,
@@ -41,6 +42,7 @@
     const frameId = 'onlyoffice-editor';
 
     let status = $state<'loading' | 'ready' | 'failed'>('loading');
+    let shareOpen = $state(false);
 
     // Back to where the document lives, for whoever may open it there.
     const back = $derived(
@@ -160,16 +162,31 @@
                 <span class="chip shrink-0">Can view</span>
             {/if}
         </div>
-        <a
-            class="btn-ghost shrink-0"
-            href={downloadUrl}
-            download
-            title={`Download version ${doc.version}`}
-            ><Download class="h-4 w-4" /><span class="hidden sm:inline"
-                >Download</span
-            ></a
-        >
+        <div class="flex shrink-0 items-center gap-1">
+            {#if doc.can_share}
+                <button
+                    type="button"
+                    class="btn-ghost"
+                    onclick={() => (shareOpen = true)}
+                    title="Share"
+                    ><Users class="h-4 w-4" /><span class="hidden sm:inline"
+                        >Share</span
+                    ></button
+                >
+            {/if}
+            <a
+                class="btn-ghost shrink-0"
+                href={downloadUrl}
+                download
+                title={`Download version ${doc.version}`}
+                ><Download class="h-4 w-4" /><span class="hidden sm:inline"
+                    >Download</span
+                ></a
+            >
+        </div>
     {/snippet}
+
+    <ShareDialog document={doc} bind:open={shareOpen} />
 
     <div
         class="relative h-[calc(100dvh-48px-57px-env(safe-area-inset-bottom))] min-h-80 md:h-[calc(100dvh-48px)]"

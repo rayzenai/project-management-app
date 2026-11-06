@@ -7,6 +7,7 @@ import {
     CircleAlert,
     ClipboardList,
     Clock,
+    FileText,
     FolderKanban,
     GitCommitHorizontal,
     ListChecks,
@@ -39,17 +40,29 @@ export interface NavGroup {
 }
 
 /**
- * The sidebar's pages, under Search (a button, not a link). Code activity
- * joins them for anyone who uses git, and stays in the account menu too.
+ * The sidebar's pages, under Search (a button, not a link). Documents
+ * joins them while documents are on; Code activity for anyone who uses git,
+ * and stays in the account menu too. On a phone, those without a tab lead
+ * the Me sheet.
  */
 export function mainLinks(options: {
     gitEnabled: boolean;
     isSuperAdmin: boolean;
+    documentsEnabled?: boolean;
 }): NavLink[] {
     // Phase 2 adds Overview here, for whoever runs something.
     return [
         { label: 'My work', href: '/workspace/my', icon: ListChecks },
         { label: 'Projects', href: '/workspace/projects', icon: FolderKanban },
+        ...(options.documentsEnabled
+            ? [
+                  {
+                      label: 'Documents',
+                      href: '/workspace/documents',
+                      icon: FileText,
+                  },
+              ]
+            : []),
         { label: 'People', href: '/workspace/team', icon: Users },
         ...(options.gitEnabled
             ? [

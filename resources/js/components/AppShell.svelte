@@ -150,6 +150,7 @@
         mainLinks({
             gitEnabled: Boolean(shared.gitEnabled),
             isSuperAdmin: Boolean(shared.isSuperAdmin),
+            documentsEnabled: Boolean(shared.documentsEnabled),
         }),
     );
     const groups = $derived(
