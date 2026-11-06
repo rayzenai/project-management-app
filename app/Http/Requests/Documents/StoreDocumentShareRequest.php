@@ -10,9 +10,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Give a document to one person: someone of its organization (anyone else,
- * or an unknown id, gets the same message, which names nobody), active, and
- * not a personal document's owner ({@see WorkspaceAccess::canShareDocumentWith()}).
+ * Give a document to one person: an active person of its organization, not a
+ * personal document's owner ({@see WorkspaceAccess::canShareDocumentWith()}).
+ * Anyone else, or an unknown id, gets the same message, which names nobody.
  */
 class StoreDocumentShareRequest extends ShareDocumentRequest
 {
@@ -33,7 +33,7 @@ class StoreDocumentShareRequest extends ShareDocumentRequest
     {
         $validator->after(function (Validator $validator): void {
             if ($this->person !== null && ! WorkspaceAccess::canShareDocumentWith($this->document(), $this->person)) {
-                $validator->errors()->add('member_id', "You can't share this with {$this->person->name}.");
+                $validator->errors()->add('member_id', $this->choose());
             }
         });
     }
@@ -42,6 +42,12 @@ class StoreDocumentShareRequest extends ShareDocumentRequest
     public function person(): Member
     {
         return $this->person ?? Member::query()->findOrFail((int) $this->validated('member_id'));
+    }
+
+    /** The one refusal, whoever was named: it never says who they are. */
+    private function choose(): string
+    {
+        return 'Choose someone in '.($this->organizationName() ?? 'your organization').'.';
     }
 
     private function inOrganization(): Closure
@@ -55,7 +61,7 @@ class StoreDocumentShareRequest extends ShareDocumentRequest
                 ->first();
 
             if ($this->person === null) {
-                $fail('Choose someone in '.($this->organizationName() ?? 'your organization').'.');
+                $fail($this->choose());
             }
         };
     }

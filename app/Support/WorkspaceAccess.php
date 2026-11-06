@@ -712,15 +712,30 @@ class WorkspaceAccess
     /**
      * Open a document to the organization and give it to people: a personal
      * document's owner, a project document's canDeleteDocument people (whoever
-     * runs the project, or its maker). Never while it is trashed or frozen.
+     * runs the project, or its maker) who are of its organization (or
+     * administer it): a cross-organization team's outsider never shares a
+     * host organization's document, nor searches its people. Never while it
+     * is trashed or frozen.
      */
     public static function canShareDocument(?Authenticatable $user, Document $document): bool
     {
-        if (! config('documents.enabled') || $user === null || $document->trashed()) {
+        if (! config('documents.enabled') || $user === null || $document->trashed() || ! self::canDeleteDocument($user, $document)) {
             return false;
         }
 
-        return self::canDeleteDocument($user, $document);
+        if ($document->isPersonal()) {
+            return true;
+        }
+
+        $organizationId = self::documentOrganizationId($document);
+
+        if (self::administers($user, $organizationId)) {
+            return true;
+        }
+
+        $member = self::memberFor($user);
+
+        return $member !== null && $member->is_active && $organizationId !== null && (int) $member->organization_id === $organizationId;
     }
 
     /**

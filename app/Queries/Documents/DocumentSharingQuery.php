@@ -26,6 +26,7 @@ class DocumentSharingQuery
         $organization = $organizationId === null ? null : Organization::query()->find($organizationId, ['id', 'name']);
 
         $shares = $document->shares()
+            ->whereHas('member')
             ->with('member.designation')
             ->get()
             ->each(fn (DocumentShare $share) => $share->setRelation('document', $document))

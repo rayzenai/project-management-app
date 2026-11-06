@@ -22,6 +22,9 @@ class DocumentLibraryQuery
 {
     public const PAGE_SIZE = 50;
 
+    /** The trash shows this many, newest first. */
+    public const TRASH_LIMIT = 200;
+
     /**
      * @param  array{show: string, project: string|null, type: string|null, q: string|null}  $filters
      * @return array{documents: list<array<string, mixed>>, next_cursor: string|null, filters: array{show: string, project: string|null, type: string|null, q: string|null}, projects: list<array{slug: string, title: string, label: string}>, organization: array{id: int, name: string}|null, types: list<array{value: string, label: string}>, max_upload_mb: int, can_create_personal: bool, trashed_count: int}
@@ -39,7 +42,7 @@ class DocumentLibraryQuery
             'types' => array_map(fn (string $type): array => ['value' => $type, 'label' => DocumentTypes::label($type)], DocumentTypes::all()),
             'max_upload_mb' => intdiv((int) config('documents.max_upload_kilobytes'), 1024),
             'can_create_personal' => WorkspaceAccess::canCreatePersonalDocuments($viewer),
-            'trashed_count' => $this->narrowed(Document::onlyTrashed()->visibleTo($viewer), $viewer, $organizationId)->count(),
+            'trashed_count' => count($this->trash($viewer, null, $organizationId)),
         ];
     }
 
@@ -54,7 +57,7 @@ class DocumentLibraryQuery
         $query = $this->narrowed($this->filtered(Document::query()->visibleTo($viewer), $viewer, $filters), $viewer, $organizationId);
 
         $page = $query
-            ->with(['creator:id,name', 'updater:id,name', 'owner:id,name', 'project.program'])
+            ->with(['creator:id,name', 'updater:id,name', 'owner', 'project.program'])
             ->orderByDesc('documents.updated_at')
             ->orderByDesc('documents.id')
             ->cursorPaginate(self::PAGE_SIZE, ['documents.*'], 'cursor', $cursor);
@@ -66,8 +69,10 @@ class DocumentLibraryQuery
     }
 
     /**
-     * Trashed documents the viewer may see, newest first, for one project or
-     * all; `can_delete` says which they may restore.
+     * The trash, newest first, at most TRASH_LIMIT. One project's (its tab):
+     * all of its trashed documents the viewer may see, `can_delete` saying
+     * which they may restore. Otherwise (the Documents page): what the viewer
+     * may restore, plus, for a super-admin, frozen documents to read.
      *
      * @return list<array<string, mixed>>
      */
@@ -75,12 +80,20 @@ class DocumentLibraryQuery
     {
         $documents = $this->narrowed(Document::onlyTrashed()->visibleTo($viewer), $viewer, $organizationId)
             ->when($projectSlug !== null, fn (Builder $q) => $q->whereHas('project', fn (Builder $p) => $p->where('slug', $projectSlug)))
-            ->with(['creator:id,name', 'updater:id,name', 'owner:id,name', 'project.program'])
+            ->with(['creator:id,name', 'updater:id,name', 'owner', 'project.program'])
             ->orderByDesc('documents.deleted_at')
             ->orderByDesc('documents.id')
+            ->limit(self::TRASH_LIMIT)
             ->get();
+        $rows = $this->rows($documents->all(), $viewer);
 
-        return $this->rows($documents->all(), $viewer);
+        if ($projectSlug !== null) {
+            return $rows;
+        }
+
+        $superAdmin = WorkspaceAccess::isSuperAdmin($viewer);
+
+        return array_values(array_filter($rows, fn (array $row): bool => $row['can_delete'] === true || ($superAdmin && $row['frozen'] === true)));
     }
 
     /**

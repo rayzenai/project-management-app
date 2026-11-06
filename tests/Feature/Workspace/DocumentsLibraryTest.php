@@ -245,17 +245,23 @@ it('uploads a personal document, and one into a project', function () {
         ->and(Document::query()->where('title', 'SRS')->value('project_id'))->toBe($this->project->id);
 });
 
-it('lists the trash the viewer may restore, for one project too', function () {
+it('lists the trash the viewer may restore, and a project\'s whole trash on its tab', function () {
     docsMake($this->member, title: 'Old notes')->delete();
     docsMake($this->manager, $this->project, 'Old plan')->delete();
     docsMake($this->colleague, title: 'Their old notes')->delete();
+    $shared = docsMake($this->colleague, title: 'Shared, then trashed');
+    docsShare($shared, $this->member, 'edit');
+    $shared->delete();
 
-    $this->actingAs($this->member)->getJson('/workspace/documents/trash')->assertOk()->assertJsonCount(2, 'data');
+    // The page's trash: what they may restore.
+    $this->actingAs($this->member)->getJson('/workspace/documents/trash')->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.title', 'Old notes');
     $this->actingAs($this->member)->getJson("/workspace/documents/trash?project={$this->project->slug}")
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.title', 'Old plan')
         ->assertJsonPath('data.0.can_delete', false);
-    $this->actingAs($this->member)->get('/workspace/documents')->assertInertia(fn (AssertableInertia $page) => $page->where('trashed_count', 2));
+    $this->actingAs($this->member)->get('/workspace/documents')->assertInertia(fn (AssertableInertia $page) => $page->where('trashed_count', 1));
 });
 
 it('narrows a super-admin\'s page to the chosen organization', function () {
@@ -363,4 +369,25 @@ it('refuses to delete a person who owns personal documents, trashed ones include
     $leaver = WorkspaceAccess::memberFor(docsPerson($this->organization, null));
     $this->actingAs($admin)->delete("/workspace/members/{$leaver->id}")->assertRedirect();
     expect($leaver->fresh()->trashed())->toBeTrue();
+});
+
+it('lets a super-admin with no person use their own personal documents', function () {
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+    $notes = docsMake($boss, title: 'Boss notes');
+    $notes2 = docsMake($boss, title: 'Old boss notes');
+    $notes2->delete();
+
+    $row = fn () => collect($this->actingAs($boss)->get('/workspace/documents')->viewData('page')['props']['documents'])->firstWhere('title', 'Boss notes');
+    expect($row()['access'])->toBe('edit')
+        ->and($row()['frozen'])->toBeFalse()
+        ->and($row()['can_delete'])->toBeTrue()
+        ->and($row()['can_share'])->toBeTrue();
+
+    $this->actingAs($boss)->getJson('/workspace/documents/trash')->assertJsonPath('data.0.title', 'Old boss notes')->assertJsonPath('data.0.can_delete', true)->assertJsonPath('data.0.frozen', false);
+
+    Sanctum::actingAs($boss);
+    $this->postJson('/api/v1/workspace/documents', ['title' => 'Memo', 'type' => 'docx'])->assertCreated()
+        ->assertJsonPath('data.access', 'edit')
+        ->assertJsonPath('data.frozen', false)
+        ->assertJsonPath('data.can_delete', true);
 });

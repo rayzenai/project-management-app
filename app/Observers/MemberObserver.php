@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Jobs\SyncRepositoryAccess;
+use App\Models\DocumentShare;
 use App\Models\GitRepository;
 use App\Models\Member;
 use App\Services\Structure\MoveReportsUpService;
@@ -16,6 +17,8 @@ use App\Support\Background;
  * Reporting lines: when a person moves to another organization or is
  * deleted, the people who reported to them move up to their own higher
  * authority (MoveReportsUpService). Deactivation keeps every line.
+ *
+ * A deleted person's document shares are removed with them.
  */
 class MemberObserver
 {
@@ -46,5 +49,9 @@ class MemberObserver
     public function deleting(Member $member): void
     {
         $this->reports->execute($member, $member->reports_to_id);
+
+        // Documents shared with them: nothing left to give (a soft delete
+        // would keep the rows until the prune's hard delete cascades them).
+        DocumentShare::query()->where('member_id', $member->id)->delete();
     }
 }

@@ -83,10 +83,11 @@ it('refuses the owner, an inactive person and a non-owner sharing', function () 
     $inactive = docsPerson($this->organization, null, null, ['is_active' => false]);
     $url = "/workspace/documents/{$this->document->id}/shares";
 
+    // The same message as for anyone else: it names nobody.
     $this->actingAs($this->owner)->postJson($url, ['member_id' => docsMemberId($this->owner), 'permission' => 'edit'])
-        ->assertUnprocessable()->assertJsonPath('errors.member_id.0', "You can't share this with {$this->owner->name}.");
+        ->assertUnprocessable()->assertJsonPath('errors.member_id.0', 'Choose someone in SDOC.');
     $this->actingAs($this->owner)->postJson($url, ['member_id' => docsMemberId($inactive), 'permission' => 'edit'])
-        ->assertUnprocessable()->assertJsonPath('errors.member_id.0', "You can't share this with {$inactive->name}.");
+        ->assertUnprocessable()->assertJsonPath('errors.member_id.0', 'Choose someone in SDOC.');
     $this->actingAs($this->owner)->postJson($url, ['member_id' => docsMemberId($this->colleague), 'permission' => 'own'])->assertUnprocessable();
 
     docsShare($this->document, $this->colleague, 'edit');
@@ -205,4 +206,30 @@ it('shares over the API too', function () {
 
     expect(Document::query()->find($this->document->id)?->organization_access)->toBe('edit')
         ->and(DocumentShare::query()->count())->toBe(0);
+});
+
+it('drops a deleted person\'s shares, and the dialog still loads', function () {
+    $admin = docsPerson($this->organization, null, null, ['is_office_admin' => true]);
+    docsShare($this->document, $this->colleague, 'edit');
+    $person = WorkspaceAccess::memberFor($this->colleague);
+
+    $this->actingAs($admin)->delete("/workspace/members/{$person->id}")->assertRedirect();
+
+    expect(DocumentShare::query()->count())->toBe(0);
+    $this->actingAs($this->owner)->getJson("/workspace/documents/{$this->document->id}/sharing")->assertOk()->assertJsonCount(0, 'data.shares');
+});
+
+it('lets nobody from another organization share a project document, not even its maker on a cross-organization team', function () {
+    $project = Project::factory()->create(['organization_id' => $this->organization->id]);
+    $project->ensureTeam()->update(['is_cross_organization' => true]);
+    $outsider = docsPerson(Organization::factory()->create(), $project, 'member');
+    $document = docsMake($outsider, $project, 'Their draft');
+
+    expect(WorkspaceAccess::canShareDocument($outsider, $document))->toBeFalse()
+        ->and(WorkspaceAccess::canDeleteDocument($outsider, $document))->toBeTrue()
+        ->and(WorkspaceAccess::documentAccess($outsider, $document))->toBe('edit');
+
+    $this->actingAs($outsider)->getJson("/workspace/documents/{$document->id}/sharing/candidates?q=e")->assertForbidden();
+    $this->actingAs($outsider)->postJson("/workspace/documents/{$document->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'edit'])->assertForbidden();
+    $this->actingAs($outsider)->putJson("/workspace/documents/{$document->id}/sharing/organization", ['access' => 'edit'])->assertForbidden();
 });

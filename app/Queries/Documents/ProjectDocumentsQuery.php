@@ -58,7 +58,7 @@ class ProjectDocumentsQuery
      */
     public function show(Document $document, ?Authenticatable $viewer): array
     {
-        $document->loadMissing(['creator:id,name', 'updater:id,name', 'owner:id,name', 'project.program']);
+        $document->loadMissing(['creator:id,name', 'updater:id,name', 'owner', 'project.program']);
         $project = $document->project;
 
         return [

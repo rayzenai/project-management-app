@@ -23,7 +23,7 @@ trait RespondsWithDocument
             return $this->respondWithResult($result);
         }
 
-        $payload = (new DocumentResource($document->loadMissing(['creator:id,name', 'updater:id,name', 'owner:id,name', 'project.program'])))
+        $payload = (new DocumentResource($document->loadMissing(['creator:id,name', 'updater:id,name', 'owner', 'project.program'])))
             ->withViewer(request()->user())
             ->resolve();
 
