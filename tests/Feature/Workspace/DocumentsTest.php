@@ -84,15 +84,15 @@ it('shows the Documents tab only to the people who may use it, and to nobody whi
 
 it('refuses every document route to a viewer of the public project', function () {
     $document = docsCreate($this->project, $this->member);
-    $base = "/workspace/projects/{$this->project->slug}/documents";
+    $slug = $this->project->slug;
 
     $this->actingAs($this->viewer);
-    $this->post($base, ['title' => 'Mine', 'type' => 'docx'])->assertForbidden();
-    $this->post("{$base}/upload", ['file' => UploadedFile::fake()->createWithContent('x.docx', (string) file_get_contents(resource_path('documents/blank.docx')))])->assertForbidden();
+    $this->post('/workspace/documents', ['title' => 'Mine', 'type' => 'docx', 'project' => $slug])->assertSessionHasErrors(['project' => 'Choose one of your projects.']);
+    $this->post('/workspace/documents/upload', ['project' => $slug, 'file' => UploadedFile::fake()->createWithContent('x.docx', (string) file_get_contents(resource_path('documents/blank.docx')))])->assertSessionHasErrors('project');
     $this->get("/workspace/documents/{$document->id}")->assertForbidden();
     $this->get("/workspace/documents/{$document->id}/versions")->assertForbidden();
     $this->get("/workspace/documents/{$document->id}/versions/1/download")->assertForbidden();
-    $this->get("{$base}/trash")->assertForbidden();
+    $this->getJson("/workspace/documents/trash?project={$slug}")->assertOk()->assertJsonCount(0, 'data');
     $this->patch("/workspace/documents/{$document->id}", ['title' => 'Taken'])->assertForbidden();
     $this->delete("/workspace/documents/{$document->id}")->assertForbidden();
 
@@ -113,7 +113,7 @@ it('refuses another project\'s document to someone on this one', function () {
 
 it('creates a blank document as its first version and opens it in the editor', function () {
     $this->actingAs($this->member)
-        ->post("/workspace/projects/{$this->project->slug}/documents", ['title' => '  Test plan  ', 'type' => 'xlsx'])
+        ->post('/workspace/documents', ['title' => '  Test plan  ', 'type' => 'xlsx', 'project' => $this->project->slug])
         ->assertRedirect();
 
     $document = Document::query()->sole();
@@ -135,7 +135,7 @@ it('creates a blank document as its first version and opens it in the editor', f
 
 it('refuses a type that is not a document, spreadsheet or presentation', function () {
     $this->actingAs($this->member)
-        ->post("/workspace/projects/{$this->project->slug}/documents", ['title' => 'Script', 'type' => 'exe'])
+        ->post('/workspace/documents', ['title' => 'Script', 'type' => 'exe', 'project' => $this->project->slug])
         ->assertSessionHasErrors('type');
 
     expect(Document::query()->count())->toBe(0);
@@ -145,7 +145,7 @@ it('uploads a real Word file and names it after the file', function () {
     $file = UploadedFile::fake()->createWithContent('SRS draft.docx', (string) file_get_contents(resource_path('documents/blank.docx')));
 
     $this->actingAs($this->member)
-        ->post("/workspace/projects/{$this->project->slug}/documents/upload", ['file' => $file])
+        ->post('/workspace/documents/upload', ['file' => $file, 'project' => $this->project->slug])
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
@@ -158,7 +158,7 @@ it('uploads a real Word file and names it after the file', function () {
 
 it('refuses an upload that is not really the Office file its name says', function (string $name, string $contents) {
     $this->actingAs($this->member)
-        ->post("/workspace/projects/{$this->project->slug}/documents/upload", ['file' => UploadedFile::fake()->createWithContent($name, $contents)])
+        ->post('/workspace/documents/upload', ['project' => $this->project->slug, 'file' => UploadedFile::fake()->createWithContent($name, $contents)])
         ->assertSessionHasErrors('file');
 
     expect(Document::query()->count())->toBe(0);
@@ -411,7 +411,6 @@ it('renames a document and logs it', function () {
 it('lets the creator and whoever runs the project move a document to the trash, never another teammate', function () {
     $mine = docsCreate($this->project, $this->member, 'Mine');
     $theirs = docsCreate($this->project, $this->teammate, 'Theirs');
-    $base = "/workspace/projects/{$this->project->slug}/documents";
 
     $this->actingAs($this->member)->delete("/workspace/documents/{$theirs->id}")->assertForbidden();
     expect($theirs->fresh()->trashed())->toBeFalse();
@@ -427,7 +426,7 @@ it('lets the creator and whoever runs the project move a document to the trash, 
 
     // Trashed: out of the list and the editor, into the trash.
     $this->actingAs($this->member)->get("/workspace/documents/{$mine->id}")->assertNotFound();
-    $this->actingAs($this->member)->getJson("{$base}/trash")->assertJsonCount(2, 'data');
+    $this->actingAs($this->member)->getJson("/workspace/documents/trash?project={$this->project->slug}")->assertJsonCount(2, 'data');
     $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page->where('documents.documents', [])->where('documents.trashed_count', 2));
 
@@ -471,29 +470,29 @@ it('still keeps a save of a document trashed while someone had it open', functio
 
 it('serves the same documents over the API, with the editor config', function () {
     Sanctum::actingAs($this->member);
-    $base = "/api/v1/workspace/projects/{$this->project->slug}/documents";
+    $slug = $this->project->slug;
 
-    $created = $this->postJson($base, ['title' => 'Minutes', 'type' => 'docx'])
+    $created = $this->postJson('/api/v1/workspace/documents', ['title' => 'Minutes', 'type' => 'docx', 'project' => $slug])
         ->assertCreated()
         ->assertJsonPath('data.title', 'Minutes')
         ->assertJsonPath('data.can_delete', true);
     $id = $created->json('data.id');
 
-    $this->postJson("{$base}/upload", ['file' => UploadedFile::fake()->createWithContent('Deck.pptx', (string) file_get_contents(resource_path('documents/blank.pptx')))])
+    $this->postJson('/api/v1/workspace/documents/upload', ['project' => $slug, 'file' => UploadedFile::fake()->createWithContent('Deck.pptx', (string) file_get_contents(resource_path('documents/blank.pptx')))])
         ->assertCreated()
         ->assertJsonPath('data.kind', 'Presentation');
 
-    $this->getJson($base)->assertOk()->assertJsonCount(2, 'data');
+    $this->getJson("/api/v1/workspace/documents?project={$slug}")->assertOk()->assertJsonCount(2, 'data');
     $this->getJson("/api/v1/workspace/documents/{$id}")
         ->assertOk()
         ->assertJsonPath('data.document.title', 'Minutes')
         ->assertJsonPath('data.editor.config.document.key', Document::query()->find($id)?->editor_key);
     $this->patchJson("/api/v1/workspace/documents/{$id}", ['title' => 'Minutes, 5 November'])->assertOk()->assertJsonPath('data.title', 'Minutes, 5 November');
     $this->deleteJson("/api/v1/workspace/documents/{$id}")->assertOk();
-    $this->getJson("{$base}/trash")->assertJsonCount(1, 'data');
+    $this->getJson("/api/v1/workspace/documents/trash?project={$slug}")->assertJsonCount(1, 'data');
     $this->postJson("/api/v1/workspace/documents/{$id}/restore")->assertOk()->assertJsonPath('data.deleted_at', null);
 
     Sanctum::actingAs($this->viewer);
-    $this->getJson($base)->assertForbidden();
+    $this->getJson("/api/v1/workspace/documents?project={$slug}")->assertOk()->assertJsonCount(0, 'data');
     $this->getJson("/api/v1/workspace/documents/{$id}")->assertForbidden();
 });

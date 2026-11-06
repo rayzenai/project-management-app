@@ -6,8 +6,8 @@ use App\Models\Document;
 use App\Support\Documents\DocumentTypes;
 use Illuminate\Validation\Rule;
 
-/** A new blank document, spreadsheet or presentation. */
-class StoreDocumentRequest extends DocumentsRequest
+/** A blank document, spreadsheet or presentation. */
+class StoreDocumentRequest extends CreateDocumentRequest
 {
     /**
      * @return array<string, mixed>
@@ -15,6 +15,7 @@ class StoreDocumentRequest extends DocumentsRequest
     public function rules(): array
     {
         return [
+            ...parent::rules(),
             'title' => ['required', 'string', 'max:'.Document::TITLE_MAX],
             'type' => ['required', 'string', Rule::in(DocumentTypes::all())],
         ];

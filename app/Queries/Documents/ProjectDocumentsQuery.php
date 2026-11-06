@@ -11,9 +11,8 @@ use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
- * A project's documents, for its Documents tab (web) and the API list:
- * newest change first, or the trash, newest first (callers have checked
- * canUseProjectDocuments); and one document for its editor page (callers
+ * A project's documents, for its Documents tab: newest change first (callers
+ * have checked canUseProjectDocuments; its trash is DocumentLibraryQuery's); and one document for its editor page (callers
  * have checked its access level).
  */
 class ProjectDocumentsQuery
@@ -36,13 +35,12 @@ class ProjectDocumentsQuery
     /**
      * @return list<array<string, mixed>>
      */
-    public function list(Project $project, ?Authenticatable $viewer, bool $trashed = false): array
+    public function list(Project $project, ?Authenticatable $viewer): array
     {
         $documents = Document::query()
-            ->when($trashed, fn ($q) => $q->onlyTrashed())
             ->where('project_id', $project->id)
             ->with(['creator:id,name', 'updater:id,name', 'project.program'])
-            ->orderByDesc($trashed ? 'deleted_at' : 'updated_at')
+            ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get();
 

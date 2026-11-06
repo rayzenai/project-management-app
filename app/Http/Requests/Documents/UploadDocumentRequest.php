@@ -7,7 +7,7 @@ use App\Rules\OfficeFile;
 use App\Support\Documents\DocumentTypes;
 
 /** An uploaded .docx, .xlsx or .pptx; the title defaults to its file name. */
-class UploadDocumentRequest extends DocumentsRequest
+class UploadDocumentRequest extends CreateDocumentRequest
 {
     /**
      * @return array<string, mixed>
@@ -15,6 +15,7 @@ class UploadDocumentRequest extends DocumentsRequest
     public function rules(): array
     {
         return [
+            ...parent::rules(),
             'file' => ['required', 'file', 'max:'.(int) config('documents.max_upload_kilobytes'), 'extensions:'.implode(',', DocumentTypes::all()), new OfficeFile],
             'title' => ['nullable', 'string', 'max:'.Document::TITLE_MAX],
         ];

@@ -40,7 +40,6 @@
     } = $props();
 
     const uid = $props.id();
-    const base = $derived(`/workspace/projects/${project.slug}/documents`);
 
     const ICONS = {
         docx: FileText,
@@ -91,8 +90,12 @@
         creating = true;
         newErrors = {};
         router.post(
-            base,
-            { title: newTitle.trim() || placeholder, type: newType },
+            '/workspace/documents',
+            {
+                title: newTitle.trim() || placeholder,
+                type: newType,
+                project: project.slug,
+            },
             {
                 // The server opens the new document in the editor.
                 onError: (errors) => (newErrors = errors),
@@ -122,8 +125,8 @@
 
         uploading = true;
         router.post(
-            `${base}/upload`,
-            { file },
+            '/workspace/documents/upload',
+            { file, project: project.slug },
             {
                 forceFormData: true,
                 preserveScroll: true,
@@ -239,10 +242,13 @@
         trashFailed = false;
 
         try {
-            const response = await fetch(`${base}/trash`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
+            const response = await fetch(
+                `/workspace/documents/trash?project=${encodeURIComponent(project.slug)}`,
+                {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                },
+            );
 
             if (!response.ok) {
                 throw new Error(String(response.status));

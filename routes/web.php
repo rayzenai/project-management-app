@@ -15,6 +15,7 @@ use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\DesignationController;
 use App\Http\Controllers\Workspace\DocumentController;
+use App\Http\Controllers\Workspace\DocumentLibraryController;
 use App\Http\Controllers\Workspace\EmailSettingsController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\GuideController;
@@ -185,13 +186,15 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
             ->name('projects.repositories.destroy');
         Route::get('/go/{org}/{index}', GoToTaskController::class)->name('go');
 
-        // A project's documents (the Documents tab). Old editor links
+        // The Documents page: every document the user may open, Show more,
+        // the trash, New and Upload (into a project or personal). The
+        // project tab uses them with its project. Old editor links
         // (/projects/{project}/documents/{id}) go to the document's page.
-        Route::scopeBindings()->group(function () {
-            Route::get('/projects/{project:slug}/documents/trash', [DocumentController::class, 'trash'])->name('projects.documents.trash');
-            Route::post('/projects/{project:slug}/documents', [DocumentController::class, 'store'])->name('projects.documents.store');
-            Route::post('/projects/{project:slug}/documents/upload', [DocumentController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('projects.documents.upload');
-        });
+        Route::get('/documents', [DocumentLibraryController::class, 'index'])->name('documents.index');
+        Route::get('/documents/list', [DocumentLibraryController::class, 'list'])->name('documents.list');
+        Route::get('/documents/trash', [DocumentLibraryController::class, 'trash'])->name('documents.trash');
+        Route::post('/documents', [DocumentLibraryController::class, 'store'])->name('documents.store');
+        Route::post('/documents/upload', [DocumentLibraryController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('documents.upload');
         Route::redirect('/projects/{project}/documents/{document}', '/workspace/documents/{document}')->whereNumber('document');
 
         // One document, wherever it lives: the editor page and its actions,

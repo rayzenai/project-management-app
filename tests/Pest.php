@@ -179,7 +179,7 @@ function docsPerson(Organization $organization, ?Project $project, ?string $role
 
 function docsCreate(Project $project, User $user, string $title = 'Agreement', string $type = 'docx'): Document
 {
-    test()->actingAs($user)->post("/workspace/projects/{$project->slug}/documents", ['title' => $title, 'type' => $type])->assertRedirect();
+    test()->actingAs($user)->post('/workspace/documents', ['title' => $title, 'type' => $type, 'project' => $project->slug])->assertRedirect();
 
     return Document::query()->where('project_id', $project->id)->where('title', $title)->latest('id')->firstOrFail();
 }

@@ -1092,6 +1092,33 @@ export interface ProjectDocuments {
     max_upload_mb: number;
 }
 
+/** A project a document can go into (the Where choice, the project filter). */
+export interface ProjectChoice {
+    slug: string;
+    title: string;
+    label: string;
+}
+
+/** The Documents page (DocumentLibraryQuery::page). */
+export interface DocumentLibrary {
+    documents: DocumentItem[];
+    /** Fetches the next 50 from /workspace/documents/list; null at the end. */
+    next_cursor: string | null;
+    filters: {
+        show: 'all' | 'mine' | 'shared' | 'organization' | 'projects';
+        project: string | null;
+        type: DocumentFileType | null;
+        q: string | null;
+    };
+    projects: ProjectChoice[];
+    /** The viewer's organization, for "Everyone in SDOC". */
+    organization: { id: number; name: string } | null;
+    types: { value: DocumentFileType; label: string }[];
+    max_upload_mb: number;
+    can_create_personal: boolean;
+    trashed_count: number;
+}
+
 /** The editor page's project: null for a personal document. */
 export interface DocumentProject {
     slug: string;

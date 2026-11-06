@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DesignationController;
 use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\DocumentLibraryController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InviteController;
 use App\Http\Controllers\Api\MaintenanceController;
@@ -145,13 +146,12 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::post('/projects/{project:slug}/repositories/new', [ProjectRepositoryController::class, 'create'])->name('projects.repositories.create');
             Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
 
-            // A project's documents.
-            Route::scopeBindings()->group(function () {
-                Route::get('/projects/{project:slug}/documents', [DocumentController::class, 'index'])->name('projects.documents.index');
-                Route::get('/projects/{project:slug}/documents/trash', [DocumentController::class, 'trash'])->name('projects.documents.trash');
-                Route::post('/projects/{project:slug}/documents', [DocumentController::class, 'store'])->name('projects.documents.store');
-                Route::post('/projects/{project:slug}/documents/upload', [DocumentController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('projects.documents.upload');
-            });
+            // Every document the user may open (filters as the web page's),
+            // the trash, New and Upload (into a project or personal).
+            Route::get('/documents', [DocumentLibraryController::class, 'index'])->name('documents.index');
+            Route::get('/documents/trash', [DocumentLibraryController::class, 'trash'])->name('documents.trash');
+            Route::post('/documents', [DocumentLibraryController::class, 'store'])->name('documents.store');
+            Route::post('/documents/upload', [DocumentLibraryController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('documents.upload');
 
             // One document, wherever it lives; show carries the signed editor
             // config at the viewer's access level.
