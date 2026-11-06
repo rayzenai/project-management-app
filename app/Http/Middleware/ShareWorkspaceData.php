@@ -252,6 +252,9 @@ class ShareWorkspaceData
         // Whether the user may use git anywhere: the Guide shows its Code section then.
         Inertia::share('gitEnabled', fn (): bool => $request->user() instanceof User && GitAccess::anyFor($request->user()));
 
+        // Whether documents are on (the editor is configured): the Guide's Documents section.
+        Inertia::share('documentsEnabled', fn (): bool => (bool) config('documents.enabled'));
+
         // The top bar's clock: today's punches and the next step, or null.
         Inertia::share('clock', fn (): ?array => app(MyAttendanceQuery::class)->get($request->user()));
 

@@ -13,13 +13,15 @@
     "license": "MIT",
     "require": {
         "php": "^8.5",
+        "firebase/php-jwt": "^7.2",
         "inertiajs/inertia-laravel": "^3.0",
         "jeremy379/laravel-openid-connect": "^3.3",
         "laravel/framework": "^13.17",
         "laravel/passport": "^13.10",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
-        "laravel/wayfinder": "^0.1.14"
+        "laravel/wayfinder": "^0.1.14",
+        "league/flysystem-aws-s3-v3": "^3"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",

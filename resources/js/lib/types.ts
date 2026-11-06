@@ -876,6 +876,8 @@ export interface SharedProps {
     features?: Features;
     /** The user may use git somewhere (GitAccess): the Guide's Code section. */
     gitEnabled?: boolean;
+    /** Documents are on (the editor is configured): the Guide's Documents section. */
+    documentsEnabled?: boolean;
     /** The office pages the user may open (OfficeLinks). */
     office?: OfficeLinks;
     /** A super-admin's organization switch; null for everyone else. */
@@ -1030,4 +1032,48 @@ export interface MyWorkPayload {
     today: { date: string; label: string; bs: string | null; tomorrow: string };
     groups: MyWorkGroup[];
     joined: MyWorkJoined[];
+}
+
+/** A project's document (DocumentResource). People by id and name only. */
+export interface ProjectDocument {
+    id: number;
+    title: string;
+    file_type: DocumentFileType;
+    /** Document, Spreadsheet or Presentation. */
+    kind: string;
+    /** The current version's number. */
+    version: number;
+    size: number;
+    created_by?: { id: number; name: string } | null;
+    updated_by?: { id: number; name: string } | null;
+    created_at: string | null;
+    updated_at: string | null;
+    deleted_at: string | null;
+    /** Trash and restore: whoever runs the project, or its creator. */
+    can_delete: boolean;
+}
+
+export type DocumentFileType = 'docx' | 'xlsx' | 'pptx';
+
+/** One saved version (DocumentVersionResource). */
+export interface DocumentVersionItem {
+    version: number;
+    size: number;
+    source: 'created' | 'uploaded' | 'edited';
+    user?: { id: number; name: string } | null;
+    created_at: string | null;
+}
+
+/** The project page's Documents tab; null when not the viewer's to use. */
+export interface ProjectDocuments {
+    documents: ProjectDocument[];
+    trashed_count: number;
+    types: { value: DocumentFileType; label: string }[];
+    max_upload_mb: number;
+}
+
+/** What the editor page hands ONLYOFFICE: where it is and the signed config. */
+export interface DocumentEditor {
+    server_url: string;
+    config: Record<string, unknown>;
 }

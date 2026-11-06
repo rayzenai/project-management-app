@@ -497,6 +497,42 @@ The forge's webhook, `POST /git/webhooks/{connection}` (name `git.webhook`),
 is server to server: no session, CSRF or token, a body signed with the
 connection's webhook secret. See `docs/forgejo.md`, section 12.
 
+## Documents *(documents on; the project's team, its program's manager, its organizational admin or a super-admin; trash and restore: whoever runs the project, or the document's creator)*
+
+A project's Word, Excel and PowerPoint files, edited together in ONLYOFFICE
+(`docs/onlyoffice.md`). Every route answers 403 while documents are off
+(no editor configured) or to anyone else, other viewers of a public project
+included. A document is `{ id, title, file_type (docx|xlsx|pptx), kind
+(Document|Spreadsheet|Presentation), version, size, created_by, updated_by,
+created_at, updated_at, deleted_at, can_delete }` (people as `{ id, name }`);
+a version is `{ version, size, source (created|uploaded|edited), user,
+created_at }`. Every save from the editor is a new version; none is ever
+deleted, and the trash is never emptied. A document of another project is
+404.
+
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| GET | `/workspace/projects/{slug}/documents` | the documents, newest change first (JSON API only; the web Documents tab gets them with the project as `documents: { documents, trashed_count, types, max_upload_mb }`) |
+| GET | `/workspace/projects/{slug}/documents/trash` | the trashed ones, newest first |
+| POST | `/workspace/projects/{slug}/documents` | `title` (at most 200), `type` (`docx`, `xlsx` or `pptx`): a blank one. `Created {title}.`; the web opens it in the editor |
+| POST | `/workspace/projects/{slug}/documents/upload` | multipart `file` (a real `.docx`, `.xlsx` or `.pptx`, at most 50 MB; anything else is 422 `This file could not be read as a Word, Excel or PowerPoint file.` or `Upload a .docx, .xlsx or .pptx file.`), optional `title` (else the file name). `Uploaded {title}.` |
+| GET | `/workspace/projects/{slug}/documents/{id}` | `{ document, versions, editor: { server_url, config } }`: `config` is ONLYOFFICE's editor config, signed (`token`); pass it to `new DocsAPI.DocEditor(...)` from `{server_url}/web-apps/apps/api/documents/api.js` unchanged (only `type`, `width`, `height` and `events` may be added). The person is named by id and name, never email. The web renders the editor page |
+| GET | `/workspace/projects/{slug}/documents/{id}/versions` | the versions, newest first |
+| GET | `/workspace/projects/{slug}/documents/{id}/versions/{n}/download` | the file of version `n` (`{title}.docx`, `{title} (version 2).docx` for an older one) |
+| PATCH | `/workspace/projects/{slug}/documents/{id}` | `title`. `Renamed to {title}.` |
+| DELETE | `/workspace/projects/{slug}/documents/{id}` | to the trash: `Moved {title} to the trash.` |
+| POST | `/workspace/projects/{slug}/documents/{id}/restore` | back from the trash: `Restored.` |
+
+On the JSON API these are `/api/v1/workspace/projects/{slug}/documents…`
+(names `api.workspace.projects.documents.index|trash|store|upload|show|versions|download|update|destroy|restore`);
+creating and uploading answer 201 with the document. On the web they answer
+with a redirect and `workspace_flash`, except `trash` and `versions`, which
+are JSON.
+
+The editor's own two calls, `GET /documents/{id}/file/{version}` and `POST
+/documents/{id}/callback`, are for ONLYOFFICE only: signed URLs from the
+editor config plus the editor's JWT, no session.
+
 ## Code activity *(anyone who may use git: `git_enabled` on `/user`; 403 otherwise)*
 
 Who committed what, per person, within what the caller runs. Whole
@@ -1182,6 +1218,12 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Documents.**
+
+- New: `/workspace/projects/{slug}/documents…` (see Documents).
+- The project show adds `documents` (null while documents are off or not
+  the caller's to use).
 
 **Repositories no project links.**
 

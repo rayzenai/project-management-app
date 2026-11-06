@@ -1,0 +1,187 @@
+<script lang="ts">
+    import { inertia } from '@inertiajs/svelte';
+    import { Download } from '@lucide/svelte';
+    import AppShell from '../../components/AppShell.svelte';
+    import Spinner from '../../components/Spinner.svelte';
+    import type {
+        DocumentEditor,
+        DocumentVersionItem,
+        Project,
+        ProjectDocument,
+    } from '../../lib/types';
+
+    /**
+     * A document open in ONLYOFFICE, filling the page under the top bar.
+     * The editor loads from its own server (editor.server_url) with the
+     * config the tracker signed; it fetches the file and sends saves to the
+     * tracker by itself. Everyone with the document open edits together.
+     */
+    let {
+        project,
+        document: doc,
+        versions,
+        editor,
+    }: {
+        project: Project;
+        document: ProjectDocument;
+        versions: DocumentVersionItem[];
+        editor: DocumentEditor;
+    } = $props();
+
+    interface DocsApi {
+        DocEditor: new (
+            id: string,
+            config: Record<string, unknown>,
+        ) => { destroyEditor?: () => void };
+    }
+
+    const MOBILE_WIDTH = 768;
+    const frameId = 'onlyoffice-editor';
+
+    let status = $state<'loading' | 'ready' | 'failed'>('loading');
+
+    const projectUrl = $derived(
+        `/workspace/projects/${project.slug}?view=documents`,
+    );
+    const downloadUrl = $derived(
+        `/workspace/projects/${project.slug}/documents/${doc.id}/versions/${doc.version}/download`,
+    );
+
+    /** The editor's script, loaded once per page load and reused after. */
+    function loadApi(src: string): Promise<DocsApi> {
+        const loaded = (window as unknown as { DocsAPI?: DocsApi }).DocsAPI;
+
+        if (loaded) {
+            return Promise.resolve(loaded);
+        }
+
+        return new Promise((resolve, reject) => {
+            const script = window.document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.onload = () => {
+                const api = (window as unknown as { DocsAPI?: DocsApi })
+                    .DocsAPI;
+
+                if (api) {
+                    resolve(api);
+                } else {
+                    reject(new Error('DocsAPI missing'));
+                }
+            };
+            script.onerror = () => reject(new Error('editor unreachable'));
+            window.document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Hands the element to ONLYOFFICE: it gets a placeholder of its own,
+     * which the editor swaps for its frame, so Svelte never owns that part.
+     */
+    function mountEditor(node: HTMLDivElement) {
+        let instance: { destroyEditor?: () => void } | null = null;
+        let gone = false;
+
+        const placeholder = window.document.createElement('div');
+        placeholder.id = frameId;
+        node.appendChild(placeholder);
+
+        loadApi(`${editor.server_url}/web-apps/apps/api/documents/api.js`)
+            .then((api) => {
+                if (gone) {
+                    return;
+                }
+
+                // Layout is the browser's to choose; the signed config
+                // (document, editorConfig, token) is passed as given.
+                instance = new api.DocEditor(frameId, {
+                    ...editor.config,
+                    type:
+                        window.innerWidth < MOBILE_WIDTH ? 'mobile' : 'desktop',
+                    width: '100%',
+                    height: '100%',
+                    events: {
+                        onAppReady: () => (status = 'ready'),
+                        onError: () => (status = 'failed'),
+                    },
+                });
+            })
+            .catch(() => (status = 'failed'));
+
+        return {
+            destroy() {
+                gone = true;
+                instance?.destroyEditor?.();
+                node.replaceChildren();
+            },
+        };
+    }
+</script>
+
+<svelte:head><title>{doc.title} · {project.title}</title></svelte:head>
+
+<AppShell flush>
+    {#snippet bar()}
+        <div class="flex min-w-0 items-center gap-1.5 text-[13px]">
+            <a
+                href={projectUrl}
+                use:inertia
+                class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
+                >{project.title}</a
+            >
+            <span class="hidden text-fg-faint sm:inline">/</span>
+            <span class="truncate font-medium">{doc.title}</span>
+            <span class="shrink-0 text-xs text-fg-faint"
+                >Version {doc.version}</span
+            >
+        </div>
+        <a
+            class="btn-ghost shrink-0"
+            href={downloadUrl}
+            download
+            title={`Download version ${doc.version}`}
+            ><Download class="h-4 w-4" /><span class="hidden sm:inline"
+                >Download</span
+            ></a
+        >
+    {/snippet}
+
+    <div
+        class="relative h-[calc(100dvh-48px-57px-env(safe-area-inset-bottom))] min-h-80 md:h-[calc(100dvh-48px)]"
+    >
+        <div use:mountEditor class="h-full w-full"></div>
+        {#if status === 'loading'}
+            <div
+                class="absolute inset-0 flex items-center justify-center gap-2 bg-surface text-fg-muted"
+            >
+                <Spinner size={16} />Opening {doc.title}
+            </div>
+        {:else if status === 'failed'}
+            <div
+                class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface px-6 text-center"
+            >
+                <p class="font-medium">The editor isn't reachable right now.</p>
+                <p class="max-w-md text-[13px] text-fg-muted">
+                    Your document is safe: every saved version is kept. You can
+                    download it, or try again in a moment.
+                </p>
+                <div class="flex gap-2">
+                    <a class="btn" href={downloadUrl} download
+                        ><Download class="h-3.5 w-3.5" />Download version {doc.version}</a
+                    >
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        onclick={() => window.location.reload()}
+                        >Try again</button
+                    >
+                </div>
+                {#if versions.length > 1}
+                    <p class="text-xs text-fg-faint">
+                        {versions.length} versions are kept.
+                    </p>
+                {/if}
+            </div>
+        {/if}
+    </div>
+</AppShell>

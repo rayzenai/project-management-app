@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DocumentServerController;
 use App\Http\Controllers\GitWebhookController;
 use App\Http\Controllers\Workspace\AssignmentController;
 use App\Http\Controllers\Workspace\Attendance\AttendanceNetworkController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\Workspace\AuthController;
 use App\Http\Controllers\Workspace\CodeActivityController;
 use App\Http\Controllers\Workspace\ContactController;
 use App\Http\Controllers\Workspace\DesignationController;
+use App\Http\Controllers\Workspace\DocumentController;
 use App\Http\Controllers\Workspace\EmailSettingsController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\GuideController;
@@ -86,6 +88,20 @@ Route::post('/git/webhooks/{connection}', GitWebhookController::class)
     ->withoutMiddleware('web')
     ->middleware('throttle:600,1,git-webhook')
     ->name('git.webhook');
+
+// ONLYOFFICE's two calls (docs/onlyoffice.md): fetching a document's file
+// and reporting a save. Server to server: the signed URLs the editor config
+// handed out plus the editor's own JWT, no session or CSRF.
+Route::get('/documents/{document}/file/{version}', [DocumentServerController::class, 'file'])
+    ->whereNumber(['document', 'version'])
+    ->withoutMiddleware('web')
+    ->middleware(['signed', 'throttle:600,1,documents-server'])
+    ->name('documents.file');
+Route::post('/documents/{document}/callback', [DocumentServerController::class, 'callback'])
+    ->whereNumber('document')
+    ->withoutMiddleware('web')
+    ->middleware(['signed', 'throttle:600,1,documents-server'])
+    ->name('documents.callback');
 
 Route::middleware('guest')
     ->prefix('workspace')
@@ -168,6 +184,19 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
             ->scopeBindings()
             ->name('projects.repositories.destroy');
         Route::get('/go/{org}/{index}', GoToTaskController::class)->name('go');
+
+        // A project's documents (the Documents tab) and the editor page.
+        Route::scopeBindings()->group(function () {
+            Route::get('/projects/{project:slug}/documents/trash', [DocumentController::class, 'trash'])->name('projects.documents.trash');
+            Route::post('/projects/{project:slug}/documents', [DocumentController::class, 'store'])->name('projects.documents.store');
+            Route::post('/projects/{project:slug}/documents/upload', [DocumentController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('projects.documents.upload');
+            Route::get('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'show'])->whereNumber('document')->name('projects.documents.show');
+            Route::get('/projects/{project:slug}/documents/{document}/versions', [DocumentController::class, 'versions'])->whereNumber('document')->name('projects.documents.versions');
+            Route::get('/projects/{project:slug}/documents/{document}/versions/{version:version}/download', [DocumentController::class, 'download'])->whereNumber(['document', 'version'])->name('projects.documents.download');
+            Route::patch('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'update'])->whereNumber('document')->name('projects.documents.update');
+            Route::delete('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'destroy'])->whereNumber('document')->name('projects.documents.destroy');
+            Route::post('/projects/{project:slug}/documents/{document}/restore', [DocumentController::class, 'restore'])->whereNumber('document')->withTrashed()->name('projects.documents.restore');
+        });
 
         // Who may pull and push a linked repository (its maintainers and grants).
         Route::scopeBindings()->group(function () {

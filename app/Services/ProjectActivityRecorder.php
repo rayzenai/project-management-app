@@ -61,7 +61,9 @@ class ProjectActivityRecorder
 
     /**
      * Write an entry about the project itself rather than one of its tasks.
-     * $system as for record().
+     * $system as for record(). $actorId credits someone other than the
+     * signed-in user: a save the editor reports names its last editor, with
+     * no one signed in.
      *
      * @param  array<string, mixed>|null  $changes
      */
@@ -72,6 +74,7 @@ class ProjectActivityRecorder
         string $description,
         ?array $changes = null,
         bool $system = false,
+        ?int $actorId = null,
     ): ?ProjectActivity {
         if (! self::tableExists()) {
             return null;
@@ -80,7 +83,7 @@ class ProjectActivityRecorder
         return ProjectActivity::create([
             'project_id' => $project->id,
             'task_id' => null,
-            'user_id' => $system ? null : auth()->id(),
+            'user_id' => $system ? null : ($actorId ?? auth()->id()),
             'subject_type' => $subject->getMorphClass(),
             'subject_id' => $subject->getKey(),
             'action' => $action,

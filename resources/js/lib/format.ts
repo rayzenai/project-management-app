@@ -138,3 +138,20 @@ export function formatDistance(metres: number | null): string {
 export function plural(n: number, one: string, many = `${one}s`): string {
     return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
+
+/** "840 bytes", "24 KB", "3.2 MB". */
+export function formatBytes(bytes: number): string {
+    if (bytes < 1024) {
+        return plural(bytes, 'byte');
+    }
+
+    const kb = bytes / 1024;
+
+    if (kb < 1024) {
+        return `${Math.round(kb)} KB`;
+    }
+
+    const mb = kb / 1024;
+
+    return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}

@@ -48,7 +48,7 @@ vendor/bin/pest > file 2>&1` and read the file.
   `project`, `task`, `task-comment`, `task-dependency`, `project-note`,
   `project-contact`, `subtask`, `project-assignment`, `team`, `member`,
   `git-repository`, `git-repository-grant`, `git-branch`, `git-commit`,
-  `git-pull-request`), and the
+  `git-pull-request`, `document`), and the
   observers (`ProgramObserver`, `ProjectObserver`, `TaskObserver`, ...).
 - `routes/web.php` — `/workspace/*` (Inertia, `auth` + `ShareWorkspaceData`),
   guest login routes, `/` redirect. `routes/api.php` — `/api/v1/*` (Sanctum).
@@ -181,7 +181,10 @@ project_ids, user_id}`, empty but the viewer's own commits for an inactive
 member), `ledTeamIds` (empty for a deactivated member: a deactivated manager
 has no manager powers, like inactive organizational admins and program
 managers), `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
-`canViewProgram` (twin of `Program::scopeVisibleTo`). Visibility scopes:
+`canViewProgram` (twin of `Program::scopeVisibleTo`), `canUseProjectDocuments`
+(a project's documents: as `canViewProjectCode` without git, while documents
+are on), `canDeleteDocument` (trash and restore: the twin of `canDeleteTask`).
+Visibility scopes:
 `Project`, `Team`, `Member` and `Program::scopeVisibleTo` (the first three
 reach a program manager's projects through `Project::inPrograms`). Memos
 are per user instance and flushed on every `RouteMatched`/`RequestHandled`.
@@ -885,6 +888,50 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
   `repositories_default_branch_changed` (the forge's default is another
   branch than the protected one: work merged there skips the rule; the Code
   tab marks it too). UI: `components/ChecksMark.svelte`.
+
+## Documents (ONLYOFFICE)
+
+Spec: `docs/superpowers/specs/2026-11-05-documents-design.md`. Runbook:
+`docs/onlyoffice.md`. API: `docs/api.md` (Documents).
+
+- **The editor** is ONLYOFFICE Docs Community Edition at docs.sdoc.gov.np
+  (`onlyoffice/`, Dokploy project `docs`): no users, no documents of its
+  own. Documents are on only while `config('documents.enabled')` (an editor
+  URL and a JWT secret of at least 32 characters).
+- **Models**: `Document` (a project's; `file_type` `docx|xlsx|pptx` from
+  `App\Support\Documents\DocumentTypes`, the one list; `version` the
+  current one; `editor_key` the editor's id for the current version, shared
+  by everyone editing it, a new one after each finished session; soft
+  deletes with `deleted_by`, never purged) and `DocumentVersion` (one file
+  per version on the `documents` disk at `DocumentVersion::pathFor`, never
+  overwritten or deleted; `source` `created|uploaded|edited`; written only
+  through `DocumentFiles::write`). Files are in RustFS (bucket
+  `tasks-documents`, a key with no delete permission) in production, never
+  on the VM's root disk; a local disk elsewhere.
+- **Who**: `canUseProjectDocuments` for everything (read, open, edit,
+  create, upload, rename, versions, downloads), `canDeleteDocument` for
+  trash and restore (`DocumentsRequest` and the requests that extend it,
+  `DeleteDocumentRequest`). Never other viewers of a public project.
+- **The editor's session**: `DocumentEditorQuery` builds the config the
+  page hands ONLYOFFICE and signs all of it as `token` (`EditorToken`,
+  HS256, the shared secret): the file URL (a temporary signed route), the
+  callback URL (a signed route), `editor_key`, the person's id and name
+  (never email), and the customization (AI tools, plugins, macros, chat
+  off). `DocumentServerController` answers the editor's two calls, outside
+  the `web` group: the file (signed URL plus a `download` JWT) and the
+  callback (signed URL plus a `callback` JWT; the token's `payload` is the
+  truth, never the body). `SaveEditedDocumentService` keeps status 2 and 6
+  saves as the next version (refusing a file URL off the editor's own
+  host, at most 100 MB, the same file twice is not a version), gives status
+  2 a new `editor_key`, ignores a key the document no longer has, and
+  answers a failure so the editor asks again.
+- **Activity**: `DocumentObserver` (renamed, trashed, restored) and
+  `DocumentVersionObserver` (created, uploaded, saved, credited to the
+  editor's last user through `ProjectActivityRecorder`'s `actorId`).
+- **UI**: the project's Documents tab (`project/DocumentsView.svelte`,
+  shown when `documents` is not null) and the editor page
+  (`pages/Documents/Edit.svelte`: loads `api.js` from the editor, mounts it
+  through an action).
 
 ## Structure, attendance and work reports
 

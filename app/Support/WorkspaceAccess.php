@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\AttendanceSetting;
+use App\Models\Document;
 use App\Models\GitConnection;
 use App\Models\GitRepository;
 use App\Models\LeaveRequest;
@@ -545,6 +546,60 @@ class WorkspaceAccess
     public static function canChangeProjectKey(?Authenticatable $user, Project $project): bool
     {
         return self::administers($user, $project->organization_id);
+    }
+
+    // ---- Documents ----
+    // Only while the editor is configured (config/documents.php).
+
+    /**
+     * A project's documents (see, open, edit, create, upload, rename, their
+     * versions): the same people as its code without the git condition.
+     * Whoever administers its organization, and, while active, its program's
+     * manager and everyone on its team. Not other viewers of a public
+     * project: documents are for the people doing the work.
+     */
+    public static function canUseProjectDocuments(?Authenticatable $user, Project $project): bool
+    {
+        if (! config('documents.enabled')) {
+            return false;
+        }
+
+        if (self::administers($user, $project->organization_id)) {
+            return true;
+        }
+
+        $member = self::memberFor($user);
+
+        if ($member === null || ! $member->is_active) {
+            return false;
+        }
+
+        if (self::managesProgramOf($user, $project)) {
+            return true;
+        }
+
+        return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
+    }
+
+    /**
+     * Move a document to the trash and bring it back: whoever runs its
+     * project (canManageProjectAccess), or the person who created it while
+     * they may still use the project's documents. The twin of canDeleteTask.
+     */
+    public static function canDeleteDocument(?Authenticatable $user, Document $document, Project $project): bool
+    {
+        if (! config('documents.enabled')) {
+            return false;
+        }
+
+        if (self::canManageProjectAccess($user, $project)) {
+            return true;
+        }
+
+        return $user !== null
+            && $document->created_by !== null
+            && $document->created_by === (int) $user->getAuthIdentifier()
+            && self::canUseProjectDocuments($user, $project);
     }
 
     // ---- Code (git) ----

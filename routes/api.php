@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\CodeActivityController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DesignationController;
+use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InviteController;
 use App\Http\Controllers\Api\MaintenanceController;
@@ -143,6 +144,20 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::post('/projects/{project:slug}/repositories', [ProjectRepositoryController::class, 'store'])->name('projects.repositories.store');
             Route::post('/projects/{project:slug}/repositories/new', [ProjectRepositoryController::class, 'create'])->name('projects.repositories.create');
             Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
+
+            // A project's documents; show carries the signed editor config.
+            Route::scopeBindings()->group(function () {
+                Route::get('/projects/{project:slug}/documents', [DocumentController::class, 'index'])->name('projects.documents.index');
+                Route::get('/projects/{project:slug}/documents/trash', [DocumentController::class, 'trash'])->name('projects.documents.trash');
+                Route::post('/projects/{project:slug}/documents', [DocumentController::class, 'store'])->name('projects.documents.store');
+                Route::post('/projects/{project:slug}/documents/upload', [DocumentController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('projects.documents.upload');
+                Route::get('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'show'])->whereNumber('document')->name('projects.documents.show');
+                Route::get('/projects/{project:slug}/documents/{document}/versions', [DocumentController::class, 'versions'])->whereNumber('document')->name('projects.documents.versions');
+                Route::get('/projects/{project:slug}/documents/{document}/versions/{version:version}/download', [DocumentController::class, 'download'])->whereNumber(['document', 'version'])->name('projects.documents.download');
+                Route::patch('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'update'])->whereNumber('document')->name('projects.documents.update');
+                Route::delete('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'destroy'])->whereNumber('document')->name('projects.documents.destroy');
+                Route::post('/projects/{project:slug}/documents/{document}/restore', [DocumentController::class, 'restore'])->whereNumber('document')->withTrashed()->name('projects.documents.restore');
+            });
 
             // Who may pull and push a linked repository (its maintainers and grants).
             Route::scopeBindings()->group(function () {

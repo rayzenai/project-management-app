@@ -60,6 +60,28 @@ return [
             'report' => false,
         ],
 
+        // Documents (config/documents.php), one object per saved version.
+        // RustFS in production (DOCUMENTS_DISK=rustfs, bucket tasks-documents,
+        // reached as http://rustfs:9000 on the storage network), never the
+        // VM's root disk; storage/app/documents elsewhere. Failures throw, so
+        // a version row never points at a file that was not written.
+        'documents' => env('DOCUMENTS_DISK', 'local') === 'rustfs' ? [
+            'driver' => 's3',
+            'key' => env('RUSTFS_KEY'),
+            'secret' => env('RUSTFS_SECRET'),
+            'region' => env('RUSTFS_REGION', 'us-east-1'),
+            'bucket' => env('RUSTFS_BUCKET', 'tasks-documents'),
+            'endpoint' => env('RUSTFS_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'throw' => true,
+            'report' => false,
+        ] : [
+            'driver' => 'local',
+            'root' => storage_path('app/documents'),
+            'throw' => true,
+            'report' => false,
+        ],
+
     ],
 
     /*

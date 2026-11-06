@@ -154,6 +154,16 @@ class Project extends Model
     }
 
     /**
+     * Its documents (not the trashed ones unless asked).
+     *
+     * @return HasMany<Document, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /**
      * The link to the project's team. The pivot is unique on both sides, so a
      * project has exactly one team and a team serves exactly one project;
      * the visibility scopes query through this relation.

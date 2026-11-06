@@ -289,6 +289,29 @@
         'The approval is what guards main. A pull request runs its own version of the workflow, so read changes to it as closely as the code, and never post a test result by hand.',
     ];
 
+    const documents = [
+        [
+            'Where they are',
+            "A project's Documents tab holds its Word, Excel and PowerPoint files. Its team, its program's manager and the organizational admins see them; nobody else, not even other people who can see a public project.",
+        ],
+        [
+            'Editing together',
+            'Open a document and it opens in your browser. Everyone who has it open edits at once and sees the others typing. There is nothing to save by hand: when the last person closes it, it becomes a new version a few seconds later.',
+        ],
+        [
+            'Versions',
+            "Every save is kept, with who made it. A document's Versions list downloads any of them. Nothing is ever deleted.",
+        ],
+        [
+            'Upload',
+            'Upload a .docx, .xlsx or .pptx file of up to 50 MB. Open an older .doc or .xls file in Word or LibreOffice and save it as .docx first.',
+        ],
+        [
+            'Trash',
+            'Whoever made a document, and whoever runs the project, can move it to the trash and bring it back. The trash is never emptied.',
+        ],
+    ];
+
     const structure = [
         [
             'Organogram',
@@ -695,6 +718,22 @@
                 <h3 class="mt-6 mb-2 font-medium">More about code</h3>
                 <dl class="border-t border-line">
                     {#each code as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+            </section>
+        {/if}
+
+        {#if shared.documentsEnabled}
+            <section>
+                <h2 class="section-title mb-3">Documents</h2>
+                <dl class="border-t border-line">
+                    {#each documents as [term, meaning] (term)}
                         <div
                             class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
                         >

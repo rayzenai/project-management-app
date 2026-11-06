@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\GitBranch;
 use App\Models\GitCommit;
 use App\Models\GitPullRequest;
@@ -22,6 +24,8 @@ use App\Models\TaskGitLink;
 use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Observers\DocumentObserver;
+use App\Observers\DocumentVersionObserver;
 use App\Observers\GitPullRequestObserver;
 use App\Observers\GitRepositoryGrantObserver;
 use App\Observers\GitRepositoryObserver;
@@ -135,6 +139,7 @@ class AppServiceProvider extends ServiceProvider
             'git-commit' => GitCommit::class,
             'git-pull-request' => GitPullRequest::class,
             'git-repository-grant' => GitRepositoryGrant::class,
+            'document' => Document::class,
         ]);
 
         // Observers own every side effect of a workspace mutation: the
@@ -159,6 +164,8 @@ class AppServiceProvider extends ServiceProvider
         Member::observe(MemberObserver::class);
         TaskGitLink::observe(TaskGitLinkObserver::class);
         GitPullRequest::observe(GitPullRequestObserver::class);
+        Document::observe(DocumentObserver::class);
+        DocumentVersion::observe(DocumentVersionObserver::class);
     }
 
     /**
