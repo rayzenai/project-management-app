@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Documents;
 
 use App\Models\Document;
-use App\Models\Project;
 use App\Support\WorkspaceAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -15,12 +14,9 @@ class DeleteDocumentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $project = $this->route('project');
         $document = $this->route('document');
 
-        return $project instanceof Project
-            && $document instanceof Document
-            && WorkspaceAccess::canDeleteDocument($this->user(), $document);
+        return $document instanceof Document && WorkspaceAccess::canDeleteDocument($this->user(), $document);
     }
 
     /**

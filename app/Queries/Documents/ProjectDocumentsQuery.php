@@ -12,8 +12,9 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * A project's documents, for its Documents tab (web) and the API list:
- * newest change first, or the trash, newest first. Callers have checked
- * canUseProjectDocuments.
+ * newest change first, or the trash, newest first (callers have checked
+ * canUseProjectDocuments); and one document for its editor page (callers
+ * have checked its access level).
  */
 class ProjectDocumentsQuery
 {
@@ -40,32 +41,37 @@ class ProjectDocumentsQuery
         $documents = Document::query()
             ->when($trashed, fn ($q) => $q->onlyTrashed())
             ->where('project_id', $project->id)
-            ->with(['creator:id,name', 'updater:id,name'])
+            ->with(['creator:id,name', 'updater:id,name', 'project.program'])
             ->orderByDesc($trashed ? 'deleted_at' : 'updated_at')
             ->orderByDesc('id')
             ->get();
 
         return array_values($documents
-            ->map(fn (Document $document): array => (new DocumentResource($document))
-                ->withCanDelete(WorkspaceAccess::canDeleteDocument($viewer, $document))
-                ->resolve())
+            ->map(fn (Document $document): array => (new DocumentResource($document))->withViewer($viewer)->resolve())
             ->all());
     }
 
     /**
-     * One document with its versions, newest first.
+     * One document with its versions, newest first, and its project (null for
+     * a personal one; `can_open` says whether the viewer may open its
+     * Documents tab).
      *
-     * @return array{document: array<string, mixed>, versions: list<array<string, mixed>>}
+     * @return array{document: array<string, mixed>, versions: list<array<string, mixed>>, project: array{slug: string, title: string, label: string, can_open: bool}|null}
      */
-    public function show(Document $document, Project $project, ?Authenticatable $viewer): array
+    public function show(Document $document, ?Authenticatable $viewer): array
     {
-        $document->loadMissing(['creator:id,name', 'updater:id,name']);
+        $document->loadMissing(['creator:id,name', 'updater:id,name', 'owner:id,name', 'project.program']);
+        $project = $document->project;
 
         return [
-            'document' => (new DocumentResource($document))
-                ->withCanDelete(WorkspaceAccess::canDeleteDocument($viewer, $document))
-                ->resolve(),
+            'document' => (new DocumentResource($document))->withViewer($viewer)->resolve(),
             'versions' => array_values(DocumentVersionResource::collection($document->versions()->with('user:id,name')->get())->resolve()),
+            'project' => $project === null ? null : [
+                'slug' => $project->slug,
+                'title' => $project->title,
+                'label' => $project->label(),
+                'can_open' => WorkspaceAccess::canUseProjectDocuments($viewer, $project),
+            ],
         ];
     }
 }

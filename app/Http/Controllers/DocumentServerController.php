@@ -7,6 +7,7 @@ use App\Models\DocumentVersion;
 use App\Services\Documents\SaveEditedDocumentService;
 use App\Support\Documents\DocumentTypes;
 use App\Support\Documents\EditorToken;
+use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -26,8 +27,10 @@ class DocumentServerController extends Controller
     {
         abort_if(EditorToken::payloadFrom($request, EditorToken::OPERATION_DOWNLOAD) === null, 403);
 
-        $found = Document::query()->find($document);
-        abort_if($found === null, 404);
+        // A trashed document is out of the editor, except a frozen one, which a
+        // super-admin may still read.
+        $found = Document::withTrashed()->find($document);
+        abort_if($found === null || ($found->trashed() && ! WorkspaceAccess::isDocumentFrozen($found)), 404);
 
         $file = DocumentVersion::query()->where('document_id', $found->id)->where('version', $version)->first();
         abort_if($file === null, 404);

@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\RespondsWithServiceResult;
 use App\Http\Requests\Documents\DeleteDocumentRequest;
+use App\Http\Requests\Documents\DocumentRequest;
 use App\Http\Requests\Documents\DocumentsRequest;
+use App\Http\Requests\Documents\EditDocumentRequest;
 use App\Http\Requests\Documents\StoreDocumentRequest;
-use App\Http\Requests\Documents\UpdateDocumentRequest;
 use App\Http\Requests\Documents\UploadDocumentRequest;
 use App\Http\Resources\DocumentResource;
 use App\Models\Document;
@@ -21,7 +22,6 @@ use App\Services\Documents\TrashDocumentService;
 use App\Services\Workspace\RestoreWorkspaceModel;
 use App\Support\Documents\DocumentDownload;
 use App\Support\ServiceResult;
-use App\Support\WorkspaceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -45,7 +45,7 @@ class DocumentController extends Controller
         return response()->json(['message' => 'Trashed documents retrieved.', 'data' => $query->list($project, $request->user(), trashed: true)]);
     }
 
-    public function show(DocumentsRequest $request, Project $project, Document $document, ProjectDocumentsQuery $documents, DocumentEditorQuery $editor): JsonResponse
+    public function show(DocumentRequest $request, Document $document, ProjectDocumentsQuery $documents, DocumentEditorQuery $editor): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -53,18 +53,18 @@ class DocumentController extends Controller
         return response()->json([
             'message' => 'Document retrieved.',
             'data' => [
-                ...$documents->show($document, $project, $user),
-                'editor' => $editor->for($document, $project, $user),
+                ...$documents->show($document, $user),
+                'editor' => $editor->for($document, $user, (string) $request->access()),
             ],
         ]);
     }
 
-    public function versions(DocumentsRequest $request, Project $project, Document $document, ProjectDocumentsQuery $query): JsonResponse
+    public function versions(DocumentRequest $request, Document $document, ProjectDocumentsQuery $query): JsonResponse
     {
-        return response()->json(['message' => 'Versions retrieved.', 'data' => $query->show($document, $project, $request->user())['versions']]);
+        return response()->json(['message' => 'Versions retrieved.', 'data' => $query->show($document, $request->user())['versions']]);
     }
 
-    public function download(DocumentsRequest $request, Project $project, Document $document, DocumentVersion $version): StreamedResponse
+    public function download(DocumentRequest $request, Document $document, DocumentVersion $version): StreamedResponse
     {
         return DocumentDownload::of($document, $version);
     }
@@ -73,32 +73,32 @@ class DocumentController extends Controller
     {
         $result = $service->blank($project, (string) $request->validated('title'), (string) $request->validated('type'), $request->user());
 
-        return $this->respondWithDocument($result, $project, 201);
+        return $this->respondWithDocument($result, 201);
     }
 
     public function upload(UploadDocumentRequest $request, Project $project, CreateDocumentService $service): JsonResponse
     {
         $result = $service->upload($project, $request->file('file'), $request->validated('title'), $request->user());
 
-        return $this->respondWithDocument($result, $project, 201);
+        return $this->respondWithDocument($result, 201);
     }
 
-    public function update(UpdateDocumentRequest $request, Project $project, Document $document, RenameDocumentService $service): JsonResponse
+    public function update(EditDocumentRequest $request, Document $document, RenameDocumentService $service): JsonResponse
     {
-        return $this->respondWithDocument($service->execute($document, (string) $request->validated('title'), $request->user()), $project);
+        return $this->respondWithDocument($service->execute($document, (string) $request->validated('title'), $request->user()));
     }
 
-    public function destroy(DeleteDocumentRequest $request, Project $project, Document $document, TrashDocumentService $service): JsonResponse
+    public function destroy(DeleteDocumentRequest $request, Document $document, TrashDocumentService $service): JsonResponse
     {
         return $this->respondWithResult($service->execute($document, $request->user()));
     }
 
-    public function restore(DeleteDocumentRequest $request, Project $project, Document $document, RestoreWorkspaceModel $service): JsonResponse
+    public function restore(DeleteDocumentRequest $request, Document $document, RestoreWorkspaceModel $service): JsonResponse
     {
-        return $this->respondWithDocument($service->execute($document), $project);
+        return $this->respondWithDocument($service->execute($document));
     }
 
-    private function respondWithDocument(ServiceResult $result, Project $project, ?int $status = null): JsonResponse
+    private function respondWithDocument(ServiceResult $result, ?int $status = null): JsonResponse
     {
         $document = $result->data;
 
@@ -106,8 +106,8 @@ class DocumentController extends Controller
             return $this->respondWithResult($result);
         }
 
-        $payload = (new DocumentResource($document->loadMissing(['creator:id,name', 'updater:id,name'])))
-            ->withCanDelete(WorkspaceAccess::canDeleteDocument(request()->user(), $document))
+        $payload = (new DocumentResource($document->loadMissing(['creator:id,name', 'updater:id,name', 'owner:id,name', 'project.program'])))
+            ->withViewer(request()->user())
             ->resolve();
 
         return $this->respondWithResult($result, $payload, $status);

@@ -2,15 +2,18 @@
 
 use App\Models\Document;
 use App\Models\DocumentShare;
+use App\Models\DocumentVersion;
 use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\MailManager;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\Mailer\Envelope;
@@ -248,4 +251,33 @@ function docsUpdatePerson(User $user, array $attributes): void
 {
     WorkspaceAccess::memberFor($user)?->update($attributes);
     WorkspaceAccess::flush();
+}
+
+/** Gives a document made with docsMake its first version's file. */
+function docsAddFile(Document $document): void
+{
+    $path = DocumentVersion::pathFor($document, 1);
+    Storage::disk('documents')->put($path, (string) file_get_contents(resource_path('documents/blank.docx')));
+    DocumentVersion::query()->create([
+        'document_id' => $document->id,
+        'version' => 1,
+        'path' => $path,
+        'size' => 100,
+        'sha256' => str_repeat('0', 64),
+        'user_id' => $document->created_by,
+        'source' => 'created',
+    ]);
+}
+
+/**
+ * The editor config the editor page was given, as the editor reads its
+ * signed token.
+ *
+ * @return array<string, mixed>
+ */
+function docsEditorConfig(TestResponse $response): array
+{
+    $token = $response->viewData('page')['props']['editor']['config']['token'];
+
+    return json_decode((string) json_encode(JWT::decode($token, new Key(DOCS_SECRET, 'HS256'))), true);
 }

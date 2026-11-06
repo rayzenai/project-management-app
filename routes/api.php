@@ -145,19 +145,22 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::post('/projects/{project:slug}/repositories/new', [ProjectRepositoryController::class, 'create'])->name('projects.repositories.create');
             Route::delete('/projects/{project:slug}/repositories/{repository}', [ProjectRepositoryController::class, 'destroy'])->scopeBindings()->name('projects.repositories.destroy');
 
-            // A project's documents; show carries the signed editor config.
+            // A project's documents.
             Route::scopeBindings()->group(function () {
                 Route::get('/projects/{project:slug}/documents', [DocumentController::class, 'index'])->name('projects.documents.index');
                 Route::get('/projects/{project:slug}/documents/trash', [DocumentController::class, 'trash'])->name('projects.documents.trash');
                 Route::post('/projects/{project:slug}/documents', [DocumentController::class, 'store'])->name('projects.documents.store');
                 Route::post('/projects/{project:slug}/documents/upload', [DocumentController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('projects.documents.upload');
-                Route::get('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'show'])->whereNumber('document')->name('projects.documents.show');
-                Route::get('/projects/{project:slug}/documents/{document}/versions', [DocumentController::class, 'versions'])->whereNumber('document')->name('projects.documents.versions');
-                Route::get('/projects/{project:slug}/documents/{document}/versions/{version:version}/download', [DocumentController::class, 'download'])->whereNumber(['document', 'version'])->name('projects.documents.download');
-                Route::patch('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'update'])->whereNumber('document')->name('projects.documents.update');
-                Route::delete('/projects/{project:slug}/documents/{document}', [DocumentController::class, 'destroy'])->whereNumber('document')->name('projects.documents.destroy');
-                Route::post('/projects/{project:slug}/documents/{document}/restore', [DocumentController::class, 'restore'])->whereNumber('document')->withTrashed()->name('projects.documents.restore');
             });
+
+            // One document, wherever it lives; show carries the signed editor
+            // config at the viewer's access level.
+            Route::get('/documents/{document}', [DocumentController::class, 'show'])->whereNumber('document')->withTrashed()->name('documents.show');
+            Route::get('/documents/{document}/versions', [DocumentController::class, 'versions'])->whereNumber('document')->withTrashed()->name('documents.versions');
+            Route::get('/documents/{document}/versions/{version:version}/download', [DocumentController::class, 'download'])->whereNumber(['document', 'version'])->withTrashed()->scopeBindings()->name('documents.download');
+            Route::patch('/documents/{document}', [DocumentController::class, 'update'])->whereNumber('document')->name('documents.update');
+            Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->whereNumber('document')->name('documents.destroy');
+            Route::post('/documents/{document}/restore', [DocumentController::class, 'restore'])->whereNumber('document')->withTrashed()->name('documents.restore');
 
             // Who may pull and push a linked repository (its maintainers and grants).
             Route::scopeBindings()->group(function () {

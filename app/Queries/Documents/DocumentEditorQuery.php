@@ -3,10 +3,10 @@
 namespace App\Queries\Documents;
 
 use App\Models\Document;
-use App\Models\Project;
 use App\Models\User;
 use App\Support\Documents\DocumentTypes;
 use App\Support\Documents\EditorToken;
+use App\Support\WorkspaceAccess;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -17,15 +17,22 @@ use Illuminate\Support\Facades\URL;
  * token expires with the file link: a page brought back from the browser's
  * history later (after a sign-out, say) can't open the editor again, while
  * an editor already open keeps its own session. The person is named by id
- * and name, never email.
+ * and name, never email. `$access` is the viewer's level
+ * (WorkspaceAccess::documentAccess): view opens the editor read-only.
  */
 class DocumentEditorQuery
 {
     /**
      * @return array{server_url: string, config: array<string, mixed>}
      */
-    public function for(Document $document, Project $project, User $viewer): array
+    public function for(Document $document, User $viewer, string $access): array
     {
+        $edit = $access === Document::ACCESS_EDIT;
+        $project = $document->project;
+        $back = $project !== null && WorkspaceAccess::canUseProjectDocuments($viewer, $project)
+            ? ['url' => route('workspace.projects.show', ['project' => $project->slug, 'view' => 'documents']), 'text' => "Back to {$project->title}"]
+            : ['url' => url('/workspace/documents'), 'text' => 'Back to Documents'];
+
         $config = [
             'documentType' => DocumentTypes::editorType($document->file_type),
             'document' => [
@@ -37,13 +44,15 @@ class DocumentEditorQuery
                     now()->addMinutes((int) config('documents.file_link_minutes')),
                     ['document' => $document->id, 'version' => $document->version],
                 ),
+                // Can view opens read-only; the signed token keeps the
+                // browser from turning it into an editing session.
                 'permissions' => [
-                    'edit' => true,
-                    'comment' => true,
-                    'review' => true,
-                    'fillForms' => true,
-                    'modifyFilter' => true,
-                    'modifyContentControl' => true,
+                    'edit' => $edit,
+                    'comment' => $edit,
+                    'review' => $edit,
+                    'fillForms' => $edit,
+                    'modifyFilter' => $edit,
+                    'modifyContentControl' => $edit,
                     'download' => true,
                     'print' => true,
                     // Nothing keeps the editor's chat; talk on the task instead.
@@ -51,7 +60,7 @@ class DocumentEditorQuery
                 ],
             ],
             'editorConfig' => [
-                'mode' => 'edit',
+                'mode' => $edit ? 'edit' : 'view',
                 'lang' => 'en',
                 'callbackUrl' => URL::signedRoute('documents.callback', ['document' => $document->id]),
                 'user' => ['id' => (string) $viewer->id, 'name' => $viewer->name],
@@ -64,11 +73,7 @@ class DocumentEditorQuery
                     'forcesave' => false,
                     'mentionShare' => false,
                     'feedback' => false,
-                    'goback' => [
-                        'url' => route('workspace.projects.show', ['project' => $project->slug, 'view' => 'documents']),
-                        'text' => "Back to {$project->title}",
-                        'blank' => false,
-                    ],
+                    'goback' => $back + ['blank' => false],
                     'uiTheme' => match ($viewer->appearance()['theme']) {
                         'light' => 'default-light',
                         'dark' => 'default-dark',

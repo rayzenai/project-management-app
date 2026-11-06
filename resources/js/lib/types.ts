@@ -1034,8 +1034,14 @@ export interface MyWorkPayload {
     joined: MyWorkJoined[];
 }
 
-/** A project's document (DocumentResource). People by id and name only. */
-export interface ProjectDocument {
+/** What a person may do with a document: edit it, or open it read-only. */
+export type DocumentAccess = 'edit' | 'view';
+
+/**
+ * A document (DocumentResource), wherever it lives, with what the viewer may
+ * do with it. People by id and name only.
+ */
+export interface DocumentItem {
     id: number;
     title: string;
     file_type: DocumentFileType;
@@ -1044,13 +1050,27 @@ export interface ProjectDocument {
     /** The current version's number. */
     version: number;
     size: number;
+    /** In a project, or personal: its owner's. */
+    home: 'project' | 'personal';
+    project?: { slug: string; title: string; label: string } | null;
+    owner?: { id: number; name: string } | null;
+    /** Open to everyone in its organization, at this level. */
+    organization_access: DocumentAccess | null;
+    /** The viewer's level; null for one they only see in the trash. */
+    access: DocumentAccess | null;
+    /** A personal document whose owner left: read-only, for super-admins. */
+    frozen: boolean;
+    /** Trash and restore. */
+    can_delete: boolean;
+    /** Open to the organization and give to people. */
+    can_share: boolean;
+    /** Move a personal document into a project. */
+    can_move: boolean;
     created_by?: { id: number; name: string } | null;
     updated_by?: { id: number; name: string } | null;
     created_at: string | null;
     updated_at: string | null;
     deleted_at: string | null;
-    /** Trash and restore: whoever runs the project, or its creator. */
-    can_delete: boolean;
 }
 
 export type DocumentFileType = 'docx' | 'xlsx' | 'pptx';
@@ -1066,10 +1086,19 @@ export interface DocumentVersionItem {
 
 /** The project page's Documents tab; null when not the viewer's to use. */
 export interface ProjectDocuments {
-    documents: ProjectDocument[];
+    documents: DocumentItem[];
     trashed_count: number;
     types: { value: DocumentFileType; label: string }[];
     max_upload_mb: number;
+}
+
+/** The editor page's project: null for a personal document. */
+export interface DocumentProject {
+    slug: string;
+    title: string;
+    label: string;
+    /** Whether the viewer may open the project's Documents tab. */
+    can_open: boolean;
 }
 
 /** What the editor page hands ONLYOFFICE: where it is and the signed config. */

@@ -5,16 +5,18 @@
     import Spinner from '../../components/Spinner.svelte';
     import type {
         DocumentEditor,
+        DocumentItem,
+        DocumentProject,
         DocumentVersionItem,
-        Project,
-        ProjectDocument,
     } from '../../lib/types';
 
     /**
      * A document open in ONLYOFFICE, filling the page under the top bar.
      * The editor loads from its own server (editor.server_url) with the
      * config the tracker signed; it fetches the file and sends saves to the
-     * tracker by itself. Everyone with the document open edits together.
+     * tracker by itself. Everyone with the document open edits together;
+     * Can view and frozen documents open read-only (the signed config says
+     * so). `project` is null for a personal document.
      */
     let {
         project,
@@ -22,8 +24,8 @@
         versions,
         editor,
     }: {
-        project: Project;
-        document: ProjectDocument;
+        project: DocumentProject | null;
+        document: DocumentItem;
         versions: DocumentVersionItem[];
         editor: DocumentEditor;
     } = $props();
@@ -40,11 +42,17 @@
 
     let status = $state<'loading' | 'ready' | 'failed'>('loading');
 
-    const projectUrl = $derived(
-        `/workspace/projects/${project.slug}?view=documents`,
+    // Back to where the document lives, for whoever may open it there.
+    const back = $derived(
+        project?.can_open
+            ? {
+                  href: `/workspace/projects/${project.slug}?view=documents`,
+                  label: project.label,
+              }
+            : { href: '/workspace/documents', label: 'Documents' },
     );
     const downloadUrl = $derived(
-        `/workspace/projects/${project.slug}/documents/${doc.id}/versions/${doc.version}/download`,
+        `/workspace/documents/${doc.id}/versions/${doc.version}/download`,
     );
 
     /** The editor's script, loaded once per page load and reused after. */
@@ -128,22 +136,29 @@
     }
 </script>
 
-<svelte:head><title>{doc.title} · {project.title}</title></svelte:head>
+<svelte:head
+    ><title>{doc.title} · {project?.title ?? 'Documents'}</title></svelte:head
+>
 
 <AppShell flush>
     {#snippet bar()}
         <div class="flex min-w-0 items-center gap-1.5 text-[13px]">
             <a
-                href={projectUrl}
+                href={back.href}
                 use:inertia
                 class="hidden shrink-0 text-fg-muted hover:text-fg sm:inline"
-                >{project.title}</a
+                >{back.label}</a
             >
             <span class="hidden text-fg-faint sm:inline">/</span>
             <span class="truncate font-medium">{doc.title}</span>
             <span class="shrink-0 text-xs text-fg-faint"
                 >Version {doc.version}</span
             >
+            {#if doc.frozen}
+                <span class="chip shrink-0">Read-only: its owner has left</span>
+            {:else if doc.access === 'view'}
+                <span class="chip shrink-0">Can view</span>
+            {/if}
         </div>
         <a
             class="btn-ghost shrink-0"

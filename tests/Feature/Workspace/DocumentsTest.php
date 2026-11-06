@@ -2,7 +2,6 @@
 
 use App\Models\Document;
 use App\Models\DocumentVersion;
-use App\Models\Member;
 use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
@@ -90,25 +89,24 @@ it('refuses every document route to a viewer of the public project', function ()
     $this->actingAs($this->viewer);
     $this->post($base, ['title' => 'Mine', 'type' => 'docx'])->assertForbidden();
     $this->post("{$base}/upload", ['file' => UploadedFile::fake()->createWithContent('x.docx', (string) file_get_contents(resource_path('documents/blank.docx')))])->assertForbidden();
-    $this->get("{$base}/{$document->id}")->assertForbidden();
-    $this->get("{$base}/{$document->id}/versions")->assertForbidden();
-    $this->get("{$base}/{$document->id}/versions/1/download")->assertForbidden();
+    $this->get("/workspace/documents/{$document->id}")->assertForbidden();
+    $this->get("/workspace/documents/{$document->id}/versions")->assertForbidden();
+    $this->get("/workspace/documents/{$document->id}/versions/1/download")->assertForbidden();
     $this->get("{$base}/trash")->assertForbidden();
-    $this->patch("{$base}/{$document->id}", ['title' => 'Taken'])->assertForbidden();
-    $this->delete("{$base}/{$document->id}")->assertForbidden();
+    $this->patch("/workspace/documents/{$document->id}", ['title' => 'Taken'])->assertForbidden();
+    $this->delete("/workspace/documents/{$document->id}")->assertForbidden();
 
     expect(Document::query()->count())->toBe(1)
         ->and($document->fresh()->title)->toBe('Agreement');
 });
 
-it('finds a document only under its own project', function () {
+it('refuses another project\'s document to someone on this one', function () {
     $other = Project::factory()->create(['organization_id' => $this->organization->id]);
     $otherMember = docsPerson($this->organization, $other, 'member');
     $theirs = docsCreate($other, $otherMember, 'Their file');
 
-    // The member may use this project's documents; the id belongs elsewhere.
-    $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}/documents/{$theirs->id}")->assertNotFound();
-    $this->actingAs($this->member)->delete("/workspace/projects/{$this->project->slug}/documents/{$theirs->id}")->assertNotFound();
+    $this->actingAs($this->member)->get("/workspace/documents/{$theirs->id}")->assertForbidden();
+    $this->actingAs($this->member)->delete("/workspace/documents/{$theirs->id}")->assertForbidden();
 });
 
 // ---- Create and upload ----
@@ -176,7 +174,7 @@ it('refuses an upload that is not really the Office file its name says', functio
 it('hands the editor a signed config that names the person without their email', function () {
     $document = docsCreate($this->project, $this->member);
 
-    $response = $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}/documents/{$document->id}");
+    $response = $this->actingAs($this->member)->get("/workspace/documents/{$document->id}");
 
     $response->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Documents/Edit')
@@ -382,19 +380,19 @@ it('lists the versions and downloads each under the document name', function () 
     Http::fake(['https://docs.example/*' => Http::response(docsEditedFile())]);
     docsCallback($document, ['key' => $document->editor_key, 'status' => 2, 'url' => 'https://docs.example/out.docx', 'users' => [(string) $this->teammate->id]]);
 
-    $this->actingAs($this->member)->getJson("/workspace/projects/{$this->project->slug}/documents/{$document->id}/versions")
+    $this->actingAs($this->member)->getJson("/workspace/documents/{$document->id}/versions")
         ->assertOk()
         ->assertJsonPath('data.0.version', 2)
         ->assertJsonPath('data.0.source', 'edited')
         ->assertJsonPath('data.0.user.name', $this->teammate->name)
         ->assertJsonPath('data.1.version', 1);
 
-    $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}/documents/{$document->id}/versions/1/download")
+    $this->actingAs($this->member)->get("/workspace/documents/{$document->id}/versions/1/download")
         ->assertOk()
         ->assertDownload('Agreement (version 1).docx');
-    $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}/documents/{$document->id}/versions/2/download")
+    $this->actingAs($this->member)->get("/workspace/documents/{$document->id}/versions/2/download")
         ->assertDownload('Agreement.docx');
-    $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}/documents/{$document->id}/versions/3/download")
+    $this->actingAs($this->member)->get("/workspace/documents/{$document->id}/versions/3/download")
         ->assertNotFound();
 });
 
@@ -402,7 +400,7 @@ it('renames a document and logs it', function () {
     $document = docsCreate($this->project, $this->member);
 
     $this->actingAs($this->teammate)
-        ->patch("/workspace/projects/{$this->project->slug}/documents/{$document->id}", ['title' => 'Signed agreement'])
+        ->patch("/workspace/documents/{$document->id}", ['title' => 'Signed agreement'])
         ->assertRedirect();
 
     expect($document->fresh()->title)->toBe('Signed agreement')
@@ -415,11 +413,11 @@ it('lets the creator and whoever runs the project move a document to the trash, 
     $theirs = docsCreate($this->project, $this->teammate, 'Theirs');
     $base = "/workspace/projects/{$this->project->slug}/documents";
 
-    $this->actingAs($this->member)->delete("{$base}/{$theirs->id}")->assertForbidden();
+    $this->actingAs($this->member)->delete("/workspace/documents/{$theirs->id}")->assertForbidden();
     expect($theirs->fresh()->trashed())->toBeFalse();
 
-    $this->actingAs($this->member)->delete("{$base}/{$mine->id}")->assertRedirect();
-    $this->actingAs($this->manager)->delete("{$base}/{$theirs->id}")->assertRedirect();
+    $this->actingAs($this->member)->delete("/workspace/documents/{$mine->id}")->assertRedirect();
+    $this->actingAs($this->manager)->delete("/workspace/documents/{$theirs->id}")->assertRedirect();
 
     expect($mine->fresh()->trashed())->toBeTrue()
         ->and($mine->fresh()->deleted_by)->toBe($this->member->id)
@@ -428,14 +426,14 @@ it('lets the creator and whoever runs the project move a document to the trash, 
     Storage::disk('documents')->assertExists(DocumentVersion::query()->pluck('path')->all());
 
     // Trashed: out of the list and the editor, into the trash.
-    $this->actingAs($this->member)->get("{$base}/{$mine->id}")->assertNotFound();
+    $this->actingAs($this->member)->get("/workspace/documents/{$mine->id}")->assertNotFound();
     $this->actingAs($this->member)->getJson("{$base}/trash")->assertJsonCount(2, 'data');
     $this->actingAs($this->member)->get("/workspace/projects/{$this->project->slug}")
         ->assertInertia(fn (AssertableInertia $page) => $page->where('documents.documents', [])->where('documents.trashed_count', 2));
 
     // Restore: the same rule.
-    $this->actingAs($this->member)->post("{$base}/{$theirs->id}/restore")->assertForbidden();
-    $this->actingAs($this->member)->post("{$base}/{$mine->id}/restore")->assertRedirect();
+    $this->actingAs($this->member)->post("/workspace/documents/{$theirs->id}/restore")->assertForbidden();
+    $this->actingAs($this->member)->post("/workspace/documents/{$mine->id}/restore")->assertRedirect();
 
     expect($mine->fresh()->trashed())->toBeFalse()
         ->and($mine->fresh()->deleted_by)->toBeNull()
@@ -453,14 +451,14 @@ it('lets a creator who left the team trash nothing', function () {
     $document = docsCreate($this->project, $this->member);
     $this->project->team()?->members()->detach(WorkspaceAccess::memberFor($this->member)?->id);
 
-    $this->actingAs($this->member)->delete("/workspace/projects/{$this->project->slug}/documents/{$document->id}")->assertForbidden();
+    $this->actingAs($this->member)->delete("/workspace/documents/{$document->id}")->assertForbidden();
     expect($document->fresh()->trashed())->toBeFalse();
 });
 
 it('still keeps a save of a document trashed while someone had it open', function () {
     $document = docsCreate($this->project, $this->member);
     $key = $document->editor_key;
-    $this->actingAs($this->member)->delete("/workspace/projects/{$this->project->slug}/documents/{$document->id}");
+    $this->actingAs($this->member)->delete("/workspace/documents/{$document->id}");
     Http::fake(['https://docs.example/*' => Http::response(docsEditedFile())]);
 
     docsCallback($document, ['key' => $key, 'status' => 2, 'url' => 'https://docs.example/out.docx'])
@@ -486,16 +484,16 @@ it('serves the same documents over the API, with the editor config', function ()
         ->assertJsonPath('data.kind', 'Presentation');
 
     $this->getJson($base)->assertOk()->assertJsonCount(2, 'data');
-    $this->getJson("{$base}/{$id}")
+    $this->getJson("/api/v1/workspace/documents/{$id}")
         ->assertOk()
         ->assertJsonPath('data.document.title', 'Minutes')
         ->assertJsonPath('data.editor.config.document.key', Document::query()->find($id)?->editor_key);
-    $this->patchJson("{$base}/{$id}", ['title' => 'Minutes, 5 November'])->assertOk()->assertJsonPath('data.title', 'Minutes, 5 November');
-    $this->deleteJson("{$base}/{$id}")->assertOk();
+    $this->patchJson("/api/v1/workspace/documents/{$id}", ['title' => 'Minutes, 5 November'])->assertOk()->assertJsonPath('data.title', 'Minutes, 5 November');
+    $this->deleteJson("/api/v1/workspace/documents/{$id}")->assertOk();
     $this->getJson("{$base}/trash")->assertJsonCount(1, 'data');
-    $this->postJson("{$base}/{$id}/restore")->assertOk()->assertJsonPath('data.deleted_at', null);
+    $this->postJson("/api/v1/workspace/documents/{$id}/restore")->assertOk()->assertJsonPath('data.deleted_at', null);
 
     Sanctum::actingAs($this->viewer);
     $this->getJson($base)->assertForbidden();
-    $this->getJson("{$base}/{$id}")->assertForbidden();
+    $this->getJson("/api/v1/workspace/documents/{$id}")->assertForbidden();
 });

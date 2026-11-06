@@ -20,7 +20,7 @@
         DocumentFileType,
         DocumentVersionItem,
         Project,
-        ProjectDocument,
+        DocumentItem,
         ProjectDocuments,
     } from '../../lib/types';
     import Popover from '../Popover.svelte';
@@ -79,7 +79,7 @@
 
     // The trash, loaded when opened.
     let trashOpen = $state(false);
-    let trashed = $state<ProjectDocument[] | null>(null);
+    let trashed = $state<DocumentItem[] | null>(null);
     let trashFailed = $state(false);
 
     const placeholder = $derived(
@@ -144,7 +144,7 @@
         );
     }
 
-    async function startRename(document: ProjectDocument) {
+    async function startRename(document: DocumentItem) {
         renamingId = document.id;
         renameTitle = document.title;
         await tick();
@@ -152,7 +152,7 @@
         renameInput?.select();
     }
 
-    function rename(event: SubmitEvent, document: ProjectDocument) {
+    function rename(event: SubmitEvent, document: DocumentItem) {
         event.preventDefault();
         const title = renameTitle.trim();
 
@@ -163,7 +163,7 @@
         }
 
         router.patch(
-            `${base}/${document.id}`,
+            `/workspace/documents/${document.id}`,
             { title },
             {
                 preserveScroll: true,
@@ -173,7 +173,7 @@
         );
     }
 
-    async function toggleVersions(document: ProjectDocument) {
+    async function toggleVersions(document: DocumentItem) {
         if (versions.has(document.id)) {
             versions.delete(document.id);
 
@@ -183,10 +183,13 @@
         versions.set(document.id, 'loading');
 
         try {
-            const response = await fetch(`${base}/${document.id}/versions`, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
+            const response = await fetch(
+                `/workspace/documents/${document.id}/versions`,
+                {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                },
+            );
 
             if (!response.ok) {
                 throw new Error(String(response.status));
@@ -206,8 +209,8 @@
         }
     }
 
-    function trash(document: ProjectDocument) {
-        router.delete(`${base}/${document.id}`, {
+    function trash(document: DocumentItem) {
+        router.delete(`/workspace/documents/${document.id}`, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
@@ -220,9 +223,9 @@
         });
     }
 
-    function restore(document: ProjectDocument) {
+    function restore(document: DocumentItem) {
         router.post(
-            `${base}/${document.id}/restore`,
+            `/workspace/documents/${document.id}/restore`,
             {},
             {
                 preserveScroll: true,
@@ -245,7 +248,7 @@
                 throw new Error(String(response.status));
             }
 
-            trashed = ((await response.json()) as { data: ProjectDocument[] })
+            trashed = ((await response.json()) as { data: DocumentItem[] })
                 .data;
         } catch {
             trashFailed = true;
@@ -262,7 +265,7 @@
     }
 
     /** Who last changed it; a document never saved since is "Added". */
-    function edited(document: ProjectDocument): string {
+    function edited(document: DocumentItem): string {
         const added = document.version === 1;
         const who = (added ? document.created_by : document.updated_by)?.name;
         const verb = added ? 'Added' : 'Edited';
@@ -273,8 +276,8 @@
         return who ? `${verb} ${when} by ${who}` : `${verb} ${when}`;
     }
 
-    function downloadUrl(document: ProjectDocument, version: number): string {
-        return `${base}/${document.id}/versions/${version}/download`;
+    function downloadUrl(document: DocumentItem, version: number): string {
+        return `/workspace/documents/${document.id}/versions/${version}/download`;
     }
 </script>
 
@@ -434,7 +437,7 @@
                                 </form>
                             {:else}
                                 <a
-                                    href="{base}/{document.id}"
+                                    href="/workspace/documents/{document.id}"
                                     use:inertia
                                     class="block truncate font-medium text-fg hover:text-accent"
                                     >{document.title}</a
