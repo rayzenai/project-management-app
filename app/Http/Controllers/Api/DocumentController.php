@@ -6,11 +6,14 @@ use App\Http\Controllers\Api\Concerns\RespondsWithDocument;
 use App\Http\Requests\Documents\DeleteDocumentRequest;
 use App\Http\Requests\Documents\DocumentRequest;
 use App\Http\Requests\Documents\EditDocumentRequest;
+use App\Http\Requests\Documents\MoveDocumentRequest;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Project;
 use App\Models\User;
 use App\Queries\Documents\DocumentEditorQuery;
 use App\Queries\Documents\ProjectDocumentsQuery;
+use App\Services\Documents\MoveDocumentService;
 use App\Services\Documents\RenameDocumentService;
 use App\Services\Documents\TrashDocumentService;
 use App\Services\Workspace\RestoreWorkspaceModel;
@@ -65,5 +68,13 @@ class DocumentController extends Controller
     public function restore(DeleteDocumentRequest $request, Document $document, RestoreWorkspaceModel $service): JsonResponse
     {
         return $this->respondWithDocument($service->execute($document));
+    }
+
+    public function move(MoveDocumentRequest $request, Document $document, MoveDocumentService $service): JsonResponse
+    {
+        /** @var Project $project validated */
+        $project = $request->project();
+
+        return $this->respondWithDocument($service->execute($document, $project));
     }
 }

@@ -3,6 +3,7 @@
 use App\Models\Document;
 use App\Models\Organization;
 use App\Models\Project;
+use App\Models\ProjectActivity;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\UploadedFile;
@@ -282,4 +283,84 @@ it('serves the Documents page and personal documents over the API', function () 
     $this->postJson('/api/v1/workspace/documents', ['title' => 'Memo', 'type' => 'docx'])->assertCreated()->assertJsonPath('data.home', 'personal')->assertJsonPath('data.access', 'edit');
     $this->postJson('/api/v1/workspace/documents', ['title' => 'Memo', 'type' => 'docx', 'project' => $this->project->slug])->assertCreated()->assertJsonPath('data.home', 'project');
     $this->getJson('/api/v1/workspace/documents/trash')->assertOk()->assertJsonCount(0, 'data');
+});
+
+// ---- Move to project ----
+
+it('moves a personal document into a project and keeps its shares', function () {
+    $document = docsMake($this->member, title: 'Draft SRS');
+    docsAddFile($document);
+    docsShare($document, $this->colleague, 'view');
+
+    $this->actingAs($this->member)->post("/workspace/documents/{$document->id}/move", ['project' => $this->project->slug])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $document->refresh();
+    expect($document->project_id)->toBe($this->project->id)
+        ->and($document->owner_id)->toBeNull()
+        ->and($document->created_by)->toBe($this->member->id)
+        ->and($document->shares()->count())->toBe(1)
+        ->and(WorkspaceAccess::documentAccess($this->colleague, $document))->toBe('view')
+        ->and(WorkspaceAccess::documentAccess($this->manager, $document))->toBe('edit')
+        ->and($document->versions()->first()?->path)->toBe("personal/documents/{$document->id}/v1.docx")
+        ->and(ProjectActivity::query()->where('description', 'Moved document Draft SRS into this project')->value('project_id'))->toBe($this->project->id);
+});
+
+it('turns off organization access when moving into another organization\'s project', function () {
+    $elsewhere = Organization::factory()->create();
+    $theirs = Project::factory()->create(['organization_id' => $elsewhere->id]);
+    $theirs->ensureTeam()->update(['is_cross_organization' => true]);
+    $theirs->ensureTeam()->members()->attach(WorkspaceAccess::memberFor($this->member)?->id, ['role' => 'member']);
+    $document = docsMake($this->member, title: 'Open notes', attributes: ['organization_access' => 'edit']);
+
+    $this->actingAs($this->member)->post("/workspace/documents/{$document->id}/move", ['project' => $theirs->slug])->assertSessionHasNoErrors();
+
+    expect($document->fresh()->project_id)->toBe($theirs->id)
+        ->and($document->fresh()->organization_access)->toBeNull();
+});
+
+it('refuses a project the owner may not use, a frozen, a trashed and a project document', function () {
+    $document = docsMake($this->colleague, title: 'Mine');
+    $this->actingAs($this->colleague)->post("/workspace/documents/{$document->id}/move", ['project' => $this->project->slug])
+        ->assertSessionHasErrors(['project' => 'Choose one of your projects.']);
+
+    $projectDocument = docsMake($this->member, $this->project, 'Plan');
+    $this->actingAs($this->member)->post("/workspace/documents/{$projectDocument->id}/move", ['project' => $this->project->slug])->assertForbidden();
+
+    $trashed = docsMake($this->member, title: 'Old');
+    $trashed->delete();
+    $this->actingAs($this->member)->post("/workspace/documents/{$trashed->id}/move", ['project' => $this->project->slug])->assertNotFound();
+
+    $boss = User::factory()->create(['email' => 'boss@example.com']);
+    $frozen = docsMake($this->member, title: 'Proof');
+    docsUpdatePerson($this->member, ['is_active' => false]);
+    $this->actingAs($boss)->post("/workspace/documents/{$frozen->id}/move", ['project' => $this->project->slug])->assertForbidden();
+
+    expect($document->fresh()->project_id)->toBeNull()->and($frozen->fresh()->project_id)->toBeNull();
+});
+
+// ---- Owners are deactivated, never deleted ----
+
+it('refuses to delete a person who owns personal documents, trashed ones included', function () {
+    $admin = docsPerson($this->organization, null, null, ['is_office_admin' => true]);
+    $person = WorkspaceAccess::memberFor($this->colleague);
+    docsMake($this->colleague, title: 'Old notes')->delete();
+
+    $this->actingAs($admin)->delete("/workspace/members/{$person->id}")
+        ->assertRedirect()
+        ->assertSessionHas('workspace_flash', fn (array $flash): bool => $flash['success'] === false && $flash['message'] === 'They own personal documents; deactivate them instead.');
+
+    Sanctum::actingAs($admin);
+    $this->deleteJson("/api/v1/workspace/members/{$person->id}")
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'They own personal documents; deactivate them instead.');
+
+    expect($person->fresh()->trashed())->toBeFalse()
+        ->and(User::query()->find($this->colleague->id))->not->toBeNull();
+
+    // Someone who owns none is deleted as before.
+    $leaver = WorkspaceAccess::memberFor(docsPerson($this->organization, null));
+    $this->actingAs($admin)->delete("/workspace/members/{$leaver->id}")->assertRedirect();
+    expect($leaver->fresh()->trashed())->toBeTrue();
 });

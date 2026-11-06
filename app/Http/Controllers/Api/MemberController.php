@@ -7,6 +7,7 @@ use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Http\Resources\MemberResource;
 use App\Jobs\SyncForgeOwners;
+use App\Models\Document;
 use App\Models\Member;
 use App\Models\User;
 use App\Services\Structure\SetReportsToService;
@@ -172,6 +173,12 @@ class MemberController extends Controller
         abort_unless(WorkspaceAccess::canManageMember($request->user(), $member), 403);
 
         $user = $member->user;
+
+        // Their personal documents stay as the record they left, so they are
+        // deactivated instead (the database refuses the delete too).
+        if ($user !== null && Document::hasPersonalDocuments($user)) {
+            return response()->json(['message' => Document::OWNER_CANNOT_BE_DELETED], 422);
+        }
 
         DB::transaction(function () use ($member, $user, $links): void {
             // Links are kept by email: none may outlive the login and serve

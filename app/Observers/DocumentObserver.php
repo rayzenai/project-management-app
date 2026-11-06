@@ -24,6 +24,18 @@ class DocumentObserver
 
         $title = ProjectActivityRecorder::truncate($document->title);
 
+        // Moved in from personal: one entry, on the project it joined.
+        if ($document->wasChanged('project_id')) {
+            ProjectActivityRecorder::recordForProject(
+                project: $project,
+                subject: $document,
+                action: ProjectActivity::ACTION_UPDATED,
+                description: "Moved document {$title} into this project",
+            );
+
+            return;
+        }
+
         if ($document->wasChanged('title')) {
             $from = ProjectActivityRecorder::truncate((string) $document->getOriginal('title'));
 

@@ -162,6 +162,7 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::patch('/documents/{document}', [DocumentController::class, 'update'])->whereNumber('document')->name('documents.update');
             Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->whereNumber('document')->name('documents.destroy');
             Route::post('/documents/{document}/restore', [DocumentController::class, 'restore'])->whereNumber('document')->withTrashed()->name('documents.restore');
+            Route::post('/documents/{document}/move', [DocumentController::class, 'move'])->whereNumber('document')->name('documents.move');
 
             // Who has a document beyond its home: everyone in its organization
             // and chosen people (WorkspaceAccess::canShareDocument).

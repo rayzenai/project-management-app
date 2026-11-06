@@ -57,6 +57,9 @@ class Document extends Model
 
     public const ACCESSES = [self::ACCESS_VIEW, self::ACCESS_EDIT];
 
+    /** Why a person who owns personal documents is never deleted. */
+    public const OWNER_CANNOT_BE_DELETED = 'They own personal documents; deactivate them instead.';
+
     // version, editor_key, size and the people are set by the services only.
     protected $fillable = ['project_id', 'title', 'file_type'];
 
