@@ -15,7 +15,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Testing\TestResponse;
 use Inertia\Support\SessionKey;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Sanctum\Sanctum;
@@ -25,8 +24,6 @@ use Laravel\Sanctum\Sanctum;
  * who may use them, the editor's signed config, its file and save calls,
  * versions, trash and the API twins.
  */
-
-const DOCS_SECRET = 'a-test-secret-that-is-at-least-32-characters';
 
 beforeEach(function () {
     config([
@@ -45,52 +42,6 @@ beforeEach(function () {
     // In the organization, not on the team: sees the public project, never its documents.
     $this->viewer = docsPerson($this->organization, null);
 });
-
-function docsPerson(Organization $organization, ?Project $project, ?string $role = null, array $member = []): User
-{
-    $user = User::factory()->create();
-    $person = Member::factory()->linkedTo($user)->create($member + ['organization_id' => $organization->id]);
-
-    if ($project !== null && $role !== null) {
-        $project->ensureTeam()->members()->attach($person->id, ['role' => $role]);
-    }
-
-    return $user;
-}
-
-function docsCreate(Project $project, User $user, string $title = 'Agreement', string $type = 'docx'): Document
-{
-    test()->actingAs($user)->post("/workspace/projects/{$project->slug}/documents", ['title' => $title, 'type' => $type])->assertRedirect();
-
-    return Document::query()->where('project_id', $project->id)->where('title', $title)->latest('id')->firstOrFail();
-}
-
-/** @param  array<string, mixed>  $payload */
-function docsToken(array $payload, string $operation, string $secret = DOCS_SECRET): string
-{
-    return JWT::encode(['payload' => $payload, 'operation' => $operation], $secret, 'HS256');
-}
-
-function docsCallback(Document $document, array $payload, ?string $token = null): TestResponse
-{
-    auth()->logout();
-
-    return test()->withHeader('Authorization', 'Bearer '.($token ?? docsToken($payload, 'callback')))
-        ->postJson(URL::signedRoute('documents.callback', ['document' => $document->id]), $payload);
-}
-
-/** A real docx, different from the blank one (its bytes plus a comment in the zip). */
-function docsEditedFile(): string
-{
-    $path = tempnam(sys_get_temp_dir(), 'edited').'.docx';
-    copy(resource_path('documents/blank.docx'), $path);
-    $zip = new ZipArchive;
-    $zip->open($path);
-    $zip->setArchiveComment('edited '.uniqid());
-    $zip->close();
-
-    return (string) file_get_contents($path);
-}
 
 // ---- Who ----
 

@@ -1,8 +1,16 @@
 <?php
 
+use App\Models\Document;
+use App\Models\Member;
+use App\Models\Organization;
+use App\Models\Project;
+use App\Models\User;
+use Firebase\JWT\JWT;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\MailManager;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Testing\TestResponse;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\Exception\UnexpectedResponseException;
@@ -143,4 +151,57 @@ function smtpReply(int $code, string $at = 'RCPT TO'): UnexpectedResponseExcepti
     }
 
     throw new InvalidArgumentException("No SMTP step {$at}.");
+}
+
+/*
+ * Documents (tests/Feature/Workspace/Documents*Test.php): the editor's shared
+ * secret, people, documents and the editor's signed calls.
+ */
+
+const DOCS_SECRET = 'a-test-secret-that-is-at-least-32-characters';
+
+function docsPerson(Organization $organization, ?Project $project, ?string $role = null, array $member = []): User
+{
+    $user = User::factory()->create();
+    $person = Member::factory()->linkedTo($user)->create($member + ['organization_id' => $organization->id]);
+
+    if ($project !== null && $role !== null) {
+        $project->ensureTeam()->members()->attach($person->id, ['role' => $role]);
+    }
+
+    return $user;
+}
+
+function docsCreate(Project $project, User $user, string $title = 'Agreement', string $type = 'docx'): Document
+{
+    test()->actingAs($user)->post("/workspace/projects/{$project->slug}/documents", ['title' => $title, 'type' => $type])->assertRedirect();
+
+    return Document::query()->where('project_id', $project->id)->where('title', $title)->latest('id')->firstOrFail();
+}
+
+/** @param  array<string, mixed>  $payload */
+function docsToken(array $payload, string $operation, string $secret = DOCS_SECRET): string
+{
+    return JWT::encode(['payload' => $payload, 'operation' => $operation], $secret, 'HS256');
+}
+
+function docsCallback(Document $document, array $payload, ?string $token = null): TestResponse
+{
+    auth()->logout();
+
+    return test()->withHeader('Authorization', 'Bearer '.($token ?? docsToken($payload, 'callback')))
+        ->postJson(URL::signedRoute('documents.callback', ['document' => $document->id]), $payload);
+}
+
+/** A real docx, different from the blank one (its bytes plus a comment in the zip). */
+function docsEditedFile(): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'edited').'.docx';
+    copy(resource_path('documents/blank.docx'), $path);
+    $zip = new ZipArchive;
+    $zip->open($path);
+    $zip->setArchiveComment('edited '.uniqid());
+    $zip->close();
+
+    return (string) file_get_contents($path);
 }

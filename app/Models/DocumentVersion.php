@@ -62,9 +62,15 @@ class DocumentVersion extends Model
         return $this->belongsTo(User::class);
     }
 
-    /** Where a version's file lives on the disk. */
+    /**
+     * Where a version's file lives on the disk. A personal document's go under
+     * `personal/`; each version keeps the path it was written to, so a
+     * document moved into a project keeps its older files where they are.
+     */
     public static function pathFor(Document $document, int $version): string
     {
-        return "projects/{$document->project_id}/documents/{$document->id}/v{$version}.{$document->file_type}";
+        $home = $document->project_id === null ? 'personal' : "projects/{$document->project_id}";
+
+        return "{$home}/documents/{$document->id}/v{$version}.{$document->file_type}";
     }
 }
