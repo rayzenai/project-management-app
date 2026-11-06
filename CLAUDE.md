@@ -48,7 +48,8 @@ vendor/bin/pest > file 2>&1` and read the file.
   `project`, `task`, `task-comment`, `task-dependency`, `project-note`,
   `project-contact`, `subtask`, `project-assignment`, `team`, `member`,
   `git-repository`, `git-repository-grant`, `git-branch`, `git-commit`,
-  `git-pull-request`, `document`), and the
+  `git-pull-request`, `document`; shares are logged with their document
+  as subject, so `DocumentShare` has no entry), and the
   observers (`ProgramObserver`, `ProjectObserver`, `TaskObserver`, ...).
 - `routes/web.php` — `/workspace/*` (Inertia, `auth` + `ShareWorkspaceData`),
   guest login routes, `/` redirect. `routes/api.php` — `/api/v1/*` (Sanctum).
@@ -183,7 +184,14 @@ has no manager powers, like inactive organizational admins and program
 managers), `managedProgramIds`, `managesProgramOf`, `canManagePrograms`,
 `canViewProgram` (twin of `Program::scopeVisibleTo`), `canUseProjectDocuments`
 (a project's documents: as `canViewProjectCode` without git, while documents
-are on), `canDeleteDocument` (trash and restore: the twin of `canDeleteTask`).
+are on; twin `Project::scopeDocumentsVisibleTo`), `documentAccess` (a
+person's level on a document, `edit|view|null`; twin `Document::scopeVisibleTo`),
+`documentOwnerActive`, `isDocumentFrozen`, `documentOrganizationId`,
+`canCreatePersonalDocuments`, `canShareDocument`, `canShareDocumentWith`
+(twin `DocumentShareCandidatesQuery`), `isShareEffective`,
+`canDeleteDocument(user, document)` (trash and restore: a project's as
+`canDeleteTask`, a personal one its owner's), `canMoveDocument` (see
+Documents below).
 Visibility scopes:
 `Project`, `Team`, `Member` and `Program::scopeVisibleTo` (the first three
 reach a program manager's projects through `Project::inPrograms`). Memos
@@ -891,50 +899,110 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
 
 ## Documents (ONLYOFFICE)
 
-Spec: `docs/superpowers/specs/2026-11-05-documents-design.md`. Runbook:
-`docs/onlyoffice.md`. API: `docs/api.md` (Documents).
+Specs: `docs/superpowers/specs/2026-11-05-documents-design.md` (the editor,
+a project's documents) and `2026-11-06-documents-workspace-design.md` (the
+Documents page, personal documents, sharing). Runbook: `docs/onlyoffice.md`.
+API: `docs/api.md` (Documents).
 
 - **The editor** is ONLYOFFICE Docs Community Edition at docs.sdoc.gov.np
   (`onlyoffice/`, Dokploy project `docs`): no users, no documents of its
-  own. Documents are on only while `config('documents.enabled')` (an editor
-  URL and a JWT secret of at least 32 characters).
-- **Models**: `Document` (a project's; `file_type` `docx|xlsx|pptx` from
-  `App\Support\Documents\DocumentTypes`, the one list; `version` the
-  current one; `editor_key` the editor's id for the current version, shared
-  by everyone editing it, a new one after each finished session; soft
-  deletes with `deleted_by`, never purged) and `DocumentVersion` (one file
-  per version on the `documents` disk at `DocumentVersion::pathFor`, never
-  overwritten or deleted; `source` `created|uploaded|edited`; written only
-  through `DocumentFiles::write`). Files are in RustFS (bucket
-  `tasks-documents`, a key with no delete permission) in production, never
-  on the VM's root disk; a local disk elsewhere.
-- **Who**: `canUseProjectDocuments` for everything (read, open, edit,
-  create, upload, rename, versions, downloads), `canDeleteDocument` for
-  trash and restore (`DocumentsRequest` and the requests that extend it,
-  `DeleteDocumentRequest`). Never other viewers of a public project.
-- **The editor's session**: `DocumentEditorQuery` builds the config the
-  page hands ONLYOFFICE and signs all of it as `token` (`EditorToken`,
-  HS256, the shared secret): the file URL (a temporary signed route), the
-  callback URL (a signed route), `editor_key`, the person's id and name
-  (never email), and the customization (AI tools, plugins, macros, chat
-  off); the token expires with the file link, and the page is kept in
-  history only encrypted (cleared on sign-out). `DocumentServerController` answers the editor's two calls, outside
-  the `web` group: the file (signed URL plus a `download` JWT) and the
-  callback (signed URL plus a `callback` JWT; the token's `payload` is the
-  truth, never the body). `SaveEditedDocumentService` keeps status 2, 3, 6
-  and 7 saves as the next version (3 and 7 with a warning; refusing a file
-  URL off the editor's own host, at most 100 MB, the same file twice is not
-  a version), gives 2 and 3 (session over) a new `editor_key`, ignores a
-  key the document no longer has, never logs the editor's file link, and
-  answers a failure so the editor asks again. The page reloads on the
-  editor's `onRequestRefreshFile`.
-- **Activity**: `DocumentObserver` (renamed, trashed, restored) and
+  own; its `/` and `/welcome/` redirect to the Documents page (a Dokploy
+  redirect). Documents are on only while `config('documents.enabled')` (an
+  editor URL and a JWT secret of at least 32 characters).
+- **Models**: `Document` belongs to a project (`project_id`) or, personal, to
+  the person who made it (`owner_id`, users, restrict on delete: deleting a
+  login that owns one fails, and both member controllers refuse first with
+  `Document::OWNER_CANNOT_BE_DELETED`); `organization_access`
+  (`view|edit|null`) opens it to everyone in its organization; `file_type`
+  `docx|xlsx|pptx` from `App\Support\Documents\DocumentTypes`, the one
+  list; `version` the current one; `editor_key` the editor's id for the
+  current version, shared by everyone editing it, a new one after each
+  finished session; soft deletes with `deleted_by`, never purged.
+  `DocumentShare` (`document_shares`: a member, `view|edit`, `shared_by`,
+  unique per document and member) gives it to one person. `DocumentVersion`:
+  one file per version on the `documents` disk at `DocumentVersion::pathFor`
+  (`personal/documents/...` or `projects/{id}/documents/...`; each version
+  keeps the path it was written to), never overwritten or deleted; `source`
+  `created|uploaded|edited`; written only through `DocumentFiles::write`.
+  Files are in RustFS (bucket `tasks-documents`, a key with no delete
+  permission) in production, never on the VM's root disk; a local disk
+  elsewhere.
+- **Who** (SECURITY CRITICAL, all in `WorkspaceAccess`): `documentAccess`
+  is the one answer, the highest of the home (`canUseProjectDocuments` for a
+  project's; the owner while `documentOwnerActive`, a super-admin or an
+  active person, for a personal one), `organization_access` for every active
+  person of `documentOrganizationId` (the project's organization, or the
+  owner's now: a personal document goes with its owner), and a share while
+  its person is active and in that organization. Frozen (`isDocumentFrozen`:
+  personal, owner not active): `view` for super-admins, nothing for anyone
+  else, trashed ones included; reactivating the owner brings everything
+  back. `view` opens read-only (versions, download), `edit` also renames
+  (`EditDocumentRequest`). `DocumentRequest` opens (a trashed document is a
+  404 unless frozen), `canDeleteDocument` trashes and restores,
+  `canShareDocument` (not trashed, and `canDeleteDocument`) shares,
+  `canMoveDocument` (a personal document's active owner, not trashed) moves
+  into a project the owner may use (`ChoosesUsableProject`, one way: a
+  project's document never goes back; organization access is turned off
+  when the project is another organization's). Sharing stays inside the
+  document's organization (`canShareDocumentWith`; outsiders and unknown ids
+  get one generic 422 that names nobody). Nobody else sees a personal
+  document: not admins, managers or super-admins while its owner is active.
+  `Document::scopeVisibleTo` is `documentAccess`'s twin, checked against it
+  over a matrix in `DocumentsAccessTest`; keep them in step.
+- **Reads**: `DocumentLibraryQuery` (the Documents page: filters `show`
+  `all|mine|shared|organization|projects`, `project`, `type`, `q`, 50 per
+  page by `updated_at, id` cursor, a super-admin's organization switch;
+  the trash), `ProjectDocumentsQuery` (a project's tab; one document's
+  `show` with its `project` `{slug, title, label, can_open}`),
+  `DocumentSharingQuery` and `DocumentShareCandidatesQuery` (the Share
+  dialog). Rows through `DocumentResource::withViewer` (`access`, `frozen`,
+  `can_delete`, `can_share`, `can_move`).
+- **Writes**: `CreateDocumentService` (`blank`/`upload` with a project or
+  none), `RenameDocumentService`, `TrashDocumentService`,
+  `MoveDocumentService`, `DocumentSharingService` (organization access,
+  share, change, unshare; sharing and moving never touch `updated_at`; only
+  a new share notifies, `DocumentShared`, also in `SendEmailUpdates::KINDS`),
+  `SaveEditedDocumentService`.
+- **The editor's session**: `DocumentEditorQuery::for($document, $viewer,
+  $access)` builds the config the page hands ONLYOFFICE and signs all of it
+  as `token` (`EditorToken`, HS256, the shared secret): the file URL (a
+  temporary signed route), the callback URL (a signed route), `editor_key`,
+  the person's id and name (never email), `mode` `edit` or `view` with the
+  permissions to match, the back link (the project's tab for whoever may use
+  it, else the Documents page) and the customization (AI tools, plugins,
+  macros, chat off); the token expires with the file link, and the page is
+  kept in history only encrypted (cleared on sign-out).
+  `DocumentServerController` answers the editor's two calls, outside the
+  `web` group: the file (signed URL plus a `download` JWT; a trashed
+  document only when frozen) and the callback (signed URL plus a `callback`
+  JWT; the token's `payload` is the truth, never the body).
+  `SaveEditedDocumentService` keeps status 2, 3, 6 and 7 saves as the next
+  version (3 and 7 with a warning; refusing a file URL off the editor's own
+  host, at most 100 MB, the same file twice is not a version), gives 2 and
+  3 (session over) a new `editor_key`, ignores a key the document no longer
+  has, never logs the editor's file link, and answers a failure so the
+  editor asks again. A session already open when access ends keeps going,
+  and its save is kept. The page reloads on the editor's
+  `onRequestRefreshFile`.
+- **Routes**: `/workspace/documents` (page, `list`, `trash`, store, upload)
+  and `/workspace/documents/{id}` (editor page, versions, download, rename,
+  trash, restore, `move`, `sharing`, `sharing/candidates`,
+  `sharing/organization`, `shares`), the API twins under
+  `/api/v1/workspace/documents`; old `/workspace/projects/{slug}/documents/{id}`
+  links redirect.
+- **Activity**: project documents only. `DocumentObserver` (renamed,
+  organization access, moved into the project, trashed, restored),
+  `DocumentShareObserver` (shared, changed, removed) and
   `DocumentVersionObserver` (created, uploaded, saved, credited to the
   editor's last user through `ProjectActivityRecorder`'s `actorId`).
-- **UI**: the project's Documents tab (`project/DocumentsView.svelte`,
-  shown when `documents` is not null) and the editor page
+  Personal documents write none.
+- **UI**: the sidebar's Documents (`mainLinks`, with `documentsEnabled`)
+  opens `pages/Documents/Index.svelte`; a project's Documents tab is
+  `project/DocumentsView.svelte` (shown when `documents` is not null); both
+  are built from `components/documents/` (`DocumentList`, `NewDocument`
+  with Where, `DocumentTrash`, `ShareDialog`). The editor page
   (`pages/Documents/Edit.svelte`: loads `api.js` from the editor, mounts it
-  through an action).
+  through an action) has Share and the Can view and frozen marks.
 
 ## Structure, attendance and work reports
 

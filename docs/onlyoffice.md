@@ -79,11 +79,29 @@ secrets are in the gitignored `.env.sdoc`; never print them.
   in; `/example/` answers 502), bundled plugins, the public Document Builder
   and conversion APIs (404), WOPI. `WELCOME_PAGE_ENABLED` is false, yet 10.0
   still answers `/` and `/welcome/` with a bare status page (the product's
-  name and whether it runs); nothing about this installation. In each editor config: AI tools, plugins, macros
-  (several 10.0 fixes were macro sandbox escapes) and chat.
+  name and whether it runs); a Dokploy redirect sends those two to the
+  tracker's Documents page instead (Front door, below). In each editor
+  config: AI tools, plugins, macros (several 10.0 fixes were macro sandbox
+  escapes) and chat.
 - `start.sh` refuses to start without the three variables (the image would
   otherwise invent a JWT secret nobody knows).
 - The ONLYOFFICE logo stays: the Community Edition's licence requires it.
+
+## Front door
+
+People type docs.sdoc.gov.np to reach their documents, so `/` and
+`/welcome/` redirect to `https://tasks.sdoc.gov.np/workspace/documents`
+(the tracker signs them in first when it has to). Every other path stays
+the editor's: the browser loads `api.js` and the editor from here. It is a
+Dokploy redirect on `docs-onlyoffice` (Advanced, Redirects; Traefik does
+it), not part of the image:
+
+- Regex `^https?://docs\.sdoc\.gov\.np/(welcome/?)?$`
+- Replacement `https://tasks.sdoc.gov.np/workspace/documents`
+- Permanent: off (302), so it can change later.
+
+Check: `curl -sI https://docs.sdoc.gov.np/` answers 302 to that page, and
+`/healthcheck` and `/web-apps/apps/api/documents/api.js` still answer 200.
 
 ## Check
 

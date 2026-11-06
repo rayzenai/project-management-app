@@ -497,37 +497,75 @@ The forge's webhook, `POST /git/webhooks/{connection}` (name `git.webhook`),
 is server to server: no session, CSRF or token, a body signed with the
 connection's webhook secret. See `docs/forgejo.md`, section 12.
 
-## Documents *(documents on; the project's team, its program's manager, its organizational admin or a super-admin; trash and restore: whoever runs the project, or the document's creator)*
+## Documents *(documents on; what each person may do is their access level, below)*
 
-A project's Word, Excel and PowerPoint files, edited together in ONLYOFFICE
-(`docs/onlyoffice.md`). Every route answers 403 while documents are off
-(no editor configured) or to anyone else, other viewers of a public project
-included. A document is `{ id, title, file_type (docx|xlsx|pptx), kind
-(Document|Spreadsheet|Presentation), version, size, created_by, updated_by,
-created_at, updated_at, deleted_at, can_delete }` (people as `{ id, name }`);
-a version is `{ version, size, source (created|uploaded|edited), user,
-created_at }`. Every save from the editor is a new version; none is ever
-deleted, and the trash is never emptied. A document of another project is
-404.
+Word, Excel and PowerPoint files, edited together in ONLYOFFICE
+(`docs/onlyoffice.md`; design `docs/superpowers/specs/2026-11-06-documents-workspace-design.md`).
+A document belongs to a project (`home: project`) or, personal, to the
+person who made it (`home: personal`). Every route answers 403 while
+documents are off (no editor configured).
+
+**Who.** Each person's `access` to a document is `edit`, `view` or null,
+the highest of:
+
+- its home: a project's documents are `edit` for its team, its program's
+  manager and whoever administers its organization (never other viewers of
+  a public project); a personal one is `edit` for its owner;
+- `organization_access` (`view`, `edit` or null): every active person of
+  the document's organization (the project's, or the owner's now);
+- a share to the person (`view` or `edit`), while they are active and in
+  that organization.
+
+A personal document whose owner is deactivated is `frozen`: `view` for
+super-admins and nothing for anyone else, trashed ones included, until the
+owner is active again. `view` opens the editor read-only and may download;
+`edit` also renames. Trash, restore and sharing (`can_delete`, `can_share`)
+are a personal document's owner's, and on a project document whoever runs
+the project and the document's maker's; `can_move` (Move to project) is a
+personal document's owner's. Someone who owns personal documents, trashed
+ones included, can't be deleted: `DELETE /workspace/members/{id}` answers
+422 `They own personal documents; deactivate them instead.`
+
+A document is `{ id, title, file_type (docx|xlsx|pptx), kind
+(Document|Spreadsheet|Presentation), version, size, home (project|personal),
+project ({ slug, title, label } or null), owner ({ id, name } or null),
+organization_access, access, frozen, can_delete, can_share, can_move,
+created_by, updated_by, created_at, updated_at, deleted_at }` (people as
+`{ id, name }`); a version is `{ version, size, source
+(created|uploaded|edited), user, created_at }`; a share is `{ id, member: {
+id, name, designation }, permission, effective }`. Every save from the
+editor is a new version; none is ever deleted, and the trash is never
+emptied.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/projects/{slug}/documents` | the documents, newest change first (JSON API only; the web Documents tab gets them with the project as `documents: { documents, trashed_count, types, max_upload_mb }`) |
-| GET | `/workspace/projects/{slug}/documents/trash` | the trashed ones, newest first |
-| POST | `/workspace/projects/{slug}/documents` | `title` (at most 200), `type` (`docx`, `xlsx` or `pptx`): a blank one. `Created {title}.`; the web opens it in the editor |
-| POST | `/workspace/projects/{slug}/documents/upload` | multipart `file` (a real `.docx`, `.xlsx` or `.pptx`, at most 50 MB; anything else is 422 `This file could not be read as a Word, Excel or PowerPoint file.` or `Upload a .docx, .xlsx or .pptx file.`), optional `title` (else the file name). `Uploaded {title}.` |
-| GET | `/workspace/projects/{slug}/documents/{id}` | `{ document, versions, editor: { server_url, config } }`: `config` is ONLYOFFICE's editor config, signed (`token`); pass it to `new DocsAPI.DocEditor(...)` from `{server_url}/web-apps/apps/api/documents/api.js` unchanged (only `type`, `width`, `height` and `events` may be added). The person is named by id and name, never email. The web renders the editor page |
-| GET | `/workspace/projects/{slug}/documents/{id}/versions` | the versions, newest first |
-| GET | `/workspace/projects/{slug}/documents/{id}/versions/{n}/download` | the file of version `n` (`{title}.docx`, `{title} (version 2).docx` for an older one) |
-| PATCH | `/workspace/projects/{slug}/documents/{id}` | `title`. `Renamed to {title}.` |
-| DELETE | `/workspace/projects/{slug}/documents/{id}` | to the trash: `Moved {title} to the trash.` |
-| POST | `/workspace/projects/{slug}/documents/{id}/restore` | back from the trash: `Restored.` |
+| GET | `/workspace/documents` | every document the caller may open, newest change first, 50 at a time: `{ data, next_cursor }` (pass `cursor` for the next). Query: `show` (`all`, `mine` (personal ones they own), `shared` (shared with them), `organization` (open to the organization), `projects`), `project` (a slug), `type`, `q` (in the title). The web renders the Documents page; its Show more is `GET /workspace/documents/list` |
+| GET | `/workspace/documents/trash` | the trashed ones the caller may see, newest first (`project` narrows to one) |
+| POST | `/workspace/documents` | `title` (at most 200), `type` (`docx`, `xlsx` or `pptx`), optional `project` (a slug): a blank one in that project, or personal without one. A project whose documents the caller may not use is 422 `Choose one of your projects.` on `project`; a personal one needs an active person (403 otherwise). `Created {title}.`; the web opens it in the editor |
+| POST | `/workspace/documents/upload` | multipart `file` (a real `.docx`, `.xlsx` or `.pptx`, at most 50 MB; anything else is 422 `This file could not be read as a Word, Excel or PowerPoint file.` or `Upload a .docx, .xlsx or .pptx file.`), optional `title` (else the file name), optional `project` as above. `Uploaded {title}.` |
+| GET | `/workspace/documents/{id}` | `{ document, versions, project, editor: { server_url, config } }`: `project` is `{ slug, title, label, can_open }` or null; `config` is ONLYOFFICE's editor config at the caller's level, signed (`token`); pass it to `new DocsAPI.DocEditor(...)` from `{server_url}/web-apps/apps/api/documents/api.js` unchanged (only `type`, `width`, `height` and `events` may be added). The person is named by id and name, never email. A trashed document is 404 unless frozen. The web renders the editor page |
+| GET | `/workspace/documents/{id}/versions` | the versions, newest first |
+| GET | `/workspace/documents/{id}/versions/{n}/download` | the file of version `n` (`{title}.docx`, `{title} (version 2).docx` for an older one) |
+| PATCH | `/workspace/documents/{id}` | `title` (`edit`, not frozen). `Renamed to {title}.` |
+| DELETE | `/workspace/documents/{id}` | to the trash: `Moved {title} to the trash.` |
+| POST | `/workspace/documents/{id}/restore` | back from the trash: `Restored.` |
+| POST | `/workspace/documents/{id}/move` | `project` (a slug): a personal document into a project the owner may use, for good. It keeps its shares; organization access is turned off when the project is another organization's. `Moved {title} to {project}.` |
+| GET | `/workspace/documents/{id}/sharing` | `{ home: { type, project }, organization: { id, name } or null, organization_access, shares }` (`can_share` only) |
+| GET | `/workspace/documents/{id}/sharing/candidates?q=` | up to 8 active people of the document's organization it isn't shared with yet (never its owner), as `{ id, name, designation }` |
+| PUT | `/workspace/documents/{id}/sharing/organization` | `access`: `view`, `edit` or null. A document with no organization is 422 on `access`. Answers with the document |
+| POST | `/workspace/documents/{id}/shares` | `member_id`, `permission` (`view`, `edit`): someone of the document's organization (anyone else or an unknown id is the same 422 `Choose someone in {organization}.`, which names nobody; the owner or an inactive person is 422 `You can't share this with {name}.`). Sharing again changes the permission. A new share notifies the person in the app and by email (`document_shared`). 201 with the share |
+| PATCH | `/workspace/documents/{id}/shares/{share}` | `permission` |
+| DELETE | `/workspace/documents/{id}/shares/{share}` | takes it back |
 
-On the JSON API these are `/api/v1/workspace/projects/{slug}/documents…`
-(names `api.workspace.projects.documents.index|trash|store|upload|show|versions|download|update|destroy|restore`);
-creating and uploading answer 201 with the document. On the web they answer
-with a redirect and `workspace_flash`, except `trash` and `versions`, which
-are JSON.
+On the JSON API these are `/api/v1/workspace/documents…` (names
+`api.workspace.documents.*`, `api.workspace.documents.sharing.*`,
+`api.workspace.documents.shares.*`); creating, uploading and sharing answer
+201. On the web they answer with a redirect and `workspace_flash`, except the
+lists, `versions`, `sharing` and `candidates`, which are JSON. The web's
+project page carries its project's documents as `documents: { documents,
+trashed_count, types, max_upload_mb }`. Sharing and moving never change a
+document's `updated_at`. On a project document, sharing changes and a move
+into it go into the project's activity; a personal document writes none.
 
 The editor's own two calls, `GET /documents/{id}/file/{version}` and `POST
 /documents/{id}/callback`, are for ONLYOFFICE only: signed URLs from the
@@ -1218,6 +1256,24 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Documents page, personal documents and sharing (2026-11-06).**
+
+- New: `GET /workspace/documents` (and `/trash`), `POST /workspace/documents`
+  and `/upload` with an optional `project`, `POST .../{id}/move`, and the
+  sharing routes (see Documents).
+- Moved: a document's own routes are `/workspace/documents/{id}…` (show,
+  versions, download, rename, trash, restore), for project documents too.
+  The project-scoped routes are gone: list a project's with
+  `GET /workspace/documents?project={slug}`, its trash with
+  `/workspace/documents/trash?project={slug}`, and create or upload into it
+  with `project`. Old web editor links redirect.
+- A document adds `home`, `project`, `owner`, `organization_access`,
+  `access`, `frozen`, `can_share` and `can_move`. A project the caller may
+  not use is now a 422 on `project` (was 403), and its list is empty.
+- `DELETE /workspace/members/{id}` refuses (422) someone who owns personal
+  documents.
+- Notifications add `document_shared` (filter `type=documents`).
 
 **Documents.**
 

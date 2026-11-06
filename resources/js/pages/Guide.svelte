@@ -292,7 +292,19 @@
     const documents = [
         [
             'Where they are',
-            "A project's Documents tab holds its Word, Excel and PowerPoint files. Its team, its program's manager and the organizational admins see them; nobody else, not even other people who can see a public project.",
+            "Documents in the sidebar lists every document you can open, newest first: your own, those shared with you, those open to your office and your projects'. A project's Documents tab shows that project's.",
+        ],
+        [
+            'Just me or a project',
+            "New and Upload ask where it goes. Just me makes a personal document: it is yours, and nobody else sees it until you share it. In a project, it belongs to the project: its team, its program's manager and the organizational admins can open and edit it, and it stays with them whoever made it leaves. Move to project puts a personal document into one of your projects, for good.",
+        ],
+        [
+            'Sharing',
+            "Share opens a document to everyone in your office, or to chosen people of your office, each with Can edit or Can view. Someone you add gets a notification and an email. On a project document, whoever runs the project and whoever made it can share it, for example with one person who isn't on the team.",
+        ],
+        [
+            'Can view',
+            'Opens the document read-only. They can download it and see its versions, never change it.',
         ],
         [
             'Editing together',
@@ -308,7 +320,11 @@
         ],
         [
             'Trash',
-            'Whoever made a document, and whoever runs the project, can move it to the trash and bring it back. The trash is never emptied.',
+            "Your personal documents are yours to trash and bring back. A project's: whoever made it and whoever runs the project. The trash is never emptied.",
+        ],
+        [
+            'When someone leaves',
+            "A person's personal documents stay as they left them, read-only, for the super-admins only; everyone they were shared with loses them. Someone who owns personal documents is deactivated, never deleted. Project documents stay with the project.",
         ],
     ];
 
