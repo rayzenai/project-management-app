@@ -1,14 +1,17 @@
 <script lang="ts">
-    import { inertia } from '@inertiajs/svelte';
+    import { inertia, page, router } from '@inertiajs/svelte';
     import { Download, Users } from '@lucide/svelte';
+    import { onMount, tick } from 'svelte';
     import AppShell from '../../components/AppShell.svelte';
     import ShareDialog from '../../components/documents/ShareDialog.svelte';
     import Spinner from '../../components/Spinner.svelte';
+    import { QUIET } from '../../lib/toast.svelte';
     import type {
         DocumentEditor,
         DocumentItem,
         DocumentProject,
         DocumentVersionItem,
+        SharedProps,
     } from '../../lib/types';
 
     /**
@@ -17,7 +20,9 @@
      * config the tracker signed; it fetches the file and sends saves to the
      * tracker by itself. Everyone with the document open edits together;
      * Can view and frozen documents open read-only (the signed config says
-     * so). `project` is null for a personal document.
+     * so). `project` is null for a personal document. Whoever may edit it
+     * renames it by clicking its title in the bar; a document just made
+     * opens with that title selected, so typing names it.
      */
     let {
         project,
@@ -43,6 +48,81 @@
 
     let status = $state<'loading' | 'ready' | 'failed'>('loading');
     let shareOpen = $state(false);
+
+    // Renaming in the bar: Enter or leaving the field saves, Escape keeps
+    // the old title.
+    let renaming = $state(false);
+    let titleDraft = $state('');
+    let titleInput = $state<HTMLInputElement | null>(null);
+    let saving = $state(false);
+    let renameError = $state<string | null>(null);
+    const canRename = $derived(doc.access === 'edit' && !doc.frozen);
+
+    async function startRename() {
+        if (!canRename) {
+            return;
+        }
+
+        titleDraft = doc.title;
+        renameError = null;
+        renaming = true;
+        await tick();
+        titleInput?.focus();
+        titleInput?.select();
+    }
+
+    function saveTitle() {
+        if (!renaming || saving) {
+            return;
+        }
+
+        const title = titleDraft.trim();
+
+        if (title === '' || title === doc.title) {
+            renaming = false;
+
+            return;
+        }
+
+        saving = true;
+        router.patch(
+            `/workspace/documents/${doc.id}`,
+            { title },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['document'],
+                headers: QUIET,
+                onSuccess: () => (renaming = false),
+                onError: (errors) =>
+                    (renameError =
+                        errors.title ??
+                        errors.__global ??
+                        "The title didn't save. Try again."),
+                onFinish: () => (saving = false),
+            },
+        );
+    }
+
+    function titleKeys(event: KeyboardEvent) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveTitle();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            renaming = false;
+            renameError = null;
+        }
+    }
+
+    // A document just made (the create's flash names it) opens ready to name.
+    onMount(() => {
+        const flash = (page.props as unknown as SharedProps).flash;
+
+        if (flash?.created_document === doc.id) {
+            void startRename();
+        }
+    });
 
     // Back to where the document lives, for whoever may open it there.
     const back = $derived(
@@ -111,7 +191,15 @@
                     width: '100%',
                     height: '100%',
                     events: {
-                        onAppReady: () => (status = 'ready'),
+                        onAppReady: () => {
+                            status = 'ready';
+
+                            // The editor takes focus when it opens; a title
+                            // being typed keeps it.
+                            if (renaming) {
+                                titleInput?.focus();
+                            }
+                        },
                         // Once it runs, the editor shows its own errors;
                         // this page's only covers one that never started.
                         onError: () => {
@@ -152,7 +240,41 @@
                 >{back.label}</a
             >
             <span class="hidden text-fg-faint sm:inline">/</span>
-            <span class="truncate font-medium">{doc.title}</span>
+            {#if renaming}
+                <label for="document-title" class="sr-only">Title</label>
+                <input
+                    id="document-title"
+                    bind:this={titleInput}
+                    bind:value={titleDraft}
+                    maxlength="200"
+                    autocomplete="off"
+                    disabled={saving}
+                    aria-invalid={renameError ? 'true' : undefined}
+                    aria-describedby={renameError
+                        ? 'document-title-error'
+                        : undefined}
+                    class="input h-8 max-w-md min-w-0 flex-1 py-0 font-medium lg:min-h-8"
+                    onkeydown={titleKeys}
+                    onblur={saveTitle}
+                />
+                {#if renameError}
+                    <span
+                        id="document-title-error"
+                        role="alert"
+                        class="truncate text-xs text-danger">{renameError}</span
+                    >
+                {/if}
+            {:else if canRename}
+                <button
+                    type="button"
+                    class="-mx-1 min-w-0 truncate rounded-sm px-1 py-0.5 font-medium hover:bg-hover"
+                    title="Rename"
+                    aria-label={`Rename ${doc.title}`}
+                    onclick={startRename}>{doc.title}</button
+                >
+            {:else}
+                <span class="truncate font-medium">{doc.title}</span>
+            {/if}
             <span class="shrink-0 text-xs text-fg-faint"
                 >Version {doc.version}</span
             >

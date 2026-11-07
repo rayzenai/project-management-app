@@ -900,8 +900,9 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
 ## Documents (ONLYOFFICE)
 
 Specs: `docs/superpowers/specs/2026-11-05-documents-design.md` (the editor,
-a project's documents) and `2026-11-06-documents-workspace-design.md` (the
-Documents page, personal documents, sharing). Runbook: `docs/onlyoffice.md`.
+a project's documents), `2026-11-06-documents-workspace-design.md` (the
+Documents page, personal documents, sharing) and
+`2026-11-07-documents-ui-design.md` (its tabs, rows and one-click start). Runbook: `docs/onlyoffice.md`.
 API: `docs/api.md` (Documents).
 
 - **The editor** is ONLYOFFICE Docs Community Edition at docs.sdoc.gov.np
@@ -950,14 +951,23 @@ API: `docs/api.md` (Documents).
   document: not admins, managers or super-admins while its owner is active.
   `Document::scopeVisibleTo` is `documentAccess`'s twin, checked against it
   over a matrix in `DocumentsAccessTest`; keep them in step.
-- **Reads**: `DocumentLibraryQuery` (the Documents page: filters `show`
-  `all|mine|shared|organization|projects`, `project`, `type`, `q`, 50 per
-  page by `updated_at, id` cursor, a super-admin's organization switch;
-  the trash), `ProjectDocumentsQuery` (a project's tab; one document's
+- **Reads**: `DocumentLibraryQuery` (the Documents page: the tab `show`
+  `recent|personal|shared|projects`, where Personal is the viewer's own
+  personal documents and Shared with me is shared with them by name plus
+  open to the whole office when they reach it no other way, not their own
+  and not in a project whose documents they use; the old names
+  `all|mine|organization` still map, `DocumentLibraryRequest::OLD_SHOWS`;
+  `project`, `type`, `q`, 50 per page by `updated_at, id` cursor, a
+  super-admin's organization switch; the Projects tab with no other filter
+  gives `project_cards` (`projectCards`, also the API's
+  `/documents/projects`) instead of rows; `total`, how many the viewer may
+  open; the trash), `ProjectDocumentsQuery` (a project's tab; one document's
   `show` with its `project` `{slug, title, label, can_open}`),
   `DocumentSharingQuery` and `DocumentShareCandidatesQuery` (the Share
   dialog). Rows through `DocumentResource::withViewer` (`access`, `frozen`,
-  `can_delete`, `can_share`, `can_move`), after
+  `can_delete`, `can_share`, `can_move`, `shares_count` for whoever may
+  share, counted from the eager-loaded `shares.member` by
+  `canShareDocumentWith`, and the project's `can_open`), after
   `WorkspaceAccess::preloadDocumentAccess` (the owners' people, the
   projects' teams and team membership, the viewer's shares, in a few
   queries; the same answers), so a list's queries don't grow with its rows
@@ -1006,12 +1016,22 @@ API: `docs/api.md` (Documents).
   editor's last user through `ProjectActivityRecorder`'s `actorId`).
   Personal documents write none.
 - **UI**: the sidebar's Documents (`mainLinks`, with `documentsEnabled`)
-  opens `pages/Documents/Index.svelte`; a project's Documents tab is
+  opens `pages/Documents/Index.svelte` (the start tiles, the four tabs,
+  search from 9 documents); a project's Documents tab is
   `project/DocumentsView.svelte` (shown when `documents` is not null); both
-  are built from `components/documents/` (`DocumentList`, `NewDocument`
-  with Where, `DocumentTrash`, `ShareDialog`). The editor page
+  are built from `components/documents/`: `DocumentStart` (a tile per kind
+  makes "Untitled ..." and opens it; Upload and a file dropped anywhere on
+  the page, one after another, checked for kind and `max_upload_mb` first;
+  on the Documents page "New ones go to", remembered per person in
+  `localStorage`), `DocumentList` (the kind's colour from
+  `DocumentKindIcon`, where it lives, who can see it, "You · 3 hours ago";
+  the whole row is its one link, Share shows on hover), `DocumentProjectCards`,
+  `DocumentTrash`, `ShareDialog`. The kind colours are CSS-only tokens
+  (`--ws-doc-docx|xlsx|pptx`, `-soft`), never status. The editor page
   (`pages/Documents/Edit.svelte`: loads `api.js` from the editor, mounts it
-  through an action) has Share and the Can view and frozen marks.
+  through an action) has Share, the Can view and frozen marks, and rename by
+  clicking the title (a document just made, the flash's `created_document`,
+  opens with it selected).
 
 ## Structure, attendance and work reports
 

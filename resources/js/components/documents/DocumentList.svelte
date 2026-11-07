@@ -1,35 +1,41 @@
 <script lang="ts">
-    import { inertia, router } from '@inertiajs/svelte';
+    import { inertia, page, router } from '@inertiajs/svelte';
     import {
+        Building2,
         Download,
         Ellipsis,
-        FileSpreadsheet,
-        FileText,
         FolderInput,
         History,
+        Lock,
         Pencil,
-        Presentation,
         Trash2,
         Users,
     } from '@lucide/svelte';
     import { tick } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
-    import { formatBytes, formatTimeAgo } from '../../lib/format';
+    import { formatBytes, formatTimeAgo, plural } from '../../lib/format';
     import type {
         DocumentItem,
         DocumentVersionItem,
         ProjectChoice,
+        SharedProps,
     } from '../../lib/types';
     import Popover from '../Popover.svelte';
     import Spinner from '../Spinner.svelte';
+    import DocumentKindIcon from './DocumentKindIcon.svelte';
     import ShareDialog from './ShareDialog.svelte';
 
     /**
      * Documents as rows, for a project's Documents tab and the Documents
-     * page: open, rename, share, move into a project, versions, download and
-     * trash, each offered only as the row's flags allow (DocumentResource).
-     * Changes are Inertia visits back to the page, which brings its rows
-     * again.
+     * page. Each row says what it is (the kind's colour), where it lives
+     * (the project, linked when the viewer may open its tab, or Personal,
+     * Shared by), who can see it (Only you, Shared with N people, Whole
+     * office; Can view when that is the viewer's level) and who touched it
+     * last and when. The whole row opens it; Share shows on hover for whoever
+     * may share, and the menu holds rename, share, move into a project,
+     * versions, download and trash, each as the row's flags allow
+     * (DocumentResource). Changes are Inertia visits back to the page,
+     * which brings its rows again.
      */
     let {
         documents,
@@ -45,17 +51,15 @@
 
     const uid = $props.id();
 
-    const ICONS = {
-        docx: FileText,
-        xlsx: FileSpreadsheet,
-        pptx: Presentation,
-    } as const;
-
     const SOURCE = {
         created: 'Created',
         uploaded: 'Uploaded',
         edited: 'Saved',
     } as const;
+
+    const viewerId = $derived(
+        (page.props as unknown as SharedProps).auth.user?.id ?? null,
+    );
 
     let renamingId = $state<number | null>(null);
     let renameTitle = $state('');
@@ -83,44 +87,63 @@
         return `${url(document)}/versions/${version}/download`;
     }
 
-    /** Who last changed it; a document never saved since is "Added". */
-    function edited(document: DocumentItem): string {
+    /** Who last changed it ("You" for the viewer) and when; never saved since is when it was added. */
+    function lastTouched(document: DocumentItem): string {
         const added = document.version === 1;
-        const who = (added ? document.created_by : document.updated_by)?.name;
-        const verb = added ? 'Added' : 'Edited';
+        const person = added ? document.created_by : document.updated_by;
         const when = formatTimeAgo(
             added ? document.created_at : document.updated_at,
         );
 
-        return who ? `${verb} ${when} by ${who}` : `${verb} ${when}`;
-    }
-
-    /** Where it lives, said from the viewer's side. */
-    function where(document: DocumentItem): string {
-        if (document.home === 'project') {
-            return document.project?.label ?? 'A project';
+        if (!person) {
+            return when;
         }
 
+        return `${person.id === viewerId ? 'You' : person.name} · ${when}`;
+    }
+
+    /** Where it lives, said from the viewer's side, when it isn't a project. */
+    function personalHome(document: DocumentItem): string {
         if (document.frozen) {
             return `Left by ${document.owner?.name ?? 'someone'}`;
         }
 
-        // Only the owner may trash a personal document.
-        return document.can_delete
+        return document.owner?.id === viewerId
             ? 'Personal'
             : `Shared by ${document.owner?.name ?? 'someone'}`;
     }
 
-    /** The line under the title: where, kind, last change, whole office. */
-    function details(document: DocumentItem): string {
-        return [
-            showWhere ? where(document) : null,
-            document.kind,
-            edited(document),
-            document.organization_access ? 'Whole office' : null,
-        ]
-            .filter((part) => part !== null)
-            .join(' · ');
+    /**
+     * Who can see it. For whoever may share: Whole office, else the people
+     * it is shared with, else Only you (a personal one; a project's is its
+     * team's, which the project's name says). For anyone else: Whole office
+     * when it is open to the office.
+     */
+    function audience(
+        document: DocumentItem,
+    ): { icon: typeof Lock; label: string } | null {
+        if (document.frozen) {
+            return null;
+        }
+
+        if (document.organization_access) {
+            return { icon: Building2, label: 'Whole office' };
+        }
+
+        if (!document.can_share) {
+            return null;
+        }
+
+        if ((document.shares_count ?? 0) > 0) {
+            return {
+                icon: Users,
+                label: `Shared with ${plural(document.shares_count ?? 0, 'person', 'people')}`,
+            };
+        }
+
+        return document.home === 'personal'
+            ? { icon: Lock, label: 'Only you' }
+            : null;
     }
 
     const canRename = (document: DocumentItem): boolean =>
@@ -234,15 +257,18 @@
 
 <ul class="border-t border-line">
     {#each documents as document (document.id)}
-        {@const Icon = ICONS[document.file_type]}
         {@const list = versions.get(document.id)}
-        <li class="border-b border-line py-2.5">
-            <div class="flex min-h-7 items-center gap-2.5">
-                <Icon class="h-4 w-4 shrink-0 text-fg-faint" />
+        {@const seen = audience(document)}
+        {@const touched = lastTouched(document)}
+        <li class="border-b border-line">
+            <div
+                class="group relative -mx-2 flex min-h-[56px] items-center gap-3 rounded-md px-2 py-2 hover:bg-hover"
+            >
+                <DocumentKindIcon type={document.file_type} />
                 <div class="min-w-0 flex-1">
                     {#if renamingId === document.id}
                         <form
-                            class="flex items-center gap-2"
+                            class="relative z-10 flex items-center gap-2"
                             onsubmit={(e) => rename(e, document)}
                         >
                             <label
@@ -254,7 +280,7 @@
                                 bind:this={renameInput}
                                 bind:value={renameTitle}
                                 maxlength="200"
-                                class="input h-7"
+                                class="input h-8 lg:min-h-8"
                                 onkeydown={(e) => {
                                     if (e.key === 'Escape') {
                                         renamingId = null;
@@ -273,10 +299,11 @@
                         </form>
                     {:else}
                         <div class="flex min-w-0 items-center gap-2">
+                            <!-- The row's one link: its ::after covers the row. -->
                             <a
                                 href={url(document)}
                                 use:inertia
-                                class="truncate font-medium text-fg hover:text-accent"
+                                class="truncate font-medium text-fg outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] group-hover:text-accent focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-accent"
                                 >{document.title}</a
                             >
                             {#if document.frozen}
@@ -287,11 +314,72 @@
                                 <span class="chip shrink-0">Can view</span>
                             {/if}
                         </div>
-                        <p class="truncate text-xs text-fg-muted">
-                            {details(document)}
+                        <p
+                            class="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted"
+                        >
+                            {#if showWhere}
+                                {#if document.home === 'project' && document.project}
+                                    {#if document.project.can_open}
+                                        <a
+                                            href={`/workspace/projects/${document.project.slug}?view=documents`}
+                                            use:inertia
+                                            class="relative z-10 truncate hover:text-accent hover:underline"
+                                            >{document.project.label}</a
+                                        >
+                                    {:else}
+                                        <span class="truncate"
+                                            >{document.project.label}</span
+                                        >
+                                    {/if}
+                                {:else}
+                                    <span class="truncate"
+                                        >{personalHome(document)}</span
+                                    >
+                                {/if}
+                            {/if}
+                            {#if seen}
+                                {#if showWhere}<span
+                                        class="text-fg-faint"
+                                        aria-hidden="true">·</span
+                                    >{/if}
+                                <span
+                                    class="inline-flex shrink-0 items-center gap-1"
+                                    title={seen.label}
+                                    ><seen.icon
+                                        class="h-3 w-3"
+                                        aria-hidden="true"
+                                    /><span class="sr-only sm:not-sr-only"
+                                        >{seen.label}</span
+                                    ></span
+                                >
+                            {/if}
+                            <!-- On a phone the time folds into this line. -->
+                            {#if showWhere || seen}<span
+                                    class="text-fg-faint sm:hidden"
+                                    aria-hidden="true">·</span
+                                >{/if}
+                            <span class="truncate tabular-nums sm:hidden"
+                                >{touched}</span
+                            >
                         </p>
                     {/if}
                 </div>
+                <span
+                    class="hidden w-44 shrink-0 truncate text-right text-xs text-fg-muted tabular-nums sm:block"
+                    >{touched}</span
+                >
+                <!-- The same slot on every row, so the times line up. -->
+                <span class="hidden w-[5.5rem] shrink-0 justify-end md:flex">
+                    {#if document.can_share && renamingId !== document.id}
+                        <button
+                            type="button"
+                            class="btn-ghost relative z-10 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                            onclick={() => share(document)}
+                            aria-label={`Share ${document.title}`}
+                            ><Users class="h-3.5 w-3.5" />Share</button
+                        >
+                    {/if}
+                </span>
                 <Popover
                     bind:open={
                         () => menuFor === document.id,
@@ -303,7 +391,8 @@
                                   : menuFor)
                     }
                     align="right"
-                    triggerClass="btn-icon shrink-0"
+                    wrapperClass="relative z-10 shrink-0"
+                    triggerClass="btn-icon"
                     triggerLabel={`More for ${document.title}`}
                     panelClass="w-52"
                 >
@@ -366,7 +455,7 @@
 
             {#if movingId === document.id}
                 <form
-                    class="mt-2 ml-6.5 flex flex-wrap items-center gap-2"
+                    class="mb-2.5 ml-11 flex flex-wrap items-center gap-2"
                     onsubmit={(e) => move(e, document)}
                 >
                     <label for="{uid}-move-{document.id}" class="sr-only"
@@ -375,7 +464,7 @@
                     <select
                         id="{uid}-move-{document.id}"
                         bind:value={moveTo}
-                        class="input h-7 w-auto max-w-full min-w-0 flex-1"
+                        class="input h-8 w-auto max-w-full min-w-0 flex-1 lg:min-h-8"
                     >
                         {#each moveTargets as target (target.slug)}
                             <option value={target.slug}>{target.label}</option>
@@ -401,16 +490,16 @@
 
             {#if list === 'loading'}
                 <p
-                    class="mt-2 ml-6.5 flex items-center gap-2 text-xs text-fg-muted"
+                    class="mb-2.5 ml-11 flex items-center gap-2 text-xs text-fg-muted"
                 >
                     <Spinner size={12} />Loading versions
                 </p>
             {:else if list === 'failed'}
-                <p class="mt-2 ml-6.5 text-xs text-danger">
+                <p class="mb-2.5 ml-11 text-xs text-danger">
                     The versions didn't load.
                 </p>
             {:else if list}
-                <ol class="mt-2 ml-6.5 border-l border-line-soft">
+                <ol class="mb-2.5 ml-11 border-l border-line-soft">
                     {#each list as version (version.version)}
                         <li
                             class="flex items-center gap-3 py-1 pl-3 text-xs text-fg-muted"
@@ -421,7 +510,7 @@
                             <span class="min-w-0 flex-1 truncate"
                                 >{SOURCE[version.source]}
                                 {formatTimeAgo(version.created_at)}{version.user
-                                    ? ` by ${version.user.name}`
+                                    ? ` by ${version.user.id === viewerId ? 'you' : version.user.name}`
                                     : ''}</span
                             >
                             <span class="shrink-0 tabular-nums"

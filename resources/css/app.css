@@ -59,6 +59,15 @@
     --color-series-2: var(--ws-series-2);
     --color-series-3: var(--ws-series-3);
     --color-series-4: var(--ws-series-4);
+    /* Document kinds: the blue, green and orange people know Word, Excel
+       and PowerPoint files by. Only a document's kind icon carries them,
+       never a status. */
+    --color-doc-docx: var(--ws-doc-docx);
+    --color-doc-xlsx: var(--ws-doc-xlsx);
+    --color-doc-pptx: var(--ws-doc-pptx);
+    --color-doc-docx-soft: var(--ws-doc-docx-soft);
+    --color-doc-xlsx-soft: var(--ws-doc-xlsx-soft);
+    --color-doc-pptx-soft: var(--ws-doc-pptx-soft);
 
     /* One radius scale: 6px for panels/buttons/inputs, 4px for chips. */
     --radius-sm: 4px;
@@ -95,6 +104,12 @@
     --ws-series-2: #b55386;
     --ws-series-3: #812794;
     --ws-series-4: #2695ac;
+    --ws-doc-docx: #2b5fc9;
+    --ws-doc-xlsx: #1a7f4b;
+    --ws-doc-pptx: #c4511c;
+    --ws-doc-docx-soft: rgba(43, 95, 201, 0.1);
+    --ws-doc-xlsx-soft: rgba(26, 127, 75, 0.1);
+    --ws-doc-pptx-soft: rgba(196, 81, 28, 0.1);
     color-scheme: light;
 }
 
@@ -124,17 +139,29 @@
         --ws-series-2: #d162a5;
         --ws-series-3: #8451a7;
         --ws-series-4: #2695ac;
+        --ws-doc-docx: #7ea3f6;
+        --ws-doc-xlsx: #52c58a;
+        --ws-doc-pptx: #f2925a;
+        --ws-doc-docx-soft: rgba(126, 163, 246, 0.15);
+        --ws-doc-xlsx-soft: rgba(82, 197, 138, 0.14);
+        --ws-doc-pptx-soft: rgba(242, 146, 90, 0.14);
         color-scheme: dark;
     }
 }
 
-/* applyTheme writes no series colours, so a dark theme chosen on a light OS
-   takes the dark steps here. */
+/* applyTheme writes no series or document-kind colours, so a dark theme
+   chosen on a light OS takes the dark steps here. */
 :root[data-theme='dark'] {
     --ws-series-1: #3987e5;
     --ws-series-2: #d162a5;
     --ws-series-3: #8451a7;
     --ws-series-4: #2695ac;
+    --ws-doc-docx: #7ea3f6;
+    --ws-doc-xlsx: #52c58a;
+    --ws-doc-pptx: #f2925a;
+    --ws-doc-docx-soft: rgba(126, 163, 246, 0.15);
+    --ws-doc-xlsx-soft: rgba(82, 197, 138, 0.14);
+    --ws-doc-pptx-soft: rgba(242, 146, 90, 0.14);
 }
 
 @layer base {
@@ -232,6 +259,17 @@
     /* ---- Panels & rows ------------------------------------------------ */
     .panel {
         @apply rounded-lg border border-line bg-surface;
+    }
+    /* A large start button: the Documents page's new-document and upload
+       tiles. The one being worked on keeps full colour while the rest wait. */
+    .start-tile {
+        @apply flex min-h-[60px] min-w-0 items-center gap-3 rounded-lg border border-line bg-surface p-3 text-left transition hover:border-accent hover:bg-hover active:translate-y-px;
+    }
+    .start-tile:disabled {
+        pointer-events: none;
+    }
+    .start-tile:disabled:not([aria-busy='true']) {
+        opacity: 0.55;
     }
     .section-title {
         @apply flex items-baseline gap-2 text-[13px] font-semibold text-fg;

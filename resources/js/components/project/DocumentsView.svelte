@@ -1,15 +1,17 @@
 <script lang="ts">
     import type { Project, ProjectDocuments } from '../../lib/types';
     import DocumentList from '../documents/DocumentList.svelte';
+    import DocumentStart from '../documents/DocumentStart.svelte';
     import DocumentTrash from '../documents/DocumentTrash.svelte';
-    import NewDocument from '../documents/NewDocument.svelte';
 
     /**
      * A project's Documents tab: its Word, Excel and PowerPoint files, each
      * opened in the editor (ONLYOFFICE) where the team edits it together.
-     * Every save is a version kept for good; the trash is never emptied.
-     * Every document, the project's and personal ones, is on the Documents
-     * page too.
+     * They start as on the Documents page (a tile per kind, upload, or a
+     * file dropped on the page), here always into this project. Every save
+     * is a version kept for good; the trash is never emptied. Every
+     * document, the project's and personal ones, is on the Documents page
+     * too.
      */
     let {
         project,
@@ -21,32 +23,27 @@
 </script>
 
 <section>
-    <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-            <h2 class="section-title mb-1">
-                Documents <span class="section-count"
-                    >{documents.documents.length}</span
-                >
-            </h2>
-            <p class="text-xs text-fg-muted">
-                Word, Excel and PowerPoint files the team edits together. Every
-                save is kept as a version.
-            </p>
-        </div>
-        <NewDocument
-            types={documents.types}
-            maxUploadMb={documents.max_upload_mb}
-            project={project.slug}
-        />
-    </div>
+    <h2 class="section-title mb-1">
+        Documents <span class="section-count">{documents.documents.length}</span
+        >
+    </h2>
+    <p class="mb-3 text-xs text-fg-muted">
+        Word, Excel and PowerPoint files the team edits together. Every save is
+        kept as a version.
+    </p>
+    <DocumentStart
+        types={documents.types}
+        maxUploadMb={documents.max_upload_mb}
+        project={project.slug}
+    />
 
     {#if documents.documents.length === 0}
-        <p class="mt-3 text-[13px] text-fg-muted">
-            No documents yet. Start one, or upload a .docx, .xlsx or .pptx file
-            of up to {documents.max_upload_mb} MB.
+        <p class="mt-4 text-[13px] text-fg-muted">
+            No documents yet. Start one above, or drop a .docx, .xlsx or .pptx
+            file of up to {documents.max_upload_mb} MB anywhere on this page.
         </p>
     {:else}
-        <div class="mt-3">
+        <div class="mt-4">
             <DocumentList documents={documents.documents} />
         </div>
     {/if}

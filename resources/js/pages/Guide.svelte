@@ -292,11 +292,11 @@
     const documents = [
         [
             'Where they are',
-            "Documents in the sidebar lists every document you can open, newest first: your own, those shared with you, those open to your office and your projects'. A project's Documents tab shows that project's.",
+            'Documents in the sidebar has four tabs. Recent is every document you can open, the last edited first. Personal is your own. Shared with me is what people shared with you by name and what is open to your whole office. Projects has a card for each of your projects, which opens its Documents tab.',
         ],
         [
             'Just me or a project',
-            "New and Upload ask where it goes. Just me makes a personal document: it is yours, and nobody else sees it until you share it. In a project, it belongs to the project: its team, its program's manager and the organizational admins can open and edit it, and it stays with them whoever made it leaves. Move to project puts a personal document into one of your projects, for good.",
+            "Click Document, Spreadsheet or Presentation and it opens at once, its title ready to type over. On the Documents page it goes where New ones go to says, and that choice is remembered. Just me makes a personal document: it is yours, and nobody else sees it until you share it. In a project, it belongs to the project: its team, its program's manager and the organizational admins can open and edit it, and it stays with them whoever made it leaves. Move to project puts a personal document into one of your projects, for good.",
         ],
         [
             'Sharing',
@@ -316,7 +316,7 @@
         ],
         [
             'Upload',
-            'Upload a .docx, .xlsx or .pptx file of up to 50 MB. Open an older .doc or .xls file in Word or LibreOffice and save it as .docx first.',
+            "Upload a file, or drop one or more files anywhere on the Documents page or a project's Documents tab: .docx, .xlsx or .pptx files of up to 50 MB each. Open an older .doc or .xls file in Word or LibreOffice and save it as .docx first.",
         ],
         [
             'Trash',
