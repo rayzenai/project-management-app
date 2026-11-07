@@ -149,7 +149,8 @@ forgejo/                   # separate Dokploy app: Dockerfile, start.sh, .env.ex
                            # plus host/ firewall script + systemd unit for runner-job isolation
 ops/backup/                # encrypted SDOC VM backup script + systemd service/timer
 ops/rustfs/                # production documents bucket/user/policy setup
-onlyoffice/                # separate pinned ONLYOFFICE Docs image, entrypoint, fonts and environment
+onlyoffice/                # separate pinned ONLYOFFICE Docs image, entrypoint, fonts/environment;
+                           # home/ is the nginx-served SDOC Docs landing page at /
 deploy.sh                  # SDOC Dokploy web/scheduler deploy + health verification
 Dockerfile, dock.sh        # production image and local image runner
 ```

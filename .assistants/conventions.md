@@ -109,8 +109,11 @@ afresh and have no unique lock. `docs/forgejo.md` section 12 describes adding
 only web/scheduler.
 
 ONLYOFFICE is another separate Dokploy app, built from `onlyoffice/`; its
-runbook is `docs/onlyoffice.md`. Documents are enabled only when the
-editor URL and a shared JWT secret of at least 32 characters are configured.
+runbook is `docs/onlyoffice.md`. `onlyoffice/home/` is the SDOC Docs front
+door served at `/` by the image's nginx; keep it visually aligned with the
+Forgejo home and do not restore the old Dokploy redirect. Documents are enabled
+only when the editor URL and a shared JWT secret of at least 32 characters are
+configured.
 Production uses the `documents` disk backed by RustFS's `tasks-documents`
 bucket. `DocumentFiles` is the sole file-write path: every saved version gets
 a new object, and the app never overwrites, purges or deletes document files.

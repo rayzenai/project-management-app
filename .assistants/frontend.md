@@ -162,7 +162,9 @@ Repository rows show the fixed `protected_branch` and warn when the forge's
 skips the tracker's rule.
 Documents: `Documents/Index` lists every document the viewer may open, newest
 first, with ownership/access/project/type/search filters, cursor-based Show
-more, creation/upload destination and trash. `project/DocumentsView` is present
+more, creation/upload destination and trash. Show more uses the server-applied
+filters attached to its cursor and discards a response if an Inertia filter
+visit replaced the list while it loaded. `project/DocumentsView` is present
 only when the backend supplies a non-null payload and reuses the same
 `documents/{DocumentList,DocumentTrash,NewDocument}` components for one project.
 Rows show their home and view/edit/frozen state, open Share when allowed, move
@@ -259,6 +261,11 @@ signed-out home with the tracker OIDC button, Tasks navbar link and SDOC footer.
 `forgejo/start.sh` replaces the custom public/templates files from the image
 on every start. Existing forge accounts keep their stored theme; the runbook's
 Branding section covers moving old accounts onto an offered SDOC theme.
+
+`onlyoffice/home/` is the standalone SDOC Docs landing page served by the
+editor's nginx at `/`, visually paired with SDOC Git and linking sign-in to the
+tracker's Documents page. Its nginx include redirects `/welcome/` back to it;
+the editor API and document routes remain unchanged.
 
 ## Office and work pages
 

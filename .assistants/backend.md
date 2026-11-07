@@ -383,7 +383,9 @@ in the same transaction; a selected manager keeps their leader role.
 ## Documents / ONLYOFFICE
 
 Documents exist only while `config('documents.enabled')` has an editor URL and
-a shared JWT secret. `Document` belongs either to a project or, through
+a shared JWT secret. The editor image serves the static SDOC Docs front door
+from `onlyoffice/home/` at `/`; `/welcome/` redirects there. `Document` belongs
+either to a project or, through
 `owner_id`, to the login that made a personal document; deleting a login that
 owns one is refused. `organization_access` is `view|edit|null`.
 `DocumentShare` stores one `view|edit` permission per document/member.
@@ -408,8 +410,11 @@ one), and only an active person there is effective. `DocumentResource` exposes
 `/api/v1/workspace/documents`: filters `all|mine|shared|organization|projects`,
 project/type/title filters, 50-row cursor pagination, project choices and trash.
 The web query follows the super-admin organization switch; the API does not.
-`ProjectDocumentsQuery` supplies the project tab. All document editor, version,
-download, rename, trash, restore, move and sharing routes now live under
+`ProjectDocumentsQuery` supplies the project tab. Both list queries call
+`WorkspaceAccess::preloadDocumentAccess`, which loads owners, project teams,
+viewer memberships and shares in bounded queries before resources ask their
+access. All document editor, version, download, rename, trash, restore, move and
+sharing routes now live under
 `documents/{document}`; old project-document editor links redirect there.
 `DocumentRequest` opens a document at its computed level, including frozen
 trash for a super-admin, and `DocumentSharingQuery` /
@@ -420,8 +425,11 @@ document's active owner may move it one way into any project whose documents
 they may use; `MoveDocumentService` keeps its immutable versions and shares,
 and closes organization access when the destination is in another organization.
 `DocumentSharingService` changes organization access and shares without touching
-`updated_at`; only a new effective share sends `DocumentShared`, also handled by
-right-away email. Project-document changes are audited by
+`updated_at`; `firstOrCreate` makes concurrent identical shares one row. A new
+effective share sends `DocumentShared`, also handled by right-away email, at
+most once per document/recipient in 24 hours. The four web/API sharing writes
+share a per-user `throttle:30,1,document-sharing` limit. Project-document
+changes are audited by
 `DocumentObserver`/`DocumentShareObserver`/`DocumentVersionObserver`; personal
 documents write no project activity.
 

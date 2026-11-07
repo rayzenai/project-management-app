@@ -202,9 +202,12 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   personal-document/login deletion constraint. `DocumentsLibraryTest` covers
   read-only/editable opens, frozen trash, old-link redirects, filters/order/
   cursor pagination, project/personal create/upload/trash, organization switch,
-  API parity and one-way moves. `DocumentsSharingTest` covers organization and
+  API parity, one-way moves and bounded query counts for both library and
+  project-tab lists. `DocumentsSharingTest` covers organization and
   named-person sharing, privacy-preserving outsider errors/candidates, frozen/
-  trashed refusals, activity, notifications/right-away email and web/API parity.
+  trashed refusals, activity, notifications/right-away email, concurrent-share
+  idempotence, the 24-hour notification cooldown, the shared web/API throttle
+  and surface parity.
   These tests fake every editor HTTP call; none reaches ONLYOFFICE or RustFS.
 
 ## Running
