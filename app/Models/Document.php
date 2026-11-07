@@ -225,7 +225,7 @@ class Document extends Model
      * @param  Builder<Document>  $query
      * @return Builder<Document>
      */
-    private static function whereNotFrozen(Builder $query): Builder
+    public static function whereNotFrozen(Builder $query): Builder
     {
         return $query
             ->whereNotNull('documents.project_id')

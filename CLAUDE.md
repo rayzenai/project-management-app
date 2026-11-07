@@ -1204,8 +1204,8 @@ and `/api/v1/user` gives it.
   Nepali shows in English. Placeholders are `:name` (Nepali attaches
   postpositions: `:nameले`); a number filled into one is written in the
   language's digits (`Locales::number` on the server; `t` does it in the
-  browser; `trans_choice` overwrites `:count`, so name a server count
-  `:n`). In Nepali, digits are Devanagari and a date shown in both
+  browser; `trans_choice` fills `:count` with plain digits unless it is
+  given, so pass `'count' => Locales::number($n)`). In Nepali, digits are Devanagari and a date shown in both
   calendars leads with Bikram Sambat.
 - **In a translated page or component** every visible text, `aria-label`,
   `title` and `placeholder` goes through `t()` (`tc()` for counts,

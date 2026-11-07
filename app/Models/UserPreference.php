@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $email_weekly the weekly brief
  * @property bool $task_notes_enabled
  * @property bool $contacts_enabled
- * @property string $locale the language they read the app in (App\Support\Locales)
+ * @property string|null $locale the language they chose to read the app in (App\Support\Locales); null: not chosen
  */
 #[Fillable(['user_id', 'theme', 'font_override', 'email_notifications', 'email_morning', 'email_weekly', 'task_notes_enabled', 'contacts_enabled', 'locale'])]
 class UserPreference extends Model

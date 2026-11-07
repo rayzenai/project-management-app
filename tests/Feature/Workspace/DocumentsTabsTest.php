@@ -4,6 +4,7 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\WorkspaceAccess;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
@@ -187,4 +188,31 @@ it('says on the editor page that a document was just made, once', function () {
     $this->actingAs($this->member)->post('/workspace/documents', ['title' => 'Untitled document', 'type' => 'docx'])
         ->assertRedirect()
         ->assertSessionHas('workspace_flash.created_document');
+});
+
+it('answers the page\'s file-by-file uploads in JSON, and Inertia with a redirect', function () {
+    $file = fn (string $name) => UploadedFile::fake()->createWithContent($name, (string) file_get_contents(resource_path('documents/blank.docx')));
+
+    $this->actingAs($this->member)->postJson('/workspace/documents/upload', ['file' => $file('Draft.docx')])
+        ->assertCreated()
+        ->assertJsonPath('message', 'Uploaded Draft.')
+        ->assertJsonPath('data.title', 'Draft')
+        ->assertJsonPath('data.home', 'personal');
+    $this->actingAs($this->member)->postJson('/workspace/documents/upload', ['file' => UploadedFile::fake()->create('Scan.pdf', 10)])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('file');
+    $this->actingAs($this->member)->withHeader('X-Inertia', 'true')
+        ->post('/workspace/documents/upload', ['file' => $file('Plan.docx')], ['Accept' => 'text/html, application/xhtml+xml'])
+        ->assertRedirect();
+});
+
+it('leaves a frozen document out of a super-admin\'s Shared with me, though Recent still has it', function () {
+    $boss = docsPerson($this->organization, null);
+    $boss->forceFill(['email' => 'boss@example.com'])->save();
+    $leaver = docsPerson($this->organization, null);
+    docsMake($leaver, title: 'Left behind', attributes: ['organization_access' => 'view']);
+    docsUpdatePerson($leaver, ['is_active' => false]);
+
+    expect(docsTabTitles($this->actingAs($boss->fresh())->get('/workspace/documents?show=shared')))->toBe([])
+        ->and(docsTabTitles($this->actingAs($boss->fresh())->get('/workspace/documents')))->toContain('Left behind');
 });

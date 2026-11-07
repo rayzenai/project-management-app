@@ -99,17 +99,25 @@ export function digits(text: string): string {
 }
 
 function fill(text: string, replace: Record<string, string | number>): string {
-    // Longest names first, so :count never eats :count_total.
-    return Object.keys(replace)
-        .sort((a, b) => b.length - a.length)
-        .reduce((out, name) => {
-            const value = replace[name];
+    // One pass, like Laravel's strtr: a value put in is never read again
+    // (a file named "notes :max.docx" stays as it is), and the longest
+    // name wins (:count never takes the start of :count_total).
+    const names = Object.keys(replace).sort((a, b) => b.length - a.length);
 
-            return out.replaceAll(
-                `:${name}`,
-                typeof value === 'number' ? number(value) : value,
-            );
-        }, text);
+    if (names.length === 0) {
+        return text;
+    }
+
+    const pattern = new RegExp(
+        `:(${names.map((name) => name.replace(/[^\w]/g, '')).join('|')})`,
+        'g',
+    );
+
+    return text.replace(pattern, (_, name: string) => {
+        const value = replace[name];
+
+        return typeof value === 'number' ? number(value) : value;
+    });
 }
 
 /**

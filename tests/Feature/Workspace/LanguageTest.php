@@ -136,3 +136,33 @@ it('refuses a sign-in in Nepali', function () {
         ->assertSessionHasErrors('email');
     expect(session('errors')->first('email'))->toMatch(DEVANAGARI)->not->toBe(EnsureCanSignIn::DEACTIVATED);
 });
+
+it('takes the cookie\'s language for someone with preferences but no language chosen', function () {
+    $user = User::factory()->create();
+    $user->preferences()->create(['theme' => 'dark']);
+
+    $this->actingAs($user)->withCookie('locale', 'ne')->get('/workspace/my')
+        ->assertInertia(fn ($page) => $page->where('locale', 'ne'));
+});
+
+it('keeps the language chosen on the sign-in page as the person\'s own', function () {
+    $user = User::factory()->create(['password' => bcrypt('a-long-password-1')]);
+    $user->preferences()->create(['theme' => 'dark']);
+
+    $this->withCookie('locale', 'ne')
+        ->post('/workspace/login', ['email' => $user->email, 'password' => 'a-long-password-1'])
+        ->assertRedirect();
+
+    expect($user->fresh()->locale())->toBe('ne');
+});
+
+it('does not replace a language already chosen when signing in with another cookie', function () {
+    $user = User::factory()->create(['password' => bcrypt('a-long-password-1')]);
+    $user->preferences()->create(['locale' => 'en']);
+
+    $this->withCookie('locale', 'ne')
+        ->post('/workspace/login', ['email' => $user->email, 'password' => 'a-long-password-1'])
+        ->assertRedirect();
+
+    expect($user->fresh()->locale())->toBe('en');
+});

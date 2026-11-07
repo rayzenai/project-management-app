@@ -29,6 +29,16 @@ stays changed for them on every device.
 - A page not yet translated keeps the English helpers (`formatTimeAgo`,
   `plural`), so it never mixes Nepali numbers into English text; a
   translated page uses the i18n helpers throughout.
+- Task status names (the shared `statuses`, from the configured labels)
+  follow the reader's language on every page, the untranslated ones too:
+  they are the words people look for on a board, and a Nepali reader is
+  better served by them in Nepali than by the "no page mixes" rule. Every
+  other text of an untranslated page stays English.
+- Validation messages fill `:max`, `:min` and the like with plain digits
+  (Laravel's own replacements); a few form errors read "२०० अक्षर" as "200
+  अक्षर" until a replacer is added.
+- Nepali `formatDay` writes weekdays, months, days and years only; a caller
+  that needs a clock time in Nepali formats it with `digits()`.
 - Notification texts are stored in English when they are made, so the
   notifications list, emails and the morning mail are a later round (they
   need wording at read time, by kind). The task preview (Peek) and the
@@ -43,7 +53,8 @@ stays changed for them on every device.
   Laravel's own messages are in `lang/ne/{validation,auth,passwords,pagination}.php`.
 - **Placeholders** are Laravel's `:name`, in both. A number filled into one
   is written in the language's digits (`Locales::number` on the server,
-  automatic in `t`). Counted texts use `one|many` (`tc(':count file|:count
+  automatic in `t`; `trans_choice` writes plain digits for `:count` unless
+  given `'count' => Locales::number($n)`). Counted texts use `one|many` (`tc(':count file|:count
   files', n)`, `trans_choice`); a Nepali entry may have a single form.
 - **The language of a request**: `App\Http\Middleware\SetLocale` (web and
   API groups) from `App\Support\Locales::forRequest`; shared to every page

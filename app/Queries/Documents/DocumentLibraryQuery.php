@@ -120,8 +120,9 @@ class DocumentLibraryQuery
             'personal' => $query->whereNull('documents.project_id')->where('documents.owner_id', $viewer->id),
             // Shared with them by name, and opened to the whole office when
             // they reach it no other way: not their own, not in a project
-            // whose documents they use.
-            'shared' => $query->where(fn (Builder $shared) => $shared
+            // whose documents they use. Never a frozen one (its owner left:
+            // nothing is shared any more; a super-admin finds it in Recent).
+            'shared' => $query->where(fn (Builder $live) => Document::whereNotFrozen($live))->where(fn (Builder $shared) => $shared
                 ->when($member !== null, fn (Builder $named) => $named->whereHas('shares', fn (Builder $share) => $share->where('document_shares.member_id', $member?->id)))
                 ->orWhere(fn (Builder $office) => $office
                     ->whereNotNull('documents.organization_access')

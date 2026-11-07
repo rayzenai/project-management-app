@@ -105,6 +105,43 @@
         );
     }
 
+    // While the editor opens it takes focus by itself, more than once. A
+    // title being typed then keeps it: a blur that lands in the editor's
+    // frame before the document is ready is the editor's, not the
+    // person's. After that a blur saves, as does Enter.
+    let settling = true;
+
+    function titleBlurred() {
+        setTimeout(() => {
+            const active = window.document.activeElement;
+            const intoEditor =
+                active instanceof HTMLIFrameElement &&
+                active.closest('[data-editor]') !== null;
+
+            if (settling && renaming && intoEditor) {
+                titleInput?.focus();
+
+                return;
+            }
+
+            saveTitle();
+        });
+    }
+
+    // An editor that never says it is ready doesn't keep the title forever.
+    setTimeout(() => (settling = false), 20_000);
+
+    function settle() {
+        // The document's own focus comes just after it is ready.
+        setTimeout(() => {
+            settling = false;
+
+            if (renaming) {
+                titleInput?.focus();
+            }
+        }, 400);
+    }
+
     function titleKeys(event: KeyboardEvent) {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -116,13 +153,27 @@
         }
     }
 
-    // A document just made (the create's flash names it) opens ready to name.
+    // A document just made (the create's flash names it) opens ready to
+    // name, once: coming back to it through history leaves the title be.
     onMount(() => {
         const flash = (page.props as unknown as SharedProps).flash;
+        const key = `documents:named:${doc.id}`;
 
-        if (flash?.created_document === doc.id) {
-            void startRename();
+        if (flash?.created_document !== doc.id) {
+            return;
         }
+
+        try {
+            if (window.sessionStorage.getItem(key) !== null) {
+                return;
+            }
+
+            window.sessionStorage.setItem(key, '1');
+        } catch {
+            // Blocked storage: it may open ready to name again.
+        }
+
+        void startRename();
     });
 
     // Back to where the document lives, for whoever may open it there.
@@ -201,11 +252,13 @@
                                 titleInput?.focus();
                             }
                         },
+                        onDocumentReady: settle,
                         // Once it runs, the editor shows its own errors;
                         // this page's only covers one that never started.
                         onError: () => {
                             if (status === 'loading') {
                                 status = 'failed';
+                                settling = false;
                             }
                         },
                         // The session it was opened for has been saved (a
@@ -215,7 +268,10 @@
                     },
                 });
             })
-            .catch(() => (status = 'failed'));
+            .catch(() => {
+                status = 'failed';
+                settling = false;
+            });
 
         return {
             destroy() {
@@ -257,7 +313,7 @@
                         : undefined}
                     class="input h-8 max-w-md min-w-0 flex-1 py-0 font-medium lg:min-h-8"
                     onkeydown={titleKeys}
-                    onblur={saveTitle}
+                    onblur={titleBlurred}
                 />
                 {#if renameError}
                     <span
@@ -317,7 +373,7 @@
     <div
         class="relative h-[calc(100dvh-48px-57px-env(safe-area-inset-bottom))] min-h-80 md:h-[calc(100dvh-48px)]"
     >
-        <div use:mountEditor class="h-full w-full"></div>
+        <div use:mountEditor data-editor class="h-full w-full"></div>
         {#if status === 'loading'}
             <div
                 class="absolute inset-0 flex items-center justify-center gap-2 bg-surface text-fg-muted"

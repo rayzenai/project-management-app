@@ -56,6 +56,20 @@ final class Locales
         return self::isSupported($cookie) ? $cookie : self::DEFAULT;
     }
 
+    /**
+     * Signing in: a language chosen on the sign-in page (the cookie) becomes
+     * the person's own when they have chosen none, so it follows them to
+     * the app and other devices. A saved choice is never replaced.
+     */
+    public static function adoptFromCookie(Request $request, User $user): void
+    {
+        $cookie = $request->cookie(self::COOKIE);
+
+        if ($user->locale(fallback: null) === null && self::isSupported($cookie)) {
+            $user->preferences()->updateOrCreate(['user_id' => $user->id], ['locale' => $cookie]);
+        }
+    }
+
     public static function cookie(string $locale): Cookie
     {
         return cookie(self::COOKIE, $locale, self::COOKIE_MINUTES);

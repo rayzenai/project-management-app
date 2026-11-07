@@ -6,14 +6,15 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * The language each person reads the app in (English or Nepali,
- * App\Support\Locales), English for everyone until they choose.
+ * App\Support\Locales); null until they choose, so the sign-in page's
+ * choice (its cookie) still counts for someone who saved only a theme.
  */
 return new class extends Migration
 {
     public function up(): void
     {
         Schema::table('user_preferences', function (Blueprint $table): void {
-            $table->string('locale', 8)->default('en');
+            $table->string('locale', 8)->nullable();
         });
     }
 

@@ -1,8 +1,9 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
     import { Upload } from '@lucide/svelte';
+    import { onDestroy } from 'svelte';
     import { msg, t, tc } from '../../lib/i18n';
-    import { QUIET, toast } from '../../lib/toast.svelte';
+    import { toast } from '../../lib/toast.svelte';
     import type {
         DocumentFileType,
         ProjectChoice,
@@ -170,35 +171,79 @@
         return null;
     }
 
-    /** One upload; resolves with the server's complaint, or null. */
-    function send(file: File): Promise<string | null> {
-        return new Promise((resolve) => {
-            let outcome: string | null | undefined;
+    // Left the page while files were still going: the rest stay unsent.
+    let gone = false;
 
-            router.post(
-                '/workspace/documents/upload',
-                { file, ...(target ? { project: target } : {}) },
-                {
-                    forceFormData: true,
-                    preserveScroll: true,
-                    preserveState: true,
-                    headers: QUIET,
-                    onSuccess: () => (outcome = null),
-                    onError: (errors) =>
-                        (outcome =
-                            errors.file ??
-                            errors.project ??
-                            errors.__global ??
-                            t("it couldn't be uploaded.")),
-                    onFinish: () =>
-                        resolve(
-                            outcome === undefined
-                                ? t("it couldn't be uploaded.")
-                                : outcome,
-                        ),
+    onDestroy(() => (gone = true));
+
+    /** Laravel's XSRF cookie, which stays current after sign-in. */
+    function csrfHeaders(): Record<string, string> {
+        const cookie = document.cookie
+            .split('; ')
+            .find((c) => c.startsWith('XSRF-TOKEN='));
+
+        return cookie
+            ? {
+                  'X-XSRF-TOKEN': decodeURIComponent(
+                      cookie.slice('XSRF-TOKEN='.length),
+                  ),
+              }
+            : {};
+    }
+
+    /**
+     * One upload, by fetch rather than an Inertia visit, so it never
+     * interrupts a click elsewhere on the page or is interrupted by one.
+     * Resolves with the server's complaint, or null.
+     */
+    async function send(file: File): Promise<string | null> {
+        const body = new FormData();
+        body.append('file', file);
+
+        if (target) {
+            body.append('project', target);
+        }
+
+        try {
+            const response = await fetch('/workspace/documents/upload', {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...csrfHeaders(),
                 },
+                credentials: 'same-origin',
+                body,
+            });
+
+            if (response.ok) {
+                return null;
+            }
+
+            if (response.status === 419) {
+                return t('the page has expired. Reload it and try again.');
+            }
+
+            if (response.status === 429) {
+                return t(
+                    'too many uploads at once. Wait a minute and try again.',
+                );
+            }
+
+            const json = (await response.json().catch(() => null)) as {
+                message?: string;
+                errors?: Record<string, string[]>;
+            } | null;
+
+            return (
+                json?.errors?.file?.[0] ??
+                json?.errors?.project?.[0] ??
+                json?.message ??
+                t("it couldn't be uploaded.")
             );
-        });
+        } catch {
+            return t("it couldn't be uploaded.");
+        }
     }
 
     /** Files one after another, so each lands before the next starts. */
@@ -224,6 +269,10 @@
         let uploaded = 0;
 
         for (const [index, file] of ready.entries()) {
+            if (gone) {
+                return;
+            }
+
             progress = {
                 index: index + 1,
                 total: ready.length,
@@ -243,7 +292,17 @@
         progress = null;
         problems = found;
 
-        if (uploaded > 0) {
+        if (uploaded > 0 && !gone) {
+            // One fresh list for the lot (on a project's tab, its documents).
+            router.reload({
+                only: [
+                    'documents',
+                    'next_cursor',
+                    'total',
+                    'trashed_count',
+                    'project_cards',
+                ],
+            });
             toast.show(
                 uploaded === 1 && ready.length === 1
                     ? t('Uploaded :name.', { name: ready[0].name })

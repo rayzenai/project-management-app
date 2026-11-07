@@ -527,8 +527,9 @@ personal document's owner's. Someone who owns personal documents, trashed
 ones included, can't be deleted: `DELETE /workspace/members/{id}` answers
 422 `They own personal documents; deactivate them instead.`
 
-A document is `{ id, title, file_type (docx|xlsx|pptx), kind
-(Document|Spreadsheet|Presentation), version, size, home (project|personal),
+A document is `{ id, title, file_type (docx|xlsx|pptx), kind (its kind's
+name to show, in the caller's language: Document, Spreadsheet, Presentation
+or their Nepali; check `file_type`, never `kind`), version, size, home (project|personal),
 project ({ slug, title, label, can_open } or null; `can_open`: the caller
 may open the project's Documents tab), owner ({ id, name } or null),
 organization_access, access, frozen, can_delete, can_share, shares_count,

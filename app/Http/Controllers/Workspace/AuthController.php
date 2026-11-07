@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Workspace;
 
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
+use App\Support\Locales;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +28,10 @@ class AuthController extends Controller
     public function store(LoginRequest $request): SymfonyResponse
     {
         $request->authenticate();
+
+        /** @var User $user */
+        $user = $request->user();
+        Locales::adoptFromCookie($request, $user);
 
         // A person deleted while signed in left their password hash in this
         // browser's session; AuthenticateSession would read it as the new

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Workspace;
 
+use App\Http\Controllers\Api\Concerns\RespondsWithDocument;
 use App\Http\Controllers\Workspace\Concerns\RedirectsWithServiceResult;
 use App\Http\Requests\Documents\DocumentLibraryRequest;
 use App\Http\Requests\Documents\StoreDocumentRequest;
@@ -26,6 +27,7 @@ use Inertia\Response;
 class DocumentLibraryController extends Controller
 {
     use RedirectsWithServiceResult;
+    use RespondsWithDocument;
 
     public function index(DocumentLibraryRequest $request, DocumentLibraryQuery $query): Response
     {
@@ -57,9 +59,21 @@ class DocumentLibraryController extends Controller
         return $this->openOrBack($service->blank($request->project(), (string) $request->validated('title'), (string) $request->validated('type'), $request->user()));
     }
 
-    public function upload(UploadDocumentRequest $request, CreateDocumentService $service): RedirectResponse
+    /**
+     * The page sends its uploads one after another with fetch, so a file
+     * still uploading never interrupts a click elsewhere (an Inertia visit
+     * would): that plain JSON request gets the API's answer. Inertia's
+     * visits keep the redirect.
+     */
+    public function upload(UploadDocumentRequest $request, CreateDocumentService $service): RedirectResponse|JsonResponse
     {
-        return $this->redirectWithResult($service->upload($request->project(), $request->file('file'), $request->validated('title'), $request->user()));
+        $result = $service->upload($request->project(), $request->file('file'), $request->validated('title'), $request->user());
+
+        if ($request->expectsJson() && $request->header('X-Inertia') === null) {
+            return $this->respondWithDocument($result, 201);
+        }
+
+        return $this->redirectWithResult($result);
     }
 
     /**
