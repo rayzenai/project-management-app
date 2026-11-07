@@ -45,9 +45,9 @@
   --primary-hover: #103b6d;
   --primary-contrast: #ffffff;
   --body: #ffffff;
-  --text: #131d2a;
+  --text: #193350;
   --text-1: #3f4e63;
-  --text-2: #4a596e;
+  --text-2: #56657a;
   --line: #e1e6ed;
   --box: #f8fafc;
   --button: #edf1f6;
@@ -204,6 +204,7 @@ a:hover {
   border-color: transparent;
   background: var(--primary);
   color: var(--primary-contrast);
+  font-weight: 600;
 }
 
 .button.primary:hover {
