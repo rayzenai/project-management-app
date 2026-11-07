@@ -2,6 +2,7 @@
     import { Link, useForm } from '@inertiajs/svelte';
     import { Eye, EyeOff } from '@lucide/svelte';
     import LanguageSwitch from '../../components/LanguageSwitch.svelte';
+    import { t } from '../../lib/i18n';
 
     const uid = $props.id();
     let showPassword = $state(false);
@@ -16,7 +17,7 @@
     }
 </script>
 
-<svelte:head><title>Sign in · Workspace</title></svelte:head>
+<svelte:head><title>{t('Sign in · Workspace')}</title></svelte:head>
 
 <main
     class="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-fg"
@@ -31,13 +32,17 @@
                 >W</span
             >
             <div>
-                <h1 class="text-[15px] font-semibold">Sign in to Workspace</h1>
+                <h1 class="text-[15px] font-semibold">
+                    {t('Sign in to Workspace')}
+                </h1>
             </div>
         </div>
 
         <form onsubmit={submit} class="panel flex flex-col gap-4 p-5">
             <div class="flex flex-col gap-1.5">
-                <label for="{uid}-email" class="label">Email address</label>
+                <label for="{uid}-email" class="label"
+                    >{t('Email address')}</label
+                >
                 <input
                     id="{uid}-email"
                     type="email"
@@ -53,7 +58,8 @@
             </div>
 
             <div class="flex flex-col gap-1.5">
-                <label for="{uid}-password" class="label">Password</label>
+                <label for="{uid}-password" class="label">{t('Password')}</label
+                >
                 <div class="relative">
                     <input
                         id="{uid}-password"
@@ -67,8 +73,8 @@
                         type="button"
                         onclick={() => (showPassword = !showPassword)}
                         aria-label={showPassword
-                            ? 'Hide password'
-                            : 'Show password'}
+                            ? t('Hide password')
+                            : t('Show password')}
                         class="absolute inset-y-0 right-0 flex items-center px-3 text-fg-faint hover:text-fg"
                     >
                         {#if showPassword}<EyeOff class="h-4 w-4" />{:else}<Eye
@@ -82,7 +88,7 @@
                 <Link
                     href="/workspace/forgot-password"
                     class="self-start text-[13px] text-accent hover:underline"
-                    >Forgot your password?</Link
+                    >{t('Forgot your password?')}</Link
                 >
             </div>
 
@@ -92,7 +98,7 @@
                     bind:checked={form.remember}
                     class="h-3.5 w-3.5 rounded-sm border-line accent-accent"
                 />
-                Remember me
+                {t('Remember me')}
             </label>
 
             <button
@@ -100,7 +106,7 @@
                 disabled={form.processing}
                 class="btn-primary btn-lg mt-1 w-full justify-center"
             >
-                {form.processing ? 'Signing in' : 'Sign in'}
+                {form.processing ? t('Signing in') : t('Sign in')}
             </button>
         </form>
     </div>

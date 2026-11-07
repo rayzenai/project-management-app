@@ -5,6 +5,7 @@
     import AppShell from '../../components/AppShell.svelte';
     import ShareDialog from '../../components/documents/ShareDialog.svelte';
     import Spinner from '../../components/Spinner.svelte';
+    import { t, tc } from '../../lib/i18n';
     import { QUIET } from '../../lib/toast.svelte';
     import type {
         DocumentEditor,
@@ -98,7 +99,7 @@
                     (renameError =
                         errors.title ??
                         errors.__global ??
-                        "The title didn't save. Try again."),
+                        t("The title didn't save. Try again.")),
                 onFinish: () => (saving = false),
             },
         );
@@ -131,7 +132,7 @@
                   href: `/workspace/projects/${project.slug}?view=documents`,
                   label: project.label,
               }
-            : { href: '/workspace/documents', label: 'Documents' },
+            : { href: '/workspace/documents', label: t('Documents') },
     );
     const downloadUrl = $derived(
         `/workspace/documents/${doc.id}/versions/${doc.version}/download`,
@@ -227,7 +228,8 @@
 </script>
 
 <svelte:head
-    ><title>{doc.title} · {project?.title ?? 'Documents'}</title></svelte:head
+    ><title>{doc.title} · {project?.title ?? t('Documents')}</title
+    ></svelte:head
 >
 
 <AppShell flush>
@@ -241,7 +243,7 @@
             >
             <span class="hidden text-fg-faint sm:inline">/</span>
             {#if renaming}
-                <label for="document-title" class="sr-only">Title</label>
+                <label for="document-title" class="sr-only">{t('Title')}</label>
                 <input
                     id="document-title"
                     bind:this={titleInput}
@@ -268,20 +270,22 @@
                 <button
                     type="button"
                     class="-mx-1 min-w-0 truncate rounded-sm px-1 py-0.5 font-medium hover:bg-hover"
-                    title="Rename"
-                    aria-label={`Rename ${doc.title}`}
+                    title={t('Rename')}
+                    aria-label={t('Rename :title', { title: doc.title })}
                     onclick={startRename}>{doc.title}</button
                 >
             {:else}
                 <span class="truncate font-medium">{doc.title}</span>
             {/if}
             <span class="shrink-0 text-xs text-fg-faint"
-                >Version {doc.version}</span
+                >{t('Version :version', { version: doc.version })}</span
             >
             {#if doc.frozen}
-                <span class="chip shrink-0">Read-only: its owner has left</span>
+                <span class="chip shrink-0"
+                    >{t('Read-only: its owner has left')}</span
+                >
             {:else if doc.access === 'view'}
-                <span class="chip shrink-0">Can view</span>
+                <span class="chip shrink-0">{t('Can view')}</span>
             {/if}
         </div>
         <div class="flex shrink-0 items-center gap-1">
@@ -290,9 +294,9 @@
                     type="button"
                     class="btn-ghost"
                     onclick={() => (shareOpen = true)}
-                    title="Share"
+                    title={t('Share')}
                     ><Users class="h-4 w-4" /><span class="hidden sm:inline"
-                        >Share</span
+                        >{t('Share')}</span
                     ></button
                 >
             {/if}
@@ -300,9 +304,9 @@
                 class="btn-ghost shrink-0"
                 href={downloadUrl}
                 download
-                title={`Download version ${doc.version}`}
+                title={t('Download version :version', { version: doc.version })}
                 ><Download class="h-4 w-4" /><span class="hidden sm:inline"
-                    >Download</span
+                    >{t('Download')}</span
                 ></a
             >
         </div>
@@ -318,31 +322,40 @@
             <div
                 class="absolute inset-0 flex items-center justify-center gap-2 bg-surface text-fg-muted"
             >
-                <Spinner size={16} />Opening {doc.title}
+                <Spinner size={16} />{t('Opening :title', { title: doc.title })}
             </div>
         {:else if status === 'failed'}
             <div
                 class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface px-6 text-center"
             >
-                <p class="font-medium">The editor isn't reachable right now.</p>
+                <p class="font-medium">
+                    {t("The editor isn't reachable right now.")}
+                </p>
                 <p class="max-w-md text-[13px] text-fg-muted">
-                    Your document is safe: every saved version is kept. You can
-                    download it, or try again in a moment.
+                    {t(
+                        'Your document is safe: every saved version is kept. You can download it, or try again in a moment.',
+                    )}
                 </p>
                 <div class="flex gap-2">
                     <a class="btn" href={downloadUrl} download
-                        ><Download class="h-3.5 w-3.5" />Download version {doc.version}</a
+                        ><Download class="h-3.5 w-3.5" />{t(
+                            'Download version :version',
+                            { version: doc.version },
+                        )}</a
                     >
                     <button
                         type="button"
                         class="btn-primary"
                         onclick={() => window.location.reload()}
-                        >Try again</button
+                        >{t('Try again')}</button
                     >
                 </div>
                 {#if versions.length > 1}
                     <p class="text-xs text-fg-faint">
-                        {versions.length} versions are kept.
+                        {tc(
+                            ':count version is kept.|:count versions are kept.',
+                            versions.length,
+                        )}
                     </p>
                 {/if}
             </div>

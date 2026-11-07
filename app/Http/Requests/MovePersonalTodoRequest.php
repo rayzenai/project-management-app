@@ -24,6 +24,6 @@ class MovePersonalTodoRequest extends PersonalTodoRequest
      */
     public function messages(): array
     {
-        return ['project_id.required' => 'Pick a project.'];
+        return ['project_id.required' => __('Pick a project.')];
     }
 }

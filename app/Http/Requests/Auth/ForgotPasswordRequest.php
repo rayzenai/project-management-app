@@ -63,7 +63,7 @@ class ForgotPasswordRequest extends FormRequest
 
         foreach ($limits as $key => $max) {
             if (RateLimiter::tooManyAttempts($key, $max)) {
-                throw ValidationException::withMessages(['email' => self::THROTTLED])->status(429);
+                throw ValidationException::withMessages(['email' => __('Too many tries. Wait a few minutes.')])->status(429);
             }
         }
 

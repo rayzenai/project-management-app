@@ -177,7 +177,7 @@ class MemberController extends Controller
         // Their personal documents stay as the record they left, so they are
         // deactivated instead (the database refuses the delete too).
         if ($user !== null && Document::hasPersonalDocuments($user)) {
-            return response()->json(['message' => Document::OWNER_CANNOT_BE_DELETED], 422);
+            return response()->json(['message' => Document::ownerCannotBeDeleted()], 422);
         }
 
         DB::transaction(function () use ($member, $user, $links): void {

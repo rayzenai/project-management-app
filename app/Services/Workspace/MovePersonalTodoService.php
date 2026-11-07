@@ -28,7 +28,7 @@ class MovePersonalTodoService
                 $todo = PersonalTodo::query()->whereKey($todo->id)->lockForUpdate()->first();
 
                 if ($todo === null) {
-                    return ServiceResult::failure('That to-do is no longer there.', 404);
+                    return ServiceResult::failure(__('That to-do is no longer there.'), 404);
                 }
 
                 $filed = $this->quickAdd->fileTitle($projectId, $todo->title, $todo->due_on?->toDateString(), $owner);
@@ -40,7 +40,7 @@ class MovePersonalTodoService
                 // For good: no Undo may bring it back beside its task.
                 $todo->forceDelete();
 
-                return ServiceResult::success($filed->data, "Moved to {$filed->data->project->label()}.");
+                return ServiceResult::success($filed->data, __('Moved to :project.', ['project' => $filed->data->project->label()]));
             });
         } catch (Throwable $e) {
             report($e);

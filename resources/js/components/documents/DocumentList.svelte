@@ -13,7 +13,8 @@
     } from '@lucide/svelte';
     import { tick } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
-    import { formatBytes, formatTimeAgo, plural } from '../../lib/format';
+    import { formatBytes } from '../../lib/format';
+    import { digits, msg, t, tc, timeAgo } from '../../lib/i18n';
     import type {
         DocumentItem,
         DocumentVersionItem,
@@ -51,11 +52,37 @@
 
     const uid = $props.id();
 
-    const SOURCE = {
-        created: 'Created',
-        uploaded: 'Uploaded',
-        edited: 'Saved',
+    // How each version came to be, by whom: the viewer, someone, or no one known.
+    const VERSION_LINES = {
+        created: {
+            you: msg('Created :when by you'),
+            name: msg('Created :when by :name'),
+            none: msg('Created :when'),
+        },
+        uploaded: {
+            you: msg('Uploaded :when by you'),
+            name: msg('Uploaded :when by :name'),
+            none: msg('Uploaded :when'),
+        },
+        edited: {
+            you: msg('Saved :when by you'),
+            name: msg('Saved :when by :name'),
+            none: msg('Saved :when'),
+        },
     } as const;
+
+    function versionLine(version: DocumentVersionItem): string {
+        const lines = VERSION_LINES[version.source];
+        const when = timeAgo(version.created_at);
+
+        if (!version.user) {
+            return t(lines.none, { when });
+        }
+
+        return version.user.id === viewerId
+            ? t(lines.you, { when })
+            : t(lines.name, { when, name: version.user.name });
+    }
 
     const viewerId = $derived(
         (page.props as unknown as SharedProps).auth.user?.id ?? null,
@@ -91,26 +118,28 @@
     function lastTouched(document: DocumentItem): string {
         const added = document.version === 1;
         const person = added ? document.created_by : document.updated_by;
-        const when = formatTimeAgo(
-            added ? document.created_at : document.updated_at,
-        );
+        const when = timeAgo(added ? document.created_at : document.updated_at);
 
         if (!person) {
             return when;
         }
 
-        return `${person.id === viewerId ? 'You' : person.name} · ${when}`;
+        return person.id === viewerId
+            ? t('You · :when', { when })
+            : t(':name · :when', { name: person.name, when });
     }
 
     /** Where it lives, said from the viewer's side, when it isn't a project. */
     function personalHome(document: DocumentItem): string {
+        const name = document.owner?.name ?? t('someone');
+
         if (document.frozen) {
-            return `Left by ${document.owner?.name ?? 'someone'}`;
+            return t('Left by :name', { name });
         }
 
         return document.owner?.id === viewerId
-            ? 'Personal'
-            : `Shared by ${document.owner?.name ?? 'someone'}`;
+            ? t('Personal')
+            : t('Shared by :name', { name });
     }
 
     /**
@@ -127,7 +156,7 @@
         }
 
         if (document.organization_access) {
-            return { icon: Building2, label: 'Whole office' };
+            return { icon: Building2, label: t('Whole office') };
         }
 
         if (!document.can_share) {
@@ -137,12 +166,15 @@
         if ((document.shares_count ?? 0) > 0) {
             return {
                 icon: Users,
-                label: `Shared with ${plural(document.shares_count ?? 0, 'person', 'people')}`,
+                label: tc(
+                    'Shared with :count person|Shared with :count people',
+                    document.shares_count ?? 0,
+                ),
             };
         }
 
         return document.home === 'personal'
-            ? { icon: Lock, label: 'Only you' }
+            ? { icon: Lock, label: t('Only you') }
             : null;
     }
 
@@ -199,7 +231,7 @@
                     (moveError =
                         errors.project ??
                         errors.__global ??
-                        "It didn't move. Try again."),
+                        t("It didn't move. Try again.")),
             },
         );
     }
@@ -273,7 +305,7 @@
                         >
                             <label
                                 for="{uid}-rename-{document.id}"
-                                class="sr-only">New title</label
+                                class="sr-only">{t('New title')}</label
                             >
                             <input
                                 id="{uid}-rename-{document.id}"
@@ -288,13 +320,13 @@
                                 }}
                             />
                             <button type="submit" class="btn shrink-0"
-                                >Save</button
+                                >{t('Save')}</button
                             >
                             <button
                                 type="button"
                                 class="btn-ghost shrink-0"
                                 onclick={() => (renamingId = null)}
-                                >Cancel</button
+                                >{t('Cancel')}</button
                             >
                         </form>
                     {:else}
@@ -308,10 +340,12 @@
                             >
                             {#if document.frozen}
                                 <span class="chip shrink-0"
-                                    >Read-only: its owner has left</span
+                                    >{t('Read-only: its owner has left')}</span
                                 >
                             {:else if document.access === 'view'}
-                                <span class="chip shrink-0">Can view</span>
+                                <span class="chip shrink-0"
+                                    >{t('Can view')}</span
+                                >
                             {/if}
                         </div>
                         <p
@@ -375,8 +409,10 @@
                             type="button"
                             class="btn-ghost relative z-10 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
                             onclick={() => share(document)}
-                            aria-label={`Share ${document.title}`}
-                            ><Users class="h-3.5 w-3.5" />Share</button
+                            aria-label={t('Share :title', {
+                                title: document.title,
+                            })}
+                            ><Users class="h-3.5 w-3.5" />{t('Share')}</button
                         >
                     {/if}
                 </span>
@@ -393,7 +429,9 @@
                     align="right"
                     wrapperClass="relative z-10 shrink-0"
                     triggerClass="btn-icon"
-                    triggerLabel={`More for ${document.title}`}
+                    triggerLabel={t('More for :title', {
+                        title: document.title,
+                    })}
                     panelClass="w-52"
                 >
                     {#snippet trigger()}
@@ -405,7 +443,7 @@
                             data-popover-item
                             class="menu-item"
                             onclick={() => startRename(document)}
-                            ><Pencil class="h-3.5 w-3.5" />Rename</button
+                            ><Pencil class="h-3.5 w-3.5" />{t('Rename')}</button
                         >
                     {/if}
                     {#if document.can_share}
@@ -414,7 +452,7 @@
                             data-popover-item
                             class="menu-item"
                             onclick={() => share(document)}
-                            ><Users class="h-3.5 w-3.5" />Share</button
+                            ><Users class="h-3.5 w-3.5" />{t('Share')}</button
                         >
                     {/if}
                     {#if document.can_move && moveTargets.length > 0}
@@ -423,7 +461,9 @@
                             data-popover-item
                             class="menu-item"
                             onclick={() => startMove(document)}
-                            ><FolderInput class="h-3.5 w-3.5" />Move to project</button
+                            ><FolderInput class="h-3.5 w-3.5" />{t(
+                                'Move to project',
+                            )}</button
                         >
                     {/if}
                     <button
@@ -432,14 +472,15 @@
                         class="menu-item"
                         onclick={() => toggleVersions(document)}
                         ><History class="h-3.5 w-3.5" />{list
-                            ? 'Hide versions'
-                            : 'Versions'}</button
+                            ? t('Hide versions')
+                            : t('Versions')}</button
                     >
                     <a
                         data-popover-item
                         class="menu-item"
                         href={downloadUrl(document, document.version)}
-                        download><Download class="h-3.5 w-3.5" />Download</a
+                        download
+                        ><Download class="h-3.5 w-3.5" />{t('Download')}</a
                     >
                     {#if document.can_delete}
                         <button
@@ -447,7 +488,9 @@
                             data-popover-item
                             class="menu-item text-danger"
                             onclick={() => trash(document)}
-                            ><Trash2 class="h-3.5 w-3.5" />Move to trash</button
+                            ><Trash2 class="h-3.5 w-3.5" />{t(
+                                'Move to trash',
+                            )}</button
                         >
                     {/if}
                 </Popover>
@@ -459,7 +502,7 @@
                     onsubmit={(e) => move(e, document)}
                 >
                     <label for="{uid}-move-{document.id}" class="sr-only"
-                        >Project to move it to</label
+                        >{t('Project to move it to')}</label
                     >
                     <select
                         id="{uid}-move-{document.id}"
@@ -470,15 +513,18 @@
                             <option value={target.slug}>{target.label}</option>
                         {/each}
                     </select>
-                    <button type="submit" class="btn shrink-0">Move</button>
+                    <button type="submit" class="btn shrink-0"
+                        >{t('Move')}</button
+                    >
                     <button
                         type="button"
                         class="btn-ghost shrink-0"
-                        onclick={() => (movingId = null)}>Cancel</button
+                        onclick={() => (movingId = null)}>{t('Cancel')}</button
                     >
                     <p class="w-full text-xs text-fg-muted">
-                        It then belongs to the project: its team edits it, and
-                        it can't come back to Personal.
+                        {t(
+                            "It then belongs to the project: its team edits it, and it can't come back to Personal.",
+                        )}
                     </p>
                     {#if moveError}
                         <p role="alert" class="w-full text-xs text-danger">
@@ -492,11 +538,11 @@
                 <p
                     class="mb-2.5 ml-11 flex items-center gap-2 text-xs text-fg-muted"
                 >
-                    <Spinner size={12} />Loading versions
+                    <Spinner size={12} />{t('Loading versions')}
                 </p>
             {:else if list === 'failed'}
                 <p class="mb-2.5 ml-11 text-xs text-danger">
-                    The versions didn't load.
+                    {t("The versions didn't load.")}
                 </p>
             {:else if list}
                 <ol class="mb-2.5 ml-11 border-l border-line-soft">
@@ -505,23 +551,23 @@
                             class="flex items-center gap-3 py-1 pl-3 text-xs text-fg-muted"
                         >
                             <span class="w-20 shrink-0 text-fg"
-                                >Version {version.version}</span
+                                >{t('Version :version', {
+                                    version: version.version,
+                                })}</span
                             >
                             <span class="min-w-0 flex-1 truncate"
-                                >{SOURCE[version.source]}
-                                {formatTimeAgo(version.created_at)}{version.user
-                                    ? ` by ${version.user.id === viewerId ? 'you' : version.user.name}`
-                                    : ''}</span
+                                >{versionLine(version)}</span
                             >
                             <span class="shrink-0 tabular-nums"
-                                >{formatBytes(version.size)}</span
+                                >{digits(formatBytes(version.size))}</span
                             >
                             <a
                                 class="btn-ghost shrink-0"
                                 href={downloadUrl(document, version.version)}
                                 download
-                                aria-label={`Download version ${version.version}`}
-                                ><Download class="h-3.5 w-3.5" /></a
+                                aria-label={t('Download version :version', {
+                                    version: version.version,
+                                })}><Download class="h-3.5 w-3.5" /></a
                             >
                         </li>
                     {/each}

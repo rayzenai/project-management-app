@@ -3,6 +3,7 @@
     import { ChevronsUpDown, Plus, Search } from '@lucide/svelte';
     import { onMount } from 'svelte';
     import { forgivingFilter } from '../../lib/forgivingFilter';
+    import { number, t } from '../../lib/i18n';
     import { currentHref, under } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
     import type { OrganizationSwitch } from '../../lib/types';
@@ -144,8 +145,8 @@
                 href="/workspace/my"
                 use:inertia
                 class="shrink-0 rounded-md p-[7px] pr-[3px]"
-                title="My work"
-                aria-label="My work"
+                title={t('My work')}
+                aria-label={t('My work')}
             >
                 <Logo class="h-[26px] w-[26px]" />
             </a>
@@ -169,21 +170,21 @@
         onclick={onnewtask}
     >
         <Plus class="h-4 w-4" />
-        New task
+        {t('New task')}
         <kbd class="kbd ml-auto border-white/30 bg-transparent text-white/80"
             >N</kbd
         >
     </button>
 
-    <nav aria-label="Main" class="flex flex-col gap-0.5">
+    <nav aria-label={t('Main')} class="flex flex-col gap-0.5">
         <button
             type="button"
             class="flex h-[36px] w-full items-center gap-[10px] rounded-lg px-[10px] text-left text-[14px] text-fg-muted transition hover:bg-hover hover:text-fg"
-            title="Search (/)"
+            title={t('Search (/)')}
             onclick={onsearch}
         >
             <Search class="h-[16px] w-[16px] shrink-0" />
-            <span class="flex-1">Search</span>
+            <span class="flex-1">{t('Search')}</span>
             <kbd class="kbd">/</kbd>
         </button>
         {#each links as link (link.href)}
@@ -198,7 +199,7 @@
                 <Icon
                     class={`h-[16px] w-[16px] shrink-0 ${active ? '' : 'text-fg-muted'}`}
                 />
-                <span class="min-w-0 flex-1 truncate">{link.label}</span>
+                <span class="min-w-0 flex-1 truncate">{t(link.label)}</span>
             </a>
         {/each}
     </nav>
@@ -209,10 +210,10 @@
     >
         {#if programs.length > 0}
             <div class={headClass}>
-                Programs
-                <span class="tabular-nums">{programs.length}</span>
+                {t('Programs')}
+                <span class="tabular-nums">{number(programs.length)}</span>
             </div>
-            <nav aria-label="Programs" class="mb-3 flex flex-col gap-0.5">
+            <nav aria-label={t('Programs')} class="mb-3 flex flex-col gap-0.5">
                 {#each programs as program (program.slug)}
                     {@const href = programHref(program.slug)}
                     {@const active = under(path, href)}
@@ -231,14 +232,14 @@
         <!-- Stays in view while the list scrolls under it. -->
         <div class="sticky top-0 z-10 bg-surface-alt pb-1">
             <div class={headClass}>
-                Projects
-                <span class="tabular-nums">{projects.length}</span>
+                {t('Projects')}
+                <span class="tabular-nums">{number(projects.length)}</span>
                 <a
                     href="/workspace/projects?new=1"
                     use:inertia
                     class="btn-icon ml-auto h-6 w-6"
-                    title="New project"
-                    aria-label="New project"
+                    title={t('New project')}
+                    aria-label={t('New project')}
                 >
                     <Plus class="h-3.5 w-3.5" />
                 </a>
@@ -251,15 +252,15 @@
                     <input
                         type="search"
                         class="input h-[30px] py-0 pl-8 text-[13px]"
-                        placeholder="Filter projects"
-                        aria-label="Filter projects"
+                        placeholder={t('Filter projects')}
+                        aria-label={t('Filter projects')}
                         bind:value={query}
                         onkeydown={onFilterKey}
                     />
                 </label>
             {/if}
         </div>
-        <nav aria-label="Projects" class="flex flex-col gap-0.5 pb-2">
+        <nav aria-label={t('Projects')} class="flex flex-col gap-0.5 pb-2">
             {#each matching as project (project.id)}
                 {@const href = projectHref(project.slug)}
                 {@const active = under(path, href)}
@@ -282,8 +283,10 @@
             {:else}
                 <p class="py-1 pl-[36px] text-[13px] text-fg-faint">
                     {query.trim() === ''
-                        ? 'No projects yet'
-                        : `No project matches "${query.trim()}"`}
+                        ? t('No projects yet')
+                        : t('No project matches ":query"', {
+                              query: query.trim(),
+                          })}
                 </p>
             {/each}
         </nav>
@@ -295,7 +298,7 @@
                 variant="popover"
                 bind:open={accountOpen}
                 trigger={accountButton}
-                triggerLabel={`Account: ${user.name}`}
+                triggerLabel={t('Account: :name', { name: user.name })}
                 triggerClass="flex w-full items-center gap-[10px] rounded-lg px-2 py-1.5 text-left transition hover:bg-hover"
                 {groups}
                 {path}

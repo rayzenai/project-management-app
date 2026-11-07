@@ -37,3 +37,8 @@ createInertiaApp({
 router.on('navigate', (event) => {
     applyFromProps(event.detail.page.props as Record<string, unknown>);
 });
+
+// A visit that keeps the page (the language switch) fires no navigate.
+router.on('success', (event) => {
+    applyFromProps(event.detail.page.props as Record<string, unknown>);
+});

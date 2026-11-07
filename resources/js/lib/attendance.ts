@@ -1,5 +1,6 @@
 import { clockTime } from './dates';
 import { formatDistance } from './format';
+import { digits, msg, t } from './i18n';
 
 /**
  * Attendance: the clock (MyAttendanceQuery, shared as the `clock` prop) and
@@ -89,11 +90,12 @@ export interface Holiday {
 }
 
 /** The button for each kind of punch. */
+// English keys (msg), drawn with t() where they show.
 export const ACTION_LABELS: Record<PunchKind, string> = {
-    in: 'Clock in',
-    lunch_start: 'Start lunch',
-    lunch_end: 'End lunch',
-    out: 'Clock out',
+    in: msg('Clock in'),
+    lunch_start: msg('Start lunch'),
+    lunch_end: msg('End lunch'),
+    out: msg('Clock out'),
 };
 
 const DONE_LABELS: Record<PunchKind, string> = {
@@ -125,18 +127,19 @@ export function stateLabel(day: MyAttendance): string {
     const since = (kind: PunchKind): string => {
         const punch = day.punches.find((p) => p.kind === kind);
 
-        return punch ? clockTime(punch.at) : '';
+        return punch ? digits(clockTime(punch.at)) : '';
     };
 
+    // In the reader's language: the top bar's clock button draws it.
     switch (day.state) {
         case 'in':
-            return `In since ${since('in')}`;
+            return t('In since :time', { time: since('in') });
         case 'at_lunch':
-            return `At lunch since ${since('lunch_start')}`;
+            return t('At lunch since :time', { time: since('lunch_start') });
         case 'out':
-            return `Out at ${since('out')}`;
+            return t('Out at :time', { time: since('out') });
         default:
-            return ACTION_LABELS.in;
+            return t(ACTION_LABELS.in);
     }
 }
 

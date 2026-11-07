@@ -11,6 +11,7 @@
     } from '@lucide/svelte';
     import { tick, untrack } from 'svelte';
     import { isoDay, shiftDay, shortDay } from '../lib/dates';
+    import { formatDay, isNepali, number, t, tc } from '../lib/i18n';
     import { projectLabel } from '../lib/projectLabel';
     import { mentionAt, tokenDate } from '../lib/quickAddTokens';
     import type {
@@ -77,7 +78,6 @@
         Boolean(shared.quickAddContext?.startGeneral) && !lockProject,
     );
     const offersPersonal = $derived(!lockProject);
-    const NEEDS_PROJECT = 'Pick a project to give it to someone';
     const organizationPeople = $derived(
         shared.quickAddContext?.organizationPeople ?? [],
     );
@@ -472,6 +472,29 @@
         tokenInput?.setCaret(start);
     }
 
+    /** "Thu 12 Nov"; in Nepali, its month names and digits. */
+    function dayLabel(iso: string): string {
+        return isNepali()
+            ? formatDay(`${iso}T12:00:00+05:45`, {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+              })
+            : shortDay(iso);
+    }
+
+    /**
+     * A translated sentence split at its `:name`, so the markup can draw
+     * what goes there (a name in bold, a key) wherever the language puts it.
+     */
+    function around(text: string, name: string): [string, string] {
+        const at = text.indexOf(`:${name}`);
+
+        return at < 0
+            ? [text, '']
+            : [text.slice(0, at), text.slice(at + name.length + 1)];
+    }
+
     const CHIP =
         'inline-flex h-[34px] max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-[14px] font-medium text-fg transition hover:bg-hover lg:h-[28px] lg:text-[13px]';
     const EMPTY_CHIP = 'border-dashed text-fg-muted';
@@ -762,11 +785,23 @@
     }
 </script>
 
+{#snippet named(text: string, names: string)}
+    {@const [before, after] = around(text, 'names')}
+    {before}<span class="font-medium text-fg">{names}</span>{after}
+{/snippet}
+
+{#snippet keyed(text: string, key: string)}
+    {@const [before, after] = around(text, 'key')}
+    {before}<kbd class="kbd">{key}</kbd>{after}
+{/snippet}
+
 {#snippet fields()}
     <div class="flex flex-col gap-1">
-        <span class="label">Assign to</span>
+        <span class="label">{t('Assign to')}</span>
         {#if isPersonal}
-            <p class="text-xs text-fg-faint">{NEEDS_PROJECT}.</p>
+            <p class="text-xs text-fg-faint">
+                {t('Pick a project to give it to someone.')}
+            </p>
         {:else if projectTeam.length > 0 || joiners.length > 0}
             <AssigneePicker
                 team={projectTeam}
@@ -774,25 +809,28 @@
                 bind:selectedIds={form.assignee_member_ids}
                 max={5}
                 placeholder={joiners.length > 0
-                    ? 'Pick people'
-                    : 'Pick teammates'}
+                    ? t('Pick people')
+                    : t('Pick teammates')}
                 flow={variant === 'overlay'}
             />
             {#if pickedJoiners.length > 0}
                 <p class="text-xs text-fg-muted">
-                    <span class="font-medium text-fg"
-                        >{pickedJoiners.map((m) => m.name).join(', ')}</span
-                    >
-                    {pickedJoiners.length === 1 ? 'joins' : 'join'} the team.
+                    {@render named(
+                        tc(
+                            ':names joins the team.|:names join the team.',
+                            pickedJoiners.length,
+                        ),
+                        pickedJoiners.map((m) => m.name).join(', '),
+                    )}
                 </p>
             {/if}
             {#if tokenAssignees.length > 0}
                 <p class="text-xs text-fg-muted">
-                    Also assigning
-                    <span class="font-medium text-fg"
-                        >{tokenAssignees.map((m) => m.name).join(', ')}</span
-                    >
-                    <span class="text-fg-faint">from your @tag</span>
+                    {@render named(
+                        t('Also assigning :names'),
+                        tokenAssignees.map((m) => m.name).join(', '),
+                    )}
+                    <span class="text-fg-faint">{t('from your @tag')}</span>
                 </p>
             {/if}
             {#if selfEligible && !form.assignee_member_ids.includes(currentMemberId ?? -1)}
@@ -802,17 +840,17 @@
                     onclick={() => {
                         selfAutoSeeded = false;
                         assignMe();
-                    }}>Assign me</button
+                    }}>{t('Assign me')}</button
                 >
             {/if}
         {:else}
             <p class="text-xs text-fg-faint">
-                No teammates on this project's team yet.
+                {t("No teammates on this project's team yet.")}
             </p>
         {/if}
     </div>
     <div class="flex flex-col gap-1">
-        <label for={`${uid}-due`} class="label">Due date</label>
+        <label for={`${uid}-due`} class="label">{t('Due date')}</label>
         <input
             id={`${uid}-due`}
             type="date"
@@ -824,15 +862,15 @@
 
 {#snippet priorityPicker()}
     <div class="flex flex-col gap-1">
-        <span class="label">Priority</span>
+        <span class="label">{t('Priority')}</span>
         <PillGroup
             dot
             bind:value={form.priority}
             options={[
-                { value: 'low', label: 'Low', tone: 'neutral' },
-                { value: 'medium', label: 'Medium', tone: 'amber' },
-                { value: 'high', label: 'High', tone: 'orange' },
-                { value: 'urgent', label: 'Urgent', tone: 'red' },
+                { value: 'low', label: t('Low'), tone: 'neutral' },
+                { value: 'medium', label: t('Medium'), tone: 'amber' },
+                { value: 'high', label: t('High'), tone: 'orange' },
+                { value: 'urgent', label: t('Urgent'), tone: 'red' },
             ]}
         />
     </div>
@@ -840,7 +878,7 @@
 
 {#snippet statusPicker()}
     <div class="flex flex-col gap-1">
-        <span class="label">Status</span>
+        <span class="label">{t('Status')}</span>
         <div class="flex flex-wrap gap-1">
             {#each statuses as status (status.value)}
                 {@const active = form.status === status.value}
@@ -886,7 +924,7 @@
         personal={offersPersonal}
         {field}
         disabled={!staysOpen && form.processing}
-        placeholder={field ? 'Pick a project' : 'Project'}
+        placeholder={field ? t('Pick a project') : t('Project')}
         triggerClass={field
             ? `input flex items-center gap-2 text-left ${hasProject ? 'text-fg' : 'text-fg-faint'}`
             : `${CHIP} ${hasProject ? '' : EMPTY_CHIP}`}
@@ -897,7 +935,7 @@
 {#snippet generalNote()}
     {#if isGeneral}
         <p class="text-xs text-fg-muted">
-            Your organization's first project, managed by you.
+            {t("Your organization's first project, managed by you.")}
         </p>
     {/if}
 {/snippet}
@@ -906,7 +944,7 @@
     {#if isPersonal}
         <p class="flex items-center gap-1.5 text-xs text-fg-muted">
             <Lock class="h-3 w-3 shrink-0" />
-            A private to-do on My work. Only you see it.
+            {t('A private to-do on My work. Only you see it.')}
         </p>
     {/if}
 {/snippet}
@@ -920,18 +958,18 @@
                       program: lockedProgramName,
                   }
                 : tokenProject}
-            <span class="label">Project</span>
+            <span class="label">{t('Project')}</span>
             <p class="flex min-h-[30px] items-center gap-1.5 text-[13px]">
                 <span class="font-medium text-fg">{shown?.title}</span>
                 {#if shown?.program}
                     <span class="text-fg-faint">{shown.program}</span>
                 {/if}
                 {#if tokenProject}
-                    <span class="text-fg-faint">from your #tag</span>
+                    <span class="text-fg-faint">{t('from your #tag')}</span>
                 {/if}
             </p>
         {:else}
-            <span class="label">Project</span>
+            <span class="label">{t('Project')}</span>
             {@render projectPicker(true)}
             {@render generalNote()}
             {@render personalNote()}
@@ -942,7 +980,7 @@
 {#snippet missingProject()}
     {#if !hasProject}
         <span id={`${uid}-why`} class="text-xs text-fg-muted"
-            >Pick a project.</span
+            >{t('Pick a project.')}</span
         >
     {/if}
 {/snippet}
@@ -963,8 +1001,8 @@
                     <TokenInput
                         bind:this={tokenInput}
                         bind:value={form.title}
-                        placeholder="Add a task"
-                        aria-label="Add a task"
+                        placeholder={t('Add a task')}
+                        aria-label={t('Add a task')}
                         role="combobox"
                         aria-autocomplete="list"
                         aria-expanded={mentionOpen}
@@ -991,7 +1029,7 @@
                 <ul
                     id={`${uid}-people`}
                     role="listbox"
-                    aria-label="People"
+                    aria-label={t('People')}
                     class="popover absolute top-[48px] left-[42px] z-30 max-h-64 w-[min(300px,calc(100%-56px))] overflow-auto px-1"
                 >
                     {#each mentionPeople as person, i (person.id)}
@@ -1015,7 +1053,7 @@
                             >
                             {#if person.joins}
                                 <span class="shrink-0 text-xs text-fg-muted"
-                                    >Joins the team</span
+                                    >{t('Joins the team')}</span
                                 >
                             {/if}
                             {#if form.assignee_member_ids.includes(person.id)}
@@ -1035,8 +1073,8 @@
                     bind:open={dateOpen}
                     role="dialog"
                     triggerLabel={shownDate
-                        ? `Date ${shortDay(shownDate)}`
-                        : 'Date'}
+                        ? t('Date :date', { date: dayLabel(shownDate) })
+                        : t('Date')}
                     triggerClass={`${CHIP} ${shownDate ? '' : EMPTY_CHIP}`}
                     panelClass="w-60"
                 >
@@ -1044,7 +1082,7 @@
                         <CalendarDays
                             class="h-3.5 w-3.5 shrink-0 text-fg-muted"
                         />
-                        {shownDate ? shortDay(shownDate) : 'Date'}
+                        {shownDate ? dayLabel(shownDate) : t('Date')}
                     {/snippet}
                     <button
                         type="button"
@@ -1052,9 +1090,9 @@
                         class="menu-item"
                         onclick={() => pickDate(today)}
                     >
-                        Today
+                        {t('Today')}
                         <span class="ml-auto text-xs text-fg-faint"
-                            >{shortDay(today)}</span
+                            >{dayLabel(today)}</span
                         >
                     </button>
                     <button
@@ -1063,15 +1101,15 @@
                         class="menu-item"
                         onclick={() => pickDate(shiftDay(today, 1))}
                     >
-                        Tomorrow
+                        {t('Tomorrow')}
                         <span class="ml-auto text-xs text-fg-faint"
-                            >{shortDay(shiftDay(today, 1))}</span
+                            >{dayLabel(shiftDay(today, 1))}</span
                         >
                     </button>
                     <div class="px-1 py-1">
                         <input
                             type="date"
-                            aria-label="Pick a date"
+                            aria-label={t('Pick a date')}
                             bind:value={form.deadline_at}
                             class="input"
                         />
@@ -1081,13 +1119,13 @@
                             type="button"
                             data-popover-item
                             class="menu-item"
-                            onclick={() => pickDate('')}>No date</button
+                            onclick={() => pickDate('')}>{t('No date')}</button
                         >
                     {/if}
                 </Popover>
 
                 {#if tokenProject}
-                    <span class={CHIP} title="From your #tag">
+                    <span class={CHIP} title={t('From your #tag')}>
                         <Folder class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
                         <span class="truncate"
                             >{projectLabel(tokenProject)}</span
@@ -1102,19 +1140,21 @@
                     <button
                         type="button"
                         disabled
-                        title={NEEDS_PROJECT}
-                        aria-label={`Who: ${NEEDS_PROJECT}`}
+                        title={t('Pick a project to give it to someone')}
+                        aria-label={t('Who: :names', {
+                            names: t('Pick a project to give it to someone'),
+                        })}
                         class={`${CHIP} ${EMPTY_CHIP} cursor-default opacity-60`}
                     >
                         <UserPlus class="h-3.5 w-3.5 shrink-0 text-fg-muted" />
-                        Who
+                        {t('Who')}
                     </button>
                 {:else}
                     <Popover
                         role="dialog"
                         triggerLabel={whoNames.length > 0
-                            ? `Who: ${whoNames.join(', ')}`
-                            : 'Who'}
+                            ? t('Who: :names', { names: whoNames.join(', ') })
+                            : t('Who')}
                         triggerClass={`${CHIP} ${whoNames.length > 0 ? '' : EMPTY_CHIP}`}
                         panelClass="w-[300px]"
                     >
@@ -1124,10 +1164,10 @@
                             />
                             <span class="max-w-[12rem] truncate"
                                 >{whoNames.length === 0
-                                    ? 'Who'
+                                    ? t('Who')
                                     : whoNames.length === 1
                                       ? whoNames[0]
-                                      : `${whoNames[0]} +${whoNames.length - 1}`}</span
+                                      : `${whoNames[0]} +${number(whoNames.length - 1)}`}</span
                             >
                         {/snippet}
                         <AssigneePicker
@@ -1143,13 +1183,13 @@
                 <!-- A touch screen (a phone, an iPad) gets a button. -->
                 <span
                     class="ml-auto hidden items-center gap-1.5 text-[12.5px] text-fg-muted lg:inline-flex"
-                    ><kbd class="kbd">Enter</kbd> to add</span
+                    >{@render keyed(t(':key to add'), 'Enter')}</span
                 >
                 <button
                     type="submit"
                     disabled={!form.title.trim() || !hasProject}
                     aria-describedby={hasProject ? undefined : `${uid}-why`}
-                    class="btn-primary ml-auto lg:hidden">Add</button
+                    class="btn-primary ml-auto lg:hidden">{t('Add')}</button
                 >
             </div>
 
@@ -1160,12 +1200,13 @@
                     {@render personalNote()}
                     {#if pickedJoiners.length > 0}
                         <p class="text-xs text-fg-muted">
-                            <span class="font-medium text-fg"
-                                >{pickedJoiners
-                                    .map((m) => m.name)
-                                    .join(', ')}</span
-                            >
-                            {pickedJoiners.length === 1 ? 'joins' : 'join'} the team.
+                            {@render named(
+                                tc(
+                                    ':names joins the team.|:names join the team.',
+                                    pickedJoiners.length,
+                                ),
+                                pickedJoiners.map((m) => m.name).join(', '),
+                            )}
                         </p>
                     {/if}
                 </div>
@@ -1173,12 +1214,12 @@
         </div>
     {:else}
         <div class="border-b border-line px-5 pt-3">
-            <span class="label">Title</span>
+            <span class="label">{t('Title')}</span>
             <div class="-mx-5">
                 <TokenInput
                     bind:this={tokenInput}
                     bind:value={form.title}
-                    placeholder="What needs to happen?"
+                    placeholder={t('What needs to happen?')}
                     readonly={!staysOpen && form.processing}
                     size="xl"
                     onsubmit={submit}
@@ -1188,12 +1229,14 @@
 
         {#if !isPersonal}
             <div class="border-b border-line px-5 py-4">
-                <label for={`${uid}-desc`} class="label">Description</label>
+                <label for={`${uid}-desc`} class="label"
+                    >{t('Description')}</label
+                >
                 <textarea
                     id={`${uid}-desc`}
                     bind:value={form.description}
                     rows="4"
-                    placeholder="Any detail worth writing down (optional)"
+                    placeholder={t('Any detail worth writing down (optional)')}
                     class="input mt-1.5 resize-y"
                 ></textarea>
             </div>
@@ -1229,10 +1272,10 @@
         <div
             class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line px-5 py-2.5 text-xs text-fg-faint"
         >
-            <span>Type <kbd class="kbd">#</kbd> project</span>
-            <span><kbd class="kbd">@</kbd> assignee</span>
-            <span><kbd class="kbd">!</kbd> priority</span>
-            <span>or a date: today, fri, jun 20</span>
+            <span>{@render keyed(t('Type :key project'), '#')}</span>
+            <span>{@render keyed(t(':key assignee'), '@')}</span>
+            <span>{@render keyed(t(':key priority'), '!')}</span>
+            <span>{t('or a date: today, fri, jun 20')}</span>
         </div>
 
         {@render errorBox()}
@@ -1249,25 +1292,25 @@
                     bind:checked={keepOpen}
                     class="accent-[var(--ws-accent)]"
                 />
-                Create another
+                {t('Create another')}
             </label>
             {#if onCancel}
                 <button type="button" class="btn-ghost" onclick={onCancel}
-                    >Cancel</button
+                    >{t('Cancel')}</button
                 >
             {/if}
             <button
                 type="submit"
                 disabled={form.processing || !form.title.trim() || !hasProject}
                 aria-describedby={hasProject ? undefined : `${uid}-why`}
-                title={hasProject ? undefined : 'Pick a project.'}
+                title={hasProject ? undefined : t('Pick a project.')}
                 class="btn-primary"
             >
                 {form.processing
-                    ? 'Adding...'
+                    ? t('Adding...')
                     : isPersonal
-                      ? 'Add to-do'
-                      : 'Add task'}
+                      ? t('Add to-do')
+                      : t('Add task')}
                 <kbd class="kbd border-white/30 bg-transparent text-white/80"
                     >&#8629;</kbd
                 >

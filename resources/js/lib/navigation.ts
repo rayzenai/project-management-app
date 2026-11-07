@@ -17,13 +17,15 @@ import {
     Table2,
     Users,
 } from '@lucide/svelte';
+import { msg } from './i18n';
 import type { OfficeLinks } from './types';
 
 /**
  * Where the menu goes. The sidebar (and the phone bar) carry the few pages
  * everyone uses, mainLinks; everything else sits in the account menu,
  * accountGroups, each office page only when OfficeLinks allows it. A new
- * page is one entry here.
+ * page is one entry here. Labels stay English (msg() marks them for the
+ * translation check) and are drawn with t(link.label).
  */
 
 export interface NavLink {
@@ -52,22 +54,26 @@ export function mainLinks(options: {
 }): NavLink[] {
     // Phase 2 adds Overview here, for whoever runs something.
     return [
-        { label: 'My work', href: '/workspace/my', icon: ListChecks },
-        { label: 'Projects', href: '/workspace/projects', icon: FolderKanban },
+        { label: msg('My work'), href: '/workspace/my', icon: ListChecks },
+        {
+            label: msg('Projects'),
+            href: '/workspace/projects',
+            icon: FolderKanban,
+        },
         ...(options.documentsEnabled
             ? [
                   {
-                      label: 'Documents',
+                      label: msg('Documents'),
                       href: '/workspace/documents',
                       icon: FileText,
                   },
               ]
             : []),
-        { label: 'People', href: '/workspace/team', icon: Users },
+        { label: msg('People'), href: '/workspace/team', icon: Users },
         ...(options.gitEnabled
             ? [
                   {
-                      label: 'Code activity',
+                      label: msg('Code activity'),
                       href: '/workspace/reports/code',
                       icon: GitCommitHorizontal,
                   },
@@ -86,82 +92,86 @@ export function accountGroups(
 
     return [
         {
-            label: 'You',
+            label: msg('You'),
             links: [
                 {
-                    label: 'Notifications',
+                    label: msg('Notifications'),
                     href: '/workspace/notifications',
                     icon: Bell,
                     count: options.unread,
                 },
                 {
-                    label: 'Emails',
+                    label: msg('Emails'),
                     href: '/workspace/settings/emails',
                     icon: Mail,
                 },
-                { label: 'Guide', href: '/workspace/guide', icon: BookOpen },
+                {
+                    label: msg('Guide'),
+                    href: '/workspace/guide',
+                    icon: BookOpen,
+                },
             ],
         },
         {
-            label: 'Office',
+            label: msg('Office'),
             links: [
                 ...when(office.maintenance, {
-                    label: 'Needs attention',
+                    label: msg('Needs attention'),
                     href: '/workspace/maintenance',
                     icon: CircleAlert,
                     count: office.maintenance_count,
                 }),
                 ...when(office.organogram, {
-                    label: 'Organogram',
+                    label: msg('Organogram'),
                     href: '/workspace/organogram',
                     icon: Network,
                 }),
                 ...when(office.attendance, {
-                    label: 'Attendance',
+                    label: msg('Attendance'),
                     href: '/workspace/attendance',
                     icon: Clock,
                 }),
                 ...when(office.leave, {
-                    label: 'Leave and kaaj',
+                    label: msg('Leave and kaaj'),
                     href: '/workspace/leave',
                     icon: CalendarDays,
                 }),
                 ...when(office.attendance_settings, {
-                    label: 'Attendance settings',
+                    label: msg('Attendance settings'),
                     href: '/workspace/attendance/settings',
                     icon: SlidersHorizontal,
                 }),
             ],
         },
         {
-            label: 'Reports',
+            label: msg('Reports'),
             links: [
                 ...when(office.team_work, {
-                    label: "Today's work",
+                    label: msg("Today's work"),
                     href: '/workspace/work',
                     icon: ClipboardList,
                 }),
                 ...when(office.team_work, {
-                    label: "Team's work",
+                    label: msg("Team's work"),
                     href: '/workspace/work/team',
                     icon: Table2,
                 }),
                 ...when(office.my_work_member_id, {
-                    label: 'My week',
+                    label: msg('My week'),
                     href: `/workspace/people/${office.my_work_member_id}/work`,
                     icon: CalendarRange,
                 }),
                 ...when(options.gitEnabled, {
-                    label: 'Code activity',
+                    label: msg('Code activity'),
                     href: '/workspace/reports/code',
                     icon: GitCommitHorizontal,
                 }),
             ],
         },
         {
-            label: 'Admin',
+            label: msg('Admin'),
             links: when(options.isSuperAdmin, {
-                label: 'Organizations',
+                label: msg('Organizations'),
                 href: '/workspace/organizations',
                 icon: Building2,
             }),

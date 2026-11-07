@@ -3,6 +3,7 @@
     import { Eye, EyeOff } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import LanguageSwitch from '../../components/LanguageSwitch.svelte';
+    import { t } from '../../lib/i18n';
 
     let {
         kind,
@@ -36,7 +37,7 @@
     const resend = useForm(untrack(() => ({ email })));
 
     const heading = $derived(
-        kind === 'invite' ? 'Set your password' : 'Set a new password',
+        kind === 'invite' ? t('Set your password') : t('Set a new password'),
     );
     const linkError = $derived(
         form.errors.token ?? form.errors.email ?? form.errors.kind ?? null,
@@ -80,8 +81,9 @@
             <div class="panel flex flex-col gap-2 p-5" role="status">
                 <p>{status}</p>
                 <p class="text-[13px] text-fg-muted">
-                    If nothing arrives in a few minutes, look in your spam
-                    folder.
+                    {t(
+                        'If nothing arrives in a few minutes, look in your spam folder.',
+                    )}
                 </p>
             </div>
         {:else if linkError}
@@ -94,7 +96,9 @@
                         disabled={resend.processing}
                         class="btn-primary btn-lg w-full justify-center"
                     >
-                        {resend.processing ? 'Sending' : 'Send me a new link'}
+                        {resend.processing
+                            ? t('Sending')
+                            : t('Send me a new link')}
                     </button>
                     {#if resend.errors.email}<p class="text-xs text-danger">
                             {resend.errors.email}
@@ -103,7 +107,7 @@
                     <Link
                         href="/workspace/forgot-password"
                         class="btn-primary btn-lg w-full justify-center"
-                        >Send me a new link</Link
+                        >{t('Send me a new link')}</Link
                     >
                 {/if}
             </div>
@@ -111,7 +115,7 @@
             <form onsubmit={submit} class="panel flex flex-col gap-4 p-5">
                 <div class="flex flex-col gap-1.5">
                     <label for="{uid}-password" class="label"
-                        >New password</label
+                        >{t('New password')}</label
                     >
                     <div class="relative">
                         <input
@@ -127,8 +131,8 @@
                             type="button"
                             onclick={() => (showPassword = !showPassword)}
                             aria-label={showPassword
-                                ? 'Hide password'
-                                : 'Show password'}
+                                ? t('Hide password')
+                                : t('Show password')}
                             class="absolute inset-y-0 right-0 flex items-center px-3 text-fg-faint hover:text-fg"
                         >
                             {#if showPassword}<EyeOff
@@ -146,7 +150,7 @@
 
                 <div class="flex flex-col gap-1.5">
                     <label for="{uid}-confirm" class="label"
-                        >Type it again</label
+                        >{t('Type it again')}</label
                     >
                     <input
                         id="{uid}-confirm"
@@ -163,14 +167,14 @@
                     disabled={form.processing}
                     class="btn-primary btn-lg mt-1 w-full justify-center"
                 >
-                    {form.processing ? 'Saving' : 'Set my password'}
+                    {form.processing ? t('Saving') : t('Set my password')}
                 </button>
             </form>
         {/if}
 
         <p class="mt-4 text-center text-[13px]">
             <Link href="/workspace/login" class="text-accent hover:underline"
-                >Back to sign in</Link
+                >{t('Back to sign in')}</Link
             >
         </p>
     </div>

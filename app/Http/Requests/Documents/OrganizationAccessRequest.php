@@ -28,7 +28,7 @@ class OrganizationAccessRequest extends ShareDocumentRequest
     {
         $validator->after(function (Validator $validator): void {
             if (WorkspaceAccess::documentOrganizationId($this->document()) === null) {
-                $validator->errors()->add('access', 'This document has no organization to share with.');
+                $validator->errors()->add('access', __('This document has no organization to share with.'));
             }
         });
     }

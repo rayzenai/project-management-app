@@ -52,7 +52,9 @@ class User extends Authenticatable
      */
     public function locale(?string $fallback = Locales::DEFAULT): ?string
     {
-        $saved = $this->preferences?->locale;
+        // Read, not cached on the user: every request asks it once, the same.
+        $preferences = $this->relationLoaded('preferences') ? $this->preferences : $this->preferences()->first(['locale']);
+        $saved = $preferences?->locale;
 
         return Locales::isSupported($saved) ? $saved : $fallback;
     }

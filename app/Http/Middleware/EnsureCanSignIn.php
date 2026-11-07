@@ -19,6 +19,12 @@ class EnsureCanSignIn
 {
     public const DEACTIVATED = 'This account is deactivated. Ask your organizational admin to turn it back on.';
 
+    /** DEACTIVATED in the reader's language, for wherever it is shown. */
+    public static function deactivated(): string
+    {
+        return __('This account is deactivated. Ask your organizational admin to turn it back on.');
+    }
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -28,7 +34,7 @@ class EnsureCanSignIn
         }
 
         if (! $request->hasSession()) {
-            return response()->json(['message' => self::DEACTIVATED], 401);
+            return response()->json(['message' => self::deactivated()], 401);
         }
 
         Auth::guard('web')->logout();

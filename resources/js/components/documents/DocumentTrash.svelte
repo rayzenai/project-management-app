@@ -7,7 +7,7 @@
         RotateCcw,
         Trash2,
     } from '@lucide/svelte';
-    import { formatTimeAgo, plural } from '../../lib/format';
+    import { number, t, tc, timeAgo } from '../../lib/i18n';
     import type { DocumentItem } from '../../lib/types';
     import Spinner from '../Spinner.svelte';
 
@@ -79,18 +79,22 @@
             aria-expanded={open}
             onclick={toggle}
         >
-            <Trash2 class="h-3.5 w-3.5" />Trash
-            <span class="section-count">{count}</span>
+            <Trash2 class="h-3.5 w-3.5" />{t('Trash')}
+            <span class="section-count">{number(count)}</span>
         </button>
         {#if open}
             {#if failed}
-                <p class="mt-2 text-xs text-danger">The trash didn't load.</p>
+                <p class="mt-2 text-xs text-danger">
+                    {t("The trash didn't load.")}
+                </p>
             {:else if trashed === null}
                 <p class="mt-2 flex items-center gap-2 text-xs text-fg-muted">
-                    <Spinner size={12} />Loading
+                    <Spinner size={12} />{t('Loading')}
                 </p>
             {:else if trashed.length === 0}
-                <p class="mt-2 text-xs text-fg-muted">The trash is empty.</p>
+                <p class="mt-2 text-xs text-fg-muted">
+                    {t('The trash is empty.')}
+                </p>
             {:else}
                 <ul class="mt-2 border-t border-line">
                     {#each trashed as document (document.id)}
@@ -112,11 +116,22 @@
                                     </p>
                                 {/if}
                                 <p class="text-xs text-fg-faint">
-                                    Moved to the trash {formatTimeAgo(
-                                        document.deleted_at,
-                                    )} · {plural(document.version, 'version')} kept{document.frozen
-                                        ? ' · Read-only: its owner has left'
-                                        : ''}
+                                    {[
+                                        t('Moved to the trash :when', {
+                                            when: timeAgo(document.deleted_at),
+                                        }),
+                                        tc(
+                                            ':count version kept|:count versions kept',
+                                            document.version,
+                                        ),
+                                        ...(document.frozen
+                                            ? [
+                                                  t(
+                                                      'Read-only: its owner has left',
+                                                  ),
+                                              ]
+                                            : []),
+                                    ].join(' · ')}
                                 </p>
                             </div>
                             {#if document.can_delete}
@@ -124,9 +139,9 @@
                                     type="button"
                                     class="btn-ghost shrink-0"
                                     onclick={() => restore(document)}
-                                    ><RotateCcw
-                                        class="h-3.5 w-3.5"
-                                    />Restore</button
+                                    ><RotateCcw class="h-3.5 w-3.5" />{t(
+                                        'Restore',
+                                    )}</button
                                 >
                             {/if}
                         </li>

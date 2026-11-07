@@ -147,11 +147,11 @@ final readonly class QuickAddDispatcher
     private function fileable(?Project $project, Authenticatable $user): Project|ServiceResult
     {
         if ($project === null) {
-            return ServiceResult::failure('Pick a project.', 422);
+            return ServiceResult::failure(__('Pick a project.'), 422);
         }
 
         if (! WorkspaceAccess::canViewProject($user, $project)) {
-            return ServiceResult::failure('That project is not available to you.', 403);
+            return ServiceResult::failure(__('That project is not available to you.'), 403);
         }
 
         return $project;
@@ -209,7 +209,7 @@ final readonly class QuickAddDispatcher
         }
 
         if ($someoneElse) {
-            $message = 'Pick a project to give it to someone.';
+            $message = __('Pick a project to give it to someone.');
 
             return ServiceResult::failure($message, 422, ['project_id' => $message]);
         }

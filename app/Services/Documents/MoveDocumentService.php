@@ -38,6 +38,6 @@ class MoveDocumentService
             $document->setRelation('project', $project);
         });
 
-        return ServiceResult::success($document, "Moved {$document->title} to {$project->label()}.");
+        return ServiceResult::success($document, __('Moved :title to :project.', ['title' => $document->title, 'project' => $project->label()]));
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Http\Requests\Concerns\LowercasesEmail;
+use App\Support\Locales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\RateLimiter;
@@ -63,14 +64,17 @@ class SetPasswordRequest extends FormRequest
         $rules = Password::defaults()->appliedRules();
 
         $with = array_values(array_filter([
-            $rules['mixedCase'] ? 'upper and lower case letters' : ($rules['letters'] ? 'a letter' : null),
-            $rules['numbers'] ? 'a number' : null,
-            $rules['symbols'] ? 'a symbol' : null,
+            $rules['mixedCase'] ? __('upper and lower case letters') : ($rules['letters'] ? __('a letter') : null),
+            $rules['numbers'] ? __('a number') : null,
+            $rules['symbols'] ? __('a symbol') : null,
         ]));
 
-        $words = "At least {$rules['min']} characters".($with === [] ? '' : ', with '.Arr::join($with, ', ', ' and ')).'.';
+        $min = Locales::number($rules['min']);
+        $words = $with === []
+            ? __('At least :min characters.', ['min' => $min])
+            : __('At least :min characters, with :with.', ['min' => $min, 'with' => Arr::join($with, ', ', ' '.__('and').' ')]);
 
-        return $rules['uncompromised'] ? $words.' Not one that has shown up in a data leak.' : $words;
+        return $rules['uncompromised'] ? $words.' '.__('Not one that has shown up in a data leak.') : $words;
     }
 
     /**
@@ -89,7 +93,7 @@ class SetPasswordRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if (RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
-            throw ValidationException::withMessages(['password' => self::THROTTLED])->status(429);
+            throw ValidationException::withMessages(['password' => __('Too many tries. Wait a minute.')])->status(429);
         }
 
         $this->lowercaseEmail();

@@ -3,6 +3,7 @@
     import { Link2, Minimize2, Plus, StickyNote, X } from '@lucide/svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import { formatDate } from '../lib/format';
+    import { formatDay, isNepali, msg, number, t } from '../lib/i18n';
     import {
         NOTE_COLORS as COLORS,
         noteTypeColor,
@@ -65,10 +66,29 @@
     // that is the whole point of a sticky.
     type ArrangeMode = 'task' | 'title' | 'type';
     const ARRANGE_OPTIONS: { value: ArrangeMode; label: string }[] = [
-        { value: 'task', label: 'Group by task' },
-        { value: 'title', label: 'Sort by title' },
-        { value: 'type', label: 'Sort by type' },
+        { value: 'task', label: msg('Group by task') },
+        { value: 'title', label: msg('Sort by title') },
+        { value: 'type', label: msg('Sort by type') },
     ];
+    /** Each colour's swatch, named for a screen reader. */
+    const COLOR_LABELS: Record<WorkspaceNoteColor, string> = {
+        amber: msg('Colour amber'),
+        rose: msg('Colour rose'),
+        sky: msg('Colour sky'),
+        emerald: msg('Colour emerald'),
+        violet: msg('Colour violet'),
+    };
+
+    /** A note's date; Nepali month names and digits in Nepali. */
+    function noteDate(value: string | undefined): string {
+        return isNepali() && value
+            ? formatDay(value, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+              })
+            : formatDate(value);
+    }
     let arrange = $state<ArrangeMode>('task');
 
     type ArrangeItem = { key: string; task: Note };
@@ -99,7 +119,7 @@
                     arrange === 'task'
                         ? (it.task.task?.short_title ??
                           it.task.task?.title ??
-                          'Untagged')
+                          t('Untagged'))
                         : it.task.type_label;
                 const bucket = groups.get(label);
 
@@ -325,7 +345,7 @@
     }
 
     function deleteNote(note: WorkspaceNote) {
-        if (!confirm('Delete this note?')) {
+        if (!confirm(t('Delete this note?'))) {
             return;
         }
 
@@ -394,7 +414,7 @@
         <!-- Clicking the dimmed backdrop (outside the drawer) closes in one click. -->
         <button
             type="button"
-            aria-label="Close notes board"
+            aria-label={t('Close notes board')}
             class="absolute inset-0 h-full w-full cursor-default bg-black/40"
             onclick={onClose}
         ></button>
@@ -402,7 +422,7 @@
         <div
             class="fixed inset-y-0 right-0 flex w-[min(720px,94vw)] flex-col border-l border-line bg-surface"
             role="dialog"
-            aria-label="Sticky notes"
+            aria-label={t('Sticky notes')}
             tabindex="-1"
         >
             <!-- toolbar -->
@@ -413,9 +433,9 @@
                 <div
                     class="flex items-center rounded-md border border-line bg-surface-alt p-[2px]"
                     role="group"
-                    aria-label="Which notes"
+                    aria-label={t('Which notes')}
                 >
-                    {#each [{ key: 'mine', label: 'My notes', count: notes.length }, { key: 'tasks', label: 'From tasks', count: taskNotes.length }] as opt (opt.key)}
+                    {#each [{ key: 'mine', label: t('My notes'), count: notes.length }, { key: 'tasks', label: t('From tasks'), count: taskNotes.length }] as opt (opt.key)}
                         <button
                             type="button"
                             aria-pressed={lane === opt.key}
@@ -428,7 +448,7 @@
                         >
                             {opt.label}
                             <span class="font-mono text-fg-faint tabular-nums"
-                                >{opt.count}</span
+                                >{number(opt.count)}</span
                             >
                         </button>
                     {/each}
@@ -438,15 +458,15 @@
                         <label
                             class="flex items-center gap-1.5 text-xs text-fg-muted"
                         >
-                            Arrange
+                            {t('Arrange')}
                             <select
                                 bind:value={arrange}
                                 class="input h-7 w-auto py-0"
-                                aria-label="Arrange notes"
+                                aria-label={t('Arrange notes')}
                             >
                                 {#each ARRANGE_OPTIONS as opt (opt.value)}
                                     <option value={opt.value}
-                                        >{opt.label}</option
+                                        >{t(opt.label)}</option
                                     >
                                 {/each}
                             </select>
@@ -458,13 +478,13 @@
                             class="btn"
                         >
                             <Plus class="h-3.5 w-3.5" />
-                            New note
+                            {t('New note')}
                         </button>
                     {/if}
                     <button
                         type="button"
                         onclick={onClose}
-                        aria-label="Close"
+                        aria-label={t('Close')}
                         class="btn-icon"
                     >
                         <X class="h-4 w-4" />
@@ -481,23 +501,27 @@
                     <div
                         class="absolute inset-0 flex flex-col items-center justify-center gap-3"
                     >
-                        <p class="text-fg-muted">No sticky notes yet.</p>
+                        <p class="text-fg-muted">
+                            {t('No sticky notes yet.')}
+                        </p>
                         <button
                             type="button"
                             onclick={startCompose}
                             class="btn"
                         >
                             <Plus class="h-3.5 w-3.5" />
-                            New note
+                            {t('New note')}
                         </button>
                     </div>
                 {:else if lane === 'tasks' && taskNotes.length === 0}
                     <div
                         class="absolute inset-0 flex flex-col items-center justify-center gap-2"
                     >
-                        <p class="text-fg-muted">No notes on your tasks yet.</p>
+                        <p class="text-fg-muted">
+                            {t('No notes on your tasks yet.')}
+                        </p>
                         <p class="text-xs text-fg-faint">
-                            Notes you add to a task show up here.
+                            {t('Notes you add to a task show up here.')}
                         </p>
                     </div>
                 {/if}
@@ -538,7 +562,9 @@
                                             {#each COLORS as c (c)}
                                                 <button
                                                     type="button"
-                                                    aria-label={`Colour ${c}`}
+                                                    aria-label={t(
+                                                        COLOR_LABELS[c],
+                                                    )}
                                                     aria-pressed={note.color ===
                                                         c}
                                                     onclick={() =>
@@ -551,7 +577,7 @@
                                             type="button"
                                             data-no-drag
                                             onclick={collapse}
-                                            aria-label="Collapse note"
+                                            aria-label={t('Collapse note')}
                                             class="btn-icon h-6 w-6"
                                         >
                                             <Minimize2 class="h-3.5 w-3.5" />
@@ -563,7 +589,9 @@
                                             type="text"
                                             data-no-drag
                                             bind:value={draftTitle}
-                                            placeholder="Heading (optional)"
+                                            placeholder={t(
+                                                'Heading (optional)',
+                                            )}
                                             class="input mb-2 font-medium"
                                         />
                                         <textarea
@@ -580,14 +608,16 @@
                                                 type="button"
                                                 onclick={() =>
                                                     (editingId = null)}
-                                                class="btn-ghost">Cancel</button
+                                                class="btn-ghost"
+                                                >{t('Cancel')}</button
                                             >
                                             <button
                                                 type="button"
                                                 onclick={() => saveEdit(note)}
                                                 disabled={!draftBody.trim() ||
                                                     saving}
-                                                class="btn-primary">Save</button
+                                                class="btn-primary"
+                                                >{t('Save')}</button
                                             >
                                         </div>
                                     {:else}
@@ -611,7 +641,7 @@
                                         >
                                             <span
                                                 class="font-mono text-[11px] text-fg-faint tabular-nums"
-                                                >{formatDate(
+                                                >{noteDate(
                                                     note.updated_at,
                                                 )}</span
                                             >
@@ -623,14 +653,14 @@
                                                     onclick={() =>
                                                         startEdit(note)}
                                                     class="btn-ghost h-6 px-1.5 text-xs"
-                                                    >Edit</button
+                                                    >{t('Edit')}</button
                                                 >
                                                 <button
                                                     type="button"
                                                     onclick={() =>
                                                         deleteNote(note)}
                                                     class="btn-ghost h-6 px-1.5 text-xs text-danger hover:text-danger"
-                                                    >Delete</button
+                                                    >{t('Delete')}</button
                                                 >
                                             </div>
                                         </div>
@@ -648,7 +678,7 @@
                                     >
                                     <span
                                         class="mt-1.5 font-mono text-[11px] text-fg-faint tabular-nums"
-                                        >{formatDate(note.updated_at)}</span
+                                        >{noteDate(note.updated_at)}</span
                                     >
                                 {/if}
                             </div>
@@ -730,7 +760,7 @@
                         onkeydown={onComposeKey}
                         role="dialog"
                         aria-modal="true"
-                        aria-label="New note"
+                        aria-label={t('New note')}
                         tabindex="-1"
                     >
                         <div class="mb-3 flex items-center justify-between">
@@ -739,13 +769,13 @@
                                     class="h-[15px] w-[15px] text-fg-muted"
                                 />
                                 <h3 class="text-[13px] font-medium text-fg">
-                                    New note
+                                    {t('New note')}
                                 </h3>
                             </div>
                             <button
                                 type="button"
                                 onclick={cancelCompose}
-                                aria-label="Cancel"
+                                aria-label={t('Cancel')}
                                 class="btn-icon h-6 w-6"
                             >
                                 <X class="h-3.5 w-3.5" />
@@ -761,7 +791,7 @@
                             <input
                                 type="text"
                                 bind:value={draftTitle}
-                                placeholder="Heading (optional)"
+                                placeholder={t('Heading (optional)')}
                                 class="w-full bg-transparent text-sm font-medium text-fg outline-none placeholder:text-fg-faint"
                             />
                             <!-- svelte-ignore a11y_autofocus -->
@@ -769,7 +799,7 @@
                                 bind:this={bodyEl}
                                 bind:value={draftBody}
                                 autofocus
-                                placeholder="Write a note"
+                                placeholder={t('Write a note')}
                                 rows="7"
                                 class="mt-2 w-full resize-none bg-transparent text-[13px] leading-relaxed text-fg outline-none placeholder:text-fg-faint"
                             ></textarea>
@@ -780,14 +810,14 @@
                                 <div
                                     class="flex items-center gap-1.5"
                                     role="radiogroup"
-                                    aria-label="Note colour"
+                                    aria-label={t('Note colour')}
                                 >
                                     {#each COLORS as c (c)}
                                         <button
                                             type="button"
                                             role="radio"
                                             aria-checked={draftColor === c}
-                                            aria-label={`Colour ${c}`}
+                                            aria-label={t(COLOR_LABELS[c])}
                                             onclick={() => (draftColor = c)}
                                             class={`h-4 w-4 rounded-sm transition ${swatchClass[c]} ${
                                                 draftColor === c
@@ -802,14 +832,14 @@
                                     <button
                                         type="button"
                                         onclick={cancelCompose}
-                                        class="btn-ghost">Cancel</button
+                                        class="btn-ghost">{t('Cancel')}</button
                                     >
                                     <button
                                         type="submit"
                                         disabled={!draftBody.trim() || saving}
                                         class="btn-primary"
                                     >
-                                        {saving ? 'Saving' : 'Add note'}
+                                        {saving ? t('Saving') : t('Add note')}
                                         <kbd class="kbd">⌘↵</kbd>
                                     </button>
                                 </div>

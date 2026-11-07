@@ -2,6 +2,7 @@
     import { router } from '@inertiajs/svelte';
     import { Ellipsis, Moon, Star, StarOff, Sun, X } from '@lucide/svelte';
     import { shiftDay, shortDay } from '../../lib/dates';
+    import { formatDay, isNepali, t } from '../../lib/i18n';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type { MyWorkTaskRow } from '../../lib/types';
     import Popover from '../Popover.svelte';
@@ -58,17 +59,32 @@
         });
     }
 
+    /** "Thu 12 Nov", in the reader's language. */
+    function shortText(iso: string): string {
+        return isNepali()
+            ? formatDay(iso, {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+              })
+            : shortDay(iso);
+    }
+
     function snooze(until: string | null): void {
         patch(
             { snoozed_until: until },
-            until ? `Snoozed until ${shortDay(until)}` : 'No longer snoozed',
+            until
+                ? t('Snoozed until :day', { day: shortText(until) })
+                : t('No longer snoozed'),
         );
     }
 
     function setOwnDate(day: string | null): void {
         patch(
             { personal_due_at: day },
-            day ? `Your date: ${shortDay(day)}` : 'Your date cleared',
+            day
+                ? t('Your date: :day', { day: shortText(day) })
+                : t('Your date cleared'),
         );
     }
 
@@ -83,7 +99,7 @@
 <Popover
     bind:open
     align="right"
-    triggerLabel={`Options for ${title}`}
+    triggerLabel={t('Options for :title', { title })}
     triggerClass={`btn-icon size-[44px] sm:size-[32px] ${open ? 'bg-hover text-fg' : 'pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100'}`}
     panelClass="w-64"
 >
@@ -99,10 +115,10 @@
     >
         {#if assignment.is_focused}
             <StarOff class="size-4 shrink-0" />
-            Remove star
+            {t('Remove star')}
         {:else}
             <Star class="size-4 shrink-0" />
-            Star
+            {t('Star')}
         {/if}
     </button>
 
@@ -115,7 +131,7 @@
         onclick={() => snooze(tomorrow)}
     >
         <Moon class="size-4 shrink-0" />
-        Snooze until tomorrow
+        {t('Snooze until tomorrow')}
     </button>
     <button
         type="button"
@@ -124,7 +140,7 @@
         onclick={() => snooze(shiftDay(today, 7))}
     >
         <Moon class="size-4 shrink-0" />
-        Snooze for a week
+        {t('Snooze for a week')}
     </button>
     <form
         class="px-2 pt-1 pb-1.5"
@@ -133,7 +149,8 @@
             snooze(snoozeDate);
         }}
     >
-        <label class="label" for={`snooze-${assignment.id}`}>Snooze until</label
+        <label class="label" for={`snooze-${assignment.id}`}
+            >{t('Snooze until')}</label
         >
         <div class="mt-1 flex items-center gap-1.5">
             <input
@@ -145,7 +162,7 @@
                 bind:value={snoozeDate}
                 onkeydown={keepKeys}
             />
-            <button type="submit" class="btn">Snooze</button>
+            <button type="submit" class="btn">{t('Snooze')}</button>
         </div>
     </form>
     {#if snoozed}
@@ -156,7 +173,7 @@
             onclick={() => snooze(null)}
         >
             <Sun class="size-4 shrink-0" />
-            Stop snoozing
+            {t('Stop snoozing')}
         </button>
     {/if}
 
@@ -170,7 +187,7 @@
         }}
     >
         <label class="label" for={`own-date-${assignment.id}`}
-            >My own date</label
+            >{t('My own date')}</label
         >
         <div class="mt-1 flex items-center gap-1.5">
             <input
@@ -181,7 +198,7 @@
                 bind:value={ownDate}
                 onkeydown={keepKeys}
             />
-            <button type="submit" class="btn">Set</button>
+            <button type="submit" class="btn">{t('Set')}</button>
         </div>
     </form>
     {#if assignment.personal_due_at}
@@ -192,7 +209,7 @@
             onclick={() => setOwnDate(null)}
         >
             <X class="size-4 shrink-0" />
-            Clear my own date
+            {t('Clear my own date')}
         </button>
     {/if}
 </Popover>

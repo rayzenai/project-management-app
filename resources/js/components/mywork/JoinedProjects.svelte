@@ -3,7 +3,7 @@
     import { FolderOpen, Plus, Users, X } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import { SvelteSet } from 'svelte/reactivity';
-    import { formatTimeAgo } from '../../lib/format';
+    import { t, timeAgo } from '../../lib/i18n';
     import type { MyWorkJoined } from '../../lib/types';
 
     /**
@@ -55,13 +55,19 @@
     }
 </script>
 
+<!-- The sentence with the project's name in bold where :project stands. -->
+{#snippet sentence(text: string, project: string)}
+    {@const [before, after] = text.split(':project')}
+    {before}<strong class="font-semibold">{project}</strong>{after}
+{/snippet}
+
 {#if shown.length > 0}
     <ul
         class="mt-4 max-h-[420px] space-y-2 overflow-y-auto px-5 sm:px-0"
-        aria-label="Projects you were added to"
+        aria-label={t('Projects you were added to')}
     >
         {#each shown as item (item.project.id)}
-            {@const ago = formatTimeAgo(item.joined_at)}
+            {@const ago = timeAgo(item.joined_at)}
             <li class="panel py-1 pr-1 pl-4 sm:pl-3">
                 <div class="flex items-start gap-3">
                     <Users
@@ -71,13 +77,22 @@
                         class="min-w-0 flex-1 py-[11px] text-[15px] leading-[22px] text-fg sm:py-[7px] sm:text-[14px]"
                     >
                         {#if item.role === 'leader'}
-                            You manage <strong class="font-semibold"
-                                >{item.project.label}</strong
-                            >
+                            {@render sentence(
+                                t('You manage :project'),
+                                item.project.label,
+                            )}
+                        {:else if item.added_by}
+                            {@render sentence(
+                                t('You were added to :project by :name', {
+                                    name: item.added_by,
+                                }),
+                                item.project.label,
+                            )}
                         {:else}
-                            You were added to <strong class="font-semibold"
-                                >{item.project.label}</strong
-                            >{#if item.added_by}{` by ${item.added_by}`}{/if}
+                            {@render sentence(
+                                t('You were added to :project'),
+                                item.project.label,
+                            )}
                         {/if}{#if ago}<span class="text-fg-muted"
                                 >{DOT}{ago}</span
                             >{/if}
@@ -85,8 +100,10 @@
                     <button
                         type="button"
                         class="btn-icon size-[44px] shrink-0 sm:mt-[2px] sm:size-[32px]"
-                        aria-label={`Hide ${item.project.label} here`}
-                        title="Hide on this device"
+                        aria-label={t('Hide :project here', {
+                            project: item.project.label,
+                        })}
+                        title={t('Hide on this device')}
                         onclick={() => dismiss(item.project.id)}
                     >
                         <X class="size-4" />
@@ -100,7 +117,7 @@
                         class="btn h-[44px] sm:h-[32px]"
                     >
                         <FolderOpen class="size-4 text-fg-muted" />
-                        Open project
+                        {t('Open project')}
                     </a>
                     <button
                         type="button"
@@ -108,7 +125,7 @@
                         onclick={() => onAdd(item.project.id)}
                     >
                         <Plus class="size-4 text-fg-muted" />
-                        Add a task here
+                        {t('Add a task here')}
                     </button>
                 </div>
             </li>

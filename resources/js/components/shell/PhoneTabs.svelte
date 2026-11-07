@@ -2,6 +2,7 @@
     import { inertia } from '@inertiajs/svelte';
     import { Bell, FolderKanban, ListChecks } from '@lucide/svelte';
     import { MediaQuery } from 'svelte/reactivity';
+    import { msg, number, t } from '../../lib/i18n';
     import { currentHref, under } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
     import type { OrganizationSwitch } from '../../lib/types';
@@ -43,9 +44,17 @@
     } = $props();
 
     const TABS = [
-        { label: 'My work', href: '/workspace/my', icon: ListChecks },
-        { label: 'Projects', href: '/workspace/projects', icon: FolderKanban },
-        { label: 'Updates', href: '/workspace/notifications', icon: Bell },
+        { label: msg('My work'), href: '/workspace/my', icon: ListChecks },
+        {
+            label: msg('Projects'),
+            href: '/workspace/projects',
+            icon: FolderKanban,
+        },
+        {
+            label: msg('Updates'),
+            href: '/workspace/notifications',
+            icon: Bell,
+        },
     ];
 
     let meOpen = $state(false);
@@ -65,7 +74,7 @@
     const extra = $derived(
         links.filter(
             (l) =>
-                !TABS.some((t) => t.href === l.href) &&
+                !TABS.some((item) => item.href === l.href) &&
                 !groups.some((g) => g.links.some((gl) => gl.href === l.href)),
         ),
     );
@@ -92,7 +101,7 @@
 </script>
 
 <nav
-    aria-label="Main"
+    aria-label={t('Main')}
     class="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface px-2 pb-[env(safe-area-inset-bottom)] md:hidden"
 >
     {#each TABS as item (item.href)}
@@ -103,7 +112,7 @@
             use:inertia
             aria-current={active ? 'page' : undefined}
             aria-label={item.href === '/workspace/notifications' && unread > 0
-                ? `Updates, ${unread} unread`
+                ? t('Updates, :count unread', { count: unread })
                 : undefined}
             class={tabClass(active)}
         >
@@ -112,17 +121,17 @@
                 {#if item.href === '/workspace/notifications' && unread > 0}
                     <span
                         class="absolute -top-[4px] -right-[8px] h-[16px] min-w-[16px] rounded-full bg-accent px-[4px] text-center text-[10.5px] leading-[16px] font-bold text-white tabular-nums"
-                        >{unread > 99 ? '99+' : unread}</span
+                        >{unread > 99 ? `${number(99)}+` : number(unread)}</span
                     >
                 {/if}
             </span>
-            {item.label}
+            {t(item.label)}
         </a>
     {/each}
     <button
         bind:this={meButton}
         type="button"
-        aria-label="Me"
+        aria-label={t('Me')}
         aria-haspopup="dialog"
         aria-expanded={meOpen}
         class={tabClass(meHere)}
@@ -133,7 +142,7 @@
             size="md"
             class={meHere ? 'border-accent text-accent' : ''}
         />
-        Me
+        {t('Me')}
     </button>
 </nav>
 

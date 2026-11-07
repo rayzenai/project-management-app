@@ -24,7 +24,7 @@ class OfficeFile implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $message = 'This file could not be read as a Word, Excel or PowerPoint file.';
+        $message = __('This file could not be read as a Word, Excel or PowerPoint file.');
 
         if (! $value instanceof UploadedFile) {
             $fail($message);

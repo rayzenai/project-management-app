@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { number, t } from '../../lib/i18n';
     import type { Project, ProjectDocuments } from '../../lib/types';
     import DocumentList from '../documents/DocumentList.svelte';
     import DocumentStart from '../documents/DocumentStart.svelte';
@@ -24,12 +25,13 @@
 
 <section>
     <h2 class="section-title mb-1">
-        Documents <span class="section-count">{documents.documents.length}</span
-        >
+        {t('Documents')}
+        <span class="section-count">{number(documents.documents.length)}</span>
     </h2>
     <p class="mb-3 text-xs text-fg-muted">
-        Word, Excel and PowerPoint files the team edits together. Every save is
-        kept as a version.
+        {t(
+            'Word, Excel and PowerPoint files the team edits together. Every save is kept as a version.',
+        )}
     </p>
     <DocumentStart
         types={documents.types}
@@ -39,8 +41,10 @@
 
     {#if documents.documents.length === 0}
         <p class="mt-4 text-[13px] text-fg-muted">
-            No documents yet. Start one above, or drop a .docx, .xlsx or .pptx
-            file of up to {documents.max_upload_mb} MB anywhere on this page.
+            {t(
+                'No documents yet. Start one above, or drop a .docx, .xlsx or .pptx file of up to :max MB anywhere on this page.',
+                { max: documents.max_upload_mb },
+            )}
         </p>
     {:else}
         <div class="mt-4">

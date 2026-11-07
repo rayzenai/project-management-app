@@ -3,6 +3,7 @@
     import { PanelLeft, StickyNote, X } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import type { AppearanceProps } from '../lib/appearance';
+    import { number, t } from '../lib/i18n';
     import { accountGroups, mainLinks } from '../lib/navigation';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { palette } from '../lib/palette.svelte';
@@ -164,9 +165,11 @@
 
     const role = $derived(
         shared.isSuperAdmin
-            ? 'Super admin'
+            ? t('Super admin')
             : shared.isOfficeAdmin
-              ? `Organizational admin · ${shared.organization?.name ?? ''}`
+              ? t('Organizational admin · :organization', {
+                    organization: shared.organization?.name ?? '',
+                })
               : (shared.organization?.name ?? user?.email ?? ''),
     );
 
@@ -294,7 +297,7 @@
                 {path}
                 projects={sidebarProjects}
                 {programs}
-                organizationName={shared.organization?.name ?? 'Workspace'}
+                organizationName={shared.organization?.name ?? t('Workspace')}
                 {organizationSwitch}
                 {user}
                 {role}
@@ -316,9 +319,11 @@
                 type="button"
                 class="btn-icon -ml-2 hidden shrink-0 md:inline-flex"
                 title={collapsed
-                    ? 'Show the sidebar ([)'
-                    : 'Hide the sidebar ([)'}
-                aria-label={collapsed ? 'Show the sidebar' : 'Hide the sidebar'}
+                    ? t('Show the sidebar ([)')
+                    : t('Hide the sidebar ([)')}
+                aria-label={collapsed
+                    ? t('Show the sidebar')
+                    : t('Hide the sidebar')}
                 onclick={toggleCollapsed}
             >
                 <PanelLeft class="h-4 w-4" />
@@ -341,16 +346,16 @@
             <button
                 type="button"
                 class={`btn-ghost shrink-0 ${notesBoard.open ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
-                title="Sticky notes"
+                title={t('Sticky notes')}
                 aria-label={noteCount > 0
-                    ? `Sticky notes, ${noteCount}`
-                    : 'Sticky notes'}
+                    ? t('Sticky notes, :count', { count: noteCount })
+                    : t('Sticky notes')}
                 aria-pressed={notesBoard.open}
                 onclick={() => notesBoard.toggle()}
             >
                 <StickyNote class="h-4 w-4" />
                 {#if noteCount > 0}
-                    <span class="tabular-nums">{noteCount}</span>
+                    <span class="tabular-nums">{number(noteCount)}</span>
                 {/if}
             </button>
             <LanguageSwitch compact />
@@ -399,18 +404,20 @@
                 onclick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
-                aria-label="Settings"
+                aria-label={t('Settings')}
                 tabindex="-1"
             >
                 <div
                     class="flex h-14 items-center justify-between gap-2 border-b border-line px-6"
                 >
-                    <h2 class="text-[15px] font-semibold text-fg">Settings</h2>
+                    <h2 class="text-[15px] font-semibold text-fg">
+                        {t('Settings')}
+                    </h2>
                     <div class="flex items-center gap-2">
                         <kbd class="kbd">esc</kbd>
                         <button
                             type="button"
-                            aria-label="Close"
+                            aria-label={t('Close')}
                             class="btn-icon"
                             onclick={() => (settingsOpen = false)}
                         >

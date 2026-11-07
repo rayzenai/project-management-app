@@ -18,7 +18,7 @@ class CreatePersonalTodoService
         $title = trim($title);
 
         if ($title === '') {
-            return ServiceResult::failure('Title is required.', 422);
+            return ServiceResult::failure(__('Title is required.'), 422);
         }
 
         try {
@@ -26,7 +26,7 @@ class CreatePersonalTodoService
             $todo->user_id = (int) $owner->getAuthIdentifier();
             $todo->save();
 
-            return ServiceResult::success($todo->fresh(), 'Added to your to-dos.');
+            return ServiceResult::success($todo->fresh(), __('Added to your to-dos.'));
         } catch (Throwable $e) {
             report($e);
 

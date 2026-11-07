@@ -27,7 +27,7 @@ trait ChoosesUsableProject
             $project = Project::query()->where('slug', (string) $value)->first();
 
             if ($project === null || ! WorkspaceAccess::canUseProjectDocuments($this->user(), $project)) {
-                $fail('Choose one of your projects.');
+                $fail(__('Choose one of your projects.'));
 
                 return;
             }

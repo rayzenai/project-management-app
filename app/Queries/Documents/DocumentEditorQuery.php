@@ -30,8 +30,8 @@ class DocumentEditorQuery
         $edit = $access === Document::ACCESS_EDIT;
         $project = $document->project;
         $back = $project !== null && WorkspaceAccess::canUseProjectDocuments($viewer, $project)
-            ? ['url' => route('workspace.projects.show', ['project' => $project->slug, 'view' => 'documents']), 'text' => "Back to {$project->title}"]
-            : ['url' => url('/workspace/documents'), 'text' => 'Back to Documents'];
+            ? ['url' => route('workspace.projects.show', ['project' => $project->slug, 'view' => 'documents']), 'text' => __('Back to :project', ['project' => $project->title])]
+            : ['url' => url('/workspace/documents'), 'text' => __('Back to Documents')];
 
         $config = [
             'documentType' => DocumentTypes::editorType($document->file_type),

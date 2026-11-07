@@ -8,6 +8,7 @@
     import DocumentTrash from '../../components/documents/DocumentTrash.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
     import Spinner from '../../components/Spinner.svelte';
+    import { msg, t } from '../../lib/i18n';
     import type {
         DocumentItem,
         DocumentLibrary,
@@ -30,10 +31,10 @@
     const SEARCH_FROM = 9;
 
     const tabs: { value: DocumentTab; label: string }[] = [
-        { value: 'recent', label: 'Recent' },
-        { value: 'personal', label: 'Personal' },
-        { value: 'shared', label: 'Shared with me' },
-        { value: 'projects', label: 'Projects' },
+        { value: 'recent', label: msg('Recent') },
+        { value: 'personal', label: msg('Personal') },
+        { value: 'shared', label: msg('Shared with me') },
+        { value: 'projects', label: msg('Projects') },
     ];
 
     // svelte-ignore state_referenced_locally
@@ -158,30 +159,38 @@
 
     const EMPTY: Record<DocumentTab, { title: string; body: string }> = {
         recent: {
-            title: 'No documents yet.',
-            body: 'Start a document, spreadsheet or presentation above, or drop a .docx, .xlsx or .pptx file anywhere on this page. One made for Just me is yours until you share it: with everyone in your office, or with chosen people. One in a project belongs to its team.',
+            title: msg('No documents yet.'),
+            body: msg(
+                'Start a document, spreadsheet or presentation above, or drop a .docx, .xlsx or .pptx file anywhere on this page. One made for Just me is yours until you share it: with everyone in your office, or with chosen people. One in a project belongs to its team.',
+            ),
         },
         personal: {
-            title: 'No personal documents yet.',
-            body: 'Documents you make for Just me are kept here, and only you see them until you share them.',
+            title: msg('No personal documents yet.'),
+            body: msg(
+                'Documents you make for Just me are kept here, and only you see them until you share them.',
+            ),
         },
         shared: {
-            title: 'Nothing is shared with you yet.',
-            body: 'Documents people share with you by name, and those open to your whole office, show here.',
+            title: msg('Nothing is shared with you yet.'),
+            body: msg(
+                'Documents people share with you by name, and those open to your whole office, show here.',
+            ),
         },
         projects: {
-            title: 'No projects here yet.',
-            body: "Each project you're on has its own documents, which its team edits together. Once you're on a project's team, it shows here.",
+            title: msg('No projects here yet.'),
+            body: msg(
+                "Each project you're on has its own documents, which its team edits together. Once you're on a project's team, it shows here.",
+            ),
         },
     };
 </script>
 
-<svelte:head><title>Documents</title></svelte:head>
+<svelte:head><title>{t('Documents')}</title></svelte:head>
 
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
-            <span class="truncate font-medium">Documents</span>
+            <span class="truncate font-medium">{t('Documents')}</span>
         </div>
     {/snippet}
 
@@ -194,8 +203,9 @@
         />
         {#if !props.can_create_personal && props.projects.length === 0}
             <p class="text-[13px] text-fg-muted">
-                You can open the documents shared with you here. To make your
-                own, you need a place in an office or on a project's team.
+                {t(
+                    "You can open the documents shared with you here. To make your own, you need a place in an office or on a project's team.",
+                )}
             </p>
         {/if}
 
@@ -203,20 +213,28 @@
             class="mt-6 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between"
         >
             <div class="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
-                <PillGroup options={tabs} bind:value={show} />
+                <PillGroup
+                    options={tabs.map((tab) => ({
+                        ...tab,
+                        label: t(tab.label),
+                    }))}
+                    bind:value={show}
+                />
             </div>
             {#if showSearch}
                 <div class="relative min-w-0 sm:w-64">
                     <Search
                         class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint"
                     />
-                    <label for="{uid}-q" class="sr-only">Search titles</label>
+                    <label for="{uid}-q" class="sr-only"
+                        >{t('Search titles')}</label
+                    >
                     <input
                         id="{uid}-q"
                         type="search"
                         bind:value={q}
                         oninput={searchSoon}
-                        placeholder="Search titles"
+                        placeholder={t('Search titles')}
                         autocomplete="off"
                         class="input pl-8"
                     />
@@ -234,7 +252,7 @@
             {:else if rows.length === 0}
                 {#if props.filters.q !== null}
                     <p class="text-[13px] text-fg-muted">
-                        No titles match "{props.filters.q}".
+                        {t('No titles match ":q".', { q: props.filters.q })}
                     </p>
                 {:else}
                     {@render empty(EMPTY[props.filters.show])}
@@ -254,14 +272,14 @@
                             onclick={showMore}
                         >
                             {#if loadingMore}
-                                <Spinner size={14} />Loading
+                                <Spinner size={14} />{t('Loading')}
                             {:else}
-                                Show more
+                                {t('Show more')}
                             {/if}
                         </button>
                         {#if moreFailed}
                             <p class="text-xs text-danger">
-                                The next ones didn't load. Try again.
+                                {t("The next ones didn't load. Try again.")}
                             </p>
                         {/if}
                     </div>
@@ -278,7 +296,7 @@
 
 {#snippet empty(copy: { title: string; body: string })}
     <div class="text-[13px] text-fg-muted">
-        <p class="font-medium text-fg">{copy.title}</p>
-        <p class="mt-1 max-w-xl">{copy.body}</p>
+        <p class="font-medium text-fg">{t(copy.title)}</p>
+        <p class="mt-1 max-w-xl">{t(copy.body)}</p>
     </div>
 {/snippet}

@@ -13,6 +13,7 @@
     import MyWorkRow from '../components/mywork/MyWorkRow.svelte';
     import TodoRow from '../components/mywork/TodoRow.svelte';
     import QuickAddBar from '../components/QuickAddBar.svelte';
+    import { formatDay, isNepali, number, t } from '../lib/i18n';
     import { peek } from '../lib/peek.svelte';
     import type {
         MyWorkGroup,
@@ -44,6 +45,29 @@
 
     /** Kept in a constant: a bare ' · ' at the start of a block loses its spaces. */
     const DOT = ' · ';
+
+    /** The groups' names in the reader's language (the server's are English). */
+    const GROUP_LABELS = $derived<Record<MyWorkGroupKey, string>>({
+        today: t('Today'),
+        tomorrow: t('Tomorrow'),
+        coming_up: t('Coming up'),
+        later: t('Later'),
+        asked_others: t('You asked others'),
+        no_date: t('No date'),
+        snoozed: t('Snoozed'),
+        done: t('Done'),
+    });
+
+    /** Today's Gregorian date: the server's English, or written in Nepali. */
+    const gregorian = $derived(
+        isNepali()
+            ? formatDay(today.date, {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+              })
+            : today.label,
+    );
 
     const FOLDABLE: MyWorkGroupKey[] = ['later', 'no_date', 'snoozed'];
     const STORE = 'workspace.mywork.open.';
@@ -148,13 +172,13 @@
     });
 </script>
 
-<svelte:head><title>My work</title></svelte:head>
+<svelte:head><title>{t('My work')}</title></svelte:head>
 
 {#snippet head(group: MyWorkGroup)}
-    {group.label}
+    {GROUP_LABELS[group.key] ?? group.label}
     <span
         class="text-[13.5px] font-normal text-fg-muted tabular-nums sm:text-[13px]"
-        >{group.rows.length}</span
+        >{number(group.rows.length)}</span
     >
 {/snippet}
 
@@ -165,13 +189,16 @@
                 <h1
                     class="text-[30px] leading-[36px] font-semibold tracking-[-0.02em] sm:text-[28px] sm:leading-[34px]"
                 >
-                    My work
+                    {t('My work')}
                 </h1>
+                <!-- In Nepali the Bikram Sambat date leads. -->
                 <p
                     class="mt-1 text-[14.5px] text-fg-muted sm:mt-1.5 sm:text-[14px]"
                 >
-                    {today.label}{#if today.bs}{DOT}<span class="font-np"
+                    {#if today.bs && isNepali()}<span class="font-np"
                             >{today.bs}</span
+                        >{DOT}{/if}{gregorian}{#if today.bs && !isNepali()}{DOT}<span
+                            class="font-np">{today.bs}</span
                         >{/if}
                 </p>
             </div>
@@ -181,7 +208,7 @@
                 aria-pressed={showingDone}
                 onclick={toggleDone}
             >
-                Show done
+                {t('Show done')}
             </button>
         </header>
 
@@ -203,8 +230,8 @@
         {#if !waiting}
             <p class="mt-8 px-5 text-[15px] text-fg-muted sm:px-0">
                 {joined.length > 0
-                    ? 'Nothing assigned to you yet.'
-                    : 'Nothing waiting for you.'}
+                    ? t('Nothing assigned to you yet.')
+                    : t('Nothing waiting for you.')}
             </p>
         {/if}
 

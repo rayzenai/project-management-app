@@ -55,7 +55,7 @@ class AuthController extends Controller
 
         if (! WorkspaceAccess::canSignIn($user)) {
             throw ValidationException::withMessages([
-                'email' => [EnsureCanSignIn::DEACTIVATED],
+                'email' => [EnsureCanSignIn::deactivated()],
             ]);
         }
 
@@ -76,7 +76,7 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Logged out.']);
+        return response()->json(['message' => __('Logged out.')]);
     }
 
     /**

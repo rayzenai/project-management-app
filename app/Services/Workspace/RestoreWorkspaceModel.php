@@ -12,17 +12,17 @@ class RestoreWorkspaceModel
     {
         try {
             if (! method_exists($model, 'trashed') || ! method_exists($model, 'restore')) {
-                return ServiceResult::failure('This record cannot be restored.', 422);
+                return ServiceResult::failure(__('This record cannot be restored.'), 422);
             }
 
             if (! $model->trashed()) {
-                return ServiceResult::success($model, 'Already restored.');
+                return ServiceResult::success($model, __('Already restored.'));
             }
 
             $this->ensureUniqueSlug($model);
             $model->restore();
 
-            return ServiceResult::success($model->fresh(), 'Restored.');
+            return ServiceResult::success($model->fresh(), __('Restored.'));
         } catch (Throwable $e) {
             report($e);
 

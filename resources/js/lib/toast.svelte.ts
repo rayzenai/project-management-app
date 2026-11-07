@@ -3,6 +3,7 @@
 // flash handler reports server messages, drag-drop reports failures.
 
 import { SvelteMap } from 'svelte/reactivity';
+import { msg } from './i18n';
 
 export type ToastVariant = 'success' | 'error' | 'info';
 
@@ -62,7 +63,10 @@ function show(
             message,
             variant: options.variant ?? 'success',
             undo: options.undo
-                ? { label: options.undo.label ?? 'Undo', run: options.undo.run }
+                ? {
+                      label: options.undo.label ?? msg('Undo'),
+                      run: options.undo.run,
+                  }
                 : null,
         },
     ];

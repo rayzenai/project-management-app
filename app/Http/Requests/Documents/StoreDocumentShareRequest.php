@@ -47,7 +47,11 @@ class StoreDocumentShareRequest extends ShareDocumentRequest
     /** The one refusal, whoever was named: it never says who they are. */
     private function choose(): string
     {
-        return 'Choose someone in '.($this->organizationName() ?? 'your organization').'.';
+        $organization = $this->organizationName();
+
+        return $organization === null
+            ? __('Choose someone in your organization.')
+            : __('Choose someone in :organization.', ['organization' => $organization]);
     }
 
     private function inOrganization(): Closure

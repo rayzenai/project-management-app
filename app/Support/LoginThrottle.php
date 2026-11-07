@@ -34,8 +34,8 @@ final class LoginThrottle
 
         throw ValidationException::withMessages([
             'email' => __('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
+                'seconds' => Locales::number($seconds),
+                'minutes' => Locales::number((int) ceil($seconds / 60)),
             ]),
         ])->status($status);
     }

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { inertia } from '@inertiajs/svelte';
     import { FolderOpen } from '@lucide/svelte';
-    import { formatTimeAgo, plural } from '../../lib/format';
+    import { t, tc, timeAgo } from '../../lib/i18n';
     import type { DocumentProjectCard } from '../../lib/types';
 
     /**
@@ -30,10 +30,12 @@
                     >
                     <span class="block truncate text-xs text-fg-muted">
                         {#if card.documents_count === 0}
-                            No documents yet
+                            {t('No documents yet')}
                         {:else}
-                            {plural(card.documents_count, 'document')} · {formatTimeAgo(
-                                card.last_edited_at,
+                            {tc(
+                                ':count document · :when|:count documents · :when',
+                                card.documents_count,
+                                { when: timeAgo(card.last_edited_at) },
                             )}
                         {/if}
                     </span>

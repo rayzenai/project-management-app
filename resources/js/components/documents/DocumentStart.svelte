@@ -1,6 +1,7 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
     import { Upload } from '@lucide/svelte';
+    import { msg, t, tc } from '../../lib/i18n';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type {
         DocumentFileType,
@@ -42,6 +43,11 @@
         xlsx: 'Excel',
         pptx: 'PowerPoint',
     };
+    const UNTITLED: Record<DocumentFileType, string> = {
+        docx: msg('Untitled document'),
+        xlsx: msg('Untitled spreadsheet'),
+        pptx: msg('Untitled presentation'),
+    };
 
     const shared = $derived(page.props as unknown as SharedProps);
     const storageKey = $derived(
@@ -49,7 +55,9 @@
     );
     const choosing = $derived(project === null);
     const choices = $derived([
-        ...(canCreatePersonal ? [{ value: PERSONAL, label: 'Just me' }] : []),
+        ...(canCreatePersonal
+            ? [{ value: PERSONAL, label: t('Just me') }]
+            : []),
         ...places.map((place) => ({ value: place.slug, label: place.label })),
     ]);
     const canMake = $derived(!choosing || choices.length > 0);
@@ -80,11 +88,21 @@
             : (choices[0]?.value ?? PERSONAL),
     );
     const target = $derived(project ?? (place === PERSONAL ? null : place));
-    const placeLabel = $derived(
+    const dropHint = $derived(
         choosing
-            ? (choices.find((choice) => choice.value === place)?.label ??
-                  'Just me')
-            : 'this project',
+            ? t(
+                  'To :place. Word, Excel or PowerPoint files of up to :max MB each.',
+                  {
+                      place:
+                          choices.find((choice) => choice.value === place)
+                              ?.label ?? t('Just me'),
+                      max: maxUploadMb,
+                  },
+              )
+            : t(
+                  'To this project. Word, Excel or PowerPoint files of up to :max MB each.',
+                  { max: maxUploadMb },
+              ),
     );
 
     let creating = $state<DocumentFileType | null>(null);
@@ -108,14 +126,13 @@
             return;
         }
 
-        const label = types.find((kind) => kind.value === type)?.label;
         creating = type;
         error = null;
         problems = [];
         router.post(
             '/workspace/documents',
             {
-                title: `Untitled ${(label ?? 'document').toLowerCase()}`,
+                title: t(UNTITLED[type]),
                 type,
                 ...(target ? { project: target } : {}),
             },
@@ -127,7 +144,7 @@
                         errors.type ??
                         errors.project ??
                         errors.__global ??
-                        "It couldn't be made. Try again."),
+                        t("It couldn't be made. Try again.")),
                 onFinish: () => (creating = null),
             },
         );
@@ -137,11 +154,17 @@
         const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
 
         if (!EXTENSIONS.includes(extension)) {
-            return `${file.name} isn't a Word, Excel or PowerPoint file (.docx, .xlsx or .pptx).`;
+            return t(
+                ":name isn't a Word, Excel or PowerPoint file (.docx, .xlsx or .pptx).",
+                { name: file.name },
+            );
         }
 
         if (file.size > maxUploadMb * 1024 * 1024) {
-            return `${file.name} is larger than ${maxUploadMb} MB.`;
+            return t(':name is larger than :max MB.', {
+                name: file.name,
+                max: maxUploadMb,
+            });
         }
 
         return null;
@@ -166,11 +189,11 @@
                             errors.file ??
                             errors.project ??
                             errors.__global ??
-                            "it couldn't be uploaded."),
+                            t("it couldn't be uploaded.")),
                     onFinish: () =>
                         resolve(
                             outcome === undefined
-                                ? "it couldn't be uploaded."
+                                ? t("it couldn't be uploaded.")
                                 : outcome,
                         ),
                 },
@@ -209,7 +232,9 @@
             const failed = await send(file);
 
             if (failed) {
-                found.push(`${file.name}: ${failed}`);
+                found.push(
+                    t(':name: :problem', { name: file.name, problem: failed }),
+                );
             } else {
                 uploaded++;
             }
@@ -221,8 +246,11 @@
         if (uploaded > 0) {
             toast.show(
                 uploaded === 1 && ready.length === 1
-                    ? `Uploaded ${ready[0].name}.`
-                    : `Uploaded ${uploaded} files.`,
+                    ? t('Uploaded :name.', { name: ready[0].name })
+                    : tc(
+                          'Uploaded :count file.|Uploaded :count files.',
+                          uploaded,
+                      ),
             );
         }
     }
@@ -311,14 +339,14 @@
 {/snippet}
 
 {#if canMake}
-    <section aria-label="Start a document">
+    <section aria-label={t('Start a document')}>
         <input
             bind:this={fileInput}
             type="file"
             multiple
             accept=".docx,.xlsx,.pptx"
             class="hidden"
-            aria-label="Choose files to upload"
+            aria-label={t('Choose files to upload')}
             onchange={picked}
         />
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -333,7 +361,7 @@
                     {#if creating === kind.value}
                         <span
                             class="flex h-9 w-9 shrink-0 items-center justify-center"
-                            ><Spinner size={16} label="Opening" /></span
+                            ><Spinner size={16} label={t('Opening')} /></span
                         >
                     {:else}
                         <DocumentKindIcon type={kind.value} size="lg" />
@@ -365,23 +393,26 @@
                 {#if progress}
                     {@render tileBody(
                         progress.total > 1
-                            ? `Uploading ${progress.index} of ${progress.total}`
-                            : 'Uploading',
+                            ? t('Uploading :index of :total', {
+                                  index: progress.index,
+                                  total: progress.total,
+                              })
+                            : t('Uploading'),
                         progress.name,
                     )}
                 {:else}
                     <span class="min-w-0">
                         <span
                             class="block truncate text-[14px] font-medium text-fg"
-                            >Upload a file</span
+                            >{t('Upload a file')}</span
                         >
                         <span
                             class="hidden truncate text-xs text-fg-muted md:block"
-                            >or drop it on this page</span
+                            >{t('or drop it on this page')}</span
                         >
                         <span
                             class="block truncate text-xs text-fg-muted md:hidden"
-                            >Up to {maxUploadMb} MB</span
+                            >{t('Up to :max MB', { max: maxUploadMb })}</span
                         >
                     </span>
                 {/if}
@@ -392,7 +423,7 @@
             <div
                 class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted"
             >
-                <label for="{uid}-place">New ones go to</label>
+                <label for="{uid}-place">{t('New ones go to')}</label>
                 <select
                     id="{uid}-place"
                     value={place}
@@ -405,8 +436,8 @@
                 </select>
                 <span
                     >{place === PERSONAL
-                        ? 'Only you see them until you share them.'
-                        : 'The project team can open and edit them.'}</span
+                        ? t('Only you see them until you share them.')
+                        : t('The project team can open and edit them.')}</span
                 >
             </div>
         {/if}
@@ -431,11 +462,8 @@
                 class="flex max-w-sm flex-col items-center gap-2 rounded-lg border-2 border-dashed border-accent bg-surface px-10 py-8 text-center"
             >
                 <Upload class="h-6 w-6 text-accent" />
-                <p class="font-medium text-fg">Drop to upload</p>
-                <p class="text-xs text-fg-muted">
-                    To {placeLabel}. Word, Excel or PowerPoint files of up to {maxUploadMb}
-                    MB each.
-                </p>
+                <p class="font-medium text-fg">{t('Drop to upload')}</p>
+                <p class="text-xs text-fg-muted">{dropHint}</p>
             </div>
         </div>
     {/if}

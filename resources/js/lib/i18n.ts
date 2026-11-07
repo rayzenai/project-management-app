@@ -23,8 +23,54 @@ const DICTIONARIES: Record<Locale, Record<string, string>> = {
     ne: ne as Record<string, string>,
 };
 
-/** BCP 47 tags for Intl: Nepali digits and month names come with `ne`. */
-const INTL: Record<Locale, string> = { en: 'en-GB', ne: 'ne-NP' };
+/*
+ * Nepali is written here rather than asked of the browser: many browsers
+ * carry no Nepali locale data, and Intl then answers in English. Numbers
+ * take the Indian (lakh) grouping and Devanagari digits; dates take the
+ * Gregorian months and weekdays in Nepali.
+ */
+const NE_MONTHS = [
+    'जनवरी',
+    'फेब्रुअरी',
+    'मार्च',
+    'अप्रिल',
+    'मे',
+    'जुन',
+    'जुलाई',
+    'अगस्ट',
+    'सेप्टेम्बर',
+    'अक्टोबर',
+    'नोभेम्बर',
+    'डिसेम्बर',
+];
+const NE_WEEKDAYS = [
+    'आइतबार',
+    'सोमबार',
+    'मङ्गलबार',
+    'बुधबार',
+    'बिहीबार',
+    'शुक्रबार',
+    'शनिबार',
+];
+const NE_WEEKDAYS_SHORT = [
+    'आइत',
+    'सोम',
+    'मङ्गल',
+    'बुध',
+    'बिही',
+    'शुक्र',
+    'शनि',
+];
+const WEEKDAY_INDEX: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+};
+const TIME_ZONE = 'Asia/Kathmandu';
 
 export function locale(): Locale {
     return (page.props as { locale?: string } | undefined)?.locale === 'ne'
@@ -38,7 +84,18 @@ export function isNepali(): boolean {
 
 /** A number as the language writes it: "1,234" or "१,२३४". */
 export function number(value: number): string {
-    return value.toLocaleString(INTL[locale()]);
+    return locale() === 'ne'
+        ? digits(value.toLocaleString('en-IN'))
+        : value.toLocaleString('en-GB');
+}
+
+const DEVANAGARI_DIGITS = '०१२३४५६७८९';
+
+/** Digits in ready-made text ("12.3 KB") as the language writes them. */
+export function digits(text: string): string {
+    return locale() === 'ne'
+        ? text.replace(/[0-9]/g, (digit) => DEVANAGARI_DIGITS[Number(digit)])
+        : text;
 }
 
 function fill(text: string, replace: Record<string, string | number>): string {
@@ -53,6 +110,15 @@ function fill(text: string, replace: Record<string, string | number>): string {
                 typeof value === 'number' ? number(value) : value,
             );
         }, text);
+}
+
+/**
+ * Marks an English text kept in data (an option's label, a link's name) as
+ * a key, for the check; it returns the text unchanged. Draw it with
+ * `t(option.label)`.
+ */
+export function msg(text: string): string {
+    return text;
 }
 
 /** The text in the current language, placeholders filled. */
@@ -93,7 +159,7 @@ function pick(text: string, count: number): string {
         : (plain[count === 1 ? 0 : 1] ?? plain[0]);
 }
 
-/** A form chosen by count, `:count` filled: tc(':count file|:count files', 3). */
+/** A form chosen by count (Laravel's one|many), `:count` filled. */
 export function tc(
     key: string,
     count: number,
@@ -119,46 +185,87 @@ export function timeAgo(
     );
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    const relative = new Intl.RelativeTimeFormat(INTL.ne, {
-        numeric: 'always',
-    });
 
     if (minutes < 1) {
         return t('just now');
     }
 
     if (minutes < 60) {
-        return relative.format(-minutes, 'minute');
+        return tc(':count minute ago|:count minutes ago', minutes);
     }
 
     if (hours < 24) {
-        return relative.format(-hours, 'hour');
+        return tc(':count hour ago|:count hours ago', hours);
     }
 
     if (days < 7) {
-        return relative.format(-days, 'day');
+        return tc(':count day ago|:count days ago', days);
     }
 
     if (days < 35) {
-        return relative.format(-Math.floor(days / 7), 'week');
+        return tc(':count week ago|:count weeks ago', Math.floor(days / 7));
     }
 
     if (days < 365) {
-        return relative.format(-Math.max(1, Math.floor(days / 30)), 'month');
+        return tc(
+            ':count month ago|:count months ago',
+            Math.max(1, Math.floor(days / 30)),
+        );
     }
 
-    return relative.format(-Math.floor(days / 365), 'year');
+    return tc(':count year ago|:count years ago', Math.floor(days / 365));
 }
 
-/** A date as the language writes it, for Intl's options. */
+/**
+ * A date as the language writes it, for Intl's options (in English Intl's
+ * en-GB). In Nepali the weekday, the month and day, and the year, as the
+ * options ask for them: "शनिबार, नोभेम्बर ७", "नोभेम्बर ७, २०२६".
+ */
 export function formatDay(
     value: Date | string,
     options: Intl.DateTimeFormatOptions,
 ): string {
     const date = typeof value === 'string' ? new Date(value) : value;
 
-    return new Intl.DateTimeFormat(INTL[locale()], {
-        timeZone: 'Asia/Kathmandu',
-        ...options,
-    }).format(date);
+    if (locale() === 'en') {
+        return new Intl.DateTimeFormat('en-GB', {
+            timeZone: TIME_ZONE,
+            ...options,
+        }).format(date);
+    }
+
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-US', {
+            timeZone: options.timeZone ?? TIME_ZONE,
+            weekday: 'short',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+        })
+            .formatToParts(date)
+            .map((part) => [part.type, part.value]),
+    );
+    const weekday = WEEKDAY_INDEX[parts.weekday] ?? 0;
+    const month = Number(parts.month) - 1;
+    const day = digits(parts.day);
+    const year = digits(parts.year);
+
+    const monthDay =
+        options.month === 'numeric' || options.month === '2-digit'
+            ? `${digits(String(month + 1))}/${day}`
+            : options.month
+              ? `${NE_MONTHS[month]} ${options.day ? day : ''}`.trim()
+              : options.day
+                ? day
+                : '';
+    const dated = [monthDay, options.year ? year : '']
+        .filter(Boolean)
+        .join(', ');
+    const named = options.weekday
+        ? options.weekday === 'long'
+            ? NE_WEEKDAYS[weekday]
+            : NE_WEEKDAYS_SHORT[weekday]
+        : '';
+
+    return [named, dated].filter(Boolean).join(', ');
 }

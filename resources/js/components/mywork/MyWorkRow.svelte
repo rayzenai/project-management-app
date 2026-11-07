@@ -1,8 +1,15 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { Check, CircleDashed, Star } from '@lucide/svelte';
-    import { dueLabel } from '../../lib/dates';
-    import { formatTimeAgo, plural } from '../../lib/format';
+    import { dueLabel, shiftDay } from '../../lib/dates';
+    import {
+        formatDay,
+        isNepali,
+        number,
+        t,
+        tc,
+        timeAgo,
+    } from '../../lib/i18n';
     import { peek } from '../../lib/peek.svelte';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type { MyWorkGroup, MyWorkTaskRow } from '../../lib/types';
@@ -42,32 +49,55 @@
             : row.task.project.label,
     );
     const late = $derived(
-        row.days_late > 0 ? `${plural(row.days_late, 'day')} late` : '',
+        row.days_late > 0
+            ? tc(':count day late|:count days late', row.days_late)
+            : '',
     );
+
+    /** dueLabel in the reader's language (Nepali names and digits). */
+    function dayText(iso: string): string {
+        if (!isNepali()) {
+            return dueLabel(iso, today);
+        }
+
+        if (iso === today) {
+            return t('Today');
+        }
+
+        if (iso === shiftDay(today, 1)) {
+            return t('Tomorrow');
+        }
+
+        return formatDay(
+            iso,
+            iso > today && iso <= shiftDay(today, 6)
+                ? { weekday: 'short' }
+                : { weekday: 'short', day: 'numeric', month: 'short' },
+        );
+    }
 
     /** The day beside the row; left out when the group already says it. */
     const when = $derived.by(() => {
         if (done) {
             return row.task.completed_at
-                ? dueLabel(row.task.completed_at.slice(0, 10), today)
+                ? dayText(row.task.completed_at.slice(0, 10))
                 : '';
         }
 
-        const label = row.due
-            ? dueLabel(row.due, today)
-            : asked
-              ? 'No date'
-              : '';
+        if (!row.due) {
+            return asked ? t('No date') : '';
+        }
 
-        return label === group.label ? '' : label;
+        // The server's group names are English, as dueLabel's are.
+        return dueLabel(row.due, today) === group.label ? '' : dayText(row.due);
     });
 
     const person = $derived(
         row.people.length === 0
-            ? 'Nobody on it'
+            ? t('Nobody on it')
             : row.people.length === 1
               ? row.people[0].name
-              : `${row.people[0].name} +${row.people.length - 1}`,
+              : `${row.people[0].name} +${number(row.people.length - 1)}`,
     );
     const update = $derived(row.subtask ? null : row.latest_update);
     /** Starring or snoozing finished work means nothing: no menu in Done. */
@@ -96,7 +126,7 @@
             {
                 ...quietly,
                 onSuccess: () =>
-                    toast.show(`Completed "${body}"`, {
+                    toast.show(t('Completed ":title"', { title: body }), {
                         undo: {
                             run: () =>
                                 router.patch(url, { is_done: false }, quietly),
@@ -140,7 +170,7 @@
                 type="button"
                 role="checkbox"
                 aria-checked={todoDone}
-                aria-label={`Mark "${title}" done`}
+                aria-label={t('Mark ":title" done', { title })}
                 class={`relative flex size-[24px] items-center justify-center rounded-[6px] border-[1.5px] transition before:absolute before:-inset-[10px] before:content-[''] sm:size-[18px] sm:rounded-[5px] sm:before:-inset-[13px] ${
                     todoDone
                         ? 'border-success bg-success text-white'
@@ -167,7 +197,7 @@
         <span class="block min-w-0 flex-1">
             <span class="flex items-baseline gap-3">
                 {#if row.assignment?.is_focused}
-                    <span class="sr-only">Starred:</span>
+                    <span class="sr-only">{t('Starred:')}</span>
                     <Star
                         class="-mr-1.5 size-[14px] shrink-0 self-center fill-current text-accent"
                         aria-hidden="true"
@@ -199,7 +229,7 @@
                     >
                     {#if update.at}
                         <span class="shrink-0 whitespace-pre"
-                            >{DOT}{formatTimeAgo(update.at)}</span
+                            >{DOT}{timeAgo(update.at)}</span
                         >
                     {/if}
                 </span>

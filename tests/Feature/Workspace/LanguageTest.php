@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsureCanSignIn;
+use App\Models\Member;
+use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 
 /*
@@ -90,4 +94,45 @@ it('gives the language to the app and takes it from it', function () {
 
     $error = $this->patchJson('/api/v1/user/preferences', ['locale' => 'fr'])->assertUnprocessable()->json('errors.locale.0');
     expect($error)->toMatch(DEVANAGARI);
+});
+
+it('names the field in Nepali in a form error', function () {
+    $user = User::factory()->create();
+    $user->preferences()->create(['locale' => 'ne']);
+
+    $this->actingAs($user)->post('/workspace/quick-add', ['personal' => true, 'title' => ''])->assertSessionHasErrors('title');
+
+    expect(session('errors')->first('title'))->toBe('शीर्षक आवश्यक छ।');
+});
+
+it('answers a document action in Nepali, on the web and over the API', function () {
+    config(['documents.enabled' => true, 'documents.server_url' => 'https://docs.example', 'documents.jwt_secret' => DOCS_SECRET]);
+    $owner = docsPerson(Organization::factory()->create(), null);
+    $owner->preferences()->create(['locale' => 'ne']);
+    $document = docsMake($owner, title: 'Notes');
+
+    $this->actingAs($owner)->from('/workspace/documents')
+        ->patch("/workspace/documents/{$document->id}", ['title' => 'Budget'])
+        ->assertSessionHas('workspace_flash.message', 'नाम फेरेर Budget राखियो।');
+
+    Sanctum::actingAs($owner);
+    $message = $this->patchJson("/api/v1/workspace/documents/{$document->id}", ['title' => 'Letter'])->assertOk()->json('message');
+
+    expect($message)->toMatch(DEVANAGARI)->toContain('Letter');
+});
+
+it('refuses a sign-in in Nepali', function () {
+    $user = User::factory()->create(['password' => Hash::make('secret-pass')]);
+
+    $this->withCookie('locale', 'ne')->from('/workspace/login')
+        ->post('/workspace/login', ['email' => $user->email, 'password' => 'wrong-pass'])
+        ->assertSessionHasErrors('email');
+    expect(session('errors')->first('email'))->toBe('इमेल ठेगाना वा पासवर्ड मिलेन।');
+
+    Member::factory()->linkedTo($user)->inactive()->create();
+
+    $this->withCookie('locale', 'ne')->from('/workspace/login')
+        ->post('/workspace/login', ['email' => $user->email, 'password' => 'secret-pass'])
+        ->assertSessionHasErrors('email');
+    expect(session('errors')->first('email'))->toMatch(DEVANAGARI)->not->toBe(EnsureCanSignIn::DEACTIVATED);
 });

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Every English text the app translates has its Nepali (lang/ne.json), with
 // the same :placeholders (docs/superpowers/specs/2026-11-07-languages-design.md).
-// Keys are the literal first argument of t()/tc() in resources/js and of
-// __()/trans_choice() in app/. A key built at run time can't be checked, so
-// it is refused. Exits 1 on any problem; unused Nepali entries are listed
-// as a warning only.
+// Keys are the literal first argument of t()/tc()/msg() in resources/js
+// (msg() marks a text kept in data, drawn later with t(variable)) and of
+// __()/trans_choice() in app/. A key built from pieces at run time (a
+// template literal with ${}) can't be checked, so it is refused. Exits 1 on
+// any problem; unused Nepali entries are listed as a warning only.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -70,8 +71,8 @@ function collect(path, pattern) {
         const line = source.slice(0, match.index).split('\n').length;
         const where = `${relative(root, path)}:${line}`;
 
+        // t(option.label): a key kept in data, marked where it is written.
         if (!`'"\``.includes(source[at])) {
-            problems.push(`${where}: the key is not a string literal`);
             continue;
         }
 
@@ -87,16 +88,15 @@ function collect(path, pattern) {
 }
 
 for (const path of files(join(root, 'resources/js'), ['.svelte', '.ts'])) {
-    if (!path.endsWith('/lib/i18n.ts')) {
-        collect(path, /(?<![\w.$])tc?\(/g);
-    }
+    collect(path, /(?<![\w.$])(?:tc?|msg)\(/g);
 }
 
 for (const path of files(join(root, 'app'), ['.php'])) {
     collect(path, /(?<![\w$>:])(?:__|trans_choice)\(/g);
 }
 
-const placeholders = (text) => [...text.matchAll(/:([a-z_]+)/gi)].map((m) => m[1]).sort().join(',');
+// The same names, each once: a two-form key names :count twice, one form once.
+const placeholders = (text) => [...new Set([...text.matchAll(/:([a-z_]+)/gi)].map((m) => m[1]))].sort().join(',');
 
 // "auth.failed": a key of Laravel's group files (lang/ne/auth.php), not a text.
 const groupKey = (key) => /^[a-z_-]+\.[\w.-]+$/.test(key);

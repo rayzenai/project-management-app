@@ -66,7 +66,7 @@ class LoginRequest extends FormRequest
         if (! Auth::attemptWhen($this->only('email', 'password'), $signsIn, $this->boolean('remember'))) {
             if ($deactivated) {
                 throw ValidationException::withMessages([
-                    'email' => EnsureCanSignIn::DEACTIVATED,
+                    'email' => EnsureCanSignIn::deactivated(),
                 ]);
             }
 

@@ -115,6 +115,12 @@ class Document extends Model
         return static::withTrashed()->where('owner_id', $user->id)->exists();
     }
 
+    /** OWNER_CANNOT_BE_DELETED in the reader's language, for wherever it is shown. */
+    public static function ownerCannotBeDeleted(): string
+    {
+        return __('They own personal documents; deactivate them instead.');
+    }
+
     /**
      * @return BelongsTo<User, $this>
      */

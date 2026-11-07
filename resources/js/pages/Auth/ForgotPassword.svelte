@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Link, useForm } from '@inertiajs/svelte';
     import LanguageSwitch from '../../components/LanguageSwitch.svelte';
+    import { t } from '../../lib/i18n';
 
     let { status = null }: { status?: string | null } = $props();
 
@@ -13,7 +14,8 @@
     }
 </script>
 
-<svelte:head><title>Forgot your password · Workspace</title></svelte:head>
+<svelte:head><title>{t('Forgot your password · Workspace')}</title></svelte:head
+>
 
 <main
     class="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-fg"
@@ -27,25 +29,31 @@
                 class="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-semibold text-white"
                 >W</span
             >
-            <h1 class="text-[15px] font-semibold">Forgot your password?</h1>
+            <h1 class="text-[15px] font-semibold">
+                {t('Forgot your password?')}
+            </h1>
         </div>
 
         {#if status}
             <div class="panel flex flex-col gap-2 p-5" role="status">
                 <p>{status}</p>
                 <p class="text-[13px] text-fg-muted">
-                    If nothing arrives in a few minutes, look in your spam
-                    folder.
+                    {t(
+                        'If nothing arrives in a few minutes, look in your spam folder.',
+                    )}
                 </p>
             </div>
         {:else}
             <form onsubmit={submit} class="panel flex flex-col gap-4 p-5">
                 <p class="text-[13px] text-fg-muted">
-                    Enter the email you sign in with. We will send you a link to
-                    set a new password.
+                    {t(
+                        'Enter the email you sign in with. We will send you a link to set a new password.',
+                    )}
                 </p>
                 <div class="flex flex-col gap-1.5">
-                    <label for="{uid}-email" class="label">Email address</label>
+                    <label for="{uid}-email" class="label"
+                        >{t('Email address')}</label
+                    >
                     <input
                         id="{uid}-email"
                         type="email"
@@ -65,14 +73,14 @@
                     disabled={form.processing}
                     class="btn-primary btn-lg mt-1 w-full justify-center"
                 >
-                    {form.processing ? 'Sending' : 'Send link'}
+                    {form.processing ? t('Sending') : t('Send link')}
                 </button>
             </form>
         {/if}
 
         <p class="mt-4 text-center text-[13px]">
             <Link href="/workspace/login" class="text-accent hover:underline"
-                >Back to sign in</Link
+                >{t('Back to sign in')}</Link
             >
         </p>
     </div>

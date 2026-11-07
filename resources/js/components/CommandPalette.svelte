@@ -10,6 +10,7 @@
     } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import type { Component } from 'svelte';
+    import { msg, t, tc } from '../lib/i18n';
     import { notesBoard } from '../lib/notesBoard.svelte';
     import { palette } from '../lib/palette.svelte';
     import { peek } from '../lib/peek.svelte';
@@ -106,9 +107,10 @@
         contacts: [],
     };
 
+    // English in the data, drawn (and matched) through t().
     const NAV: { label: string; href: string; icon: Icon }[] = [
-        { label: 'My work', href: '/workspace/my', icon: ListChecks },
-        { label: 'Projects', href: '/workspace/projects', icon: Folder },
+        { label: msg('My work'), href: '/workspace/my', icon: ListChecks },
+        { label: msg('Projects'), href: '/workspace/projects', icon: Folder },
     ];
 
     let query = $state('');
@@ -140,27 +142,29 @@
         const groups: { label: string; items: PaletteItem[] }[] = [];
 
         groups.push({
-            label: 'Actions',
+            label: t('Actions'),
             items: [
                 {
                     kind: 'action',
                     id: 'new-task',
-                    label: q ? `New task "${q}"` : 'New task',
+                    label: q
+                        ? t('New task ":query"', { query: q })
+                        : t('New task'),
                 },
             ],
         });
 
         const nav = q
-            ? NAV.filter((n) => n.label.toLowerCase().includes(lq))
+            ? NAV.filter((n) => t(n.label).toLowerCase().includes(lq))
             : NAV;
 
         if (nav.length) {
             groups.push({
-                label: 'Navigate',
+                label: t('Navigate'),
                 items: nav.map((n) => ({
                     kind: 'nav' as const,
                     href: n.href,
-                    label: n.label,
+                    label: t(n.label),
                     icon: n.icon,
                 })),
             });
@@ -169,20 +173,20 @@
         if (q.length >= 2) {
             if (results.projects.length) {
                 groups.push({
-                    label: 'Projects',
+                    label: t('Projects'),
                     items: results.projects.slice(0, 5).map((p) => ({
                         kind: 'project' as const,
                         id: p.id,
                         slug: p.slug,
                         title: p.title,
-                        meta: `${p.tasks_count} tasks`,
+                        meta: tc(':count task|:count tasks', p.tasks_count),
                     })),
                 });
             }
 
             if (results.tasks.length) {
                 groups.push({
-                    label: 'Tasks',
+                    label: t('Tasks'),
                     items: results.tasks.slice(0, 8).map((t) => ({
                         kind: 'task' as const,
                         id: t.id,
@@ -199,7 +203,7 @@
 
             if (notes.length) {
                 groups.push({
-                    label: 'Notes',
+                    label: t('Notes'),
                     items: notes.slice(0, 4).map((n) => ({
                         kind: 'note' as const,
                         noteKind: n.kind,
@@ -210,14 +214,14 @@
                             : null,
                         meta:
                             n.task?.title ??
-                            (n.kind === 'sticky' ? 'Sticky note' : ''),
+                            (n.kind === 'sticky' ? t('Sticky note') : ''),
                     })),
                 });
             }
 
             if (contacts.length) {
                 groups.push({
-                    label: 'Contacts',
+                    label: t('Contacts'),
                     items: contacts.slice(0, 4).map((c) => ({
                         kind: 'contact' as const,
                         id: c.id,
@@ -441,6 +445,11 @@
     }
 </script>
 
+{#snippet keyed(text: string, key: string)}
+    {@const [before, after = ''] = text.split(':key')}
+    {before}<kbd class="kbd">{key}</kbd>{after}
+{/snippet}
+
 {#if palette.isOpen}
     <div
         class="fixed inset-0 z-[60] overflow-y-auto bg-black/40"
@@ -453,7 +462,7 @@
             onclick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Command palette"
+            aria-label={t('Command palette')}
             tabindex="-1"
         >
             <div
@@ -466,7 +475,7 @@
                     bind:value={query}
                     oninput={onInput}
                     onkeydown={onKeydown}
-                    placeholder="Search or jump to"
+                    placeholder={t('Search or jump to')}
                     class="w-full bg-transparent text-[15px] text-fg outline-none placeholder:text-fg-faint"
                     role="combobox"
                     aria-expanded="true"
@@ -482,7 +491,7 @@
             <div
                 id="palette-listbox"
                 role="listbox"
-                aria-label="Results"
+                aria-label={t('Results')}
                 class="max-h-[60vh] overflow-y-auto px-1 pb-1"
             >
                 {#each grouped as group (group.label)}
@@ -578,17 +587,18 @@
                 class="flex h-9 items-center gap-4 border-t border-line px-4 text-xs text-fg-faint"
             >
                 <span class="flex items-center gap-1.5">
-                    <kbd class="kbd">↑↓</kbd> navigate
+                    {@render keyed(t(':key navigate'), '↑↓')}
                 </span>
                 <span class="flex items-center gap-1.5">
-                    <kbd class="kbd">↩</kbd> open
+                    {@render keyed(t(':key open'), '↩')}
                 </span>
                 <span class="flex items-center gap-1.5">
-                    <kbd class="kbd">esc</kbd> close
+                    {@render keyed(t(':key close'), 'esc')}
                 </span>
                 {#if loading}
                     <span class="ml-auto flex items-center gap-1.5">
-                        <Spinner size={12} label="Searching" /> Searching
+                        <Spinner size={12} label={t('Searching')} />
+                        {t('Searching')}
                     </span>
                 {/if}
             </div>

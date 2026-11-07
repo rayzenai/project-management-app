@@ -1184,13 +1184,51 @@ Shared building blocks (reach for these before writing anything new):
   `COUNT_TTL_SECONDS` per organization and every full read refreshes it, so
   other pages run the checks at most once per TTL per organization.
 
+## Languages (English and Nepali)
+
+Spec: `docs/superpowers/specs/2026-11-07-languages-design.md` (rules, the
+glossary, the rounds). Each person reads the app in English or Nepali:
+`user_preferences.locale` (`User::locale()`), copied to a `locale` cookie
+for the sign-in pages; `App\Http\Middleware\SetLocale` (web and API groups,
+`App\Support\Locales::forRequest`: saved choice, else cookie, else English)
+sets each request's language, shared as `locale` and `locales`. The switch
+(`components/LanguageSwitch.svelte`, the top bar and the sign-in pages; the
+account menu too) is `POST /locale` (anyone; signed in it also saves);
+`PATCH /workspace/preferences` and `/api/v1/user/preferences` take `locale`,
+and `/api/v1/user` gives it.
+
+- **One dictionary, English text as the key**: `lang/ne.json`, for the
+  server's `__()`/`trans_choice()` and the browser's `t()`/`tc()`
+  (`resources/js/lib/i18n.ts`); Laravel's own messages in
+  `lang/ne/{validation,auth,passwords,pagination}.php`. A key with no
+  Nepali shows in English. Placeholders are `:name` (Nepali attaches
+  postpositions: `:nameले`); a number filled into one is written in the
+  language's digits (`Locales::number` on the server; `t` does it in the
+  browser; `trans_choice` overwrites `:count`, so name a server count
+  `:n`). In Nepali, digits are Devanagari and a date shown in both
+  calendars leads with Bikram Sambat.
+- **In a translated page or component** every visible text, `aria-label`,
+  `title` and `placeholder` goes through `t()` (`tc()` for counts,
+  `timeAgo`, `number`, `digits`, `formatDay` instead of the English
+  helpers), called in markup or `$derived`, never once at the top of a
+  script. A text kept in data is written `msg('...')` and drawn with
+  `t(value)`. A page not yet translated keeps the English helpers, so no
+  page mixes the two. Round 1 (the shell, sign-in, My work, Documents, the
+  server's messages and form errors) is translated; the spec lists the
+  rounds after it.
+- **The check**: `npm run i18n:check` (`scripts/i18n-check.mjs`, in CI's
+  lint workflow) fails on a key with no Nepali or different placeholders,
+  and on keys built with `${}`. Add the Nepali in the same change as the
+  English.
+
 ## Semantic theming layer (web UI)
 
 `config/themes.php` holds exactly three themes: `system` (follows the OS),
 `light` and `dark`. One visual language, two grounds: cool-neutral surfaces,
 three text tones, hairline borders, one calm blue accent, and green / amber /
 red reserved for status, deadlines and priority. Fonts are fixed: Geist (UI),
-Geist Mono (ids, dates, counts) and Mukta (Nepali, via `font-np`).
+Geist Mono (ids, dates, counts) and Mukta (Nepali, via `font-np`, and after
+Geist in the sans stack, so Nepali text renders in Mukta).
 
 `resources/css/app.css` defines the `--ws-*` custom properties, the Tailwind
 `@theme` block mapping color utilities to them (`bg-bg`, `bg-surface`,

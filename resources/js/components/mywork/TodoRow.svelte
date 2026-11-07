@@ -8,7 +8,8 @@
         Square,
         Trash2,
     } from '@lucide/svelte';
-    import { dueLabel, shortDay } from '../../lib/dates';
+    import { dueLabel, shiftDay, shortDay } from '../../lib/dates';
+    import { formatDay, isNepali, t } from '../../lib/i18n';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type {
         Id,
@@ -40,7 +41,6 @@
 
     /** Kept in a constant: a bare ' · ' at the start of a block loses its spaces. */
     const DOT = ' · ';
-    const WHERE = 'Only you';
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
     const context = $derived(shared.quickAddContext ?? null);
@@ -49,17 +49,46 @@
     const url = $derived(`/workspace/todos/${row.todo.id}`);
     const inDone = $derived(group.key === 'done');
 
+    /** dueLabel in the reader's language (Nepali names and digits). */
+    function dayText(iso: string): string {
+        if (!isNepali()) {
+            return dueLabel(iso, today);
+        }
+
+        if (iso === today) {
+            return t('Today');
+        }
+
+        if (iso === shiftDay(today, 1)) {
+            return t('Tomorrow');
+        }
+
+        return iso > today && iso <= shiftDay(today, 6)
+            ? formatDay(iso, { weekday: 'short' })
+            : shortText(iso);
+    }
+
+    /** "Thu 12 Nov", in the reader's language. */
+    function shortText(iso: string): string {
+        return isNepali()
+            ? formatDay(iso, {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+              })
+            : shortDay(iso);
+    }
+
     /** The day beside the row; left out when the group already says it. */
     const when = $derived.by(() => {
         if (inDone) {
-            return todo.done_at
-                ? dueLabel(todo.done_at.slice(0, 10), today)
-                : '';
+            return todo.done_at ? dayText(todo.done_at.slice(0, 10)) : '';
         }
 
-        const label = row.due ? dueLabel(row.due, today) : '';
-
-        return label === group.label ? '' : label;
+        // The server's group names are English, as dueLabel's are.
+        return row.due && dueLabel(row.due, today) !== group.label
+            ? dayText(row.due)
+            : '';
     });
 
     const quietly = {
@@ -116,7 +145,9 @@
                 ...quietly,
                 onSuccess: () =>
                     toast.show(
-                        next ? `Completed "${title}"` : `Reopened "${title}"`,
+                        next
+                            ? t('Completed ":title"', { title })
+                            : t('Reopened ":title"', { title }),
                         next
                             ? {
                                   undo: {
@@ -147,7 +178,9 @@
                 ...quietly,
                 onSuccess: () =>
                     toast.show(
-                        next ? `Date: ${shortDay(next)}` : 'Date cleared',
+                        next
+                            ? t('Date: :day', { day: shortText(next) })
+                            : t('Date cleared'),
                     ),
             },
         );
@@ -166,7 +199,7 @@
         router.delete(target, {
             ...quietly,
             onSuccess: () =>
-                toast.show('To-do deleted.', {
+                toast.show(t('To-do deleted.'), {
                     undo: {
                         run: () =>
                             router.post(`${target}/restore`, {}, quietly),
@@ -233,12 +266,12 @@
                 >
                 <span
                     class="hidden min-w-0 flex-1 truncate text-[13px] text-fg-muted sm:block"
-                    >{WHERE}</span
+                    >{t('Only you')}</span
                 >
             </span>
             <span
                 class="mt-[3px] block truncate text-[13.5px] leading-[19px] text-fg-muted sm:hidden"
-                >{#if when}{when}{DOT}{/if}{WHERE}</span
+                >{#if when}{when}{DOT}{/if}{t('Only you')}</span
             >
         </span>
 
@@ -254,7 +287,7 @@
         <Popover
             bind:open={menuOpen}
             align="right"
-            triggerLabel={`Options for ${todo.title}`}
+            triggerLabel={t('Options for :title', { title: todo.title })}
             triggerClass={`btn-icon size-[44px] sm:size-[32px] ${menuOpen ? 'bg-hover text-fg' : 'pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100'}`}
             panelClass="w-64"
         >
@@ -271,10 +304,10 @@
                 >
                     {#if doing}
                         <Square class="size-4 shrink-0" />
-                        Stop
+                        {t('Stop')}
                     {:else}
                         <Play class="size-4 shrink-0" />
-                        Start
+                        {t('Start')}
                     {/if}
                 </button>
                 <button
@@ -284,7 +317,7 @@
                     onclick={startMove}
                 >
                     <FolderInput class="size-4 shrink-0" />
-                    Move to a project
+                    {t('Move to a project')}
                 </button>
 
                 <div class="my-1 border-t border-line-soft"></div>
@@ -297,7 +330,7 @@
                     }}
                 >
                     <label class="label" for={`todo-day-${todo.id}`}
-                        >Change date</label
+                        >{t('Change date')}</label
                     >
                     <div class="mt-1 flex items-center gap-1.5">
                         <input
@@ -308,7 +341,7 @@
                             bind:value={day}
                             onkeydown={keepKeys}
                         />
-                        <button type="submit" class="btn">Set</button>
+                        <button type="submit" class="btn">{t('Set')}</button>
                     </div>
                 </form>
                 {#if todo.due_on}
@@ -319,7 +352,7 @@
                         onclick={() => setDay(null)}
                     >
                         <CalendarX class="size-4 shrink-0" />
-                        Clear the date
+                        {t('Clear the date')}
                     </button>
                 {/if}
 
@@ -333,7 +366,7 @@
                 onclick={remove}
             >
                 <Trash2 class="size-4 shrink-0" />
-                Delete
+                {t('Delete')}
             </button>
         </Popover>
     </span>

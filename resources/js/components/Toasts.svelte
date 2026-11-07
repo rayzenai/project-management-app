@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Check, X } from '@lucide/svelte';
     import { fly } from 'svelte/transition';
+    import { t } from '../lib/i18n';
     import { toast } from '../lib/toast.svelte';
 </script>
 
@@ -31,12 +32,12 @@
                     class="text-xs font-medium text-accent hover:underline"
                     onclick={() => toast.undo(item.id)}
                 >
-                    {item.undo.label}
+                    {t(item.undo.label)}
                 </button>
             {/if}
             <button
                 type="button"
-                aria-label="Dismiss"
+                aria-label={t('Dismiss')}
                 class="btn-icon h-6 w-6"
                 onclick={() => toast.dismiss(item.id)}
             >
