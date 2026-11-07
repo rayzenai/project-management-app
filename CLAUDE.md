@@ -1255,7 +1255,9 @@ Rules: semantic utilities only, never raw palette colours (`neutral-*`,
 `amber-*`) or `dark:` variants (the stickies in `lib/noteColors.ts` are the one
 exception), never black/white inverted buttons, never coloured status pills or
 dots, no `rounded-xl`/`shadow-*` outside `.popover`, no em-dashes in copy, no
-unicode glyph icons (Lucide only), no mono-uppercase eyebrow labels.
+unicode glyph icons (Lucide only; the one exception is the language switch's
+`LanguageMark`, क and A, since Lucide's "languages" shows a Chinese
+character), no mono-uppercase eyebrow labels.
 
 ## Conventions
 

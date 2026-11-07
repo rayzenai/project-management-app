@@ -1,6 +1,6 @@
 <script lang="ts">
     import { inertia, page, router } from '@inertiajs/svelte';
-    import { Languages, LogOut, Plus, Search, Settings } from '@lucide/svelte';
+    import { LogOut, Plus, Search, Settings } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import { locale, number, t } from '../../lib/i18n';
     import { currentHref } from '../../lib/navigation';
@@ -8,6 +8,7 @@
     import { QUIET } from '../../lib/toast.svelte';
     import type { OrganizationSwitch } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
+    import LanguageMark from '../LanguageMark.svelte';
     import Popover from '../Popover.svelte';
     import OrganizationSwitcher from './OrganizationSwitcher.svelte';
 
@@ -276,7 +277,7 @@
                     class={itemClass(false)}
                     onclick={switchLanguage}
                 >
-                    <Languages class={iconClass} />
+                    <LanguageMark class={iconClass} />
                     <span class="flex-1" lang={otherLanguage.value}
                         >{otherLanguage.label}</span
                     >

@@ -1,8 +1,8 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
-    import { Languages } from '@lucide/svelte';
     import { locale, t } from '../lib/i18n';
     import { QUIET } from '../lib/toast.svelte';
+    import LanguageMark from './LanguageMark.svelte';
 
     /**
      * English or Nepali, in one click: the button names the other language
@@ -52,7 +52,7 @@
         aria-label={t('Read in :language', { language: other.label })}
         onclick={change}
     >
-        <Languages class="h-4 w-4" aria-hidden="true" />
+        <LanguageMark />
         <span class={compact ? 'hidden sm:inline' : ''}>{other.label}</span>
     </button>
 {/if}
