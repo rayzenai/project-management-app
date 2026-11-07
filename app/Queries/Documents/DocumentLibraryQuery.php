@@ -176,6 +176,8 @@ class DocumentLibraryQuery
      */
     private function rows(array $documents, User $viewer): array
     {
+        WorkspaceAccess::preloadDocumentAccess($viewer, $documents);
+
         return array_values(array_map(
             fn (Document $document): array => (new DocumentResource($document))->withViewer($viewer)->resolve(),
             $documents,

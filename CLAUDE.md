@@ -956,12 +956,20 @@ API: `docs/api.md` (Documents).
   `show` with its `project` `{slug, title, label, can_open}`),
   `DocumentSharingQuery` and `DocumentShareCandidatesQuery` (the Share
   dialog). Rows through `DocumentResource::withViewer` (`access`, `frozen`,
-  `can_delete`, `can_share`, `can_move`).
+  `can_delete`, `can_share`, `can_move`), after
+  `WorkspaceAccess::preloadDocumentAccess` (the owners' people, the
+  projects' teams and team membership, the viewer's shares, in a few
+  queries; the same answers), so a list's queries don't grow with its rows
+  (`DocumentsLibraryTest` counts them).
 - **Writes**: `CreateDocumentService` (`blank`/`upload` with a project or
   none), `RenameDocumentService`, `TrashDocumentService`,
   `MoveDocumentService`, `DocumentSharingService` (organization access,
   share, change, unshare; sharing and moving never touch `updated_at`; only
-  a new share notifies, `DocumentShared`, also in `SendEmailUpdates::KINDS`),
+  a new share notifies, `DocumentShared`, also in `SendEmailUpdates::KINDS`,
+  and not again about the same document within
+  `NOTIFY_AGAIN_AFTER_HOURS` (24); a share is made with `firstOrCreate`, so
+  two at once make one row; the four sharing write routes share one
+  `throttle:30,1,document-sharing`),
   `SaveEditedDocumentService`.
 - **The editor's session**: `DocumentEditorQuery::for($document, $viewer,
   $access)` builds the config the page hands ONLYOFFICE and signs all of it

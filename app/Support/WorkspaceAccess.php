@@ -16,6 +16,7 @@ use App\Models\ProjectAssignment;
 use App\Models\Task;
 use App\Models\Team;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -73,6 +74,9 @@ class WorkspaceAccess
     /** @var \WeakMap<Authenticatable, array<int, bool>>|null project id => canUseProjectDocuments */
     private static ?\WeakMap $projectDocumentsMemo = null;
 
+    /** @var \WeakMap<Authenticatable, array<int, string|false>>|null document id => the user's share's permission (false: none) */
+    private static ?\WeakMap $documentSharesMemo = null;
+
     public static function flush(): void
     {
         self::$ledTeamIdsMemo = null;
@@ -81,6 +85,7 @@ class WorkspaceAccess
         self::$gitMemo = [];
         self::$attendanceMemo = [];
         self::$projectDocumentsMemo = null;
+        self::$documentSharesMemo = null;
         OrgChart::flush();
     }
 
@@ -465,8 +470,17 @@ class WorkspaceAccess
 
         $ledTeamIds = self::ledTeamIds($user);
 
-        return $ledTeamIds !== []
-            && $project->teams()->whereIn('teams.id', $ledTeamIds)->exists();
+        if ($ledTeamIds === []) {
+            return false;
+        }
+
+        // A list's rows ask this per row; its loaded teams answer without a
+        // query (canManageRosterOfProject reads them the same way).
+        if ($project->relationLoaded('teams')) {
+            return $project->teams->contains(fn (Team $team): bool => in_array((int) $team->getKey(), $ledTeamIds, true));
+        }
+
+        return $project->teams()->whereIn('teams.id', $ledTeamIds)->exists();
     }
 
     /**
@@ -584,7 +598,10 @@ class WorkspaceAccess
         return $memo[$project->id];
     }
 
-    private static function usesProjectDocuments(Authenticatable $user, Project $project): bool
+    /**
+     * @param  bool|null  $onTeam  whether the user's person is on the project's team, when already known (preloadDocumentAccess); null asks
+     */
+    private static function usesProjectDocuments(Authenticatable $user, Project $project, ?bool $onTeam = null): bool
     {
         if (self::administers($user, $project->organization_id)) {
             return true;
@@ -600,7 +617,97 @@ class WorkspaceAccess
             return true;
         }
 
-        return $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
+        return $onTeam ?? $project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists();
+    }
+
+    /**
+     * Reads, in a few queries, what documentAccess and the other document
+     * checks would otherwise ask per document: the owners' people, the
+     * projects' teams, which of those projects the user is on, and the user's
+     * shares of these documents. For a list's rows; the answers are the
+     * same, only fewer queries.
+     *
+     * @param  iterable<Document>  $documents
+     */
+    public static function preloadDocumentAccess(?Authenticatable $user, iterable $documents): void
+    {
+        if (! config('documents.enabled') || $user === null) {
+            return;
+        }
+
+        $documents = collect($documents)->values();
+
+        if ($documents->isEmpty()) {
+            return;
+        }
+
+        self::$memberMemo ??= new \WeakMap;
+        $owners = $documents->map(fn (Document $document) => $document->relationLoaded('owner') ? $document->owner : null)
+            ->filter(fn ($owner): bool => $owner !== null && ! isset(self::$memberMemo[$owner]));
+
+        if ($owners->isNotEmpty()) {
+            $people = Member::query()->whereIn('user_id', $owners->map(fn ($owner) => $owner->getKey())->unique()->all())->get()->keyBy('user_id');
+
+            foreach ($owners as $owner) {
+                self::$memberMemo[$owner] = $people->get($owner->getKey()) ?? false;
+            }
+        }
+
+        $member = self::memberFor($user);
+        $projects = new EloquentCollection($documents
+            ->map(fn (Document $document) => $document->relationLoaded('project') ? $document->project : null)
+            ->filter()
+            ->unique(fn (Project $project): int => $project->id)
+            ->values()
+            ->all());
+
+        if ($projects->isNotEmpty()) {
+            $projects->loadMissing('teams');
+            self::$projectDocumentsMemo ??= new \WeakMap;
+            $memo = self::$projectDocumentsMemo[$user] ?? [];
+            $onTeam = $member === null ? [] : Project::query()
+                ->whereKey($projects->modelKeys())
+                ->whereHas('teams.members', fn ($m) => $m->where('members.id', $member->getKey()))
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            foreach ($projects as $project) {
+                if (! array_key_exists($project->id, $memo)) {
+                    $memo[$project->id] = self::usesProjectDocuments($user, $project, in_array($project->id, $onTeam, true));
+                }
+            }
+
+            self::$projectDocumentsMemo[$user] = $memo;
+        }
+
+        if ($member !== null) {
+            $ids = $documents->map(fn (Document $document): int => $document->id)->all();
+            $permissions = DocumentShare::query()->whereIn('document_id', $ids)->where('member_id', $member->id)->pluck('permission', 'document_id');
+            self::$documentSharesMemo ??= new \WeakMap;
+            $memo = self::$documentSharesMemo[$user] ?? [];
+
+            foreach ($ids as $id) {
+                $permission = $permissions->get($id);
+                $memo[$id] = is_string($permission) ? $permission : false;
+            }
+
+            self::$documentSharesMemo[$user] = $memo;
+        }
+    }
+
+    /** The permission of the user's share of the document, or null. */
+    private static function sharePermission(Authenticatable $user, Member $member, Document $document): ?string
+    {
+        $memo = self::$documentSharesMemo[$user] ?? null;
+
+        if (is_array($memo) && array_key_exists($document->id, $memo)) {
+            return $memo[$document->id] === false ? null : $memo[$document->id];
+        }
+
+        $permission = DocumentShare::query()->where('document_id', $document->id)->where('member_id', $member->id)->value('permission');
+
+        return is_string($permission) ? $permission : null;
     }
 
     /**
@@ -642,7 +749,7 @@ class WorkspaceAccess
 
         $levels = array_filter([
             $document->organization_access,
-            DocumentShare::query()->where('document_id', $document->id)->where('member_id', $member->id)->value('permission'),
+            self::sharePermission($user, $member, $document),
         ], fn (mixed $level): bool => is_string($level));
 
         if (in_array(Document::ACCESS_EDIT, $levels, true)) {

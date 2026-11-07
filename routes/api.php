@@ -168,10 +168,10 @@ Route::prefix('v1')->name('api.')->group(function () {
             // and chosen people (WorkspaceAccess::canShareDocument).
             Route::get('/documents/{document}/sharing', [DocumentSharingController::class, 'show'])->whereNumber('document')->name('documents.sharing.show');
             Route::get('/documents/{document}/sharing/candidates', [DocumentSharingController::class, 'candidates'])->whereNumber('document')->name('documents.sharing.candidates');
-            Route::put('/documents/{document}/sharing/organization', [DocumentSharingController::class, 'organization'])->whereNumber('document')->name('documents.sharing.organization');
-            Route::post('/documents/{document}/shares', [DocumentSharingController::class, 'store'])->whereNumber('document')->name('documents.shares.store');
-            Route::patch('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'update'])->whereNumber(['document', 'share'])->scopeBindings()->name('documents.shares.update');
-            Route::delete('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'destroy'])->whereNumber(['document', 'share'])->scopeBindings()->name('documents.shares.destroy');
+            Route::put('/documents/{document}/sharing/organization', [DocumentSharingController::class, 'organization'])->whereNumber('document')->middleware('throttle:30,1,document-sharing')->name('documents.sharing.organization');
+            Route::post('/documents/{document}/shares', [DocumentSharingController::class, 'store'])->whereNumber('document')->middleware('throttle:30,1,document-sharing')->name('documents.shares.store');
+            Route::patch('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'update'])->whereNumber(['document', 'share'])->scopeBindings()->middleware('throttle:30,1,document-sharing')->name('documents.shares.update');
+            Route::delete('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'destroy'])->whereNumber(['document', 'share'])->scopeBindings()->middleware('throttle:30,1,document-sharing')->name('documents.shares.destroy');
 
             // Who may pull and push a linked repository (its maintainers and grants).
             Route::scopeBindings()->group(function () {

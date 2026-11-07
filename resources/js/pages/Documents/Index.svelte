@@ -86,6 +86,24 @@
         searchTimer = setTimeout(apply, 300);
     }
 
+    /**
+     * The filters the rows on screen came from (the server's), not what is
+     * typed: the cursor belongs to them, and a search waiting out its 300 ms
+     * hasn't been applied yet.
+     */
+    function shownParams(): Record<string, string> {
+        const { show, project, type, q } = props.filters;
+
+        return Object.fromEntries(
+            Object.entries({
+                show: show === 'all' ? '' : show,
+                project: project ?? '',
+                type: type ?? '',
+                q: q ?? '',
+            }).filter(([, value]) => value !== ''),
+        );
+    }
+
     async function showMore() {
         if (cursor === null) {
             return;
@@ -93,9 +111,12 @@
 
         loadingMore = true;
         moreFailed = false;
+        // A filter change while this loads replaces the list; its rows
+        // would not belong there.
+        const list = props.documents;
 
         try {
-            const query = new URLSearchParams({ ...params(), cursor });
+            const query = new URLSearchParams({ ...shownParams(), cursor });
             const response = await fetch(`/workspace/documents/list?${query}`, {
                 headers: { Accept: 'application/json' },
                 credentials: 'same-origin',
@@ -109,10 +130,17 @@
                 data: DocumentItem[];
                 next_cursor: string | null;
             };
+
+            if (props.documents !== list) {
+                return;
+            }
+
             more = [...more, ...json.data];
             cursor = json.next_cursor;
         } catch {
-            moreFailed = true;
+            if (props.documents === list) {
+                moreFailed = true;
+            }
         } finally {
             loadingMore = false;
         }

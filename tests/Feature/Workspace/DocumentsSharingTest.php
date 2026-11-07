@@ -9,6 +9,8 @@ use App\Models\ProjectActivity;
 use App\Models\User;
 use App\Notifications\DocumentShared;
 use App\Support\WorkspaceAccess;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
@@ -232,4 +234,80 @@ it('lets nobody from another organization share a project document, not even its
     $this->actingAs($outsider)->getJson("/workspace/documents/{$document->id}/sharing/candidates?q=e")->assertForbidden();
     $this->actingAs($outsider)->postJson("/workspace/documents/{$document->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'edit'])->assertForbidden();
     $this->actingAs($outsider)->putJson("/workspace/documents/{$document->id}/sharing/organization", ['access' => 'edit'])->assertForbidden();
+});
+
+it('takes two identical shares at the same moment as one', function () {
+    // The other request's row lands between this one's look and its insert
+    // (committed there, so outside any savepoint here).
+    $raced = false;
+    $memberId = docsMemberId($this->colleague);
+    DB::listen(function (QueryExecuted $query) use (&$raced, $memberId): void {
+        if (! $raced && str_starts_with($query->sql, 'select') && str_contains($query->sql, 'from "document_shares"')) {
+            $raced = true;
+            DB::table('document_shares')->insert([
+                'document_id' => $this->document->id,
+                'member_id' => $memberId,
+                'permission' => 'view',
+                'shared_by' => $this->owner->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    });
+
+    $this->actingAs($this->owner)
+        ->post("/workspace/documents/{$this->document->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'edit'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($raced)->toBeTrue()
+        ->and(DocumentShare::query()->sole()->permission)->toBe('edit');
+});
+
+it('tells someone a document was shared with them at most once a day, however often it is taken away and shared again', function () {
+    $share = fn () => $this->actingAs($this->owner)
+        ->post("/workspace/documents/{$this->document->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'view'])
+        ->assertSessionHasNoErrors();
+    $unshare = fn () => $this->actingAs($this->owner)
+        ->delete("/workspace/documents/{$this->document->id}/shares/".DocumentShare::query()->sole()->id)
+        ->assertSessionHasNoErrors();
+
+    $share();
+    $unshare();
+    $share();
+    $unshare();
+    $share();
+    expect($this->colleague->notifications()->count())->toBe(1);
+
+    // Another document is news the same day.
+    $other = docsMake($this->owner, title: 'Other');
+    $this->actingAs($this->owner)->post("/workspace/documents/{$other->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'view']);
+    expect($this->colleague->notifications()->count())->toBe(2);
+
+    // A day later, sharing it again tells them again.
+    $this->travel(25)->hours();
+    DocumentShare::query()->where('document_id', $this->document->id)->delete();
+    $share();
+    expect($this->colleague->notifications()->count())->toBe(3);
+});
+
+it('limits sharing changes to 30 a minute per person, on the web and the API together', function () {
+    foreach (range(1, 30) as $i) {
+        $this->actingAs($this->owner)
+            ->put("/workspace/documents/{$this->document->id}/sharing/organization", ['access' => $i % 2 === 0 ? 'view' : null])
+            ->assertRedirect();
+    }
+
+    $this->actingAs($this->owner)
+        ->post("/workspace/documents/{$this->document->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'view'])
+        ->assertTooManyRequests();
+    Sanctum::actingAs($this->owner);
+    $this->postJson("/api/v1/workspace/documents/{$this->document->id}/shares", ['member_id' => docsMemberId($this->colleague), 'permission' => 'view'])
+        ->assertTooManyRequests();
+    expect(DocumentShare::query()->count())->toBe(0);
+
+    // Someone else has their own allowance.
+    $this->actingAs($this->colleague)
+        ->put('/workspace/documents/'.docsMake($this->colleague)->id.'/sharing/organization', ['access' => 'view'])
+        ->assertRedirect();
 });

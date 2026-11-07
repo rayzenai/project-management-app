@@ -43,6 +43,7 @@ class ProjectDocumentsQuery
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get();
+        WorkspaceAccess::preloadDocumentAccess($viewer, $documents);
 
         return array_values($documents
             ->map(fn (Document $document): array => (new DocumentResource($document))->withViewer($viewer)->resolve())

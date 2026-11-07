@@ -5,8 +5,11 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\ProjectActivity;
 use App\Models\User;
+use App\Queries\Documents\DocumentLibraryQuery;
+use App\Queries\Documents\ProjectDocumentsQuery;
 use App\Support\WorkspaceAccess;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\TestResponse;
@@ -205,6 +208,53 @@ it('pages by updated_at then id', function () {
         ->and($cursor)->not->toBeNull()
         ->and($ids)->toHaveCount(51)
         ->and(array_unique($ids))->toHaveCount(51);
+});
+
+it('reads the Documents page and a project\'s tab in the same number of queries however many documents there are', function () {
+    $person = WorkspaceAccess::memberFor($this->member);
+    $add = function (int $rounds) use ($person): void {
+        foreach (range(1, $rounds) as $i) {
+            $owner = docsPerson($this->organization, null);
+            docsShare(docsMake($owner, title: "Shared {$i}"), $this->member, 'view');
+            docsMake($owner, title: "Open {$i}", attributes: ['organization_access' => 'edit']);
+            docsMake($this->member, title: "Mine {$i}");
+            docsMake($this->member, title: "Binned {$i}")->delete();
+            docsMake($this->manager, $this->project, "Plan {$i}");
+            docsMake($this->manager, $this->project, "Old plan {$i}")->delete();
+            $project = Project::factory()->create(['organization_id' => $this->organization->id]);
+            $project->ensureTeam()->members()->attach($person?->id, ['role' => 'member']);
+            docsMake($this->manager, $project, "Elsewhere {$i}");
+        }
+    };
+    $queries = function (callable $read): int {
+        WorkspaceAccess::flush();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $read();
+        DB::disableQueryLog();
+
+        return count(DB::getQueryLog());
+    };
+    $all = ['show' => 'all', 'project' => null, 'type' => null, 'q' => null];
+    $reads = function () use ($queries, $all): array {
+        [$member, $manager, $project] = [$this->member->fresh(), $this->manager->fresh(), $this->project->fresh()];
+
+        return [
+            'member page' => $queries(fn () => app(DocumentLibraryQuery::class)->page($member, $all, null)),
+            'manager page' => $queries(fn () => app(DocumentLibraryQuery::class)->page($manager, $all, null)),
+            'member tab' => $queries(fn () => app(ProjectDocumentsQuery::class)->tab($project, $member)),
+            'manager tab' => $queries(fn () => app(ProjectDocumentsQuery::class)->tab($project, $manager)),
+        ];
+    };
+
+    $add(1);
+    $few = $reads();
+    $add(4);
+    $page = app(DocumentLibraryQuery::class)->page($this->member->fresh(), $all, null);
+
+    expect($reads())->toBe($few)
+        ->and($page['documents'])->toHaveCount(25)
+        ->and($page['trashed_count'])->toBe(5);
 });
 
 it('makes a personal document from the page and opens it', function () {

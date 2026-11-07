@@ -553,7 +553,7 @@ emptied.
 | GET | `/workspace/documents/{id}/sharing` | `{ home: { type, project }, organization: { id, name } or null, organization_access, shares }` (`can_share` only) |
 | GET | `/workspace/documents/{id}/sharing/candidates?q=` | up to 8 active people of the document's organization it isn't shared with yet (never its owner), as `{ id, name, designation }` |
 | PUT | `/workspace/documents/{id}/sharing/organization` | `access`: `view`, `edit` or null. A document with no organization is 422 on `access`. Answers with the document |
-| POST | `/workspace/documents/{id}/shares` | `member_id`, `permission` (`view`, `edit`): someone of the document's organization (anyone else or an unknown id is the same 422 `Choose someone in {organization}.`, which names nobody; the owner or an inactive person is 422 `You can't share this with {name}.`). Sharing again changes the permission. A new share notifies the person in the app and by email (`document_shared`). 201 with the share |
+| POST | `/workspace/documents/{id}/shares` | `member_id`, `permission` (`view`, `edit`): someone of the document's organization (anyone else or an unknown id is the same 422 `Choose someone in {organization}.`, which names nobody; the owner or an inactive person is 422 `You can't share this with {name}.`). Sharing again changes the permission. A new share notifies the person in the app and by email (`document_shared`), but not again about the same document within 24 hours (taking a share away and giving it back tells them once). Two identical shares at the same moment make one. 201 with the share |
 | PATCH | `/workspace/documents/{id}/shares/{share}` | `permission` |
 | DELETE | `/workspace/documents/{id}/shares/{share}` | takes it back |
 
@@ -566,6 +566,9 @@ project page carries its project's documents as `documents: { documents,
 trashed_count, types, max_upload_mb }`. Sharing and moving never change a
 document's `updated_at`. On a project document, sharing changes and a move
 into it go into the project's activity; a personal document writes none.
+The four sharing changes (`sharing/organization`, and `shares` add, change
+and remove) are limited to 30 a minute per person, web and API together;
+then 429.
 
 The editor's own two calls, `GET /documents/{id}/file/{version}` and `POST
 /documents/{id}/callback`, are for ONLYOFFICE only: signed URLs from the
@@ -1256,6 +1259,10 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Document sharing limits (2026-11-07).** The sharing changes answer 429
+after 30 a minute per person; a person is told about the same document
+being shared with them at most once in 24 hours.
 
 **Documents page, personal documents and sharing (2026-11-06).**
 
