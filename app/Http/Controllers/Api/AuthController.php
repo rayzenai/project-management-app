@@ -107,6 +107,7 @@ class AuthController extends Controller
                 'id' => $member->organization->id,
                 'name' => $member->organization->name,
             ],
+            'locale' => $user->locale(),
             'is_super_admin' => WorkspaceAccess::isSuperAdmin($user),
             'is_office_admin' => WorkspaceAccess::officeAdminOrganizationId($user) !== null,
             'led_team_ids' => WorkspaceAccess::ledTeamIds($user),

@@ -2,6 +2,7 @@
     import { Link, useForm } from '@inertiajs/svelte';
     import { Eye, EyeOff } from '@lucide/svelte';
     import { untrack } from 'svelte';
+    import LanguageSwitch from '../../components/LanguageSwitch.svelte';
 
     let {
         kind,
@@ -58,6 +59,9 @@
 <main
     class="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-fg"
 >
+    <div class="fixed top-3 right-3">
+        <LanguageSwitch />
+    </div>
     <div class="w-full max-w-[360px]">
         <div class="mb-6 flex items-center gap-2.5">
             <span

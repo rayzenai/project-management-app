@@ -6,8 +6,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-display: 'Geist', ui-sans-serif, system-ui, sans-serif;
-    --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    /* Geist has no Devanagari: Nepali text falls through to Mukta. */
+    --font-display: 'Geist', 'Mukta', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'Geist', 'Mukta', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
     --font-np: 'Mukta', 'Geist', ui-sans-serif, system-ui, sans-serif;
 

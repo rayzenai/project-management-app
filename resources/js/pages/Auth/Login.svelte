@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Link, useForm } from '@inertiajs/svelte';
     import { Eye, EyeOff } from '@lucide/svelte';
+    import LanguageSwitch from '../../components/LanguageSwitch.svelte';
 
     const uid = $props.id();
     let showPassword = $state(false);
@@ -20,6 +21,9 @@
 <main
     class="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-fg"
 >
+    <div class="fixed top-3 right-3">
+        <LanguageSwitch />
+    </div>
     <div class="w-full max-w-[360px]">
         <div class="mb-6 flex items-center gap-2.5">
             <span

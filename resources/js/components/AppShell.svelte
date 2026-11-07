@@ -13,6 +13,7 @@
     import AppearanceConfig from './AppearanceConfig.svelte';
     import ClockButton from './attendance/ClockButton.svelte';
     import CommandPalette from './CommandPalette.svelte';
+    import LanguageSwitch from './LanguageSwitch.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
     import PhoneTabs from './shell/PhoneTabs.svelte';
     import Sidebar from './shell/Sidebar.svelte';
@@ -352,6 +353,7 @@
                     <span class="tabular-nums">{noteCount}</span>
                 {/if}
             </button>
+            <LanguageSwitch compact />
             <ThemeToggle />
         </div>
 

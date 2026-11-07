@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DocumentServerController;
 use App\Http\Controllers\GitWebhookController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Workspace\AssignmentController;
 use App\Http\Controllers\Workspace\Attendance\AttendanceNetworkController;
 use App\Http\Controllers\Workspace\Attendance\AttendancePlaceController;
@@ -104,6 +105,11 @@ Route::post('/documents/{document}/callback', [DocumentServerController::class, 
     ->withoutMiddleware('web')
     ->middleware(['signed', 'throttle:600,1,documents-server'])
     ->name('documents.callback');
+
+// The language switch, signed in or out (App\Support\Locales).
+Route::post('/locale', [LocaleController::class, 'update'])
+    ->middleware('throttle:30,1,locale')
+    ->name('locale.update');
 
 Route::middleware('guest')
     ->prefix('workspace')
