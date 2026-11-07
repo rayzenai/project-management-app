@@ -9,6 +9,7 @@ composer test              # config:clear + pint check + phpstan (level 7) + Pes
 composer types:check       # PHPStan over app/ config/ database/ routes/
 vendor/bin/pint --dirty
 npm run lint && npm run format && npm run types:check && npm run build
+npm run i18n:check         # Nepali keys/placeholders + literal-key check (also lint CI)
 php artisan test --compact tests/Feature/Workspace   # scoped test runs
 php artisan db:seed --class=WorkspaceDemoSeeder      # demo data (non-prod)
 php artisan db:seed --class=SdocProjectsSeeder       # fresh databases only; never production
@@ -78,7 +79,16 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
 - Semantic theme utilities only (`bg-surface`, `text-fg-muted`, ...): never raw
   palette colors, `dark:` variants (exception: `lib/noteColors.ts` stickies),
   colored status pills, `rounded-xl`/`shadow-*` outside `.popover`, unicode
-  glyph icons (Lucide only), em-dashes in copy, or mono-uppercase eyebrows.
+  glyph icons (Lucide only; LanguageMark’s क/A is the exception), em-dashes in
+  copy, or mono-uppercase eyebrows.
+- English text is the translation key in `lang/ne.json`, shared by PHP and
+  `lib/i18n.ts`. In translated components, call `t`/`tc` in markup or `$derived`;
+  mark data-held copy with `msg`, and use localized date/time/number helpers.
+  Add Nepali with matching `:placeholders` in the same change. Untranslated
+  pages keep their English helpers; round 1 covers shell, sign-in, My work,
+  Documents and server messages/errors. See the languages design spec for rounds.
+- Use `Locales::number` for server placeholders (including explicit `count`
+  passed to `trans_choice`); Nepali uses Devanagari digits and BS-first dates.
 
 ## Adding a feature (the pattern)
 

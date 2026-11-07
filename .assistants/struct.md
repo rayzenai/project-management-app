@@ -9,13 +9,15 @@ app/
                            # git:oidc-client, git:reconcile,
                            # git:sync-access, git:commit-stats, git:commit-checks
   Http/
+    Controllers/LocaleController.php # POST /locale: guest cookie + signed-in preference
     Controllers/GitWebhookController.php # signed, sessionless forge deliveries
     Controllers/DocumentServerController.php # signed, sessionless ONLYOFFICE file/save calls
     Controllers/Api/       # /api/v1 controllers (Sanctum) + Concerns/RespondsWithServiceResult
     Controllers/Workspace/ # /workspace Inertia controllers + Concerns/RedirectsWithServiceResult
     Middleware/            # ShareWorkspaceData, EnsureProjectVisible, HandleInertiaRequests,
                            # EnsureCanSignIn (deactivation gate), EnsureCanUseGit (OIDC git gate),
-                           # TouchLastSeen, RemembersOrganizationChoice (super-admin workspace switch)
+                           # TouchLastSeen, RemembersOrganizationChoice (super-admin workspace switch),
+                           # SetLocale (saved choice, cookie, English; web + API)
     Requests/              # FormRequests — authorization + validation, shared by both surfaces
                            # Concerns/ChecksMemberRoles validates person-form role sets
     Resources/             # JsonResources ($wrap = null)
@@ -60,7 +62,7 @@ app/
                            # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background,
                            # LoginThrottle (shared web/API credential limit), OrgChart, OfficeLinks,
                            # WorkspaceOrganization (super-admin switch), ActivityText (audit wording),
-                           # InvitePlan, BikramSambat, WorkingDays, MailFailure, FirstRefusals
+                           # InvitePlan, BikramSambat, WorkingDays, MailFailure, FirstRefusals, Locales
   Support/Attendance/      # AttendanceCalendar, DaySchedule, PunchPlace
   Support/Documents/       # types/templates, immutable file writes/downloads, HS256 editor tokens
   Support/Git/             # GitAccess, GitUsernames, TaskReferences, DiffStats, CommentSyntax,
@@ -97,7 +99,8 @@ database/
                            # audit rewording, fixed protected branches, users' workspace organization,
                            # immutable task creator attribution, last-seen/email preferences and claims,
                            # separate invite tokens, lowercased emails, private personal to-dos,
-                           # project/personal documents, sharing + immutable document versions
+                           # project/personal documents, sharing + immutable document versions,
+                           # user_preferences.locale
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (fresh databases only per CLAUDE.md; never production)
 resources/
@@ -109,7 +112,7 @@ resources/
                            # Organogram/Index, Attendance/{Register,Leave,Settings},
                            # Work/{Day,Person,Team}, Maintenance/Index, Documents/{Index,Edit}
   js/components/           # shared UI (AppShell, ThemeToggle, AppearanceConfig,
-                           # StatusGlyph, QuickAdd*, AutosaveStatus, CommandBlock, ...)
+                           # StatusGlyph, QuickAdd*, AutosaveStatus, CommandBlock, LanguageSwitch/Mark, ...)
                            # plus project/ views + ProjectTeamPanel, ProgressReport,
                            # team/{RosterSearch,MemberRoleFields,DesignationSelect,GanttChart,TaskReportDrawer},
                            # task dependency UI, program/ProgramForm,
@@ -118,13 +121,15 @@ resources/
                            # shell/{Sidebar,AccountMenu,PhoneTabs,OrganizationSwitcher,Logo},
                            # mywork/, todos/, team/InviteDialog, attendance/ClockButton + settings/,
                            # organogram/, filters/, work/RangePicker, project/DocumentsView,
-                           # documents/{DocumentList,DocumentTrash,NewDocument,ShareDialog}
+                           # documents/{DocumentStart,DocumentList,DocumentKindIcon,DocumentProjectCards,
+                           # DocumentTrash,ShareDialog}
   js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils,
                            # dependencies (board ordering/links), schedule (Gantt planning),
                            # taskCode (stored project key + permanent task number),
                            # memberRoles (person-form role sets), projectLabel (title + program),
                            # navigation (main/account links), dates, format, reportVisit.svelte,
-                           # structure, attendance, attendanceRegister, work, maintenance
+                           # structure, attendance, attendanceRegister, work, maintenance,
+                           # i18n (reactive translation, digits, relative time + dual-calendar dates)
   css/app.css              # --ws-* tokens, Tailwind @theme mapping, component classes
   views/app.blade.php      # single root view
   views/emails/            # HTML + text password-link, update and morning templates
@@ -134,6 +139,9 @@ tests/
   Feature/Workspace/Api/   # API-surface feature tests
   Unit/                    # parsers, calendars, mail-failure classification,
                            # diff classification + ForgejoClient HTTP boundary tests
+lang/ne.json               # shared English-keyed Nepali dictionary (PHP + browser)
+lang/ne/                   # Laravel auth/password/pagination/validation messages
+scripts/i18n-check.mjs     # translation-key/placeholder validation, run by lint CI
 docs/api.md                # HTTP API reference + external-integration guide
 docs/backups.md            # encrypted SDOC VM backup schedule, retention and restore drill
 docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local proof,
@@ -142,7 +150,7 @@ docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local 
                            # section 14: runners, protected main and checks
 docs/onlyoffice.md         # editor deployment, JWT boundary, RustFS storage and operations
 docs/superpowers/          # design specs + implementation plans (Programs, Git phases 0/1/2,
-                           # roles on people, structure/attendance/work, Documents)
+                           # roles on people, structure/attendance/work, Documents/workspace/UI, languages)
 forgejo/                   # separate Dokploy app: Dockerfile, start.sh, .env.example;
                            # custom/ SDOC Git branding (templates, themes, fonts, logos),
                            # local.sh Homebrew/SQLite laptop runner; runner/ four runners sharing one bounded dind

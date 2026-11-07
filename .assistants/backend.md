@@ -404,11 +404,19 @@ active owner until shared; if that owner becomes inactive it is frozen,
 read-only for super-admins and hidden from everyone else. Shares stay inside
 `documentOrganizationId` (the project's organization or the owner's current
 one), and only an active person there is effective. `DocumentResource` exposes
-`access`, `frozen`, `can_delete`, `can_share` and `can_move`.
+`access`, `frozen`, `can_delete`, `can_share` and `can_move`, plus project
+`can_open` and `shares_count` for sharers (effective loaded shares only).
 
 `DocumentLibraryQuery` powers web `/workspace/documents` and API
-`/api/v1/workspace/documents`: filters `all|mine|shared|organization|projects`,
+`/api/v1/workspace/documents`: tabs `recent|personal|shared|projects`,
 project/type/title filters, 50-row cursor pagination, project choices and trash.
+`DocumentLibraryRequest::OLD_SHOWS` maps old `all|mine|organization` links.
+Personal contains the viewer’s own personal documents; Shared with me includes
+named shares and office-wide documents reached no other way, excluding frozen
+ones. Unfiltered Projects returns `project_cards` instead of document rows;
+`projectCards` lists active usable projects with counts and latest edit times,
+also at API `GET /api/v1/workspace/documents/projects`. `total` counts visible
+documents for the page’s search threshold; list reads eager-load `shares.member`.
 The web query follows the super-admin organization switch; the API does not.
 `ProjectDocumentsQuery` supplies the project tab. Both list queries call
 `WorkspaceAccess::preloadDocumentAccess`, which loads owners, project teams,
@@ -420,8 +428,11 @@ sharing routes now live under
 trash for a super-admin, and `DocumentSharingQuery` /
 `DocumentShareCandidatesQuery` feed the Share dialog without exposing emails.
 
-`CreateDocumentService` creates personal or project documents. A personal
-document's active owner may move it one way into any project whose documents
+`CreateDocumentService` creates personal or project documents. Blank creation
+redirects to the editor with one-visit `created_document` flash for title entry.
+Web uploads answer plain JSON requests with the document resource (201), while
+Inertia requests retain redirects; the UI uploads files sequentially with fetch.
+A personal document's active owner may move it one way into any project whose documents
 they may use; `MoveDocumentService` keeps its immutable versions and shares,
 and closes organization access when the destination is in another organization.
 `DocumentSharingService` changes organization access and shares without touching
@@ -443,6 +454,22 @@ configured editor host, caps them at 100 MB, deduplicates by SHA-256, preserves
 error-status saves with a warning, and advances the editor key when a session ends;
 failures tell the editor to retry; saved versions credit the editor's last user
 where known.
+
+## Languages
+
+`Support/Locales` defines English/Nepali and selects saved `User::locale()`
+(`user_preferences.locale`), else the `locale` cookie, else English.
+`Middleware/SetLocale` runs on web and API, resolving Sanctum before API auth.
+`HandleInertiaRequests` shares `locale`/`locales`, including guest pages;
+API `AuthController::userPayload` includes `locale`.
+`LocaleController` + `UpdateLocaleRequest` serve throttled `POST /locale` for
+anyone: cookie plus signed-in preference. Web/API preference PATCH routes also
+accept locale; web changes copy it to the cookie. Web login adopts the cookie
+only when no saved choice exists, preserving existing choices.
+`lang/ne.json` is the English-keyed dictionary for `__()`/`trans_choice()` and
+browser `lib/i18n.ts`; Laravel group messages live in `lang/ne/`. `Locales::number`
+localizes server placeholders. The languages design spec maps translation rounds;
+round 1 translates shell, sign-in, My work, Documents and server messages/errors.
 
 ## Notifications
 
