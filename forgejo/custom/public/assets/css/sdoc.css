@@ -149,9 +149,10 @@ li:has(> a[href^="https://forgejo.org/docs"]) {
   color: var(--color-text-light-2);
 }
 
+/* As many columns as there are points (two now), side by side. */
 .sdoc-points {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
   margin-top: 56px;
 }
@@ -179,10 +180,6 @@ li:has(> a[href^="https://forgejo.org/docs"]) {
   font-size: 14px;
   line-height: 1.55;
   color: var(--color-text-light-1);
-}
-
-.sdoc-point code {
-  font-size: 13px;
 }
 
 @media (max-width: 767.98px) {
