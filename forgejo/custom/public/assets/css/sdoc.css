@@ -149,7 +149,7 @@ li:has(> a[href^="https://forgejo.org/docs"]) {
   color: var(--color-text-light-2);
 }
 
-/* As many columns as there are points (two now), side by side. */
+/* As many columns as there are points, side by side. */
 .sdoc-points {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

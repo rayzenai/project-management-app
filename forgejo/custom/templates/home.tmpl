@@ -14,7 +14,7 @@
 
 	<section class="sdoc-hero">
 		<h1>{{AppName}}</h1>
-		<p class="sdoc-lead">The centre's code forge: repositories, reviews and history for SDOC projects, each linked to its tasks in SDOC Tasks.</p>
+		<p class="sdoc-lead">The Software Development and Operation Centre's own code forge, where the source code of its projects is written, reviewed and kept.</p>
 		<div class="sdoc-actions">
 			<a class="ui primary button" href="{{AppSubUrl}}/user/oauth2/sdoc-tasks">
 				<img src="{{AssetUrlPrefix}}/img/sdoc-tasks.svg" alt="" aria-hidden="true">
@@ -22,19 +22,24 @@
 			</a>
 			<a class="ui basic button" href="https://tasks.sdoc.gov.np">Open SDOC Tasks</a>
 		</div>
-		<p class="sdoc-note">Your SDOC Tasks account is your account here, protected by two-factor authentication.</p>
+		<p class="sdoc-note">For the centre's staff and project teams, with their SDOC Tasks account.</p>
 	</section>
 
 	<div class="sdoc-points">
 		<section class="sdoc-point">
+			{{svg "octicon-server" 20}}
+			<h2>On the centre's own servers</h2>
+			<p>SDOC keeps the source code of its projects on its own servers, under its own control, rather than with an outside provider.</p>
+		</section>
+		<section class="sdoc-point">
 			{{svg "octicon-lock" 20}}
-			<h2>Private to your office</h2>
-			<p>Repositories belong to your office's organization. Its people and the project's team see them; nobody else does.</p>
+			<h2>Each office's own</h2>
+			<p>An office's repositories are open only to its people and the teams on its projects.</p>
 		</section>
 		<section class="sdoc-point">
 			{{svg "octicon-shield-check" 20}}
 			<h2>Two-factor sign-in</h2>
-			<p>Everyone signs in through SDOC Tasks and then enters the code from their authenticator app.</p>
+			<p>Staff sign in through SDOC Tasks and then enter a code from an authenticator app.</p>
 		</section>
 	</div>
 </div>
