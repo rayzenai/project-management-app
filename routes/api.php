@@ -150,6 +150,7 @@ Route::prefix('v1')->name('api.')->group(function () {
             // Every document the user may open (filters as the web page's),
             // the trash, New and Upload (into a project or personal).
             Route::get('/documents', [DocumentLibraryController::class, 'index'])->name('documents.index');
+            Route::get('/documents/projects', [DocumentLibraryController::class, 'projects'])->name('documents.projects');
             Route::get('/documents/trash', [DocumentLibraryController::class, 'trash'])->name('documents.trash');
             Route::post('/documents', [DocumentLibraryController::class, 'store'])->name('documents.store');
             Route::post('/documents/upload', [DocumentLibraryController::class, 'upload'])->middleware('throttle:30,1,document-upload')->name('documents.upload');

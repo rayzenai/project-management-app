@@ -500,7 +500,8 @@ connection's webhook secret. See `docs/forgejo.md`, section 12.
 ## Documents *(documents on; what each person may do is their access level, below)*
 
 Word, Excel and PowerPoint files, edited together in ONLYOFFICE
-(`docs/onlyoffice.md`; design `docs/superpowers/specs/2026-11-06-documents-workspace-design.md`).
+(`docs/onlyoffice.md`; design `docs/superpowers/specs/2026-11-06-documents-workspace-design.md`,
+the page's tabs and rows `2026-11-07-documents-ui-design.md`).
 A document belongs to a project (`home: project`) or, personal, to the
 person who made it (`home: personal`). Every route answers 403 while
 documents are off (no editor configured).
@@ -528,10 +529,12 @@ ones included, can't be deleted: `DELETE /workspace/members/{id}` answers
 
 A document is `{ id, title, file_type (docx|xlsx|pptx), kind
 (Document|Spreadsheet|Presentation), version, size, home (project|personal),
-project ({ slug, title, label } or null), owner ({ id, name } or null),
-organization_access, access, frozen, can_delete, can_share, can_move,
-created_by, updated_by, created_at, updated_at, deleted_at }` (people as
-`{ id, name }`); a version is `{ version, size, source
+project ({ slug, title, label, can_open } or null; `can_open`: the caller
+may open the project's Documents tab), owner ({ id, name } or null),
+organization_access, access, frozen, can_delete, can_share, shares_count,
+can_move, created_by, updated_by, created_at, updated_at, deleted_at }`
+(people as `{ id, name }`; `shares_count` is how many people it is shared
+with whose share gives access now, for whoever may share it, else null); a version is `{ version, size, source
 (created|uploaded|edited), user, created_at }`; a share is `{ id, member: {
 id, name, designation }, permission, effective }`. Every save from the
 editor is a new version; none is ever deleted, and the trash is never
@@ -539,7 +542,8 @@ emptied.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/documents` | every document the caller may open, newest change first, 50 at a time: `{ data, next_cursor }` (pass `cursor` for the next). Query: `show` (`all`, `mine` (personal ones they own), `shared` (shared with them), `organization` (open to the organization), `projects`), `project` (a slug), `type`, `q` (in the title). The web renders the Documents page; its Show more is `GET /workspace/documents/list` |
+| GET | `/workspace/documents` | every document the caller may open, newest change first, 50 at a time: `{ data, next_cursor }` (pass `cursor` for the next). Query: `show`, the tab: `recent` (everything, the default), `personal` (personal ones they own), `shared` (shared with them by name, plus those open to the whole office that they don't own and don't reach through one of their projects), `projects` (those in projects); the earlier names `all`, `mine` and `organization` still work as `recent`, `personal` and `shared`. Also `project` (a slug), `type`, `q` (in the title). The web renders the Documents page (whose Projects tab with no other filter shows `project_cards` instead of rows, and `total`, how many the caller may open); its Show more is `GET /workspace/documents/list` |
+| GET | `/workspace/documents/projects` | the Projects tab: a card per active project whose documents the caller may use, `{ slug, title, label, documents_count, last_edited_at }`, the newest edit first, then those with none by title (API only; the web page carries them as `project_cards`) |
 | GET | `/workspace/documents/trash` | the trashed ones the caller may see, newest first (`project` narrows to one) |
 | POST | `/workspace/documents` | `title` (at most 200), `type` (`docx`, `xlsx` or `pptx`), optional `project` (a slug): a blank one in that project, or personal without one. A project whose documents the caller may not use is 422 `Choose one of your projects.` on `project`; a personal one needs an active person (403 otherwise). `Created {title}.`; the web opens it in the editor |
 | POST | `/workspace/documents/upload` | multipart `file` (a real `.docx`, `.xlsx` or `.pptx`, at most 50 MB; anything else is 422 `This file could not be read as a Word, Excel or PowerPoint file.` or `Upload a .docx, .xlsx or .pptx file.`), optional `title` (else the file name), optional `project` as above. `Uploaded {title}.` |

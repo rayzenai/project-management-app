@@ -8,15 +8,17 @@ use App\Models\Project;
 use App\Models\User;
 use App\Support\Documents\DocumentTypes;
 use App\Support\WorkspaceAccess;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * The Documents page (docs/superpowers/specs/2026-11-06-documents-workspace-design.md):
- * every document the viewer may open (Document::scopeVisibleTo), most
- * recently edited first, 50 at a time, filtered by show, project, type and
- * title; and the trash. A super-admin's organization switch ($organizationId)
- * narrows it to that organization's documents, keeping their own and those
- * shared with them.
+ * The Documents page (docs/superpowers/specs/2026-11-06-documents-workspace-design.md
+ * and 2026-11-07-documents-ui-design.md): every document the viewer may open
+ * (Document::scopeVisibleTo), most recently edited first, 50 at a time, by
+ * tab (`show`: recent, personal, shared, projects), project, type and
+ * title; the Projects tab's cards; and the trash. A super-admin's
+ * organization switch ($organizationId) narrows it to that organization's
+ * documents, keeping their own and those shared with them.
  */
 class DocumentLibraryQuery
 {
@@ -26,16 +28,24 @@ class DocumentLibraryQuery
     public const TRASH_LIMIT = 200;
 
     /**
+     * The page. The Projects tab with no other filter shows a card per
+     * project instead of rows (`project_cards`); `total` is how many
+     * documents the viewer may open at all (the page offers search once
+     * there are enough to search).
+     *
      * @param  array{show: string, project: string|null, type: string|null, q: string|null}  $filters
-     * @return array{documents: list<array<string, mixed>>, next_cursor: string|null, filters: array{show: string, project: string|null, type: string|null, q: string|null}, projects: list<array{slug: string, title: string, label: string}>, organization: array{id: int, name: string}|null, types: list<array{value: string, label: string}>, max_upload_mb: int, can_create_personal: bool, trashed_count: int}
+     * @return array{documents: list<array<string, mixed>>, next_cursor: string|null, project_cards: list<array{slug: string, title: string, label: string, documents_count: int, last_edited_at: string|null}>, total: int, filters: array{show: string, project: string|null, type: string|null, q: string|null}, projects: list<array{slug: string, title: string, label: string}>, organization: array{id: int, name: string}|null, types: list<array{value: string, label: string}>, max_upload_mb: int, can_create_personal: bool, trashed_count: int}
      */
     public function page(User $viewer, array $filters, ?int $organizationId): array
     {
         $member = WorkspaceAccess::memberFor($viewer);
         $organization = $member?->organization;
+        $cards = $filters['show'] === 'projects' && $filters['project'] === null && $filters['type'] === null && $filters['q'] === null;
 
         return [
-            ...$this->list($viewer, $filters, $organizationId),
+            ...($cards ? ['documents' => [], 'next_cursor' => null] : $this->list($viewer, $filters, $organizationId)),
+            'project_cards' => $cards ? $this->projectCards($viewer, $organizationId) : [],
+            'total' => $this->narrowed(Document::query()->visibleTo($viewer), $viewer, $organizationId)->count(),
             'filters' => $filters,
             'projects' => $this->projects($viewer),
             'organization' => $organization === null ? null : ['id' => $organization->id, 'name' => $organization->name],
@@ -57,7 +67,7 @@ class DocumentLibraryQuery
         $query = $this->narrowed($this->filtered(Document::query()->visibleTo($viewer), $viewer, $filters), $viewer, $organizationId);
 
         $page = $query
-            ->with(['creator:id,name', 'updater:id,name', 'owner', 'project.program'])
+            ->with(['creator:id,name', 'updater:id,name', 'owner', 'project.program', 'shares.member'])
             ->orderByDesc('documents.updated_at')
             ->orderByDesc('documents.id')
             ->cursorPaginate(self::PAGE_SIZE, ['documents.*'], 'cursor', $cursor);
@@ -106,11 +116,20 @@ class DocumentLibraryQuery
         $member = WorkspaceAccess::memberFor($viewer);
 
         match ($filters['show']) {
-            'mine' => $query->whereNull('documents.project_id')->where('documents.owner_id', $viewer->id),
-            'shared' => $member === null
-                ? $query->whereRaw('1 = 0')
-                : $query->whereHas('shares', fn (Builder $share) => $share->where('document_shares.member_id', $member->id)),
-            'organization' => $query->whereNotNull('documents.organization_access'),
+            // Their own personal documents (not those they made in a project).
+            'personal' => $query->whereNull('documents.project_id')->where('documents.owner_id', $viewer->id),
+            // Shared with them by name, and opened to the whole office when
+            // they reach it no other way: not their own, not in a project
+            // whose documents they use.
+            'shared' => $query->where(fn (Builder $shared) => $shared
+                ->when($member !== null, fn (Builder $named) => $named->whereHas('shares', fn (Builder $share) => $share->where('document_shares.member_id', $member?->id)))
+                ->orWhere(fn (Builder $office) => $office
+                    ->whereNotNull('documents.organization_access')
+                    ->where(fn (Builder $elsewhere) => $elsewhere
+                        ->where(fn (Builder $theirs) => $theirs->whereNull('documents.project_id')->where('documents.owner_id', '!=', $viewer->id))
+                        ->orWhere(fn (Builder $project) => $project
+                            ->whereNotNull('documents.project_id')
+                            ->whereNotIn('documents.project_id', Project::query()->documentsVisibleTo($viewer)->select('projects.id')))))),
             'projects' => $query->whereNotNull('documents.project_id'),
             default => $query,
         };
@@ -150,6 +169,44 @@ class DocumentLibraryQuery
             ->where(fn (Builder $own) => $own->whereNull('documents.project_id')->where('documents.owner_id', $viewer->id))
             ->when($memberId !== null, fn (Builder $shared) => $shared->orWhereHas('shares', fn (Builder $share) => $share->where('document_shares.member_id', $memberId)))
             ->orWhere(fn (Builder $there) => Document::whereInOrganization($there, $organizationId)));
+    }
+
+    /**
+     * The Projects tab: a card per active project whose documents the viewer
+     * may use (narrowed by a super-admin's organization switch), with how
+     * many documents it has and when one was last edited; the newest edit
+     * first, then those with none by title.
+     *
+     * @return list<array{slug: string, title: string, label: string, documents_count: int, last_edited_at: string|null}>
+     */
+    public function projectCards(User $viewer, ?int $organizationId): array
+    {
+        $projects = Project::query()
+            ->documentsVisibleTo($viewer)
+            ->active()
+            ->inOrganization($organizationId)
+            ->with('program:id,name')
+            ->withCount('documents')
+            ->withMax('documents', 'updated_at')
+            ->get(['id', 'slug', 'title', 'program_id', 'organization_id']);
+
+        return array_values($projects
+            ->map(function (Project $project): array {
+                /** @var string|null $max */
+                $max = $project->getAttribute('documents_max_updated_at');
+
+                return [
+                    'slug' => $project->slug,
+                    'title' => $project->title,
+                    'label' => $project->label(),
+                    'documents_count' => (int) $project->getAttribute('documents_count'),
+                    'last_edited_at' => $max === null ? null : CarbonImmutable::parse($max)->toIso8601String(),
+                ];
+            })
+            ->sort(fn (array $a, array $b): int => [$b['last_edited_at'] !== null, $b['last_edited_at'] ?? '', mb_strtolower($a['title'])]
+                <=> [$a['last_edited_at'] !== null, $a['last_edited_at'] ?? '', mb_strtolower($b['title'])])
+            ->values()
+            ->all());
     }
 
     /**

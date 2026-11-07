@@ -831,6 +831,8 @@ export interface Flash {
     undo?: { label: string; url: string };
     /** The row quick add just made ("todo-12", "task-34"): My work shows it. */
     created_key?: string;
+    /** The document just made: its editor page offers the title to type over. */
+    created_document?: number;
 }
 
 export interface AuthUser extends User {

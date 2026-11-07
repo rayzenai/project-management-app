@@ -62,7 +62,11 @@ class DocumentLibraryController extends Controller
         return $this->redirectWithResult($service->upload($request->project(), $request->file('file'), $request->validated('title'), $request->user()));
     }
 
-    /** A new blank document opens in the editor; a failure stays where it was. */
+    /**
+     * A new blank document opens in the editor, which offers its title for
+     * typing over (`created_document`, this visit only); a failure stays
+     * where it was.
+     */
     private function openOrBack(ServiceResult $result): RedirectResponse
     {
         if (! $result->success || ! $result->data instanceof Document) {
@@ -71,6 +75,6 @@ class DocumentLibraryController extends Controller
 
         return redirect()
             ->route('workspace.documents.show', ['document' => $result->data->id])
-            ->with('workspace_flash', ['success' => true, 'message' => $result->message]);
+            ->with('workspace_flash', ['success' => true, 'message' => $result->message, 'created_document' => $result->data->id]);
     }
 }

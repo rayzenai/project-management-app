@@ -158,7 +158,7 @@ it('lists every document the viewer may open, newest first', function () {
     $response = $this->actingAs($this->member)->get('/workspace/documents')->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Documents/Index')
-            ->where('filters.show', 'all')
+            ->where('filters.show', 'recent')
             ->where('can_create_personal', true)
             ->where('organization.name', 'SDOC')
             ->where('projects.0.slug', $this->project->slug)
@@ -178,10 +178,9 @@ it('filters by show, project, type and title', function () {
 
     $titles = fn (string $query) => collect(docsPageTitles($this->actingAs($this->member)->get("/workspace/documents?{$query}")))->sort()->values()->all();
 
-    expect($titles('show=mine'))->toBe(['My notes'])
-        ->and($titles('show=shared'))->toBe(['Shared with me'])
-        ->and($titles('show=organization'))->toBe(['Office circular'])
-        ->and($titles('show=projects'))->toBe(['Other plan', 'Project plan'])
+    expect($titles('show=personal'))->toBe(['My notes'])
+        ->and($titles('show=shared'))->toBe(['Office circular', 'Shared with me'])
+        ->and($titles('show=projects&q=plan'))->toBe(['Other plan', 'Project plan'])
         ->and($titles("show=projects&project={$other->slug}"))->toBe(['Other plan'])
         ->and($titles('type=xlsx'))->toBe(['Other plan'])
         ->and($titles('q=PLAN'))->toBe(['Other plan', 'Project plan']);
@@ -235,7 +234,7 @@ it('reads the Documents page and a project\'s tab in the same number of queries 
 
         return count(DB::getQueryLog());
     };
-    $all = ['show' => 'all', 'project' => null, 'type' => null, 'q' => null];
+    $all = ['show' => 'recent', 'project' => null, 'type' => null, 'q' => null];
     $reads = function () use ($queries, $all): array {
         [$member, $manager, $project] = [$this->member->fresh(), $this->manager->fresh(), $this->project->fresh()];
 

@@ -39,7 +39,7 @@ class ProjectDocumentsQuery
     {
         $documents = Document::query()
             ->where('project_id', $project->id)
-            ->with(['creator:id,name', 'updater:id,name', 'project.program'])
+            ->with(['creator:id,name', 'updater:id,name', 'project.program', 'shares.member'])
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get();
