@@ -48,7 +48,7 @@ vendor/bin/pest > file 2>&1` and read the file.
   `project`, `task`, `task-comment`, `task-dependency`, `project-note`,
   `project-contact`, `subtask`, `project-assignment`, `team`, `member`,
   `git-repository`, `git-repository-grant`, `git-branch`, `git-commit`,
-  `git-pull-request`, `document`; shares are logged with their document
+  `git-pull-request`, `document`, `form`, `form-response`; shares are logged with their document
   as subject, so `DocumentShare` has no entry), and the
   observers (`ProgramObserver`, `ProjectObserver`, `TaskObserver`, ...).
 - `routes/web.php` — `/workspace/*` (Inertia, `auth` + `ShareWorkspaceData`),
@@ -191,7 +191,13 @@ person's level on a document, `edit|view|null`; twin `Document::scopeVisibleTo`)
 (twin `DocumentShareCandidatesQuery`), `isShareEffective`,
 `canDeleteDocument(user, document)` (trash and restore: a project's as
 `canDeleteTask`, a personal one its owner's), `canMoveDocument` (see
-Documents below).
+Documents below), and the Forms section (see Forms below):
+`canUseProjectForms`, `canCreateForm`, `formAccess` (twin
+`Form::scopeManagedBy`), `preloadFormAccess`, `canEditForm`,
+`canSeeFormResponses`, `isFormRespondent` (twin `Form::scopeAnswerableBy`),
+`canAnswerForm`, `canSeeForm`, `canAddFormOrganizations`,
+`canShareFormWith`, `isFormShareEffective`, `canSendFormTasksTo`,
+`canOpenFormFile`.
 Visibility scopes:
 `Project`, `Team`, `Member` and `Program::scopeVisibleTo` (the first three
 reach a program manager's projects through `Project::inPrograms`). Memos
@@ -1012,6 +1018,77 @@ API: `docs/api.md` (Documents).
   with Where, `DocumentTrash`, `ShareDialog`). The editor page
   (`pages/Documents/Edit.svelte`: loads `api.js` from the editor, mounts it
   through an action) has Share and the Can view and frozen marks.
+
+## Forms
+
+Spec: `docs/superpowers/specs/2026-11-07-forms-design.md`; plan (with the
+schema's shape): `docs/superpowers/plans/2026-11-07-forms.md`. API:
+`docs/api.md` (Forms). On while `config('forms.enabled')` (`FORMS_ENABLED`,
+default on), whether or not documents are.
+
+- **Models**: `Form` (a project's; `draft` and `settings` jsonb, `code` for
+  its link `/f/{code}`, `status` `draft|open|closed`, `respondents`
+  `everyone|team|people`, `answering` `person|organization`;
+  `published_version_id` the live `FormVersion`, which never changes),
+  `FormShare` (`edit|responses`), `form_respondent_members`,
+  `form_respondent_organizations`, `FormResponse` (`respondent_key`
+  `m:{member}` or `o:{organization}`, unique per form; `sender`, `answers`,
+  `stage`, `task_id`), `FormDraft`, `FormResponseEvent` (the history),
+  `FormFile` (`content` or `answer`, on the documents disk under `forms/`,
+  never deleted). `{form}` binds explicitly (`Route::model` in
+  `AppServiceProvider`); controllers with a nested model take `Form $form`
+  first.
+- **Schema and answers** (`app/Support/Forms`): `FormSchema::clean` is the
+  only way a draft is kept (refuses a bad or repeated id, an unknown kind);
+  `FormSchema::problems` (with `FormPublishChecks`) blocks Publish;
+  `FormAnswers` is the one truth for what shows (`visible`), what a draft
+  keeps (`draft`, unchecked) and Submit (`check`: hidden questions dropped,
+  values in their stored shape, errors by question path).
+  `resources/js/lib/forms/answers.ts` mirrors it for quick feedback; keep
+  the messages identical. Ids never change or get reused; answers store
+  option ids. Rich text is TipTap JSON (`FormRichText`), drawn by
+  `components/forms/RichText.svelte`, never HTML. BS dates come from
+  `resources/data/bs-calendar.json` (`BsCalendar`, `lib/forms/bsCalendar.ts`;
+  BS 2070 to 2100 are `App\Support\BikramSambat`'s table, a test checks they
+  agree), places from `resources/data/nepal-places.json` (`NepalPlaces`).
+  Answer maps go to the page as objects (`(object)`), never `[]`.
+- **Who** (SECURITY CRITICAL, `WorkspaceAccess` Forms section):
+  `formAccess` (`edit|responses|null`; twin `Form::scopeManagedBy`):
+  `canManageProjectAccess` on its project, its maker while
+  `usesProjectDocuments` (without the documents switch), or an effective
+  share. The team gets nothing by being on it. `isFormRespondent` (twin
+  `Form::scopeAnswerableBy`) and `canAnswerForm` (open now);
+  `canSeeForm`; `canAddFormOrganizations` (its organization's admins and
+  super-admins only: the one crossing of organizations outside a
+  cross-organization team; other organizations' people are counted, never
+  named, in "who hasn't answered"); `canShareFormWith` (active, same
+  organization; one generic 422 otherwise); `canSendFormTasksTo`;
+  `canOpenFormFile` (404 for anyone else).
+- **Writes** (`app/Services/Forms`): `CreateFormService` (templates in
+  `FormTemplates`), `SaveFormDraftService`, `UpdateFormSettingsService`,
+  `PublishFormService` (first publish may notify, `FormOpened`),
+  `CloseFormService`, `DuplicateFormService`, `DeleteFormService` (no
+  responses only), `FormRespondentsService`, `FormSharingService`,
+  `FormTaskSettingsService`, `FormFileService`, `FormFillService` (draft,
+  clear, submit; a test checks against the draft and keeps nothing),
+  `FormResponseActionsService` (stages, notes), `RemindFormService`
+  (`FormReminder`, once per `forms.remind_every_hours`),
+  `FormExportService` (OpenSpout `.xlsx`; Open as spreadsheet is always a
+  personal document, never a project one), `MakeTaskFromResponseService`
+  (only when the form turns tasks on; inside `Task::bySystem`, so
+  `created_by` is null, its activity credits no one and the assignee hears
+  "A form assigned you"; copies only the chosen answers).
+- **Reads** (`app/Queries/Forms`): `FormLibraryQuery` (the three lists,
+  `toFill` for My work's `forms_to_fill`), `ProjectFormsQuery` (the tab),
+  `FormBuilderQuery`, `FormFillQuery`, `FormResponsesQuery`,
+  `FormSummaryQuery`, `FormRespondentsQuery` (people, organizations, whom to
+  tell, who hasn't answered), `FormSharingQuery`, `FormCandidatesQuery`.
+- **Pages**: `Forms/Index`, `Forms/Edit` (the builder:
+  `components/forms/builder/`), `Forms/Fill`, `Forms/Responses`,
+  `components/project/FormsView.svelte`. JSON calls go through
+  `lib/forms/http.ts` (CSRF from the page's meta tag). A dialog opened from
+  the top bar uses `lib/forms/portal.ts` (the bar's blur makes it the box
+  fixed elements sit in).
 
 ## Structure, attendance and work reports
 

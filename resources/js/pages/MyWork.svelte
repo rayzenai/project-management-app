@@ -9,10 +9,12 @@
     import { onMount, tick } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import AppShell from '../components/AppShell.svelte';
+    import FormsToFill from '../components/mywork/FormsToFill.svelte';
     import JoinedProjects from '../components/mywork/JoinedProjects.svelte';
     import MyWorkRow from '../components/mywork/MyWorkRow.svelte';
     import TodoRow from '../components/mywork/TodoRow.svelte';
     import QuickAddBar from '../components/QuickAddBar.svelte';
+    import type { FormItem } from '../lib/forms/types';
     import { peek } from '../lib/peek.svelte';
     import type {
         MyWorkGroup,
@@ -30,7 +32,12 @@
      * Nothing you add disappears: the row quick add just made (its flash's
      * `created_key`) opens its folded group, is scrolled to and glows once.
      */
-    let { today, groups, joined }: MyWorkPayload = $props();
+    let {
+        today,
+        groups,
+        joined,
+        forms_to_fill: formsToFill = [],
+    }: MyWorkPayload & { forms_to_fill?: FormItem[] } = $props();
 
     let quickAdd = $state<{ addTo: (projectId: number) => void } | null>(null);
 
@@ -194,6 +201,8 @@
                 today={today.date}
             />
         </div>
+
+        <FormsToFill forms={formsToFill} />
 
         <JoinedProjects
             {joined}

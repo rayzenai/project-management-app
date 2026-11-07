@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\ProjectActivity;
 use App\Models\ProjectAssignment;
+use App\Models\Task;
 use App\Notifications\TaskAssigned;
 use App\Services\ProjectActivityRecorder;
 use App\Support\ActivityText;
@@ -20,14 +21,16 @@ class ProjectAssignmentObserver
             subject: $assignment,
             action: ProjectActivity::ACTION_CREATED,
             description: 'Assigned to '.$name.($role === '' ? '' : " ({$role})"),
+            system: Task::madeBySystem(),
         );
 
         $user = $assignment->member?->user;
-        $actor = auth()->user();
+        // A task the system made from a form's response is the form's doing.
+        $actor = Task::madeBySystem() ? null : auth()->user();
 
         // Nobody is told (or emailed) about a task they gave themselves.
         if ($user !== null && ! $user->is($actor)) {
-            $user->notify(new TaskAssigned($assignment->task, $actor->name ?? 'Someone'));
+            $user->notify(new TaskAssigned($assignment->task, Task::madeBySystem() ? 'A form' : ($actor->name ?? 'Someone')));
         }
     }
 

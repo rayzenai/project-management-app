@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Models\Document;
 use App\Models\DocumentShare;
 use App\Models\DocumentVersion;
+use App\Models\Form;
+use App\Models\FormResponse;
 use App\Models\GitBranch;
 use App\Models\GitCommit;
 use App\Models\GitPullRequest;
@@ -53,6 +55,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Passport\Passport;
@@ -142,7 +145,13 @@ class AppServiceProvider extends ServiceProvider
             'git-pull-request' => GitPullRequest::class,
             'git-repository-grant' => GitRepositoryGrant::class,
             'document' => Document::class,
+            'form' => Form::class,
+            'form-response' => FormResponse::class,
         ]);
+
+        // {form} in a route is a Form (its requests read it), web and API
+        // alike; a deleted one is a 404.
+        Route::model('form', Form::class);
 
         // Observers own every side effect of a workspace mutation: the
         // ProjectActivity audit log and the in-app notifications.

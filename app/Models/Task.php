@@ -94,6 +94,36 @@ class Task extends Model
         ];
     }
 
+    /** While set (Task::bySystem), a task made is the system's: no creator, no one credited. */
+    private static bool $bySystem = false;
+
+    /**
+     * Make tasks as the system (a form's response): they get no creator
+     * (`created_by` stays null) and their activity credits no one, whoever
+     * is signed in.
+     *
+     * @template TResult
+     *
+     * @param  callable(): TResult  $make
+     * @return TResult
+     */
+    public static function bySystem(callable $make): mixed
+    {
+        $was = self::$bySystem;
+        self::$bySystem = true;
+
+        try {
+            return $make();
+        } finally {
+            self::$bySystem = $was;
+        }
+    }
+
+    public static function madeBySystem(): bool
+    {
+        return self::$bySystem;
+    }
+
     protected static function booted(): void
     {
         // The number in the task's code (SG-12) is assigned once and never
@@ -104,7 +134,7 @@ class Task extends Model
         static::creating(function (Task $item) {
             // Whoever is signed in made it, as its activity row says; never
             // fillable, so no request can name someone else.
-            if ($item->getAttribute('created_by') === null && auth()->id() !== null) {
+            if (! self::$bySystem && $item->getAttribute('created_by') === null && auth()->id() !== null) {
                 $item->created_by = (int) auth()->id();
             }
 

@@ -116,6 +116,8 @@ class AuthController extends Controller
             'git_enabled' => GitAccess::anyFor($user),
             // The twin of the web's documentsEnabled: projects may have documents.
             'documents_enabled' => (bool) config('documents.enabled'),
+            // Forms: the Forms page and the projects' Forms tabs.
+            'forms_enabled' => (bool) config('forms.enabled'),
             // The twin of the web's clock prop being set: the user may clock in.
             'attendance_enabled' => WorkspaceAccess::canPunch($user),
             // The twin of the web's office prop: the office pages the user may open.

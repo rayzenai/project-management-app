@@ -289,6 +289,37 @@
         'The approval is what guards main. A pull request runs its own version of the workflow, so read changes to it as closely as the code, and never post a test result by hand.',
     ];
 
+    const forms = [
+        [
+            'Where they are',
+            "Forms in the sidebar has three lists: To fill (forms waiting for you or your office, also on My work), Filled (what you sent) and Managing (forms you build or whose responses you see). A project's Forms tab shows that project's.",
+        ],
+        [
+            'Making one',
+            'New form asks for a title, a project and a template to start from. A form belongs to its project, so its responses stay with the office when people move. Anyone on the project can make one; its maker and whoever runs the project build it and see its responses.',
+        ],
+        [
+            'Building',
+            'Steps hold questions and content: short answers, paragraphs, choices, dates in BS or AD, Nepali mobile numbers, files, a place down to the ward, groups that repeat, a declaration, and headings, text, pictures, videos and files to download. Each question can be required, checked (Nepali only, an age range) and shown only when earlier answers match. Everything saves as you work.',
+        ],
+        [
+            'Publish',
+            'Nothing you change reaches people until you choose Publish, or Publish changes. Each response keeps the version it was answered on. Try it fills in the draft yourself and keeps nothing.',
+        ],
+        [
+            'Who fills it in',
+            "Everyone in your office, the project's team, or chosen people. Your office's admins can also send it to other offices. For a data call, choose one response per office: anyone there can start it and the others can change it.",
+        ],
+        [
+            'Responses',
+            "Whoever runs the project, the form's maker and the people it is shared with see the responses: a table to filter, stages to move them through, notes, a summary, who hasn't answered with a Remind button, an Excel download, Open as spreadsheet (one of your own documents) and the files as a ZIP. The rest of the team doesn't see them.",
+        ],
+        [
+            'Tasks',
+            'Turn on Tasks and each new response becomes a task in a project, for one person. The task copies only the answers you choose, since the whole team reads it.',
+        ],
+    ];
+
     const documents = [
         [
             'Where they are',
@@ -734,6 +765,22 @@
                 <h3 class="mt-6 mb-2 font-medium">More about code</h3>
                 <dl class="border-t border-line">
                     {#each code as [term, meaning] (term)}
+                        <div
+                            class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
+                        >
+                            <dt class="font-medium">{term}</dt>
+                            <dd class="text-[13px] text-fg-muted">{meaning}</dd>
+                        </div>
+                    {/each}
+                </dl>
+            </section>
+        {/if}
+
+        {#if shared.formsEnabled}
+            <section>
+                <h2 class="section-title mb-3">Forms</h2>
+                <dl class="border-t border-line">
+                    {#each forms as [term, meaning] (term)}
                         <div
                             class="grid gap-1 border-b border-line-soft py-2 sm:grid-cols-[9rem_1fr] sm:gap-4"
                         >

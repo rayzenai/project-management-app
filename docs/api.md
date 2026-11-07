@@ -574,6 +574,57 @@ The editor's own two calls, `GET /documents/{id}/file/{version}` and `POST
 /documents/{id}/callback`, are for ONLYOFFICE only: signed URLs from the
 editor config plus the editor's JWT, no session.
 
+## Forms *(forms on: `forms_enabled` on `/user`; what each person may do is their level, below)*
+
+Forms offices build and signed-in officials fill in (design
+`docs/superpowers/specs/2026-11-07-forms-design.md`). A form belongs to a
+project. Every route answers 403 (404 for the lists) while forms are off.
+
+**Who.** A person's `access` to a form is `edit`, `responses` or null:
+`edit` for whoever runs its project (its organization's admins, its
+program's manager, its manager) and for its maker while they work on the
+project; a share (`edit` or `responses`) to an active person of the
+project's organization. The rest of the team has none. A **respondent** is
+an active person of the project's organization the form is for (`respondents`:
+`everyone`, `team` or `people`), or anyone active in another organization it
+was sent to (only its organization's admins choose those). `answering`
+`organization` takes one response per organization.
+
+**Schema.** Questions are `draft` (and each published version's `schema`):
+`{languages, steps: [{id, title, show_if, blocks: [...]}]}`; the block kinds
+and answer shapes are in `docs/superpowers/plans/2026-11-07-forms.md`.
+Answers are keyed by question id; choices by option id.
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | `/workspace/forms` | anyone | `{to_fill, filled, managing, places, templates}` |
+| POST | `/workspace/forms` | may make forms in `project` | `{project, title, template?}` → 201 the form |
+| GET | `/workspace/forms/{id}` | `edit` | the builder's state: form, draft, problems, versions, respondents, tasks |
+| PUT | `/workspace/forms/{id}/draft` | `edit` | `{draft}` → `{draft, problems, changed, saved_at}`; 422 for a draft that can't be kept |
+| PATCH | `/workspace/forms/{id}` | `edit` | title, `opens_at`, `closes_at`, `response_limit`, `answering` (fixed once a response is in), `allow_edit`, `review_page`, `notify`, `stages` |
+| POST | `/workspace/forms/{id}/publish` | `edit` | `{notify?}`; 422 while a problem stands or nothing changed |
+| POST | `/workspace/forms/{id}/close`, `/reopen` | `edit` | |
+| POST | `/workspace/forms/{id}/duplicate` | `edit` | `{project}` → 201 the copy |
+| DELETE | `/workspace/forms/{id}` | `edit` | only with no responses (422 otherwise) |
+| POST | `/workspace/forms/{id}/files` | `edit` (content) or a respondent (answer) | multipart `purpose` (`content`/`answer`), `block`, `file`, `kind?`, `test?` → 201 `{id, name, size, image, url}` |
+| PUT | `/workspace/forms/{id}/respondents` | `edit` | `{respondents, member_ids, organization_ids?}` (the last: admins only; 403 otherwise) |
+| GET | `/workspace/forms/{id}/people?q=` | `edit` | people of the organization (`unshared=1`: not shared yet) |
+| GET/POST/PATCH/DELETE | `/workspace/forms/{id}/sharing`, `/shares`, `/shares/{share}` | `edit` | `{member_id, permission}`; anyone outside the organization gets one generic 422 |
+| PUT | `/workspace/forms/{id}/tasks` | `edit` | `{enabled, project, assignee_id, due_days?, title_question?, copy_questions?}` |
+| GET | `/workspace/forms/{id}/tasks/assignees?project=&q=` | `edit` | |
+| GET | `/workspace/forms/{id}/fill` | a respondent or `access` | `{state, form, schema, respondent, answers, draft, response, files}` |
+| PUT/DELETE | `/workspace/forms/{id}/fill/draft` | a respondent while open (`test`: `edit`) | `{answers}`, kept unchecked |
+| POST | `/workspace/forms/{id}/fill` | a respondent while open (`test`: `edit`) | `{answers, test?}` → `{reference}`; 422 errors keyed `answers.{question}` (`answers.{group}.{entry}.{question}`) |
+| GET | `/workspace/forms/{id}/responses` | `access` | `{form, questions, page: {rows, next_cursor, total}}`; filters `stage, organization, q, question+answer, from, to, cursor` |
+| GET | `/workspace/forms/{id}/responses/{response}` | `access` | answers, files, history |
+| PATCH | `/workspace/forms/{id}/responses/stage` | `access` | `{ids, stage, note?}` |
+| POST | `/workspace/forms/{id}/responses/{response}/notes` | `access` | `{text}` |
+| GET | `/workspace/forms/{id}/summary`, `/pending` | `access` | |
+| POST | `/workspace/forms/{id}/remind` | `access` | once a day per person and form |
+| GET | `/workspace/forms/{id}/responses/export`, `/responses/files` | `access` | `.xlsx`, `.zip` (the filters apply) |
+| POST | `/workspace/forms/{id}/responses/spreadsheet` | `access`, documents on | → 201 `{id, title}`: a personal document of the caller |
+| GET | `/workspace/forms/files/{file}` | who may open it | 404 for anyone else |
+
 ## Code activity *(anyone who may use git: `git_enabled` on `/user`; 403 otherwise)*
 
 Who committed what, per person, within what the caller runs. Whole
@@ -1259,6 +1310,10 @@ Validation rules for each body are the FormRequests in `app/Http/Requests`
 - Rate limiting is Laravel's default `api` throttle (60 requests/minute per token).
 
 ## Changes
+
+**Forms (2026-11-07).** New: the Forms routes above; `forms_enabled` on
+`/user`; notifications `form_opened` and `form_reminder` (both emailed right
+away); My work's `forms_to_fill` (web).
 
 **Document sharing limits (2026-11-07).** The sharing changes answer 429
 after 30 a minute per person; a person is told about the same document

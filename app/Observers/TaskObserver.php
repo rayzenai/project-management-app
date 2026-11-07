@@ -29,6 +29,7 @@ class TaskObserver
             subject: $item,
             action: ProjectActivity::ACTION_CREATED,
             description: 'Created the task',
+            system: Task::madeBySystem(),
         );
     }
 

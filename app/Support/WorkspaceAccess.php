@@ -5,6 +5,9 @@ namespace App\Support;
 use App\Models\AttendanceSetting;
 use App\Models\Document;
 use App\Models\DocumentShare;
+use App\Models\Form;
+use App\Models\FormFile;
+use App\Models\FormShare;
 use App\Models\GitConnection;
 use App\Models\GitRepository;
 use App\Models\LeaveRequest;
@@ -15,6 +18,7 @@ use App\Models\Project;
 use App\Models\ProjectAssignment;
 use App\Models\Task;
 use App\Models\Team;
+use App\Support\Forms\FormSchema;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Gate;
@@ -77,6 +81,9 @@ class WorkspaceAccess
     /** @var \WeakMap<Authenticatable, array<int, string|false>>|null document id => the user's share's permission (false: none) */
     private static ?\WeakMap $documentSharesMemo = null;
 
+    /** @var \WeakMap<Authenticatable, array<int, string|false>>|null form id => the user's share's permission (false: none) */
+    private static ?\WeakMap $formSharesMemo = null;
+
     public static function flush(): void
     {
         self::$ledTeamIdsMemo = null;
@@ -86,6 +93,7 @@ class WorkspaceAccess
         self::$attendanceMemo = [];
         self::$projectDocumentsMemo = null;
         self::$documentSharesMemo = null;
+        self::$formSharesMemo = null;
         OrgChart::flush();
     }
 
@@ -917,6 +925,227 @@ class WorkspaceAccess
             && ! $document->trashed()
             && $document->owner_id === (int) $user->getAuthIdentifier()
             && self::documentOwnerActive($document);
+    }
+
+    // ---- Forms ----
+    // While config('forms.enabled'). A form belongs to a project; whoever
+    // runs it, the form's maker and the people they share it with build it
+    // and see its responses; its respondents fill it in
+    // (docs/superpowers/specs/2026-11-07-forms-design.md).
+
+    /**
+     * Work with a project's forms (see its Forms tab, make one there): the
+     * same people as its documents, whether or not documents are on.
+     */
+    public static function canUseProjectForms(?Authenticatable $user, Project $project): bool
+    {
+        return config('forms.enabled') && $user !== null && self::usesProjectDocuments($user, $project);
+    }
+
+    /** Make a form in a project: whoever works on it, while it isn't archived. */
+    public static function canCreateForm(?Authenticatable $user, Project $project): bool
+    {
+        return $project->archived_at === null && self::canUseProjectForms($user, $project);
+    }
+
+    /**
+     * Read, in one query, the user's shares of these forms, for a list's
+     * rows; formAccess then answers them without a query each.
+     *
+     * @param  iterable<Form>  $forms
+     */
+    public static function preloadFormAccess(?Authenticatable $user, iterable $forms): void
+    {
+        $member = self::memberFor($user);
+        $ids = collect($forms)->map(fn (Form $form): int => $form->id)->all();
+
+        if ($user === null || $member === null || $ids === []) {
+            return;
+        }
+
+        $permissions = FormShare::query()->whereIn('form_id', $ids)->where('member_id', $member->id)->pluck('permission', 'form_id');
+        self::$formSharesMemo ??= new \WeakMap;
+        $memo = self::$formSharesMemo[$user] ?? [];
+
+        foreach ($ids as $id) {
+            $permission = $permissions->get($id);
+            $memo[$id] = is_string($permission) ? $permission : false;
+        }
+
+        self::$formSharesMemo[$user] = $memo;
+    }
+
+    /**
+     * What the person may do with a form: Form::ACCESS_EDIT (build it,
+     * publish, close, choose its respondents, share it, tasks, and all its
+     * responses) or ACCESS_RESPONSES (its responses: read, stages, notes,
+     * files, exports, who hasn't answered, reminders), or null. The highest
+     * of: running its project (canManageProjectAccess), having made it while
+     * still working on the project, and a share to the person while they are
+     * active and in the project's organization. The project's team gets
+     * nothing by being on it. Twin of Form::scopeManagedBy.
+     */
+    public static function formAccess(?Authenticatable $user, Form $form): ?string
+    {
+        if (! config('forms.enabled') || $user === null || $form->trashed()) {
+            return null;
+        }
+
+        $project = $form->project;
+
+        if (self::canManageProjectAccess($user, $project)) {
+            return Form::ACCESS_EDIT;
+        }
+
+        $member = self::memberFor($user);
+
+        if ($member === null || ! $member->is_active) {
+            return null;
+        }
+
+        if ($form->created_by !== null && $form->created_by === (int) $user->getAuthIdentifier() && self::usesProjectDocuments($user, $project)) {
+            return Form::ACCESS_EDIT;
+        }
+
+        if ($member->organization_id === null || (int) $member->organization_id !== (int) $project->organization_id) {
+            return null;
+        }
+
+        $memo = self::$formSharesMemo[$user] ?? null;
+        $permission = is_array($memo) && array_key_exists($form->id, $memo)
+            ? ($memo[$form->id] === false ? null : $memo[$form->id])
+            : FormShare::query()->where('form_id', $form->id)->where('member_id', $member->id)->value('permission');
+
+        return in_array($permission, Form::ACCESSES, true) ? (string) $permission : null;
+    }
+
+    public static function canEditForm(?Authenticatable $user, Form $form): bool
+    {
+        return self::formAccess($user, $form) === Form::ACCESS_EDIT;
+    }
+
+    public static function canSeeFormResponses(?Authenticatable $user, Form $form): bool
+    {
+        return self::formAccess($user, $form) !== null;
+    }
+
+    /**
+     * Among the form's respondents, whatever its status: an active person of
+     * the project's organization (everyone there, its team, or the chosen
+     * people, as the form says), or of another organization the form was
+     * sent to. A login with no person, a super-admin's included, answers
+     * nothing. Twin of Form::scopeAnswerableBy.
+     */
+    public static function isFormRespondent(?Authenticatable $user, Form $form): bool
+    {
+        $member = self::memberFor($user);
+
+        if (! config('forms.enabled') || $user === null || $form->trashed() || $member === null || ! $member->is_active || $member->organization_id === null) {
+            return false;
+        }
+
+        $organizationId = (int) $member->organization_id;
+
+        if ($organizationId === (int) $form->project->organization_id) {
+            $chosen = match ($form->respondents) {
+                Form::RESPONDENTS_EVERYONE => true,
+                Form::RESPONDENTS_TEAM => $form->project->teams()->whereHas('members', fn ($m) => $m->where('members.id', $member->getKey()))->exists(),
+                Form::RESPONDENTS_PEOPLE => $form->respondentMembers()->where('members.id', $member->getKey())->exists(),
+                default => false,
+            };
+
+            if ($chosen) {
+                return true;
+            }
+        }
+
+        return $form->respondentOrganizations()->where('organizations.id', $organizationId)->exists();
+    }
+
+    /**
+     * Fill the form in now: a respondent while it is open. Its response
+     * limit is the service's to check.
+     */
+    public static function canAnswerForm(?Authenticatable $user, Form $form): bool
+    {
+        return $form->isOpenNow() && self::isFormRespondent($user, $form);
+    }
+
+    /**
+     * See the form's questions and content: its respondents and whoever may
+     * see its responses (who try it out, too).
+     */
+    public static function canSeeForm(?Authenticatable $user, Form $form): bool
+    {
+        return self::formAccess($user, $form) !== null || self::isFormRespondent($user, $form);
+    }
+
+    /**
+     * Send the form to other organizations: whoever administers its
+     * project's organization (its admins and super-admins), never a
+     * project or program manager or its maker alone.
+     */
+    public static function canAddFormOrganizations(?Authenticatable $user, Form $form): bool
+    {
+        return self::canEditForm($user, $form) && self::administers($user, $form->project->organization_id);
+    }
+
+    /**
+     * Whom a form may be shared with: an active person of its project's
+     * organization. Twin of FormShareCandidatesQuery.
+     */
+    public static function canShareFormWith(Form $form, Member $member): bool
+    {
+        return $member->is_active && $member->organization_id !== null && (int) $member->organization_id === (int) $form->project->organization_id;
+    }
+
+    /** Whether a stored share gives anything now. */
+    public static function isFormShareEffective(FormShare $share): bool
+    {
+        return self::canShareFormWith($share->form, $share->member);
+    }
+
+    /**
+     * Turn tasks from responses on, into this project: whoever may edit the
+     * form and may add tasks there (sees it, as quick add asks), for a
+     * project of the form's organization that isn't archived.
+     */
+    public static function canSendFormTasksTo(?Authenticatable $user, Form $form, Project $project): bool
+    {
+        return self::canEditForm($user, $form)
+            && $project->archived_at === null
+            && (int) $project->organization_id === (int) $form->project->organization_id
+            && self::canViewProject($user, $project);
+    }
+
+    /**
+     * Open one of a form's files. A content file (an image, a circular): whoever
+     * may see the form. An answer's file: whoever may see the form's
+     * responses, and the respondent whose it is (for a data call, their
+     * organization's respondents).
+     */
+    public static function canOpenFormFile(?Authenticatable $user, FormFile $file): bool
+    {
+        $form = $file->form;
+
+        if ($file->purpose === FormFile::PURPOSE_CONTENT) {
+            // Someone who only answers gets the pictures and downloads the
+            // live version uses, never a draft's or a removed one.
+            return self::formAccess($user, $form) !== null
+                || (self::isFormRespondent($user, $form) && in_array($file->id, FormSchema::contentFileIds($form->liveSchema() ?? []), true));
+        }
+
+        if (self::canSeeFormResponses($user, $form)) {
+            return true;
+        }
+
+        // A test response's files are its tester's, who sees responses anyway.
+        $member = self::memberFor($user);
+
+        return $member !== null
+            && $file->respondent_key !== null
+            && $file->respondent_key === $form->respondentKeyFor($member)
+            && self::isFormRespondent($user, $form);
     }
 
     // ---- Code (git) ----

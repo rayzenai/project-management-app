@@ -10,6 +10,7 @@ use App\Models\Member;
 use App\Models\Program;
 use App\Models\Project;
 use App\Queries\Documents\ProjectDocumentsQuery;
+use App\Queries\Forms\ProjectFormsQuery;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,10 +26,10 @@ class ProjectShowQuery
     /** Open pull requests shown per repository on the Code tab. */
     private const OPEN_PULL_REQUESTS = 10;
 
-    public function __construct(private MainChecksQuery $mainChecks, private ProjectDocumentsQuery $documents) {}
+    public function __construct(private MainChecksQuery $mainChecks, private ProjectDocumentsQuery $documents, private ProjectFormsQuery $forms) {}
 
     /**
-     * @return array{project: array<string, mixed>, tasks: array<int, array<string, mixed>>, team: array<string, mixed>|null, git: array{repositories: list<array<string, mixed>>, can_manage: bool}|null, documents: array<string, mixed>|null, programs: array<int, array{id: int, slug: string, name: string}>}
+     * @return array{project: array<string, mixed>, tasks: array<int, array<string, mixed>>, team: array<string, mixed>|null, git: array{repositories: list<array<string, mixed>>, can_manage: bool}|null, documents: array<string, mixed>|null, forms: array<string, mixed>|null, programs: array<int, array{id: int, slug: string, name: string}>}
      */
     public function data(Project $project): array
     {
@@ -51,6 +52,8 @@ class ProjectShowQuery
             'git' => $canViewCode ? $this->git($project, $viewer) : null,
             // The Documents tab; null while documents are off or not the viewer's to use.
             'documents' => WorkspaceAccess::canUseProjectDocuments($viewer, $project) ? $this->documents->tab($project, $viewer) : null,
+            // The Forms tab; null while forms are off or not the viewer's to use.
+            'forms' => WorkspaceAccess::canUseProjectForms($viewer, $project) ? $this->forms->tab($project, $viewer) : null,
             // Edit project's Program choices, for whoever may move it.
             'programs' => WorkspaceAccess::administers($viewer, $project->organization_id)
                 ? Program::query()->where('organization_id', $project->organization_id)->orderBy('name')->get(['id', 'slug', 'name'])

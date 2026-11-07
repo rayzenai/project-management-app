@@ -7,6 +7,7 @@
     import BoardView from '../../components/project/BoardView.svelte';
     import CodeView from '../../components/project/CodeView.svelte';
     import DocumentsView from '../../components/project/DocumentsView.svelte';
+    import FormsView from '../../components/project/FormsView.svelte';
     import ListView from '../../components/project/ListView.svelte';
     import PeopleView from '../../components/project/PeopleView.svelte';
     import ProjectEditForm from '../../components/project/ProjectEditForm.svelte';
@@ -17,6 +18,7 @@
     } from '../../components/project/ProjectFilters.svelte';
     import ProjectSummaryStrip from '../../components/project/ProjectSummaryStrip.svelte';
     import ProjectTeamPanel from '../../components/project/ProjectTeamPanel.svelte';
+    import type { ProjectForms } from '../../lib/forms/types';
     import { peek } from '../../lib/peek.svelte';
     import { quickAdd } from '../../lib/quickAdd.svelte';
     import type {
@@ -36,6 +38,7 @@
         team = null,
         git = null,
         documents = null,
+        forms = null,
         programs = [],
     }: {
         project: Project;
@@ -45,13 +48,15 @@
         git?: ProjectGit | null;
         /** The Documents tab; null when not the viewer's to use. */
         documents?: ProjectDocuments | null;
+        /** The Forms tab; null when forms are off or not the viewer's to use. */
+        forms?: ProjectForms | null;
         /** Edit project's Program choices; empty unless the viewer may move it. */
         programs?: ProgramOption[];
     } = $props();
 
     let editing = $state(false);
 
-    type Tab = 'board' | 'list' | 'people' | 'code' | 'documents';
+    type Tab = 'board' | 'list' | 'people' | 'code' | 'documents' | 'forms';
 
     const TABS: { value: Tab; label: string }[] = [
         { value: 'board', label: 'Board' },
@@ -67,6 +72,7 @@
         ...(documents
             ? [{ value: 'documents' as const, label: 'Documents' }]
             : []),
+        ...(forms ? [{ value: 'forms' as const, label: 'Forms' }] : []),
     ]);
 
     function initialTab(): Tab {
@@ -85,7 +91,8 @@
             requested === 'list' ||
             requested === 'people' ||
             (requested === 'code' && git) ||
-            (requested === 'documents' && documents)
+            (requested === 'documents' && documents) ||
+            (requested === 'forms' && forms)
         ) {
             return requested;
         }
@@ -104,6 +111,10 @@
 
         if (raw === 'documents' && documents) {
             return 'documents';
+        }
+
+        if (raw === 'forms' && forms) {
+            return 'forms';
         }
 
         return raw === 'list' || raw === 'people' ? raw : 'board'; // default + garbage guard
@@ -216,6 +227,10 @@
 
         if (tab === 'documents') {
             return documents?.documents.length ?? 0;
+        }
+
+        if (tab === 'forms') {
+            return forms?.forms.length ?? 0;
         }
 
         return tab === 'people' ? teammates.length : filteredTasks.length;
@@ -362,6 +377,11 @@
                 <DocumentsView {project} {documents} />
             </div>
         {/if}
+        {#if forms}
+            <div class="border-t border-line px-6 py-7 lg:px-8">
+                <FormsView {project} {forms} />
+            </div>
+        {/if}
     {:else}
         <div
             class="flex h-14 items-center gap-1 overflow-x-auto border-b border-line px-6 lg:px-8"
@@ -383,7 +403,7 @@
                 </button>
             {/each}
 
-            {#if activeTab !== 'code' && activeTab !== 'documents'}
+            {#if activeTab !== 'code' && activeTab !== 'documents' && activeTab !== 'forms'}
                 <!-- Filters narrow tasks; Code and Documents list other things. -->
                 <ProjectFilters
                     bind:filters
@@ -435,7 +455,7 @@
             <ProjectSummaryStrip {tasks} {statuses} />
         </div>
 
-        {#if filteredTasks.length === 0 && activeTab !== 'code' && activeTab !== 'documents'}
+        {#if filteredTasks.length === 0 && activeTab !== 'code' && activeTab !== 'documents' && activeTab !== 'forms'}
             <div class="flex items-center gap-3 border-t border-line px-4 py-6">
                 <p class="text-fg-muted">No tasks match the current filters.</p>
                 <button type="button" class="btn" onclick={clearFilters}>
@@ -465,6 +485,12 @@
             {#if documents}
                 <div class="px-6 py-6 lg:px-8">
                     <DocumentsView {project} {documents} />
+                </div>
+            {/if}
+        {:else if activeTab === 'forms'}
+            {#if forms}
+                <div class="px-6 py-6 lg:px-8">
+                    <FormsView {project} {forms} />
                 </div>
             {/if}
         {:else}

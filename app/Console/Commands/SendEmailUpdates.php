@@ -6,6 +6,8 @@ use App\Mail\UpdatesMail;
 use App\Models\User;
 use App\Notifications\AddedToProjectTeam;
 use App\Notifications\DocumentShared;
+use App\Notifications\FormOpened;
+use App\Notifications\FormReminder;
 use App\Notifications\MadeProgramManager;
 use App\Notifications\MadeProjectManager;
 use App\Notifications\MentionedInComment;
@@ -53,6 +55,8 @@ class SendEmailUpdates extends Command
         MadeProjectManager::class,
         MadeProgramManager::class,
         DocumentShared::class,
+        FormOpened::class,
+        FormReminder::class,
     ];
 
     protected $signature = 'workspace:send-email-updates {--pretend : List what would be sent without sending or marking anything}';
@@ -208,6 +212,8 @@ class SendEmailUpdates extends Command
             'made_manager' => 'Project manager: '.self::text($data, 'project', 'title'),
             'made_program_manager' => 'Program manager: '.self::text($data, 'program', 'name'),
             'document_shared' => 'Shared with you: '.self::text($data, 'document', 'title'),
+            'form_opened' => 'Please fill in: '.self::text($data, 'form', 'title'),
+            'form_reminder' => 'Reminder to fill in: '.self::text($data, 'form', 'title'),
             default => self::text($data, 'title'),
         };
 

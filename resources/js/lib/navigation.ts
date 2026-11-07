@@ -49,6 +49,7 @@ export function mainLinks(options: {
     gitEnabled: boolean;
     isSuperAdmin: boolean;
     documentsEnabled?: boolean;
+    formsEnabled?: boolean;
 }): NavLink[] {
     // Phase 2 adds Overview here, for whoever runs something.
     return [
@@ -60,6 +61,15 @@ export function mainLinks(options: {
                       label: 'Documents',
                       href: '/workspace/documents',
                       icon: FileText,
+                  },
+              ]
+            : []),
+        ...(options.formsEnabled
+            ? [
+                  {
+                      label: 'Forms',
+                      href: '/workspace/forms',
+                      icon: ClipboardList,
                   },
               ]
             : []),

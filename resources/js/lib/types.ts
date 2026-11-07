@@ -878,6 +878,7 @@ export interface SharedProps {
     gitEnabled?: boolean;
     /** Documents are on (the editor is configured): the Guide's Documents section. */
     documentsEnabled?: boolean;
+    formsEnabled?: boolean;
     /** The office pages the user may open (OfficeLinks). */
     office?: OfficeLinks;
     /** A super-admin's organization switch; null for everyone else. */

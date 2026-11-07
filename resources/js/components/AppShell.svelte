@@ -151,6 +151,7 @@
             gitEnabled: Boolean(shared.gitEnabled),
             isSuperAdmin: Boolean(shared.isSuperAdmin),
             documentsEnabled: Boolean(shared.documentsEnabled),
+            formsEnabled: Boolean(shared.formsEnabled),
         }),
     );
     const groups = $derived(

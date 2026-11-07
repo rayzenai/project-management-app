@@ -18,6 +18,12 @@ use App\Http\Controllers\Workspace\DocumentController;
 use App\Http\Controllers\Workspace\DocumentLibraryController;
 use App\Http\Controllers\Workspace\DocumentSharingController;
 use App\Http\Controllers\Workspace\EmailSettingsController;
+use App\Http\Controllers\Workspace\FormBuilderController;
+use App\Http\Controllers\Workspace\FormFileController;
+use App\Http\Controllers\Workspace\FormFillController;
+use App\Http\Controllers\Workspace\FormLibraryController;
+use App\Http\Controllers\Workspace\FormPeopleController;
+use App\Http\Controllers\Workspace\FormResponsesController;
 use App\Http\Controllers\Workspace\GoToTaskController;
 use App\Http\Controllers\Workspace\GuideController;
 use App\Http\Controllers\Workspace\HomeController;
@@ -217,6 +223,50 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
         Route::patch('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'update'])->whereNumber(['document', 'share'])->scopeBindings()->middleware('throttle:30,1,document-sharing')->name('documents.shares.update');
         Route::delete('/documents/{document}/shares/{share}', [DocumentSharingController::class, 'destroy'])->whereNumber(['document', 'share'])->scopeBindings()->middleware('throttle:30,1,document-sharing')->name('documents.shares.destroy');
 
+        // Forms (docs/superpowers/specs/2026-11-07-forms-design.md): the Forms
+        // page and making one; the builder (Can edit); filling one in (its
+        // link is /f/{code}, below); its responses (Can see responses).
+        Route::get('/forms', [FormLibraryController::class, 'index'])->name('forms.index');
+        Route::post('/forms', [FormLibraryController::class, 'store'])->middleware('throttle:30,1,form-create')->name('forms.store');
+        Route::get('/forms/files/{file}', FormFileController::class)->whereNumber('file')->name('forms.files.show');
+        Route::prefix('/forms/{form}')->whereNumber('form')->name('forms.')->group(function () {
+            Route::get('/edit', [FormBuilderController::class, 'edit'])->name('edit');
+            Route::put('/draft', [FormBuilderController::class, 'draft'])->middleware('throttle:120,1,form-draft')->name('draft');
+            Route::patch('/', [FormBuilderController::class, 'update'])->name('update');
+            Route::post('/publish', [FormBuilderController::class, 'publish'])->middleware('throttle:30,1,form-publish')->name('publish');
+            Route::post('/close', [FormBuilderController::class, 'close'])->name('close');
+            Route::post('/reopen', [FormBuilderController::class, 'reopen'])->name('reopen');
+            Route::post('/duplicate', [FormBuilderController::class, 'duplicate'])->middleware('throttle:30,1,form-create')->name('duplicate');
+            Route::delete('/', [FormBuilderController::class, 'destroy'])->name('destroy');
+            Route::post('/files', [FormBuilderController::class, 'upload'])->middleware('throttle:60,1,form-upload')->name('files.store');
+
+            Route::put('/respondents', [FormPeopleController::class, 'respondents'])->name('respondents');
+            Route::get('/people', [FormPeopleController::class, 'people'])->name('people');
+            Route::get('/sharing', [FormPeopleController::class, 'sharing'])->name('sharing');
+            Route::post('/shares', [FormPeopleController::class, 'share'])->middleware('throttle:30,1,form-sharing')->name('shares.store');
+            Route::patch('/shares/{share}', [FormPeopleController::class, 'changeShare'])->whereNumber('share')->middleware('throttle:30,1,form-sharing')->name('shares.update');
+            Route::delete('/shares/{share}', [FormPeopleController::class, 'unshare'])->whereNumber('share')->middleware('throttle:30,1,form-sharing')->name('shares.destroy');
+            Route::put('/tasks', [FormPeopleController::class, 'tasks'])->name('tasks');
+            Route::get('/tasks/assignees', [FormPeopleController::class, 'assignees'])->name('tasks.assignees');
+
+            Route::get('/try', [FormFillController::class, 'try'])->name('try');
+            Route::put('/fill/draft', [FormFillController::class, 'draft'])->middleware('throttle:120,1,form-fill')->name('fill.draft');
+            Route::delete('/fill/draft', [FormFillController::class, 'clear'])->name('fill.clear');
+            Route::post('/fill', [FormFillController::class, 'submit'])->middleware('throttle:30,1,form-submit')->name('fill.submit');
+
+            Route::get('/responses', [FormResponsesController::class, 'index'])->name('responses.index');
+            Route::get('/responses/list', [FormResponsesController::class, 'list'])->name('responses.list');
+            Route::get('/responses/export', [FormResponsesController::class, 'download'])->middleware('throttle:20,1,form-export')->name('responses.export');
+            Route::post('/responses/spreadsheet', [FormResponsesController::class, 'spreadsheet'])->middleware('throttle:20,1,form-export')->name('responses.spreadsheet');
+            Route::get('/responses/files', [FormResponsesController::class, 'files'])->middleware('throttle:10,1,form-export')->name('responses.files');
+            Route::patch('/responses/stage', [FormResponsesController::class, 'move'])->name('responses.stage');
+            Route::get('/responses/{response}', [FormResponsesController::class, 'show'])->whereNumber('response')->name('responses.show');
+            Route::post('/responses/{response}/notes', [FormResponsesController::class, 'note'])->whereNumber('response')->name('responses.notes');
+            Route::get('/summary', [FormResponsesController::class, 'summary'])->name('summary');
+            Route::get('/pending', [FormResponsesController::class, 'pending'])->name('pending');
+            Route::post('/remind', [FormResponsesController::class, 'remind'])->middleware('throttle:10,1,form-remind')->name('remind');
+        });
+
         // Who may pull and push a linked repository (its maintainers and grants).
         Route::scopeBindings()->group(function () {
             Route::get('/projects/{project:slug}/repositories/{repository}/access', [RepositoryGrantController::class, 'index'])->name('projects.repositories.access.index');
@@ -347,3 +397,10 @@ Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, T
 
         Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
     });
+
+// A form's link, to paste into a letter, a chat or a notice: it asks people
+// to sign in first, then shows the form (or that it isn't for them).
+Route::middleware(['auth', AuthenticateSession::class, EnsureCanSignIn::class, TouchLastSeen::class, ShareWorkspaceData::class])
+    ->get('/f/{code}', [FormFillController::class, 'link'])
+    ->where('code', '[A-Za-z0-9-]{4,16}')
+    ->name('forms.link');
