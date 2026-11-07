@@ -78,9 +78,9 @@ secrets are in the gitignored `.env.sdoc`; never print them.
 - **Off:** the demo app (`EXAMPLE_ENABLED`, it edits files without signing
   in; `/example/` answers 502), bundled plugins, the public Document Builder
   and conversion APIs (404), WOPI. `WELCOME_PAGE_ENABLED` is false, yet 10.0
-  still answers `/` and `/welcome/` with a bare status page (the product's
-  name and whether it runs); a Dokploy redirect sends those two to the
-  tracker's Documents page instead (Front door, below). In each editor
+  still answers `/welcome/` with a bare status page (the product's name and
+  whether it runs); SDOC Docs' home page takes `/`, and `/welcome/` goes
+  there (Front door, below). In each editor
   config: AI tools, plugins, macros (several 10.0 fixes were macro sandbox
   escapes) and chat.
 - `start.sh` refuses to start without the three variables (the image would
@@ -89,18 +89,29 @@ secrets are in the gitignored `.env.sdoc`; never print them.
 
 ## Front door
 
-People type docs.sdoc.gov.np to reach their documents, so `/` and
-`/welcome/` redirect to `https://tasks.sdoc.gov.np/workspace/documents`
-(the tracker signs them in first when it has to). Every other path stays
-the editor's: the browser loads `api.js` and the editor from here. It is a
-Dokploy redirect on `docs-onlyoffice` (Advanced, Redirects; Traefik does
-it), not part of the image:
+People type docs.sdoc.gov.np to reach their documents, so `/` is SDOC Docs'
+home page, the twin of SDOC Git's (`forgejo/custom/templates/home.tmpl`):
+the centre's header, what it is, "Sign in with SDOC Tasks" (to
+`https://tasks.sdoc.gov.np/workspace/documents`, signing in on the way) and
+"Open SDOC Tasks". It is part of the image:
 
-- Regex `^https?://docs\.sdoc\.gov\.np/(welcome/?)?$`
-- Replacement `https://tasks.sdoc.gov.np/workspace/documents`
-- Permanent: off (302), so it can change later.
+- `onlyoffice/home/site/` (the page, its stylesheet, the emblem, the
+  tracker's mark and the fonts, copied from `forgejo/custom/public/assets`;
+  keep the two pages in step) goes to `/var/www/sdoc-home`.
+- `onlyoffice/home/ds-sdoc-home.conf` goes to `/etc/nginx/includes`, where
+  `ds.conf` includes every `ds-*.conf`: `location = /` serves the page,
+  `/sdoc-home/` its files, and `/welcome` and `/welcome/` redirect to `/`.
+- The Dockerfile takes the image's own `location = /` (its redirect to
+  `/welcome/`) out of `ds-docservice.conf` first. A release that changes that
+  block fails the build there, so an upgrade can't start with two.
 
-Check: `curl -sI https://docs.sdoc.gov.np/` answers 302 to that page, and
+Every other path stays the editor's: the browser loads `api.js` and the
+editor from here. (Until 2026-11-07 a Dokploy redirect on `docs-onlyoffice`
+sent `/` to the Documents page; it is gone, and none should be added back:
+Traefik would answer before the page.)
+
+Check: `curl -s https://docs.sdoc.gov.np/ | grep '<title>'` shows `SDOC
+Docs`, `curl -sI https://docs.sdoc.gov.np/welcome/` answers 302 to `/`, and
 `/healthcheck` and `/web-apps/apps/api/documents/api.js` still answer 200.
 
 ## Check

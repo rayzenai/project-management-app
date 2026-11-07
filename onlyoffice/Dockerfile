@@ -22,6 +22,18 @@ COPY fonts/ /usr/share/fonts/truetype/sdoc/
 
 COPY start.sh /app/sdoc/start.sh
 
+# SDOC Docs' home page at / (home/, like SDOC Git's), in place of the image's
+# redirect to its status page. The image's "location = /" block goes first
+# (ds-docservice.conf, a link to the file edited here); a release that
+# changes it fails this step instead of starting with two.
+COPY home/site/ /var/www/sdoc-home/
+COPY home/ds-sdoc-home.conf /etc/nginx/includes/ds-sdoc-home.conf
+RUN f=/etc/onlyoffice/documentserver/nginx/includes/ds-docservice.conf \
+ && grep -qx '#welcome page' "$f" && grep -qx 'location = / {' "$f" \
+ && sed -i '/^#welcome page$/,/^}$/d' "$f" \
+ && ! grep -q '^location = / ' "$f" \
+ && grep -q '^location / {' "$f"
+
 ENV JWT_ENABLED=true \
     JWT_HEADER=Authorization \
     JWT_IN_BODY=false \

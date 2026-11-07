@@ -906,8 +906,9 @@ API: `docs/api.md` (Documents).
 
 - **The editor** is ONLYOFFICE Docs Community Edition at docs.sdoc.gov.np
   (`onlyoffice/`, Dokploy project `docs`): no users, no documents of its
-  own; its `/` and `/welcome/` redirect to the Documents page (a Dokploy
-  redirect). Documents are on only while `config('documents.enabled')` (an
+  own; its `/` is SDOC Docs' home page (`onlyoffice/home/`, the twin of SDOC
+  Git's, served by the editor's nginx; `docs/onlyoffice.md`, Front door),
+  whose button opens the Documents page. Documents are on only while `config('documents.enabled')` (an
   editor URL and a JWT secret of at least 32 characters).
 - **Models**: `Document` belongs to a project (`project_id`) or, personal, to
   the person who made it (`owner_id`, users, restrict on delete: deleting a
