@@ -73,7 +73,8 @@
                     <p class="font-medium text-fg">No forms to manage yet.</p>
                     <p class="mt-1 max-w-xl">
                         Make a form in a project you work on: a data call to
-                        other offices, a survey, a registration or a request. It
+                        other offices, a survey, a registration, an internship
+                        or volunteer application, a request or a complaint. It
                         gets a link to share; signed-in officials fill it in,
                         and their answers come back here. Only whoever runs the
                         project, the form's maker and the people they share it

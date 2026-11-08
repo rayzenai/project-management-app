@@ -5,6 +5,7 @@ use App\Support\Forms\BsCalendar;
 use App\Support\Forms\FormAnswers;
 use App\Support\Forms\FormRichText;
 use App\Support\Forms\FormSchema;
+use App\Support\Forms\FormTemplates;
 use App\Support\Forms\InvalidFormSchema;
 use App\Support\Forms\NepalPlaces;
 use Carbon\CarbonImmutable;
@@ -203,4 +204,27 @@ it('embeds YouTube and Vimeo videos only', function () {
         ->and(FormSchema::videoEmbed('https://youtu.be/dQw4w9WgXcQ'))->toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')
         ->and(FormSchema::videoEmbed('https://vimeo.com/123456789'))->toBe('https://player.vimeo.com/video/123456789')
         ->and(FormSchema::videoEmbed('https://evil.example/watch?v=dQw4w9WgXcQ'))->toBeNull();
+});
+
+it('makes every template but Blank a form that can be published as it is', function () {
+    foreach (array_diff(FormTemplates::ids(), ['blank']) as $template) {
+        expect(FormSchema::problems(FormTemplates::make($template)['draft']))->toBe([], $template);
+    }
+});
+
+it('asks for the college letter only from an intern, and the mobile only when the office may call', function () {
+    $find = fn (array $draft, string $label): array => collect(FormSchema::questions($draft))->first(fn (array $q): bool => $q['label']['en'] === $label);
+
+    $internship = FormTemplates::make('internship');
+    $applyingAs = $find($internship['draft'], 'You are applying as');
+    $letter = $find($internship['draft'], 'A letter from your college, if you have one');
+    $complaint = FormTemplates::make('complaint');
+    $mayContact = $find($complaint['draft'], 'May the office contact you about this complaint?');
+    $mobile = $find($complaint['draft'], 'Mobile number');
+
+    expect($letter['show_if']['conditions'][0])->toBe(['question' => $applyingAs['id'], 'op' => 'equals', 'value' => $applyingAs['options'][0]['id']])
+        ->and(array_column($internship['settings']['stages'], 'name'))->toBe(['New', 'In review', 'Selected', 'Not selected'])
+        ->and(array_column($complaint['settings']['stages'], 'name'))->toBe(['Received', 'Looking into it', 'Resolved'])
+        ->and(FormAnswers::check($complaint['draft'], [$mayContact['id'] => false])['errors'])->not->toHaveKey($mobile['id'])
+        ->and(FormAnswers::check($complaint['draft'], [$mayContact['id'] => true])['errors'])->toHaveKey($mobile['id']);
 });
