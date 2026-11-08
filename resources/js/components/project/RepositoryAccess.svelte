@@ -1,14 +1,15 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
-    import { Search, X } from '@lucide/svelte';
+    import { X } from '@lucide/svelte';
     import { untrack } from 'svelte';
     import type {
+        FoundPerson,
         GitRepository,
-        Id,
         RepositoryAccess,
         RepositoryGrant,
     } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
+    import PersonSearch from '../PersonSearch.svelte';
     import Spinner from '../Spinner.svelte';
 
     /**
@@ -30,15 +31,8 @@
         id?: string;
     } = $props();
 
-    interface Candidate {
-        id: Id;
-        name: string;
-        designation: string | null;
-    }
-
     type Permission = RepositoryGrant['permission'];
 
-    const uid = $props.id();
     const WAITING = "Hasn't signed in to SDOC Git yet";
     const NO_ACCESS =
         'No access now: deactivated or no longer in this organization or team';
@@ -49,14 +43,7 @@
     let error = $state<string | null>(null);
     let seq = 0;
 
-    let query = $state('');
     let permission = $state<Permission>('write');
-    let results = $state<Candidate[]>([]);
-    let searched = $state(false);
-    let searchFailed = $state(false);
-    let adding = $state<Id | null>(null);
-    let searchSeq = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const headers = {
         Accept: 'application/json',
@@ -95,52 +82,6 @@
     });
 
     /**
-     * People who could be given access, asked of the server as the person
-     * types (debounced); a stale answer never overwrites a newer one.
-     */
-    function search() {
-        clearTimeout(timer);
-        const q = query.trim();
-
-        if (q.length < 2) {
-            searchSeq++;
-            results = [];
-            searched = searchFailed = false;
-
-            return;
-        }
-
-        timer = setTimeout(async () => {
-            const mine = ++searchSeq;
-
-            try {
-                const response = await fetch(
-                    `${url}/candidates?q=${encodeURIComponent(q)}`,
-                    { headers, credentials: 'same-origin' },
-                );
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const json = (await response.json()) as { data: Candidate[] };
-
-                if (mine === searchSeq) {
-                    results = json.data;
-                    searched = true;
-                    searchFailed = false;
-                }
-            } catch {
-                if (mine === searchSeq) {
-                    results = [];
-                    searched = false;
-                    searchFailed = true;
-                }
-            }
-        }, 200);
-    }
-
-    /**
      * One change at a time. Nothing on the page changes but the flash, so
      * only that is reloaded; the list is asked for again either way, and
      * the controls stay locked until it is back, so a grant just removed
@@ -172,24 +113,13 @@
                     undo?.();
                 }
 
-                void load(url).finally(() => {
-                    saving = false;
-                    adding = null;
-                });
+                void load(url).finally(() => (saving = false));
             },
         };
     }
 
-    function add(candidate: Candidate) {
-        adding = candidate.id;
-        router.post(
-            url,
-            { member_id: candidate.id, permission },
-            visit(() => {
-                query = '';
-                search();
-            }),
-        );
+    function add(person: FoundPerson) {
+        router.post(url, { member_id: person.id, permission }, visit());
     }
 
     /** A change that didn't save puts the select back as it was. */
@@ -316,65 +246,27 @@
             </ul>
         {/if}
 
-        <label
-            for="{uid}-q"
-            class="mt-3 block text-xs font-medium text-fg-muted"
-            >Add someone</label
-        >
-        <div class="mt-1 flex gap-2">
-            <div class="relative min-w-0 flex-1">
-                <Search
-                    class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint"
-                />
-                <input
-                    id="{uid}-q"
-                    type="search"
-                    autocomplete="off"
-                    bind:value={query}
-                    oninput={search}
-                    placeholder="Name or email"
-                    class="input pl-8"
-                />
-            </div>
-            <select
-                class="input w-auto shrink-0"
-                aria-label="Access to give"
-                bind:value={permission}
+        <div class="mt-3">
+            <PersonSearch
+                url={`${url}/candidates`}
+                label="Add someone"
+                placeholder="Name or email"
+                empty="Nobody matches who can be given access."
+                disabled={saving}
+                onpick={add}
             >
-                <option value="read">Read</option>
-                <option value="write">Write</option>
-            </select>
-        </div>
-        {#if results.length > 0}
-            <ul class="mt-1 rounded-md border border-line">
-                {#each results as candidate (candidate.id)}
-                    <li
-                        class="flex min-h-10 items-center gap-2.5 border-b border-line-soft px-2 py-1 last:border-b-0"
+                {#snippet beside()}
+                    <select
+                        class="input w-auto shrink-0"
+                        aria-label="Access to give"
+                        bind:value={permission}
                     >
-                        {@render person(
-                            candidate.name,
-                            candidate.designation,
-                            null,
-                        )}
-                        <button
-                            type="button"
-                            class="btn-ghost shrink-0"
-                            disabled={saving}
-                            onclick={() => add(candidate)}
-                            >{adding === candidate.id
-                                ? 'Adding'
-                                : 'Add'}</button
-                        >
-                    </li>
-                {/each}
-            </ul>
-        {:else if searchFailed}
-            <p class="mt-1 text-xs text-danger">The search didn't load.</p>
-        {:else if searched}
-            <p class="mt-1 text-xs text-fg-muted">
-                Nobody matches who can be given access.
-            </p>
-        {/if}
+                        <option value="read">Read</option>
+                        <option value="write">Write</option>
+                    </select>
+                {/snippet}
+            </PersonSearch>
+        </div>
 
         {#if error}
             <p role="alert" class="mt-2 text-xs text-danger">{error}</p>

@@ -1109,8 +1109,8 @@ default on), whether or not documents are.
   `components/forms/builder/`), `Forms/Fill`, `Forms/Responses`,
   `components/project/FormsView.svelte`. JSON calls go through
   `lib/forms/http.ts` (CSRF from the page's meta tag). A dialog opened from
-  the top bar uses `lib/portal.ts` (the bar's blur makes it the box
-  fixed elements sit in). New form, Make a copy and the Tasks tab choose
+  the top bar is a `Dialog`, which sits on `<body>` (the bar's blur makes
+  it the box fixed elements sit in). New form, Make a copy and the Tasks tab choose
   their project with `ProjectPicker` (`places`, and the builder's
   `tasks.places`, are `ProjectChoices`).
 
@@ -1332,6 +1332,17 @@ stays with the list's query), and a caller that posts a slug maps the
 picked id back (`personal` offers Just for me, `personalDetail` says what
 it makes, `field` with no `triggerClass` looks like an `.input`). Moving an
 element to `<body>` is `lib/portal.ts` (`use:portal`), never a copy of it.
+**A modal is `Dialog`** (`{#if open}<Dialog label onclose width center? bar?>`:
+title bar and close, Escape, a press that starts and ends on the backdrop,
+the page's scroll held, `[data-autofocus]` focused, the focus given back;
+New task, New form, Share, Invite people, Settings, the command palette).
+**A phone's bottom sheet is `Sheet`** (the to-do list, the account menu, the
+project picker, the repository's new-project form: the focus kept inside
+and given back, only the top sheet takes Escape). **Finding a person to add
+is `PersonSearch`** (`url` answering `{data: [...]}` to `q`, `detail`,
+`empty`, `beside` for the access to give; Share, a form's people, sharing
+and assignee, a project's team, a repository's access). The task preview's
+drawer and the sticky-note composer keep their own shells.
 A report's filter of projects and programs (Code activity's) is not a
 choice of where something goes and keeps its `<select>`. `Popover` portals its panel to `<body>` (`label` names
 it; a dialog needs one); a Popover opened

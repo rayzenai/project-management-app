@@ -6,10 +6,10 @@
     import { isQuestion } from '../../../lib/forms/types';
     import { toast } from '../../../lib/toast.svelte';
     import type { ProjectPick } from '../../../lib/types';
+    import PersonSearch from '../../PersonSearch.svelte';
     import ProjectPicker from '../../ProjectPicker.svelte';
     import Spinner from '../../Spinner.svelte';
     import type { BuilderData } from './builderTypes';
-    import PersonSearch from './PersonSearch.svelte';
 
     /**
      * A task from each new response, off until turned on: into a project of

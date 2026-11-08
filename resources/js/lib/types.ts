@@ -772,6 +772,15 @@ export interface CodeActivityCommit {
 }
 
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
+/** A person as a person search answers (components/PersonSearch.svelte): a PersonRef, with what some lists add. */
+export interface FoundPerson {
+    id: Id;
+    name: string;
+    designation: string | null;
+    email?: string | null;
+    organization?: string | null;
+}
+
 /** A project someone may choose (App\Support\ProjectChoices): a row of the project picker. */
 export interface ProjectOption extends ProjectSummary {
     /** Its program's name; tells apart several projects of one title. */

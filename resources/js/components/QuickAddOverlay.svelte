@@ -1,9 +1,9 @@
 <script lang="ts">
     import { page } from '@inertiajs/svelte';
-    import { X } from '@lucide/svelte';
     import { t } from '../lib/i18n';
     import { quickAdd } from '../lib/quickAdd.svelte';
     import type { SharedProps } from '../lib/types';
+    import Dialog from './Dialog.svelte';
     import QuickAddForm from './QuickAddForm.svelte';
 
     const shared = $derived((page.props ?? {}) as unknown as SharedProps);
@@ -20,21 +20,6 @@
 
     let formComp = $state<{ focusInput: () => void } | null>(null);
 
-    /**
-     * Only a press that starts and ends on the backdrop closes the dialog. A
-     * press inside the panel released out here (a text selection dragged too
-     * far, or a control that moved away under the pointer) still clicks the
-     * backdrop, which the browser targets as the nearest common ancestor; it
-     * used to close the dialog and lose the task with no message.
-     */
-    let pressedBackdrop = false;
-
-    function onBackdropClick(e: MouseEvent) {
-        if (pressedBackdrop && e.target === e.currentTarget) {
-            quickAdd.close();
-        }
-    }
-
     $effect(() => {
         if (!quickAdd.isOpen) {
             return;
@@ -42,72 +27,21 @@
 
         queueMicrotask(() => formComp?.focusInput());
     });
-
-    $effect(() => {
-        if (typeof document === 'undefined' || !quickAdd.isOpen) {
-            return;
-        }
-
-        document.body.style.overflow = 'hidden';
-
-        return () => {
-            document.body.style.overflow = '';
-        };
-    });
-
-    function onPanelKeydown(e: KeyboardEvent) {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            quickAdd.close();
-        }
-    }
 </script>
 
 {#if quickAdd.isOpen}
-    <div
-        class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
-        onpointerdown={(e) => (pressedBackdrop = e.target === e.currentTarget)}
-        onclick={onBackdropClick}
-        role="presentation"
-    >
-        <div
-            class="popover mx-auto mt-[8vh] mb-12 flex w-[min(920px,94vw)] flex-col overflow-hidden p-0"
-            onclick={(e) => e.stopPropagation()}
-            onkeydown={onPanelKeydown}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('New task')}
-            tabindex="-1"
-        >
-            <div
-                class="flex h-12 shrink-0 items-center justify-between border-b border-line px-5"
-            >
-                <span class="text-[15px] font-semibold text-fg"
-                    >{t('New task')}</span
-                >
-                <button
-                    type="button"
-                    class="btn-icon"
-                    title={t('Close (esc)')}
-                    aria-label={t('Close')}
-                    onclick={() => quickAdd.close()}
-                >
-                    <X class="h-4 w-4" />
-                </button>
-            </div>
-            <QuickAddForm
-                bind:this={formComp}
-                projects={context.projects}
-                team={context.team}
-                {currentMemberId}
-                defaultProjectId={quickAdd.projectId}
-                lockProject={quickAdd.lockProject}
-                prefill={quickAdd.prefill}
-                variant="overlay"
-                onSuccess={() => quickAdd.close()}
-                onCancel={() => quickAdd.close()}
-            />
-        </div>
-    </div>
+    <Dialog label={t('New task')} width={920} onclose={() => quickAdd.close()}>
+        <QuickAddForm
+            bind:this={formComp}
+            projects={context.projects}
+            team={context.team}
+            {currentMemberId}
+            defaultProjectId={quickAdd.projectId}
+            lockProject={quickAdd.lockProject}
+            prefill={quickAdd.prefill}
+            variant="overlay"
+            onSuccess={() => quickAdd.close()}
+            onCancel={() => quickAdd.close()}
+        />
+    </Dialog>
 {/if}

@@ -4,10 +4,10 @@
     import { tick, untrack } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { msg, number, t } from '../../lib/i18n';
-    import { portal } from '../../lib/portal';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type { Id, PersonalTodo, PersonalTodoLists } from '../../lib/types';
     import Popover from '../Popover.svelte';
+    import Sheet from '../Sheet.svelte';
     import Spinner from '../Spinner.svelte';
     import TodoItem from './TodoItem.svelte';
 
@@ -42,7 +42,6 @@
     let draft = $state('');
     let addError = $state<string | null>(null);
 
-    let sheetPanel = $state<HTMLElement | null>(null);
     let sheetTrigger = $state<HTMLButtonElement | null>(null);
     let triggerWrap = $state<HTMLElement | null>(null);
 
@@ -339,68 +338,6 @@
         }
     }
 
-    // ---- The phone's sheet ----
-
-    const FOCUSABLE =
-        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-    // The sheet opens with the focus on itself: no keyboard over the list.
-    $effect(() => {
-        if (open && !wide.current && sheetPanel) {
-            sheetPanel.focus();
-        }
-    });
-
-    async function closeSheet(): Promise<void> {
-        open = false;
-        await tick();
-        sheetTrigger?.focus();
-    }
-
-    function onWindowKey(e: KeyboardEvent): void {
-        if (!open || wide.current) {
-            return;
-        }
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            void closeSheet();
-
-            return;
-        }
-
-        // Tab goes round the sheet and never behind it; a menu opened from
-        // it keeps its own keys.
-        if (e.key === 'Tab' && sheetPanel) {
-            const active = document.activeElement as HTMLElement | null;
-
-            if (
-                active &&
-                active !== document.body &&
-                !sheetPanel.contains(active)
-            ) {
-                return;
-            }
-
-            const items = Array.from(
-                sheetPanel.querySelectorAll<HTMLElement>(FOCUSABLE),
-            );
-            const at = items.indexOf(active as HTMLElement);
-
-            if (items.length === 0) {
-                return;
-            }
-
-            if (at === -1 || (e.shiftKey && at === 0)) {
-                e.preventDefault();
-                items[e.shiftKey ? items.length - 1 : 0].focus();
-            } else if (!e.shiftKey && at === items.length - 1) {
-                e.preventDefault();
-                items[0].focus();
-            }
-        }
-    }
-
     const label = $derived(
         count > 0 ? t('To-dos, :count', { count }) : t('To-dos'),
     );
@@ -574,26 +511,12 @@
         {@render face()}
     </button>
     {#if open}
-        <div use:portal class="fixed inset-0 z-50">
-            <button
-                type="button"
-                aria-label={t('Close the to-dos')}
-                tabindex="-1"
-                class="absolute inset-0 cursor-default bg-black/40"
-                onclick={closeSheet}
-            ></button>
-            <div
-                bind:this={sheetPanel}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="todos-sheet-title"
-                tabindex="-1"
-                class="popover absolute inset-x-0 bottom-0 rounded-b-none pb-[env(safe-area-inset-bottom)] focus:outline-none"
-            >
-                {@render body(true)}
-            </div>
-        </div>
+        <Sheet
+            labelledby="todos-sheet-title"
+            closeLabel={t('Close the to-dos')}
+            onclose={() => (open = false)}
+        >
+            {@render body(true)}
+        </Sheet>
     {/if}
 {/if}
-
-<svelte:window onkeydown={onWindowKey} />

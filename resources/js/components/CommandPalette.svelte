@@ -17,6 +17,7 @@
     import { quickAdd } from '../lib/quickAdd.svelte';
     import { taskCode } from '../lib/taskCode';
     import type { SharedProps } from '../lib/types';
+    import Dialog from './Dialog.svelte';
     import Spinner from './Spinner.svelte';
     import StatusGlyph from './StatusGlyph.svelte';
 
@@ -451,20 +452,8 @@
 {/snippet}
 
 {#if palette.isOpen}
-    <div
-        class="fixed inset-0 z-[60] overflow-y-auto bg-black/40"
-        onclick={close}
-        role="presentation"
-    >
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div
-            class="popover mx-auto mt-[12vh] w-[min(640px,92vw)] overflow-hidden p-0"
-            onclick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('Command palette')}
-            tabindex="-1"
-        >
+    <Dialog label={t('Command palette')} width={640} onclose={close}>
+        {#snippet bar()}
             <div
                 class="flex h-12 items-center gap-2.5 border-b border-line px-4"
             >
@@ -487,121 +476,118 @@
                 />
                 <kbd class="kbd">esc</kbd>
             </div>
-
-            <div
-                id="palette-listbox"
-                role="listbox"
-                aria-label={t('Results')}
-                class="max-h-[60vh] overflow-y-auto px-1 pb-1"
-            >
-                {#each grouped as group (group.label)}
-                    <div class="col-head px-3 py-1.5">
-                        {group.label}
-                    </div>
-                    {#each group.items as item, j (itemKey(item))}
-                        {@const i = group.offset + j}
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <div
-                            id={`pal-item-${i}`}
-                            role="option"
-                            aria-selected={i === activeIndex}
-                            tabindex="-1"
-                            class={`menu-item h-9 cursor-pointer ${
-                                i === activeIndex ? 'bg-hover text-fg' : ''
-                            }`}
-                            onclick={() => execute(item)}
-                            onmousemove={() => (activeIndex = i)}
-                        >
-                            {#if item.kind === 'action'}
-                                <Plus
-                                    class="h-3.5 w-3.5 shrink-0 text-accent"
-                                />
-                                <span class="min-w-0 flex-1 truncate text-fg"
-                                    >{item.label}</span
-                                >
-                                <kbd class="kbd">{hasQuery ? '↩' : 'n'}</kbd>
-                            {:else if item.kind === 'nav'}
-                                {@const NavIcon = item.icon}
-                                <NavIcon
-                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
-                                />
-                                <span class="min-w-0 flex-1 truncate"
-                                    >{item.label}</span
-                                >
-                            {:else if item.kind === 'project'}
-                                <Folder
-                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
-                                />
-                                <span class="min-w-0 flex-1 truncate"
-                                    >{item.title}</span
-                                >
-                                <span
-                                    class="shrink-0 text-xs text-fg-faint tabular-nums"
+        {/snippet}
+        <div
+            id="palette-listbox"
+            role="listbox"
+            aria-label={t('Results')}
+            class="max-h-[60vh] overflow-y-auto px-1 pb-1"
+        >
+            {#each grouped as group (group.label)}
+                <div class="col-head px-3 py-1.5">
+                    {group.label}
+                </div>
+                {#each group.items as item, j (itemKey(item))}
+                    {@const i = group.offset + j}
+                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <div
+                        id={`pal-item-${i}`}
+                        role="option"
+                        aria-selected={i === activeIndex}
+                        tabindex="-1"
+                        class={`menu-item h-9 cursor-pointer ${
+                            i === activeIndex ? 'bg-hover text-fg' : ''
+                        }`}
+                        onclick={() => execute(item)}
+                        onmousemove={() => (activeIndex = i)}
+                    >
+                        {#if item.kind === 'action'}
+                            <Plus class="h-3.5 w-3.5 shrink-0 text-accent" />
+                            <span class="min-w-0 flex-1 truncate text-fg"
+                                >{item.label}</span
+                            >
+                            <kbd class="kbd">{hasQuery ? '↩' : 'n'}</kbd>
+                        {:else if item.kind === 'nav'}
+                            {@const NavIcon = item.icon}
+                            <NavIcon
+                                class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                            />
+                            <span class="min-w-0 flex-1 truncate"
+                                >{item.label}</span
+                            >
+                        {:else if item.kind === 'project'}
+                            <Folder
+                                class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                            />
+                            <span class="min-w-0 flex-1 truncate"
+                                >{item.title}</span
+                            >
+                            <span
+                                class="shrink-0 text-xs text-fg-faint tabular-nums"
+                                >{item.meta}</span
+                            >
+                        {:else if item.kind === 'task'}
+                            <StatusGlyph status={item.status} size={13} />
+                            <span
+                                class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
+                                >{item.code}</span
+                            >
+                            <span class="min-w-0 flex-1 truncate"
+                                >{item.title}</span
+                            >
+                            {#if item.meta}
+                                <span class="shrink-0 text-xs text-fg-faint"
                                     >{item.meta}</span
                                 >
-                            {:else if item.kind === 'task'}
-                                <StatusGlyph status={item.status} size={13} />
-                                <span
-                                    class="shrink-0 font-mono text-xs text-fg-faint tabular-nums"
-                                    >{item.code}</span
-                                >
-                                <span class="min-w-0 flex-1 truncate"
-                                    >{item.title}</span
-                                >
-                                {#if item.meta}
-                                    <span class="shrink-0 text-xs text-fg-faint"
-                                        >{item.meta}</span
-                                    >
-                                {/if}
-                            {:else if item.kind === 'note'}
-                                <StickyNote
-                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
-                                />
-                                <span class="min-w-0 flex-1 truncate"
-                                    >{item.body}</span
-                                >
-                                {#if item.meta}
-                                    <span class="shrink-0 text-xs text-fg-faint"
-                                        >{item.meta}</span
-                                    >
-                                {/if}
-                            {:else}
-                                <UserRound
-                                    class="h-3.5 w-3.5 shrink-0 text-fg-faint"
-                                />
-                                <span class="min-w-0 flex-1 truncate"
-                                    >{item.name}</span
-                                >
-                                {#if item.meta}
-                                    <span class="shrink-0 text-xs text-fg-faint"
-                                        >{item.meta}</span
-                                    >
-                                {/if}
                             {/if}
-                        </div>
-                    {/each}
+                        {:else if item.kind === 'note'}
+                            <StickyNote
+                                class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                            />
+                            <span class="min-w-0 flex-1 truncate"
+                                >{item.body}</span
+                            >
+                            {#if item.meta}
+                                <span class="shrink-0 text-xs text-fg-faint"
+                                    >{item.meta}</span
+                                >
+                            {/if}
+                        {:else}
+                            <UserRound
+                                class="h-3.5 w-3.5 shrink-0 text-fg-faint"
+                            />
+                            <span class="min-w-0 flex-1 truncate"
+                                >{item.name}</span
+                            >
+                            {#if item.meta}
+                                <span class="shrink-0 text-xs text-fg-faint"
+                                    >{item.meta}</span
+                                >
+                            {/if}
+                        {/if}
+                    </div>
                 {/each}
-            </div>
-
-            <div
-                class="flex h-9 items-center gap-4 border-t border-line px-4 text-xs text-fg-faint"
-            >
-                <span class="flex items-center gap-1.5">
-                    {@render keyed(t(':key navigate'), '↑↓')}
-                </span>
-                <span class="flex items-center gap-1.5">
-                    {@render keyed(t(':key open'), '↩')}
-                </span>
-                <span class="flex items-center gap-1.5">
-                    {@render keyed(t(':key close'), 'esc')}
-                </span>
-                {#if loading}
-                    <span class="ml-auto flex items-center gap-1.5">
-                        <Spinner size={12} label={t('Searching')} />
-                        {t('Searching')}
-                    </span>
-                {/if}
-            </div>
+            {/each}
         </div>
-    </div>
+
+        <div
+            class="flex h-9 items-center gap-4 border-t border-line px-4 text-xs text-fg-faint"
+        >
+            <span class="flex items-center gap-1.5">
+                {@render keyed(t(':key navigate'), '↑↓')}
+            </span>
+            <span class="flex items-center gap-1.5">
+                {@render keyed(t(':key open'), '↩')}
+            </span>
+            <span class="flex items-center gap-1.5">
+                {@render keyed(t(':key close'), 'esc')}
+            </span>
+            {#if loading}
+                <span class="ml-auto flex items-center gap-1.5">
+                    <Spinner size={12} label={t('Searching')} />
+                    {t('Searching')}
+                </span>
+            {/if}
+        </div>
+    </Dialog>
 {/if}

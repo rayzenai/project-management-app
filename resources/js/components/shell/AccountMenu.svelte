@@ -10,6 +10,7 @@
     import Avatar from '../Avatar.svelte';
     import LanguageMark from '../LanguageMark.svelte';
     import Popover from '../Popover.svelte';
+    import Sheet from '../Sheet.svelte';
     import OrganizationSwitcher from './OrganizationSwitcher.svelte';
 
     /**
@@ -65,24 +66,6 @@
         onclose?: () => void;
     } = $props();
 
-    let sheetPanel = $state<HTMLElement | null>(null);
-
-    const FOCUSABLE =
-        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
-
-    function focusables(): HTMLElement[] {
-        return Array.from(
-            sheetPanel?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
-        );
-    }
-
-    // The sheet opens with focus on its first item.
-    $effect(() => {
-        if (sheet && open && sheetPanel) {
-            focusables()[0]?.focus();
-        }
-    });
-
     const sheet = $derived(variant === 'sheet');
     const current = $derived(
         currentHref(path, [...extra, ...groups.flatMap((g) => g.links)]),
@@ -127,37 +110,6 @@
                 ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent'
                 : ''
         }`;
-    }
-
-    function onWindowKey(e: KeyboardEvent): void {
-        if (!sheet || !open) {
-            return;
-        }
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            close();
-
-            return;
-        }
-
-        // Tab goes round the sheet's items and never behind it.
-        if (e.key === 'Tab') {
-            const items = focusables();
-            const at = items.indexOf(document.activeElement as HTMLElement);
-
-            if (items.length === 0) {
-                return;
-            }
-
-            if (at === -1 || (e.shiftKey && at === 0)) {
-                e.preventDefault();
-                items[e.shiftKey ? items.length - 1 : 0].focus();
-            } else if (!e.shiftKey && at === items.length - 1) {
-                e.preventDefault();
-                items[0].focus();
-            }
-        }
     }
 </script>
 
@@ -320,23 +272,14 @@
         {@render body()}
     </Popover>
 {:else if sheet && open}
-    <div class="fixed inset-0 z-50 md:hidden">
-        <button
-            type="button"
-            aria-label={t('Close the menu')}
-            class="absolute inset-0 cursor-default bg-black/40"
-            onclick={close}
-        ></button>
-        <div
-            bind:this={sheetPanel}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('Me')}
-            class="popover absolute inset-x-0 bottom-0 rounded-b-none pb-[env(safe-area-inset-bottom)]"
-        >
-            {@render body()}
-        </div>
-    </div>
+    <!-- The sheet opens with the focus on its first item. -->
+    <Sheet
+        label={t('Me')}
+        closeLabel={t('Close the menu')}
+        onclose={close}
+        focusFirst
+        wrapperClass="md:hidden"
+    >
+        {@render body()}
+    </Sheet>
 {/if}
-
-<svelte:window onkeydown={onWindowKey} />

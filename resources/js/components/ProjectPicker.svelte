@@ -5,7 +5,6 @@
     import { MediaQuery } from 'svelte/reactivity';
     import { forgivingFilter } from '../lib/forgivingFilter';
     import { msg, t } from '../lib/i18n';
-    import { portal } from '../lib/portal';
     import { projectLabel } from '../lib/projectLabel';
     import type {
         Id,
@@ -14,6 +13,7 @@
         ProjectPick,
     } from '../lib/types';
     import Popover from './Popover.svelte';
+    import Sheet from './Sheet.svelte';
 
     /**
      * The one way to choose a project to put something in: a new task (the
@@ -432,49 +432,14 @@
         };
     });
 
-    // The sheet opens with the focus on itself: no keyboard over the list.
-    // It keeps its opening height, so searching never shrinks it: a long
-    // list's sheet stays tall, its search near the top and the matches
+    // The sheet keeps its opening height, so searching never shrinks it: a
+    // long list's sheet stays tall, its search near the top and the matches
     // above a phone's keyboard.
     $effect(() => {
         if (open && !wide.current && sheetEl) {
-            sheetEl.focus();
             sheetHeight = untrack(() => sheetEl?.offsetHeight ?? 0);
         }
     });
-
-    const FOCUSABLE =
-        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-    function onSheetKey(e: KeyboardEvent): void {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            close();
-
-            return;
-        }
-
-        // Tab goes round the sheet and never behind it.
-        if (e.key === 'Tab') {
-            const items = Array.from(
-                sheetEl?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
-            );
-            const at = items.indexOf(document.activeElement as HTMLElement);
-
-            if (items.length === 0) {
-                return;
-            }
-
-            if (at === -1 || (e.shiftKey && at === 0)) {
-                e.preventDefault();
-                items[e.shiftKey ? items.length - 1 : 0].focus();
-            } else if (!e.shiftKey && at === items.length - 1) {
-                e.preventDefault();
-                items[0].focus();
-            }
-        }
-    }
 </script>
 
 {#snippet face()}
@@ -684,29 +649,17 @@
             </button>
         </span>
         {#if open}
-            <div use:portal class="fixed inset-0 z-50">
-                <button
-                    type="button"
-                    aria-label={t('Close the projects')}
-                    tabindex="-1"
-                    class="absolute inset-0 cursor-default bg-black/40"
-                    onclick={close}
-                ></button>
-                <div
-                    bind:this={sheetEl}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={t('Choose a project')}
-                    tabindex="-1"
-                    class="popover absolute inset-x-0 bottom-0 rounded-b-none pb-[env(safe-area-inset-bottom)] focus:outline-none"
-                    style={sheetHeight > 0
-                        ? `min-height:${sheetHeight}px`
-                        : undefined}
-                    onkeydown={onSheetKey}
-                >
-                    {@render body(true)}
-                </div>
-            </div>
+            <Sheet
+                label={t('Choose a project')}
+                closeLabel={t('Close the projects')}
+                onclose={close}
+                bind:panel={sheetEl}
+                style={sheetHeight > 0
+                    ? `min-height:${sheetHeight}px`
+                    : undefined}
+            >
+                {@render body(true)}
+            </Sheet>
         {/if}
     {/if}
 </span>

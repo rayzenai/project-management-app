@@ -1,6 +1,6 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
-    import { PanelLeft, StickyNote, X } from '@lucide/svelte';
+    import { PanelLeft, StickyNote } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
     import type { AppearanceProps } from '../lib/appearance';
     import { number, t } from '../lib/i18n';
@@ -14,6 +14,7 @@
     import AppearanceConfig from './AppearanceConfig.svelte';
     import ClockButton from './attendance/ClockButton.svelte';
     import CommandPalette from './CommandPalette.svelte';
+    import Dialog from './Dialog.svelte';
     import LanguageSwitch from './LanguageSwitch.svelte';
     import QuickAddOverlay from './QuickAddOverlay.svelte';
     import PhoneTabs from './shell/PhoneTabs.svelte';
@@ -394,45 +395,17 @@
     <Toasts />
 
     {#if settingsOpen && appearance}
-        <div
-            class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
-            onclick={() => (settingsOpen = false)}
-            role="presentation"
+        <Dialog
+            label={t('Settings')}
+            width={560}
+            onclose={() => (settingsOpen = false)}
         >
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <div
-                class="popover mx-auto mt-[10vh] mb-12 w-[min(560px,94vw)] overflow-hidden p-0"
-                onclick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-                aria-label={t('Settings')}
-                tabindex="-1"
-            >
-                <div
-                    class="flex h-14 items-center justify-between gap-2 border-b border-line px-6"
-                >
-                    <h2 class="text-[15px] font-semibold text-fg">
-                        {t('Settings')}
-                    </h2>
-                    <div class="flex items-center gap-2">
-                        <kbd class="kbd">esc</kbd>
-                        <button
-                            type="button"
-                            aria-label={t('Close')}
-                            class="btn-icon"
-                            onclick={() => (settingsOpen = false)}
-                        >
-                            <X class="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-                <AppearanceConfig
-                    {appearance}
-                    onsaved={() => (settingsOpen = false)}
-                    oncancel={() => (settingsOpen = false)}
-                />
-            </div>
-        </div>
+            <AppearanceConfig
+                {appearance}
+                onsaved={() => (settingsOpen = false)}
+                oncancel={() => (settingsOpen = false)}
+            />
+        </Dialog>
     {/if}
 </div>
 

@@ -3,9 +3,9 @@
     import { FormsHttpError, send } from '../../../lib/forms/http';
     import type { PersonRef } from '../../../lib/forms/types';
     import { toast } from '../../../lib/toast.svelte';
+    import PersonSearch from '../../PersonSearch.svelte';
     import Spinner from '../../Spinner.svelte';
     import type { BuilderData } from './builderTypes';
-    import PersonSearch from './PersonSearch.svelte';
 
     /**
      * Who fills it in: everyone in the office, the project's team, or

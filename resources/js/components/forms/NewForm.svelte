@@ -1,9 +1,9 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
-    import { Plus, X } from '@lucide/svelte';
+    import { Plus } from '@lucide/svelte';
     import type { FormTemplate } from '../../lib/forms/types';
-    import { portal } from '../../lib/portal';
     import type { ProjectChoices, ProjectPick } from '../../lib/types';
+    import Dialog from '../Dialog.svelte';
     import ProjectPicker from '../ProjectPicker.svelte';
     import Spinner from '../Spinner.svelte';
 
@@ -75,107 +75,78 @@
 {/if}
 
 {#if open}
-    <div
-        use:portal
-        class="fixed inset-0 z-50 overflow-y-auto bg-black/40"
-        role="presentation"
-        onclick={(e) => e.target === e.currentTarget && (open = false)}
-    >
-        <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="New form"
-            tabindex="-1"
-            class="mx-auto mt-[10vh] mb-12 w-[min(560px,calc(100vw-32px))]"
-            onkeydown={(e) => e.key === 'Escape' && (open = false)}
-        >
-            <form class="popover flex flex-col gap-4 p-5" onsubmit={create}>
-                <div class="flex items-center justify-between">
-                    <h2 class="text-[15px] font-semibold text-fg">New form</h2>
-                    <button
-                        type="button"
-                        class="btn-icon"
-                        aria-label="Close"
-                        onclick={() => (open = false)}
-                        ><X class="h-4 w-4" /></button
-                    >
-                </div>
+    <Dialog label="New form" width={560} onclose={() => (open = false)}>
+        <form class="flex flex-col gap-4 p-5" onsubmit={create}>
+            <div>
+                <label for="{uid}-title" class="label mb-1 block">Title</label>
+                <input
+                    id="{uid}-title"
+                    class="input"
+                    bind:value={title}
+                    maxlength="200"
+                    placeholder="Untitled form"
+                    data-autofocus
+                />
+                {#if errors.title}<p class="mt-1 text-xs text-danger">
+                        {errors.title}
+                    </p>{/if}
+            </div>
+            {#if project === null}
                 <div>
-                    <label for="{uid}-title" class="label mb-1 block"
-                        >Title</label
-                    >
-                    <!-- svelte-ignore a11y_autofocus -->
-                    <input
-                        id="{uid}-title"
-                        class="input"
-                        bind:value={title}
-                        maxlength="200"
-                        placeholder="Untitled form"
-                        autofocus
+                    <span class="label mb-1 block">Project</span>
+                    <ProjectPicker
+                        projects={places.projects}
+                        organizations={places.organizations}
+                        bind:value={where}
+                        field
+                        placeholder="Pick a project"
+                        onpick={() => (errors = {})}
                     />
-                    {#if errors.title}<p class="mt-1 text-xs text-danger">
-                            {errors.title}
+                    <p class="mt-1 text-xs text-fg-muted">
+                        The form and its responses belong to this project's
+                        office. Whoever runs the project can see them.
+                    </p>
+                    {#if errors.project}<p class="mt-1 text-xs text-danger">
+                            {errors.project}
                         </p>{/if}
                 </div>
-                {#if project === null}
-                    <div>
-                        <span class="label mb-1 block">Project</span>
-                        <ProjectPicker
-                            projects={places.projects}
-                            organizations={places.organizations}
-                            bind:value={where}
-                            field
-                            placeholder="Pick a project"
-                            onpick={() => (errors = {})}
-                        />
-                        <p class="mt-1 text-xs text-fg-muted">
-                            The form and its responses belong to this project's
-                            office. Whoever runs the project can see them.
-                        </p>
-                        {#if errors.project}<p class="mt-1 text-xs text-danger">
-                                {errors.project}
-                            </p>{/if}
-                    </div>
-                {/if}
-                <fieldset>
-                    <legend class="label mb-1">Start from</legend>
-                    <div class="grid gap-2 sm:grid-cols-2">
-                        {#each templates as t (t.id)}
-                            <label
-                                class="flex cursor-pointer gap-2 rounded-md border px-3 py-2 text-[13px] {template ===
-                                t.id
-                                    ? 'border-accent bg-accent-soft'
-                                    : 'border-line'}"
+            {/if}
+            <fieldset>
+                <legend class="label mb-1">Start from</legend>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    {#each templates as t (t.id)}
+                        <label
+                            class="flex cursor-pointer gap-2 rounded-md border px-3 py-2 text-[13px] {template ===
+                            t.id
+                                ? 'border-accent bg-accent-soft'
+                                : 'border-line'}"
+                        >
+                            <input
+                                type="radio"
+                                name="{uid}-template"
+                                class="mt-0.5"
+                                value={t.id}
+                                bind:group={template}
+                            />
+                            <span
+                                ><span class="block font-medium text-fg"
+                                    >{t.name}</span
+                                ><span class="block text-xs text-fg-muted"
+                                    >{t.description}</span
+                                ></span
                             >
-                                <input
-                                    type="radio"
-                                    name="{uid}-template"
-                                    class="mt-0.5"
-                                    value={t.id}
-                                    bind:group={template}
-                                />
-                                <span
-                                    ><span class="block font-medium text-fg"
-                                        >{t.name}</span
-                                    ><span class="block text-xs text-fg-muted"
-                                        >{t.description}</span
-                                    ></span
-                                >
-                            </label>
-                        {/each}
-                    </div>
-                </fieldset>
-                <div class="flex justify-end gap-2">
-                    <button
-                        type="button"
-                        class="btn"
-                        onclick={() => (open = false)}>Cancel</button
-                    >
-                    <button class="btn btn-primary" disabled={creating}
-                        >{#if creating}<Spinner size={14} />{/if}Make it</button
-                    >
+                        </label>
+                    {/each}
                 </div>
-            </form>
-        </div>
-    </div>
+            </fieldset>
+            <div class="flex justify-end gap-2">
+                <button type="button" class="btn" onclick={() => (open = false)}
+                    >Cancel</button
+                >
+                <button class="btn btn-primary" disabled={creating}
+                    >{#if creating}<Spinner size={14} />{/if}Make it</button
+                >
+            </div>
+        </form>
+    </Dialog>
 {/if}

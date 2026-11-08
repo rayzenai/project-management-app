@@ -5,8 +5,8 @@
     import type { FormAccess, PersonRef } from '../../../lib/forms/types';
     import { toast } from '../../../lib/toast.svelte';
     import Avatar from '../../Avatar.svelte';
+    import PersonSearch from '../../PersonSearch.svelte';
     import Spinner from '../../Spinner.svelte';
-    import PersonSearch from './PersonSearch.svelte';
 
     /**
      * Who builds the form or handles its responses, beyond whoever runs the
@@ -65,32 +65,31 @@
         Whoever runs {project} and the form's maker can always edit it and see its
         responses. The rest of the team can't, unless you add them here.
     </p>
-    <div class="flex items-end gap-2">
-        <div class="min-w-0 flex-1">
-            <PersonSearch
-                url="/workspace/forms/{formId}/people?unshared=1"
-                label="Add people"
-                placeholder="Someone in {organization ?? 'the office'}"
-                disabled={busy}
-                onpick={(p) =>
-                    act(() =>
-                        send('POST', `/workspace/forms/${formId}/shares`, {
-                            member_id: p.id,
-                            permission,
-                        }),
-                    )}
-            />
-        </div>
-        <label for="share-level" class="sr-only">Their access</label>
-        <select
-            id="share-level"
-            class="input w-44 shrink-0"
-            bind:value={permission}
-        >
-            <option value="responses">Can see responses</option>
-            <option value="edit">Can edit</option>
-        </select>
-    </div>
+    <PersonSearch
+        url="/workspace/forms/{formId}/people?unshared=1"
+        label="Add people"
+        placeholder="Someone in {organization ?? 'the office'}"
+        disabled={busy}
+        onpick={(p) =>
+            act(() =>
+                send('POST', `/workspace/forms/${formId}/shares`, {
+                    member_id: p.id,
+                    permission,
+                }),
+            )}
+    >
+        {#snippet beside()}
+            <label for="share-level" class="sr-only">Their access</label>
+            <select
+                id="share-level"
+                class="input w-44 shrink-0"
+                bind:value={permission}
+            >
+                <option value="responses">Can see responses</option>
+                <option value="edit">Can edit</option>
+            </select>
+        {/snippet}
+    </PersonSearch>
     {#if shares === null}
         <p class="flex items-center gap-2 text-[13px] text-fg-muted">
             <Spinner size={14} />Loading

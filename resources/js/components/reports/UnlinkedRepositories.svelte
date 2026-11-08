@@ -1,10 +1,8 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { ExternalLink, FolderGit2, FolderPlus } from '@lucide/svelte';
-    import { tick } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { plural } from '../../lib/format';
-    import { portal } from '../../lib/portal';
     import { suggestProjectKey } from '../../lib/projectKey';
     import type {
         Id,
@@ -13,6 +11,7 @@
     } from '../../lib/types';
     import Popover from '../Popover.svelte';
     import ProjectPicker from '../ProjectPicker.svelte';
+    import Sheet from '../Sheet.svelte';
 
     /**
      * The forge repositories no project links, at the top of Code activity
@@ -92,8 +91,6 @@
     let keyEdited = $state(false);
     let programId = $state('');
     let errors = $state<Record<string, string>>({});
-    let sheetEl = $state<HTMLElement | null>(null);
-    let sheetOpener: HTMLElement | null = null;
 
     const creatingRow = $derived.by(() => {
         for (const notice of shown) {
@@ -138,22 +135,10 @@
         failure = null;
     }
 
+    // On a phone the form is a sheet, which takes the focus itself (not
+    // the title: no keyboard over the form) and gives it back.
     function stopCreating() {
         creating = null;
-        sheetOpener?.focus();
-        sheetOpener = null;
-    }
-
-    async function openSheet(
-        event: MouseEvent,
-        notice: UnlinkedRepositories,
-        repository: UnlinkedRepository,
-    ) {
-        sheetOpener = event.currentTarget as HTMLElement;
-        startCreating(notice, repository);
-        await tick();
-        // The sheet takes the focus, not the title: no keyboard over the form.
-        sheetEl?.focus();
     }
 
     function create(
@@ -185,14 +170,6 @@
                 onFinish: () => (busy = null),
             },
         );
-    }
-
-    function onSheetKey(e: KeyboardEvent) {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            stopCreating();
-        }
     }
 </script>
 
@@ -431,8 +408,8 @@
                                     aria-haspopup="dialog"
                                     aria-expanded={creating === key}
                                     disabled={busy !== null}
-                                    onclick={(e) =>
-                                        openSheet(e, notice, repository)}
+                                    onclick={() =>
+                                        startCreating(notice, repository)}
                                 >
                                     New project for it
                                 </button>
@@ -446,24 +423,14 @@
 {/each}
 
 {#if creatingRow && !wide.current}
-    <div use:portal class="fixed inset-0 z-50">
-        <button
-            type="button"
-            aria-label="Close the new project form"
-            tabindex="-1"
-            class="absolute inset-0 cursor-default bg-black/40"
-            onclick={stopCreating}
-        ></button>
-        <div
-            bind:this={sheetEl}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`New project for ${creatingRow.repository.full_name}`}
-            tabindex="-1"
-            class="popover absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-b-none px-2 pt-2 pb-[max(8px,env(safe-area-inset-bottom))] focus:outline-none"
-            onkeydown={onSheetKey}
-        >
+    <Sheet
+        label={`New project for ${creatingRow.repository.full_name}`}
+        closeLabel="Close the new project form"
+        onclose={stopCreating}
+        panelClass="max-h-[85vh] overflow-y-auto px-2 pt-2"
+    >
+        <div class="pb-2">
             {@render newProjectForm(creatingRow.notice, creatingRow.repository)}
         </div>
-    </div>
+    </Sheet>
 {/if}

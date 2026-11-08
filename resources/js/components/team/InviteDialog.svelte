@@ -1,12 +1,11 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
-    import { X } from '@lucide/svelte';
-    import { onMount } from 'svelte';
     import { SvelteMap } from 'svelte/reactivity';
     import { designationsFor } from '../../lib/structure';
     import type { DesignationOption } from '../../lib/structure';
     import type { Id, OrganizationOption } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
+    import Dialog from '../Dialog.svelte';
 
     /**
      * Invite many people at once: paste "Name, email" lines, see what
@@ -64,7 +63,6 @@
     const MAX_PEOPLE = 200;
     const PLACEHOLDER =
         'Deepak Karki, deepak.karki@example.gov.np\nSunita Rai <sunita.rai@example.gov.np>';
-    const uid = $props.id();
 
     // Seeded once: the page mounts the dialog behind an {#if}, so opening it
     // again starts afresh.
@@ -84,7 +82,6 @@
     let sendErrors = $state<Record<string, string>>({});
     /** The designation chosen for a new person, by lowercased email. */
     const chosenDesignations = new SvelteMap<string, Id | null>();
-    let textarea = $state<HTMLTextAreaElement | null>(null);
     let seq = 0;
 
     const organizationName = $derived(
@@ -259,231 +256,179 @@
             },
         );
     }
-
-    // Only a press that starts and ends on the backdrop closes the dialog.
-    let pressedBackdrop = false;
-
-    function onBackdropClick(e: MouseEvent) {
-        if (pressedBackdrop && e.target === e.currentTarget) {
-            onclose();
-        }
-    }
-
-    function onKeydown(e: KeyboardEvent) {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            onclose();
-        }
-    }
-
-    onMount(() => {
-        textarea?.focus();
-        document.body.style.overflow = 'hidden';
-
-        return () => {
-            document.body.style.overflow = '';
-        };
-    });
 </script>
 
-<div
-    class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-    onpointerdown={(e) => (pressedBackdrop = e.target === e.currentTarget)}
-    onclick={onBackdropClick}
-    role="presentation"
+<Dialog
+    label={organizationName
+        ? `Invite people to ${organizationName}`
+        : 'Invite people'}
+    width={680}
+    center
+    {onclose}
 >
-    <div
-        class="popover flex max-h-[min(620px,calc(100dvh-2rem))] w-[min(680px,100%)] flex-col overflow-hidden p-0"
-        onkeydown={onKeydown}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="{uid}-title"
-        tabindex="-1"
-    >
-        <div class="shrink-0 px-5 pt-5 sm:px-6">
-            <div class="flex items-start justify-between gap-3">
-                <h2
-                    id="{uid}-title"
-                    class="min-w-0 text-[17px] font-semibold text-fg"
-                >
-                    {organizationName
-                        ? `Invite people to ${organizationName}`
-                        : 'Invite people'}
-                </h2>
-                <button
-                    type="button"
-                    class="btn-icon -mt-1 -mr-2"
-                    aria-label="Close"
-                    onclick={onclose}><X class="h-4 w-4" /></button
-                >
-            </div>
-            <p class="mt-1 text-fg-muted">
-                Paste names and emails, one person a line. Each gets an email
-                with a link to set a password.
-            </p>
-            {#if canChooseOrganization}
-                <select
-                    class="input mt-3"
-                    aria-label="Organization"
-                    value={organizationId ?? ''}
-                    onchange={(e) => chooseOrganization(e.currentTarget.value)}
-                >
-                    <option value="" disabled>Choose an organization</option>
-                    {#each organizations as organization (organization.id)}
-                        <option value={organization.id}
-                            >{organization.name}</option
-                        >
-                    {/each}
-                </select>
-                {#if sendErrors.organization_id}
-                    <p class="mt-1 text-xs text-danger">
-                        {sendErrors.organization_id}
-                    </p>
-                {/if}
-            {/if}
-            <textarea
-                bind:this={textarea}
-                bind:value={text}
-                class="input mt-3 max-h-28 min-h-[96px] sm:max-h-40 resize-y font-mono leading-[21px] lg:text-[13px]"
-                rows="4"
-                aria-label="Paste names and emails, one person a line."
-                placeholder={PLACEHOLDER}
-                spellcheck="false"
-                autocomplete="off"
-            ></textarea>
-            {#if pastedLines > MAX_PEOPLE}
-                <p class="mt-1 text-xs text-fg-muted">
-                    Only the first {MAX_PEOPLE} people are read. Invite the rest next.
+    <div class="shrink-0 px-5 pt-4 sm:px-6">
+        <p class="text-fg-muted">
+            Paste names and emails, one person a line. Each gets an email with a
+            link to set a password.
+        </p>
+        {#if canChooseOrganization}
+            <select
+                class="input mt-3"
+                aria-label="Organization"
+                value={organizationId ?? ''}
+                onchange={(e) => chooseOrganization(e.currentTarget.value)}
+            >
+                <option value="" disabled>Choose an organization</option>
+                {#each organizations as organization (organization.id)}
+                    <option value={organization.id}>{organization.name}</option>
+                {/each}
+            </select>
+            {#if sendErrors.organization_id}
+                <p class="mt-1 text-xs text-danger">
+                    {sendErrors.organization_id}
                 </p>
             {/if}
-        </div>
+        {/if}
+        <textarea
+            bind:value={text}
+            data-autofocus
+            class="input mt-3 max-h-28 min-h-[96px] sm:max-h-40 resize-y font-mono leading-[21px] lg:text-[13px]"
+            rows="4"
+            aria-label="Paste names and emails, one person a line."
+            placeholder={PLACEHOLDER}
+            spellcheck="false"
+            autocomplete="off"
+        ></textarea>
+        {#if pastedLines > MAX_PEOPLE}
+            <p class="mt-1 text-xs text-fg-muted">
+                Only the first {MAX_PEOPLE} people are read. Invite the rest next.
+            </p>
+        {/if}
+    </div>
 
-        {#if rows.length > 0}
-            <ul
-                class="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6"
-                aria-label="People to invite"
-                aria-busy={checking}
-            >
-                {#each rows as row, i (i)}
-                    <li
-                        class="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-b border-line-soft py-2.5 last:border-b-0 sm:grid-cols-[24px_minmax(0,1fr)_160px_128px]"
-                    >
-                        <Avatar name={row.name || row.email} size="md" />
-                        <span class="min-w-0">
-                            {#if row.name}
-                                <span class="block truncate font-medium text-fg"
-                                    >{row.name}</span
-                                >
-                            {:else}
-                                <span class="block truncate text-danger"
-                                    >{STATUS_WORDS.needs_name}</span
-                                >
-                            {/if}
-                            {#if row.email}
-                                <span
-                                    class="block truncate text-[13px] text-fg-muted"
-                                    >{row.email}</span
-                                >
-                            {:else}
-                                <span
-                                    class="block truncate text-[13px] text-danger"
-                                    >{STATUS_WORDS.needs_email}</span
-                                >
-                            {/if}
-                        </span>
-                        {#if isNewPerson(row) && designations.length > 0}
-                            <select
-                                class="input col-span-2 col-start-2 row-start-2 sm:col-span-1 sm:col-start-3 sm:row-start-1"
-                                aria-label={`Designation of ${row.name}`}
-                                value={chosenDesignations.get(emailKey(row)) ??
-                                    row.designation_id ??
-                                    ''}
-                                onchange={(e) =>
-                                    chosenDesignations.set(
-                                        emailKey(row),
-                                        e.currentTarget.value
-                                            ? Number(e.currentTarget.value)
-                                            : null,
-                                    )}
+    {#if rows.length > 0}
+        <ul
+            class="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6"
+            aria-label="People to invite"
+            aria-busy={checking}
+        >
+            {#each rows as row, i (i)}
+                <li
+                    class="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-b border-line-soft py-2.5 last:border-b-0 sm:grid-cols-[24px_minmax(0,1fr)_160px_128px]"
+                >
+                    <Avatar name={row.name || row.email} size="md" />
+                    <span class="min-w-0">
+                        {#if row.name}
+                            <span class="block truncate font-medium text-fg"
+                                >{row.name}</span
                             >
-                                <option value="">Designation</option>
-                                {#each designations as designation (designation.id)}
-                                    <option value={designation.id}
-                                        >{designation.name}</option
-                                    >
-                                {/each}
-                            </select>
-                        {:else if row.member_id !== null && designationName(row.designation_id)}
-                            <span
-                                class="col-span-2 col-start-2 row-start-2 truncate text-[13px] text-fg-muted sm:col-span-1 sm:col-start-3 sm:row-start-1"
-                                >{designationName(row.designation_id)}</span
+                        {:else}
+                            <span class="block truncate text-danger"
+                                >{STATUS_WORDS.needs_name}</span
                             >
                         {/if}
-                        <span
-                            class={`col-start-3 row-start-1 text-right text-[13px] sm:col-start-4 sm:text-left ${
-                                row.status === 'needs_email' ||
-                                row.status === 'needs_name'
-                                    ? 'text-danger'
-                                    : row.status === 'ready' ||
-                                        row.status === 'resend'
-                                      ? 'text-fg'
-                                      : 'text-fg-muted'
-                            }`}
-                        >
-                            {row.status === 'needs_email' ||
-                            row.status === 'needs_name'
-                                ? 'Skipped'
-                                : STATUS_WORDS[row.status]}
-                        </span>
-                    </li>
-                {/each}
-            </ul>
-        {/if}
-
-        <div class="shrink-0 px-5 pt-3 pb-5 sm:px-6">
-            {#if withoutLoginCount > 0}
-                <label
-                    class="flex cursor-pointer items-start gap-2.5 rounded-md bg-surface-alt px-3.5 py-3 text-fg"
-                >
-                    <input
-                        type="checkbox"
-                        class="mt-1"
-                        bind:checked={includeWithoutLogin}
-                    />
-                    <span>
-                        {withoutLoginCount === 1
-                            ? 'Also invite the 1 person in the organogram who has never signed in'
-                            : `Also invite the ${withoutLoginCount} people in the organogram who have never signed in`}
+                        {#if row.email}
+                            <span
+                                class="block truncate text-[13px] text-fg-muted"
+                                >{row.email}</span
+                            >
+                        {:else}
+                            <span class="block truncate text-[13px] text-danger"
+                                >{STATUS_WORDS.needs_email}</span
+                            >
+                        {/if}
                     </span>
-                </label>
-            {/if}
-            {#if checkError}
-                <p class="mt-2 text-xs text-danger">{checkError}</p>
-            {/if}
-            {#if sendErrors.people}
-                <p class="mt-2 text-xs text-danger">{sendErrors.people}</p>
-            {/if}
-            <div class="mt-4 flex flex-wrap items-center gap-2">
-                <span class="flex-1 text-[13px] text-fg-muted"
-                    >Links work for 7 days.</span
-                >
-                <button type="button" class="btn-ghost" onclick={onclose}
-                    >Cancel</button
-                >
-                <button
-                    type="button"
-                    class="btn-primary"
-                    disabled={willInvite === 0 ||
-                        checking ||
-                        checkError !== null ||
-                        sending}
-                    onclick={send}
-                    >{willInvite === 1
-                        ? 'Send 1 invite'
-                        : `Send ${willInvite} invites`}</button
-                >
-            </div>
+                    {#if isNewPerson(row) && designations.length > 0}
+                        <select
+                            class="input col-span-2 col-start-2 row-start-2 sm:col-span-1 sm:col-start-3 sm:row-start-1"
+                            aria-label={`Designation of ${row.name}`}
+                            value={chosenDesignations.get(emailKey(row)) ??
+                                row.designation_id ??
+                                ''}
+                            onchange={(e) =>
+                                chosenDesignations.set(
+                                    emailKey(row),
+                                    e.currentTarget.value
+                                        ? Number(e.currentTarget.value)
+                                        : null,
+                                )}
+                        >
+                            <option value="">Designation</option>
+                            {#each designations as designation (designation.id)}
+                                <option value={designation.id}
+                                    >{designation.name}</option
+                                >
+                            {/each}
+                        </select>
+                    {:else if row.member_id !== null && designationName(row.designation_id)}
+                        <span
+                            class="col-span-2 col-start-2 row-start-2 truncate text-[13px] text-fg-muted sm:col-span-1 sm:col-start-3 sm:row-start-1"
+                            >{designationName(row.designation_id)}</span
+                        >
+                    {/if}
+                    <span
+                        class={`col-start-3 row-start-1 text-right text-[13px] sm:col-start-4 sm:text-left ${
+                            row.status === 'needs_email' ||
+                            row.status === 'needs_name'
+                                ? 'text-danger'
+                                : row.status === 'ready' ||
+                                    row.status === 'resend'
+                                  ? 'text-fg'
+                                  : 'text-fg-muted'
+                        }`}
+                    >
+                        {row.status === 'needs_email' ||
+                        row.status === 'needs_name'
+                            ? 'Skipped'
+                            : STATUS_WORDS[row.status]}
+                    </span>
+                </li>
+            {/each}
+        </ul>
+    {/if}
+
+    <div class="shrink-0 px-5 pt-3 pb-5 sm:px-6">
+        {#if withoutLoginCount > 0}
+            <label
+                class="flex cursor-pointer items-start gap-2.5 rounded-md bg-surface-alt px-3.5 py-3 text-fg"
+            >
+                <input
+                    type="checkbox"
+                    class="mt-1"
+                    bind:checked={includeWithoutLogin}
+                />
+                <span>
+                    {withoutLoginCount === 1
+                        ? 'Also invite the 1 person in the organogram who has never signed in'
+                        : `Also invite the ${withoutLoginCount} people in the organogram who have never signed in`}
+                </span>
+            </label>
+        {/if}
+        {#if checkError}
+            <p class="mt-2 text-xs text-danger">{checkError}</p>
+        {/if}
+        {#if sendErrors.people}
+            <p class="mt-2 text-xs text-danger">{sendErrors.people}</p>
+        {/if}
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+            <span class="flex-1 text-[13px] text-fg-muted"
+                >Links work for 7 days.</span
+            >
+            <button type="button" class="btn-ghost" onclick={onclose}
+                >Cancel</button
+            >
+            <button
+                type="button"
+                class="btn-primary"
+                disabled={willInvite === 0 ||
+                    checking ||
+                    checkError !== null ||
+                    sending}
+                onclick={send}
+                >{willInvite === 1
+                    ? 'Send 1 invite'
+                    : `Send ${willInvite} invites`}</button
+            >
         </div>
     </div>
-</div>
+</Dialog>
