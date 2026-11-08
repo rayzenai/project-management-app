@@ -6,6 +6,8 @@ import type { Appearance } from './lib/applyTheme';
 
 function applyFromProps(props: Record<string, unknown> | undefined): void {
     applyAppearance(props?.appearance as Appearance | undefined);
+    // The page's language, for screen readers, hyphenation and fonts.
+    document.documentElement.lang = props?.locale === 'ne' ? 'ne' : 'en';
 }
 
 createInertiaApp({
@@ -33,5 +35,10 @@ createInertiaApp({
 });
 
 router.on('navigate', (event) => {
+    applyFromProps(event.detail.page.props as Record<string, unknown>);
+});
+
+// A visit that keeps the page (the language switch) fires no navigate.
+router.on('success', (event) => {
     applyFromProps(event.detail.page.props as Record<string, unknown>);
 });

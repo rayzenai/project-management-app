@@ -1,6 +1,7 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { Building2, Check, ChevronsUpDown } from '@lucide/svelte';
+    import { t } from '../../lib/i18n';
     import type { Id, OrganizationSwitch } from '../../lib/types';
     import Popover from '../Popover.svelte';
 
@@ -24,13 +25,13 @@
     let open = $state(false);
 
     const choices = $derived([
-        { id: null as Id | null, name: 'All organizations' },
+        { id: null as Id | null, name: t('All organizations') },
         ...organizationSwitch.organizations,
     ]);
     const name = $derived(
         organizationSwitch.organizations.find(
             (organization) => organization.id === organizationSwitch.current,
-        )?.name ?? 'All organizations',
+        )?.name ?? t('All organizations'),
     );
 
     function switchTo(id: Id | null) {
@@ -52,7 +53,7 @@
 <Popover
     bind:open
     role="listbox"
-    triggerLabel={`Organization: ${name}`}
+    triggerLabel={t('Organization: :name', { name })}
     wrapperClass="min-w-0 flex-1"
     triggerClass={sheet
         ? 'flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-line bg-surface px-3 text-left text-[15px] font-medium text-fg transition hover:bg-hover'

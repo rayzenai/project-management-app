@@ -1,14 +1,18 @@
 <script lang="ts">
-    import { inertia } from '@inertiajs/svelte';
+    import { inertia, page, router } from '@inertiajs/svelte';
     import { Download, Users } from '@lucide/svelte';
+    import { onMount, tick } from 'svelte';
     import AppShell from '../../components/AppShell.svelte';
     import ShareDialog from '../../components/documents/ShareDialog.svelte';
     import Spinner from '../../components/Spinner.svelte';
+    import { t, tc } from '../../lib/i18n';
+    import { QUIET } from '../../lib/toast.svelte';
     import type {
         DocumentEditor,
         DocumentItem,
         DocumentProject,
         DocumentVersionItem,
+        SharedProps,
     } from '../../lib/types';
 
     /**
@@ -17,7 +21,9 @@
      * config the tracker signed; it fetches the file and sends saves to the
      * tracker by itself. Everyone with the document open edits together;
      * Can view and frozen documents open read-only (the signed config says
-     * so). `project` is null for a personal document.
+     * so). `project` is null for a personal document. Whoever may edit it
+     * renames it by clicking its title in the bar; a document just made
+     * opens with that title selected, so typing names it.
      */
     let {
         project,
@@ -44,6 +50,132 @@
     let status = $state<'loading' | 'ready' | 'failed'>('loading');
     let shareOpen = $state(false);
 
+    // Renaming in the bar: Enter or leaving the field saves, Escape keeps
+    // the old title.
+    let renaming = $state(false);
+    let titleDraft = $state('');
+    let titleInput = $state<HTMLInputElement | null>(null);
+    let saving = $state(false);
+    let renameError = $state<string | null>(null);
+    const canRename = $derived(doc.access === 'edit' && !doc.frozen);
+
+    async function startRename() {
+        if (!canRename) {
+            return;
+        }
+
+        titleDraft = doc.title;
+        renameError = null;
+        renaming = true;
+        await tick();
+        titleInput?.focus();
+        titleInput?.select();
+    }
+
+    function saveTitle() {
+        if (!renaming || saving) {
+            return;
+        }
+
+        const title = titleDraft.trim();
+
+        if (title === '' || title === doc.title) {
+            renaming = false;
+
+            return;
+        }
+
+        saving = true;
+        router.patch(
+            `/workspace/documents/${doc.id}`,
+            { title },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['document'],
+                headers: QUIET,
+                onSuccess: () => (renaming = false),
+                onError: (errors) =>
+                    (renameError =
+                        errors.title ??
+                        errors.__global ??
+                        t("The title didn't save. Try again.")),
+                onFinish: () => (saving = false),
+            },
+        );
+    }
+
+    // While the editor opens it takes focus by itself, more than once. A
+    // title being typed then keeps it: a blur that lands in the editor's
+    // frame before the document is ready is the editor's, not the
+    // person's. After that a blur saves, as does Enter.
+    let settling = true;
+
+    function titleBlurred() {
+        setTimeout(() => {
+            const active = window.document.activeElement;
+            const intoEditor =
+                active instanceof HTMLIFrameElement &&
+                active.closest('[data-editor]') !== null;
+
+            if (settling && renaming && intoEditor) {
+                titleInput?.focus();
+
+                return;
+            }
+
+            saveTitle();
+        });
+    }
+
+    // An editor that never says it is ready doesn't keep the title forever.
+    setTimeout(() => (settling = false), 20_000);
+
+    function settle() {
+        // The document's own focus comes just after it is ready.
+        setTimeout(() => {
+            settling = false;
+
+            if (renaming) {
+                titleInput?.focus();
+            }
+        }, 400);
+    }
+
+    function titleKeys(event: KeyboardEvent) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveTitle();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            renaming = false;
+            renameError = null;
+        }
+    }
+
+    // A document just made (the create's flash names it) opens ready to
+    // name, once: coming back to it through history leaves the title be.
+    onMount(() => {
+        const flash = (page.props as unknown as SharedProps).flash;
+        const key = `documents:named:${doc.id}`;
+
+        if (flash?.created_document !== doc.id) {
+            return;
+        }
+
+        try {
+            if (window.sessionStorage.getItem(key) !== null) {
+                return;
+            }
+
+            window.sessionStorage.setItem(key, '1');
+        } catch {
+            // Blocked storage: it may open ready to name again.
+        }
+
+        void startRename();
+    });
+
     // Back to where the document lives, for whoever may open it there.
     const back = $derived(
         project?.can_open
@@ -51,7 +183,7 @@
                   href: `/workspace/projects/${project.slug}?view=documents`,
                   label: project.label,
               }
-            : { href: '/workspace/documents', label: 'Documents' },
+            : { href: '/workspace/documents', label: t('Documents') },
     );
     const downloadUrl = $derived(
         `/workspace/documents/${doc.id}/versions/${doc.version}/download`,
@@ -111,12 +243,22 @@
                     width: '100%',
                     height: '100%',
                     events: {
-                        onAppReady: () => (status = 'ready'),
+                        onAppReady: () => {
+                            status = 'ready';
+
+                            // The editor takes focus when it opens; a title
+                            // being typed keeps it.
+                            if (renaming) {
+                                titleInput?.focus();
+                            }
+                        },
+                        onDocumentReady: settle,
                         // Once it runs, the editor shows its own errors;
                         // this page's only covers one that never started.
                         onError: () => {
                             if (status === 'loading') {
                                 status = 'failed';
+                                settling = false;
                             }
                         },
                         // The session it was opened for has been saved (a
@@ -126,7 +268,10 @@
                     },
                 });
             })
-            .catch(() => (status = 'failed'));
+            .catch(() => {
+                status = 'failed';
+                settling = false;
+            });
 
         return {
             destroy() {
@@ -139,7 +284,8 @@
 </script>
 
 <svelte:head
-    ><title>{doc.title} · {project?.title ?? 'Documents'}</title></svelte:head
+    ><title>{doc.title} · {project?.title ?? t('Documents')}</title
+    ></svelte:head
 >
 
 <AppShell flush>
@@ -152,14 +298,50 @@
                 >{back.label}</a
             >
             <span class="hidden text-fg-faint sm:inline">/</span>
-            <span class="truncate font-medium">{doc.title}</span>
+            {#if renaming}
+                <label for="document-title" class="sr-only">{t('Title')}</label>
+                <input
+                    id="document-title"
+                    bind:this={titleInput}
+                    bind:value={titleDraft}
+                    maxlength="200"
+                    autocomplete="off"
+                    disabled={saving}
+                    aria-invalid={renameError ? 'true' : undefined}
+                    aria-describedby={renameError
+                        ? 'document-title-error'
+                        : undefined}
+                    class="input h-8 max-w-md min-w-0 flex-1 py-0 font-medium lg:min-h-8"
+                    onkeydown={titleKeys}
+                    onblur={titleBlurred}
+                />
+                {#if renameError}
+                    <span
+                        id="document-title-error"
+                        role="alert"
+                        class="truncate text-xs text-danger">{renameError}</span
+                    >
+                {/if}
+            {:else if canRename}
+                <button
+                    type="button"
+                    class="-mx-1 min-w-0 truncate rounded-sm px-1 py-0.5 font-medium hover:bg-hover"
+                    title={t('Rename')}
+                    aria-label={t('Rename :title', { title: doc.title })}
+                    onclick={startRename}>{doc.title}</button
+                >
+            {:else}
+                <span class="truncate font-medium">{doc.title}</span>
+            {/if}
             <span class="shrink-0 text-xs text-fg-faint"
-                >Version {doc.version}</span
+                >{t('Version :version', { version: doc.version })}</span
             >
             {#if doc.frozen}
-                <span class="chip shrink-0">Read-only: its owner has left</span>
+                <span class="chip shrink-0"
+                    >{t('Read-only: its owner has left')}</span
+                >
             {:else if doc.access === 'view'}
-                <span class="chip shrink-0">Can view</span>
+                <span class="chip shrink-0">{t('Can view')}</span>
             {/if}
         </div>
         <div class="flex shrink-0 items-center gap-1">
@@ -168,9 +350,9 @@
                     type="button"
                     class="btn-ghost"
                     onclick={() => (shareOpen = true)}
-                    title="Share"
+                    title={t('Share')}
                     ><Users class="h-4 w-4" /><span class="hidden sm:inline"
-                        >Share</span
+                        >{t('Share')}</span
                     ></button
                 >
             {/if}
@@ -178,9 +360,9 @@
                 class="btn-ghost shrink-0"
                 href={downloadUrl}
                 download
-                title={`Download version ${doc.version}`}
+                title={t('Download version :version', { version: doc.version })}
                 ><Download class="h-4 w-4" /><span class="hidden sm:inline"
-                    >Download</span
+                    >{t('Download')}</span
                 ></a
             >
         </div>
@@ -191,36 +373,45 @@
     <div
         class="relative h-[calc(100dvh-48px-57px-env(safe-area-inset-bottom))] min-h-80 md:h-[calc(100dvh-48px)]"
     >
-        <div use:mountEditor class="h-full w-full"></div>
+        <div use:mountEditor data-editor class="h-full w-full"></div>
         {#if status === 'loading'}
             <div
                 class="absolute inset-0 flex items-center justify-center gap-2 bg-surface text-fg-muted"
             >
-                <Spinner size={16} />Opening {doc.title}
+                <Spinner size={16} />{t('Opening :title', { title: doc.title })}
             </div>
         {:else if status === 'failed'}
             <div
                 class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface px-6 text-center"
             >
-                <p class="font-medium">The editor isn't reachable right now.</p>
+                <p class="font-medium">
+                    {t("The editor isn't reachable right now.")}
+                </p>
                 <p class="max-w-md text-[13px] text-fg-muted">
-                    Your document is safe: every saved version is kept. You can
-                    download it, or try again in a moment.
+                    {t(
+                        'Your document is safe: every saved version is kept. You can download it, or try again in a moment.',
+                    )}
                 </p>
                 <div class="flex gap-2">
                     <a class="btn" href={downloadUrl} download
-                        ><Download class="h-3.5 w-3.5" />Download version {doc.version}</a
+                        ><Download class="h-3.5 w-3.5" />{t(
+                            'Download version :version',
+                            { version: doc.version },
+                        )}</a
                     >
                     <button
                         type="button"
                         class="btn-primary"
                         onclick={() => window.location.reload()}
-                        >Try again</button
+                        >{t('Try again')}</button
                     >
                 </div>
                 {#if versions.length > 1}
                     <p class="text-xs text-fg-faint">
-                        {versions.length} versions are kept.
+                        {tc(
+                            ':count version is kept.|:count versions are kept.',
+                            versions.length,
+                        )}
                     </p>
                 {/if}
             </div>

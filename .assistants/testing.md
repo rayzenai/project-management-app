@@ -208,7 +208,14 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   trashed refusals, activity, notifications/right-away email, concurrent-share
   idempotence, the 24-hour notification cooldown, the shared web/API throttle
   and surface parity.
+  `DocumentsTabsTest` covers Recent/Personal/Shared semantics, project cards and
+  ordering, old tab aliases, filtered rows, effective share counts, project-open
+  capability, API parity, organization narrowing, frozen shared exclusions,
+  one-visit creation flash and JSON-upload versus Inertia-redirect responses.
   These tests fake every editor HTTP call; none reaches ONLYOFFICE or RustFS.
+- `LanguageTest` covers default/saved/cookie locale precedence, guest switching,
+  validation, translated errors/actions/sign-in refusals, web/API preference
+  parity, and login adoption of a cookie only when no saved choice exists.
 
 ## Running
 
@@ -232,4 +239,7 @@ with a 512 MB memory limit.
   and member roles (`TenancyTest` is the broad regression suite).
 - New features touch both surfaces, so test both (web dir + Api dir).
 - Frontend gate: `npm run lint && npm run format && npm run types:check &&
-  npm run build` (no JS test suite).
+  npm run build`, plus `npm run i18n:check` (also in lint CI; no JS test suite).
+  The translation check scans `resources/js` and `app` for literal keys, rejects
+  interpolated keys, and verifies Nepali entries and `:placeholders`; unused
+  dictionary entries warn only.

@@ -18,7 +18,7 @@ class DeletePersonalTodoService
         try {
             $todo->delete();
 
-            return ServiceResult::success(message: 'To-do deleted.');
+            return ServiceResult::success(message: __('To-do deleted.'));
         } catch (Throwable $e) {
             report($e);
 

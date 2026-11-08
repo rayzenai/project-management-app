@@ -3,6 +3,7 @@
     import { ChevronDown, ChevronRight, ListTodo } from '@lucide/svelte';
     import { tick, untrack } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
+    import { msg, number, t } from '../../lib/i18n';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type { Id, PersonalTodo, PersonalTodoLists } from '../../lib/types';
     import Popover from '../Popover.svelte';
@@ -196,7 +197,7 @@
 
         change(todo.id, { done_at: now() });
         patch(todo.id, { done: true }, () =>
-            toast.show(`Completed "${todo.title}"`, {
+            toast.show(t('Completed ":title"', { title: todo.title }), {
                 undo: {
                     run: () => {
                         change(todo.id, { done_at: null });
@@ -228,7 +229,7 @@
             router.delete(
                 `/workspace/todos/${todo.id}`,
                 quietly(finish, () =>
-                    toast.show('To-do deleted.', {
+                    toast.show(t('To-do deleted.'), {
                         undo: { run: () => restore(todo) },
                     }),
                 ),
@@ -280,7 +281,8 @@
                     only: RELOAD,
                     onError: (errors) => {
                         addError =
-                            Object.values(errors)[0] ?? 'That was not added.';
+                            Object.values(errors)[0] ??
+                            t('That was not added.');
                         draft = draft.trim() ? `${title} ${draft}` : title;
                     },
                     onFinish: finish,
@@ -409,7 +411,9 @@
         };
     }
 
-    const label = $derived(count > 0 ? `To-dos, ${count}` : 'To-dos');
+    const label = $derived(
+        count > 0 ? t('To-dos, :count', { count }) : t('To-dos'),
+    );
     const triggerClass = $derived(
         `btn-ghost shrink-0 ${open ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`,
     );
@@ -418,14 +422,14 @@
 {#snippet face()}
     <ListTodo class="h-4 w-4" />
     {#if count > 0}
-        <span class="tabular-nums">{count}</span>
+        <span class="tabular-nums">{number(count)}</span>
     {/if}
 {/snippet}
 
 {#snippet section(title: string, todos: PersonalTodo[], today: string)}
     <h3 class="section-title px-2 pt-2 pb-1">
-        {title}
-        <span class="section-count">{todos.length}</span>
+        {t(title)}
+        <span class="section-count">{number(todos.length)}</span>
     </h3>
     {#each todos as todo (todo.id)}
         {@render item(todo, today, false)}
@@ -455,18 +459,18 @@
                 id={sheet ? 'todos-sheet-title' : 'todos-title'}
                 class="flex-1 text-[15px] font-semibold text-fg"
             >
-                To-dos
+                {t('To-dos')}
             </h2>
             {#if !sheet}
-                <kbd class="kbd" title="Press T to open or close">T</kbd>
+                <kbd class="kbd" title={t('Press T to open or close')}>T</kbd>
             {/if}
         </div>
 
         <form class="shrink-0 px-2 pt-1.5 pb-2" onsubmit={add}>
             <input
                 class="input"
-                placeholder="Add a to-do"
-                aria-label="Add a to-do"
+                placeholder={t('Add a to-do')}
+                aria-label={t('Add a to-do')}
                 maxlength="255"
                 enterkeyhint="enter"
                 bind:value={draft}
@@ -484,32 +488,32 @@
             {#if lists === null}
                 {#if loadFailed}
                     <p class="px-2 py-3 text-[14px] text-fg-muted">
-                        Couldn't load your to-dos.
+                        {t("Couldn't load your to-dos.")}
                         <button
                             type="button"
                             class="text-accent hover:underline"
                             onclick={() => {
                                 loadFailed = false;
                                 void load();
-                            }}>Try again</button
+                            }}>{t('Try again')}</button
                         >
                     </p>
                 {:else}
                     <div class="flex justify-center py-6">
-                        <Spinner label="Loading your to-dos" />
+                        <Spinner label={t('Loading your to-dos')} />
                     </div>
                 {/if}
             {:else}
                 {#if empty}
                     <p class="px-2 py-3 text-[14px] text-fg-muted">
-                        Nothing on your list.
+                        {t('Nothing on your list.')}
                     </p>
                 {/if}
                 {#if lists.doing.length > 0}
-                    {@render section('Doing', lists.doing, lists.today)}
+                    {@render section(msg('Doing'), lists.doing, lists.today)}
                 {/if}
                 {#if lists.open.length > 0}
-                    {@render section('To do', lists.open, lists.today)}
+                    {@render section(msg('To do'), lists.open, lists.today)}
                 {/if}
                 {#if lists.done.length > 0}
                     <h3 class="px-1 pt-1">
@@ -519,9 +523,9 @@
                             aria-expanded={doneOpen}
                             onclick={() => (doneOpen = !doneOpen)}
                         >
-                            Done
+                            {t('Done')}
                             <span class="section-count"
-                                >{lists.done.length}</span
+                                >{number(lists.done.length)}</span
                             >
                             {#if doneOpen}
                                 <ChevronDown
@@ -556,7 +560,7 @@
             bind:open
             role="dialog"
             align="right"
-            label="To-dos"
+            label={t('To-dos')}
             triggerLabel={label}
             {triggerClass}
             panelClass="w-[380px] max-w-[calc(100vw-16px)]"
@@ -583,7 +587,7 @@
         <div use:portal class="fixed inset-0 z-50">
             <button
                 type="button"
-                aria-label="Close the to-dos"
+                aria-label={t('Close the to-dos')}
                 tabindex="-1"
                 class="absolute inset-0 cursor-default bg-black/40"
                 onclick={closeSheet}

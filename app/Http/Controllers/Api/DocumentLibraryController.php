@@ -29,6 +29,15 @@ class DocumentLibraryController extends Controller
         return response()->json(['message' => 'Documents retrieved.', 'data' => $page['documents'], 'next_cursor' => $page['next_cursor']]);
     }
 
+    /** The Projects tab: a card per project whose documents the user may use. */
+    public function projects(DocumentLibraryRequest $request, DocumentLibraryQuery $query): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        return response()->json(['message' => 'Projects retrieved.', 'data' => $query->projectCards($user, null)]);
+    }
+
     public function trash(DocumentLibraryRequest $request, DocumentLibraryQuery $query): JsonResponse
     {
         /** @var User $user */

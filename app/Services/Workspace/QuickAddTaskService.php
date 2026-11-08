@@ -42,7 +42,7 @@ class QuickAddTaskService
     ): ServiceResult {
         $title = trim($title);
         if ($title === '') {
-            return ServiceResult::failure('Title is required.', 422);
+            return ServiceResult::failure(__('Title is required.'), 422);
         }
 
         // An explicit status wins; anything else keeps the long-standing default
@@ -58,7 +58,7 @@ class QuickAddTaskService
         $joiners = Assignees::joiners($actor, $project, $assigneeMemberIds);
 
         if ($joiners === null) {
-            return ServiceResult::failure("That person is not on this project's teams.", 422);
+            return ServiceResult::failure(__("That person is not on this project's teams."), 422);
         }
 
         try {
@@ -105,7 +105,7 @@ class QuickAddTaskService
 
                 return ServiceResult::success(
                     data: $task->fresh(['assignments.member']),
-                    message: $assigneeMemberIds === [] ? 'Task created.' : 'Task created and assigned.',
+                    message: $assigneeMemberIds === [] ? __('Task created.') : __('Task created and assigned.'),
                 );
             });
         } catch (Throwable $e) {

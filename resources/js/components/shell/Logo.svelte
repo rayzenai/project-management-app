@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { t } from '../../lib/i18n';
+
     /** The Workspace mark: a blue square with a dial. */
     let { class: className = 'h-5 w-5' }: { class?: string } = $props();
 </script>
@@ -7,7 +9,7 @@
     class={`shrink-0 ${className}`}
     viewBox="0 0 32 32"
     role="img"
-    aria-label="Workspace"
+    aria-label={t('Workspace')}
 >
     <rect width="32" height="32" rx="8" class="fill-accent" />
     <circle

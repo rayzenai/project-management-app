@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Locales;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -38,6 +39,9 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            // Read when the page renders, after SetLocale has run.
+            'locale' => fn (): string => app()->getLocale(),
+            'locales' => Locales::choices(),
             'auth' => [
                 'user' => $request->user(),
             ],

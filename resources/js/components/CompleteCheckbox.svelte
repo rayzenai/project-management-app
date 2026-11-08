@@ -1,6 +1,7 @@
 <script lang="ts">
     import { page, router } from '@inertiajs/svelte';
     import { Check } from '@lucide/svelte';
+    import { t } from '../lib/i18n';
     import { QUIET, toast } from '../lib/toast.svelte';
     import type { SharedProps, Task } from '../lib/types';
 
@@ -86,11 +87,16 @@
             quiet: true,
             onSuccess: () => {
                 onCompleted?.(previous);
-                toast.show(`Completed "${task.short_title ?? task.title}"`, {
-                    undo: {
-                        run: () => patchStatus(previous, { quiet: true }),
+                toast.show(
+                    t('Completed ":title"', {
+                        title: task.short_title ?? task.title,
+                    }),
+                    {
+                        undo: {
+                            run: () => patchStatus(previous, { quiet: true }),
+                        },
                     },
-                });
+                );
             },
         });
     }
@@ -101,10 +107,10 @@
     role="checkbox"
     aria-checked={isComplete}
     aria-label={isComplete
-        ? 'Mark not complete'
+        ? t('Mark not complete')
         : isStarted
-          ? 'Started, mark complete'
-          : 'Mark complete'}
+          ? t('Started, mark complete')
+          : t('Mark complete')}
     class={`group/check flex shrink-0 items-center justify-center border-[1.5px] transition ${
         round
             ? "relative size-[24px] rounded-full before:absolute before:-inset-[10px] before:content-[''] sm:size-[18px] sm:before:-inset-[13px]"

@@ -3,6 +3,7 @@
     import { CalendarX, Ellipsis, FolderInput, Trash2 } from '@lucide/svelte';
     import { tick } from 'svelte';
     import { dueLabel } from '../../lib/dates';
+    import { t } from '../../lib/i18n';
     import type { Id, PersonalTodo, SharedProps } from '../../lib/types';
     import Popover from '../Popover.svelte';
     import ProjectPicker from '../ProjectPicker.svelte';
@@ -187,7 +188,7 @@
                 bind:value={draft}
                 class="input -my-[8px]"
                 maxlength="255"
-                aria-label="Title"
+                aria-label={t('Title')}
                 onkeydown={onFieldKey}
                 onblur={save}
             />
@@ -201,7 +202,7 @@
                 bind:this={titleButton}
                 type="button"
                 class="block w-fit max-w-full rounded-sm text-left text-[15px] leading-[24px] break-words text-fg sm:text-[14px] sm:leading-[20px]"
-                aria-label={`Edit "${todo.title}"`}
+                aria-label={t('Edit ":title"', { title: todo.title })}
                 onclick={edit}>{todo.title}</button
             >
         {/if}
@@ -222,18 +223,18 @@
                 type="button"
                 class="btn-ghost h-[44px] px-2.5 text-[13.5px] sm:h-[28px] sm:px-2 sm:text-[13px]"
                 aria-label={doing
-                    ? `Stop working on "${todo.title}"`
-                    : `Start "${todo.title}"`}
+                    ? t('Stop working on ":title"', { title: todo.title })
+                    : t('Start ":title"', { title: todo.title })}
                 onclick={() => ondoing(!doing)}
             >
-                {doing ? 'Stop' : 'Start'}
+                {doing ? t('Stop') : t('Start')}
             </button>
         {/if}
         <button
             type="button"
             class="btn-icon size-[44px] hover:text-danger sm:size-[28px]"
-            aria-label={`Delete "${todo.title}"`}
-            title="Delete"
+            aria-label={t('Delete ":title"', { title: todo.title })}
+            title={t('Delete')}
             onclick={ondelete}
         >
             <Trash2 class="size-4" />
@@ -243,7 +244,9 @@
                 <Popover
                     bind:open={menuOpen}
                     align="right"
-                    triggerLabel={`Options for ${todo.title}`}
+                    triggerLabel={t('Options for :title', {
+                        title: todo.title,
+                    })}
                     triggerClass={`btn-icon size-[44px] sm:size-[28px] ${menuOpen ? 'bg-hover text-fg' : ''}`}
                     panelClass="w-64"
                 >
@@ -259,7 +262,7 @@
                         }}
                     >
                         <label class="label" for={`todo-panel-day-${todo.id}`}
-                            >Change date</label
+                            >{t('Change date')}</label
                         >
                         <div class="mt-1 flex items-center gap-1.5">
                             <input
@@ -270,7 +273,8 @@
                                 bind:value={day}
                                 onkeydown={keepKeys}
                             />
-                            <button type="submit" class="btn">Set</button>
+                            <button type="submit" class="btn">{t('Set')}</button
+                            >
                         </div>
                     </form>
                     {#if todo.due_on}
@@ -281,7 +285,7 @@
                             onclick={() => setDay(null)}
                         >
                             <CalendarX class="size-4 shrink-0" />
-                            Clear the date
+                            {t('Clear the date')}
                         </button>
                     {/if}
 
@@ -294,7 +298,7 @@
                         onclick={startMove}
                     >
                         <FolderInput class="size-4 shrink-0" />
-                        Move to a project
+                        {t('Move to a project')}
                     </button>
                     <button
                         type="button"
@@ -306,7 +310,7 @@
                         }}
                     >
                         <Trash2 class="size-4 shrink-0" />
-                        Delete
+                        {t('Delete')}
                     </button>
                 </Popover>
             </span>

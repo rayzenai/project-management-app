@@ -1,6 +1,7 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { UserPlus, X } from '@lucide/svelte';
+    import { msg, t } from '../../lib/i18n';
     import type {
         DocumentAccess,
         DocumentItem,
@@ -36,8 +37,8 @@
         'X-Requested-With': 'XMLHttpRequest',
     };
     const LEVELS: { value: DocumentAccess; label: string }[] = [
-        { value: 'edit', label: 'Can edit' },
-        { value: 'view', label: 'Can view' },
+        { value: 'edit', label: msg('Can edit') },
+        { value: 'view', label: msg('Can view') },
     ];
 
     let sharing = $state<DocumentSharing | null>(null);
@@ -178,7 +179,7 @@
                     errors.permission ??
                     errors.access ??
                     errors.__global ??
-                    "That change didn't save.";
+                    t("That change didn't save.");
             },
             onFinish: () => {
                 if (!saved) {
@@ -250,20 +251,20 @@
             onkeydown={onKeydown}
             role="dialog"
             aria-modal="true"
-            aria-label={`Share ${doc.title}`}
+            aria-label={t('Share :title', { title: doc.title })}
             tabindex="-1"
         >
             <div
                 class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-line px-4"
             >
                 <h2 class="truncate text-[15px] font-semibold text-fg">
-                    Share {doc.title}
+                    {t('Share :title', { title: doc.title })}
                 </h2>
                 <button
                     type="button"
                     class="btn-icon shrink-0"
-                    title="Close (esc)"
-                    aria-label="Close"
+                    title={t('Close (esc)')}
+                    aria-label={t('Close')}
                     onclick={close}
                 >
                     <X class="h-4 w-4" />
@@ -273,21 +274,21 @@
             <div class="flex flex-col gap-4 p-4">
                 {#if failed}
                     <p class="text-[13px] text-danger">
-                        Who has it didn't load.
+                        {t("Who has it didn't load.")}
                         <button type="button" class="btn-ghost" onclick={load}
-                            >Try again</button
+                            >{t('Try again')}</button
                         >
                     </p>
                 {:else if sharing === null}
                     <p
                         class="flex items-center gap-2 text-[13px] text-fg-muted"
                     >
-                        <Spinner size={14} />Loading
+                        <Spinner size={14} />{t('Loading')}
                     </p>
                 {:else}
                     <div>
                         <label for="{uid}-search" class="label mb-1 block"
-                            >Add people</label
+                            >{t('Add people')}</label
                         >
                         <div class="flex gap-2">
                             <input
@@ -297,34 +298,37 @@
                                 oninput={search}
                                 autocomplete="off"
                                 placeholder={sharing.organization
-                                    ? `Someone in ${sharing.organization.name}`
-                                    : 'Nobody to share with'}
+                                    ? t('Someone in :organization', {
+                                          organization:
+                                              sharing.organization.name,
+                                      })
+                                    : t('Nobody to share with')}
                                 disabled={!sharing.organization || saving}
                                 class="input min-w-0 flex-1"
                             />
                             <label for="{uid}-level" class="sr-only"
-                                >Their access</label
+                                >{t('Their access')}</label
                             >
                             <select
                                 id="{uid}-level"
                                 bind:value={permission}
-                                class="input w-28 shrink-0"
+                                class="input w-auto min-w-28 shrink-0"
                                 disabled={!sharing.organization || saving}
                             >
                                 {#each LEVELS as level (level.value)}
                                     <option value={level.value}
-                                        >{level.label}</option
+                                        >{t(level.label)}</option
                                     >
                                 {/each}
                             </select>
                         </div>
                         {#if searchFailed}
                             <p class="mt-1 text-xs text-danger">
-                                The search didn't work. Try again.
+                                {t("The search didn't work. Try again.")}
                             </p>
                         {:else if searched && results.length === 0}
                             <p class="mt-1 text-xs text-fg-muted">
-                                Nobody else by that name.
+                                {t('Nobody else by that name.')}
                             </p>
                         {:else if results.length > 0}
                             <ul class="mt-1 border-y border-line-soft">
@@ -369,20 +373,23 @@
                     {/if}
 
                     <div>
-                        <h3 class="label mb-1">Who has it</h3>
+                        <h3 class="label mb-1">{t('Who has it')}</h3>
                         <ul class="border-t border-line-soft">
                             <li
                                 class="flex min-h-10 items-center gap-2.5 border-b border-line-soft py-1.5 text-[13px]"
                             >
                                 <span class="min-w-0 flex-1 truncate text-fg">
                                     {sharing.home.project
-                                        ? `Everyone on ${sharing.home.project.title}`
-                                        : 'You'}
+                                        ? t('Everyone on :project', {
+                                              project:
+                                                  sharing.home.project.title,
+                                          })
+                                        : t('You')}
                                 </span>
                                 <span class="shrink-0 text-xs text-fg-muted"
                                     >{sharing.home.project
-                                        ? 'Can edit'
-                                        : 'Owner'}</span
+                                        ? t('Can edit')
+                                        : t('Owner')}</span
                                 >
                             </li>
                             {#if sharing.organization}
@@ -392,21 +399,27 @@
                                     <label
                                         for="{uid}-organization"
                                         class="min-w-0 flex-1 truncate text-fg"
-                                        >Everyone in {sharing.organization
-                                            .name}</label
+                                        >{t('Everyone in :organization', {
+                                            organization:
+                                                sharing.organization.name,
+                                        })}</label
                                     >
                                     <select
                                         id="{uid}-organization"
-                                        class="input h-7 w-28 shrink-0"
+                                        class="input h-7 w-auto min-w-28 shrink-0"
                                         value={sharing.organization_access ??
                                             ''}
                                         disabled={saving}
                                         onchange={(e) =>
                                             setOrganization(e.currentTarget)}
                                     >
-                                        <option value="">Off</option>
-                                        <option value="view">Can view</option>
-                                        <option value="edit">Can edit</option>
+                                        <option value="">{t('Off')}</option>
+                                        <option value="view"
+                                            >{t('Can view')}</option
+                                        >
+                                        <option value="edit"
+                                            >{t('Can edit')}</option
+                                        >
                                     </select>
                                 </li>
                             {/if}
@@ -430,17 +443,21 @@
                                             {share.effective
                                                 ? (share.member.designation ??
                                                   '')
-                                                : "Can't open it now (inactive or in another office)"}
+                                                : t(
+                                                      "Can't open it now (inactive or in another office)",
+                                                  )}
                                         </div>
                                     </div>
                                     <label
                                         for="{uid}-share-{share.id}"
                                         class="sr-only"
-                                        >{share.member.name}'s access</label
+                                        >{t(":name's access", {
+                                            name: share.member.name,
+                                        })}</label
                                     >
                                     <select
                                         id="{uid}-share-{share.id}"
-                                        class="input h-7 w-28 shrink-0"
+                                        class="input h-7 w-auto min-w-28 shrink-0"
                                         value={share.permission}
                                         disabled={saving}
                                         onchange={(e) =>
@@ -448,15 +465,17 @@
                                     >
                                         {#each LEVELS as level (level.value)}
                                             <option value={level.value}
-                                                >{level.label}</option
+                                                >{t(level.label)}</option
                                             >
                                         {/each}
                                     </select>
                                     <button
                                         type="button"
                                         class="btn-icon shrink-0"
-                                        aria-label={`Remove ${share.member.name}`}
-                                        title="Remove"
+                                        aria-label={t('Remove :name', {
+                                            name: share.member.name,
+                                        })}
+                                        title={t('Remove')}
                                         disabled={saving}
                                         onclick={() => remove(share)}
                                     >

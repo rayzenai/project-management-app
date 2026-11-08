@@ -8,12 +8,17 @@ use Illuminate\Validation\Rule;
 
 /**
  * The Documents page's filters, for anyone signed in while documents are on:
- * `show` (all, mine, shared, organization, projects), `project` (a slug),
- * `type`, `q` (in the title) and `cursor` (Show more).
+ * `show` (the tab: recent, personal, shared, projects; links made before
+ * the four tabs say all, mine or organization, read as OLD_SHOWS maps
+ * them), `project` (a slug), `type`, `q` (in the title) and `cursor` (Show
+ * more).
  */
 class DocumentLibraryRequest extends FormRequest
 {
-    public const SHOWS = ['all', 'mine', 'shared', 'organization', 'projects'];
+    public const SHOWS = ['recent', 'personal', 'shared', 'projects'];
+
+    /** The tabs' earlier names, still in people's links and bookmarks. */
+    public const OLD_SHOWS = ['all' => 'recent', 'mine' => 'personal', 'organization' => 'shared'];
 
     public function authorize(): bool
     {
@@ -26,7 +31,7 @@ class DocumentLibraryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'show' => ['nullable', Rule::in(self::SHOWS)],
+            'show' => ['nullable', Rule::in([...self::SHOWS, ...array_keys(self::OLD_SHOWS)])],
             'project' => ['nullable', 'string', 'max:255'],
             'type' => ['nullable', Rule::in(DocumentTypes::all())],
             'q' => ['nullable', 'string', 'max:200'],
@@ -40,9 +45,10 @@ class DocumentLibraryRequest extends FormRequest
     public function filters(): array
     {
         $q = trim((string) $this->validated('q'));
+        $show = (string) ($this->validated('show') ?? 'recent');
 
         return [
-            'show' => (string) ($this->validated('show') ?? 'all'),
+            'show' => self::OLD_SHOWS[$show] ?? $show,
             'project' => $this->validated('project') === null ? null : (string) $this->validated('project'),
             'type' => $this->validated('type') === null ? null : (string) $this->validated('type'),
             'q' => $q === '' ? null : $q,

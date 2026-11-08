@@ -1,5 +1,6 @@
 <script lang="ts">
     import { Check, X } from '@lucide/svelte';
+    import { t } from '../lib/i18n';
     import type { Member, PersonRef } from '../lib/types';
     import Avatar from './Avatar.svelte';
 
@@ -7,7 +8,7 @@
         team,
         others = [],
         selectedIds = $bindable([]),
-        placeholder = 'Assign...',
+        placeholder,
         max = 1,
         flow = false,
         listOnly = false,
@@ -16,6 +17,7 @@
         /** People not on the team who join it when picked; listed after it. */
         others?: PersonRef[];
         selectedIds: number[];
+        /** The trigger's words while nobody is picked; "Assign..." by default. */
         placeholder?: string;
         max?: number;
         /** Render the dropdown in-flow (expands the container) instead of as a clipped absolute popover. Use inside modals. */
@@ -144,14 +146,16 @@
             }}
         >
             {#if selected.length === 0}
-                <span class="text-fg-faint">{placeholder}</span>
+                <span class="text-fg-faint"
+                    >{placeholder ?? t('Assign...')}</span
+                >
             {/if}
             {#each selected as user (user.id)}
                 <span class="chip chip-accent gap-1 pr-1">
                     {user.name}
                     <button
                         type="button"
-                        aria-label="Remove"
+                        aria-label={t('Remove')}
                         class="inline-flex h-4 w-4 items-center justify-center rounded-sm text-accent hover:bg-accent-soft"
                         onclick={(e) => {
                             e.stopPropagation();
@@ -178,7 +182,7 @@
                     bind:this={searchEl}
                     type="text"
                     bind:value={query}
-                    placeholder="Search people"
+                    placeholder={t('Search people')}
                     class="input"
                     onkeydown={(e) => {
                         // Enter takes the first match instead of submitting the form.
@@ -211,7 +215,7 @@
                                     >{otherIds.has(user.id)
                                         ? [
                                               designations.get(user.id),
-                                              'Joins the team',
+                                              t('Joins the team'),
                                           ]
                                               .filter(Boolean)
                                               .join(' · ')
@@ -226,7 +230,9 @@
                         </button>
                     </li>
                 {:else}
-                    <li class="px-2 py-2 text-xs text-fg-faint">No matches.</li>
+                    <li class="px-2 py-2 text-xs text-fg-faint">
+                        {t('No matches.')}
+                    </li>
                 {/each}
             </ul>
         </div>

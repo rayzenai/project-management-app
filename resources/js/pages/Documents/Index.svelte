@@ -3,39 +3,42 @@
     import { Search } from '@lucide/svelte';
     import AppShell from '../../components/AppShell.svelte';
     import DocumentList from '../../components/documents/DocumentList.svelte';
+    import DocumentProjectCards from '../../components/documents/DocumentProjectCards.svelte';
+    import DocumentStart from '../../components/documents/DocumentStart.svelte';
     import DocumentTrash from '../../components/documents/DocumentTrash.svelte';
-    import NewDocument from '../../components/documents/NewDocument.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
     import Spinner from '../../components/Spinner.svelte';
-    import type { DocumentItem, DocumentLibrary } from '../../lib/types';
+    import { msg, t } from '../../lib/i18n';
+    import type {
+        DocumentItem,
+        DocumentLibrary,
+        DocumentTab,
+    } from '../../lib/types';
 
     /**
-     * The Documents page: every document the viewer may open (their
-     * projects', their own and those shared with them), most recently edited
-     * first, 50 at a time. The filters live in the URL; New and Upload go to
-     * Just me or a project.
+     * The Documents page: start a document with one click or drop files on
+     * it; then four tabs, Recent (everything the viewer may open, most
+     * recently edited first, 50 at a time), Personal, Shared with me (by
+     * name, and open to the whole office) and Projects (a card per project,
+     * opening its Documents tab). Search shows once there is enough to
+     * search. The tab and search live in the URL.
      */
     let props: DocumentLibrary = $props();
 
     const uid = $props.id();
 
-    const shows = $derived([
-        { value: 'all', label: 'Everything' },
-        { value: 'mine', label: 'Mine' },
-        { value: 'shared', label: 'Shared with me' },
-        // "Whole office": an organization's name can be a ministry's full title.
-        ...(props.organization
-            ? [{ value: 'organization', label: 'Whole office' }]
-            : []),
-        { value: 'projects', label: 'In projects' },
-    ]);
+    /** Search shows once there are more documents than fit at a glance. */
+    const SEARCH_FROM = 9;
+
+    const tabs: { value: DocumentTab; label: string }[] = [
+        { value: 'recent', label: msg('Recent') },
+        { value: 'personal', label: msg('Personal') },
+        { value: 'shared', label: msg('Shared with me') },
+        { value: 'projects', label: msg('Projects') },
+    ];
 
     // svelte-ignore state_referenced_locally
     let show = $state<string>(props.filters.show);
-    // svelte-ignore state_referenced_locally
-    let project = $state(props.filters.project ?? '');
-    // svelte-ignore state_referenced_locally
-    let type = $state<string>(props.filters.type ?? '');
     // svelte-ignore state_referenced_locally
     let q = $state(props.filters.q ?? '');
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -54,19 +57,20 @@
     });
 
     const rows = $derived([...props.documents, ...more]);
-    const filtered = $derived(
-        props.filters.show !== 'all' ||
-            props.filters.project !== null ||
-            props.filters.type !== null ||
-            props.filters.q !== null,
+    const showSearch = $derived(
+        props.total >= SEARCH_FROM || props.filters.q !== null,
+    );
+    const cards = $derived(
+        props.filters.show === 'projects' &&
+            props.filters.q === null &&
+            props.filters.project === null &&
+            props.filters.type === null,
     );
 
     function params(): Record<string, string> {
         return Object.fromEntries(
             Object.entries({
-                show: show === 'all' ? '' : show,
-                project: show === 'projects' ? project : '',
-                type,
+                show: show === 'recent' ? '' : show,
                 q: q.trim(),
             }).filter(([, value]) => value !== ''),
         );
@@ -77,7 +81,7 @@
             preserveState: true,
             preserveScroll: true,
             replace: true,
-            only: ['documents', 'next_cursor', 'filters'],
+            only: ['documents', 'next_cursor', 'project_cards', 'filters'],
         });
     }
 
@@ -96,7 +100,7 @@
 
         return Object.fromEntries(
             Object.entries({
-                show: show === 'all' ? '' : show,
+                show: show === 'recent' ? '' : show,
                 project: project ?? '',
                 type: type ?? '',
                 q: q ?? '',
@@ -147,94 +151,111 @@
     }
 
     $effect(() => {
-        // The segmented control writes `show`; follow it.
+        // The tabs write `show`; follow them.
         if (show !== props.filters.show) {
             apply();
         }
     });
+
+    const EMPTY: Record<DocumentTab, { title: string; body: string }> = {
+        recent: {
+            title: msg('No documents yet.'),
+            body: msg(
+                'Start a document, spreadsheet or presentation above, or drop a .docx, .xlsx or .pptx file anywhere on this page. One made for Just me is yours until you share it: with everyone in your office, or with chosen people. One in a project belongs to its team.',
+            ),
+        },
+        personal: {
+            title: msg('No personal documents yet.'),
+            body: msg(
+                'Documents you make for Just me are kept here, and only you see them until you share them.',
+            ),
+        },
+        shared: {
+            title: msg('Nothing is shared with you yet.'),
+            body: msg(
+                'Documents people share with you by name, and those open to your whole office, show here.',
+            ),
+        },
+        projects: {
+            title: msg('No projects here yet.'),
+            body: msg(
+                "Each project you're on has its own documents, which its team edits together. Once you're on a project's team, it shows here.",
+            ),
+        },
+    };
 </script>
 
-<svelte:head><title>Documents</title></svelte:head>
+<svelte:head><title>{t('Documents')}</title></svelte:head>
 
 <AppShell>
     {#snippet bar()}
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
-            <span class="truncate font-medium">Documents</span>
+            <span class="truncate font-medium">{t('Documents')}</span>
         </div>
-        <NewDocument
+    {/snippet}
+
+    <div class="mx-auto w-full max-w-4xl">
+        <DocumentStart
             types={props.types}
             maxUploadMb={props.max_upload_mb}
             places={props.projects}
             canCreatePersonal={props.can_create_personal}
         />
-    {/snippet}
+        {#if !props.can_create_personal && props.projects.length === 0}
+            <p class="text-[13px] text-fg-muted">
+                {t(
+                    "You can open the documents shared with you here. To make your own, you need a place in an office or on a project's team.",
+                )}
+            </p>
+        {/if}
 
-    <div class="mx-auto w-full max-w-4xl">
-        <div class="flex flex-col gap-2.5">
+        <div
+            class="mt-6 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between"
+        >
             <div class="-mx-1 overflow-x-auto px-1 [scrollbar-width:none]">
-                <PillGroup options={shows} bind:value={show} />
+                <PillGroup
+                    options={tabs.map((tab) => ({
+                        ...tab,
+                        label: t(tab.label),
+                    }))}
+                    bind:value={show}
+                />
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <div class="relative min-w-0 flex-1 basis-48">
+            {#if showSearch}
+                <div class="relative min-w-0 sm:w-64">
                     <Search
                         class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint"
                     />
-                    <label for="{uid}-q" class="sr-only">Search titles</label>
+                    <label for="{uid}-q" class="sr-only"
+                        >{t('Search titles')}</label
+                    >
                     <input
                         id="{uid}-q"
+                        type="search"
                         bind:value={q}
                         oninput={searchSoon}
-                        placeholder="Search titles"
+                        placeholder={t('Search titles')}
                         autocomplete="off"
                         class="input pl-8"
                     />
                 </div>
-                {#if show === 'projects'}
-                    <label for="{uid}-project" class="sr-only">Project</label>
-                    <select
-                        id="{uid}-project"
-                        bind:value={project}
-                        onchange={apply}
-                        class="input w-auto max-w-full"
-                    >
-                        <option value="">Any project</option>
-                        {#each props.projects as choice (choice.slug)}
-                            <option value={choice.slug}>{choice.label}</option>
-                        {/each}
-                    </select>
-                {/if}
-                <label for="{uid}-type" class="sr-only">Kind</label>
-                <select
-                    id="{uid}-type"
-                    bind:value={type}
-                    onchange={apply}
-                    class="input w-auto"
-                >
-                    <option value="">All kinds</option>
-                    {#each props.types as kind (kind.value)}
-                        <option value={kind.value}>{kind.label}</option>
-                    {/each}
-                </select>
-            </div>
+            {/if}
         </div>
 
-        <div class="mt-4">
-            {#if rows.length === 0}
-                {#if filtered}
+        <div class="mt-3">
+            {#if cards}
+                {#if props.project_cards.length === 0}
+                    {@render empty(EMPTY.projects)}
+                {:else}
+                    <DocumentProjectCards cards={props.project_cards} />
+                {/if}
+            {:else if rows.length === 0}
+                {#if props.filters.q !== null}
                     <p class="text-[13px] text-fg-muted">
-                        Nothing matches. Try other filters.
+                        {t('No titles match ":q".', { q: props.filters.q })}
                     </p>
                 {:else}
-                    <div class="text-[13px] text-fg-muted">
-                        <p class="font-medium text-fg">No documents yet.</p>
-                        <p class="mt-1 max-w-xl">
-                            Start a document, spreadsheet or presentation with
-                            New, or upload a .docx, .xlsx or .pptx file. One
-                            made for Just me is yours until you share it: with
-                            everyone in your office, or with chosen people. One
-                            in a project is its team's.
-                        </p>
-                    </div>
+                    {@render empty(EMPTY[props.filters.show])}
                 {/if}
             {:else}
                 <DocumentList
@@ -251,14 +272,14 @@
                             onclick={showMore}
                         >
                             {#if loadingMore}
-                                <Spinner size={14} />Loading
+                                <Spinner size={14} />{t('Loading')}
                             {:else}
-                                Show more
+                                {t('Show more')}
                             {/if}
                         </button>
                         {#if moreFailed}
                             <p class="text-xs text-danger">
-                                The next ones didn't load. Try again.
+                                {t("The next ones didn't load. Try again.")}
                             </p>
                         {/if}
                     </div>
@@ -272,3 +293,10 @@
         />
     </div>
 </AppShell>
+
+{#snippet empty(copy: { title: string; body: string })}
+    <div class="text-[13px] text-fg-muted">
+        <p class="font-medium text-fg">{t(copy.title)}</p>
+        <p class="mt-1 max-w-xl">{t(copy.body)}</p>
+    </div>
+{/snippet}

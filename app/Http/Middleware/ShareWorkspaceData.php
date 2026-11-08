@@ -70,7 +70,8 @@ class ShareWorkspaceData
         Inertia::share('statuses', fn (): array => collect((array) config('project-management.statuses'))
             ->map(fn (array $meta, string $value): array => [
                 'value' => $value,
-                'label' => $meta['label'] ?? ucfirst($value),
+                // In the reader's language (lang/ne.json has the configured labels).
+                'label' => __($meta['label'] ?? ucfirst($value)),
                 'color' => $meta['color'] ?? '#9CA3AF',
                 'is_complete' => (bool) ($meta['is_complete'] ?? false),
                 'is_closed' => (bool) ($meta['is_closed'] ?? $meta['is_complete'] ?? false),

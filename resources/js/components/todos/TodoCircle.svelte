@@ -1,5 +1,6 @@
 <script lang="ts">
     import { Check } from '@lucide/svelte';
+    import { t } from '../../lib/i18n';
 
     /**
      * A private to-do's done circle, drawn as My work's task circle: 24px
@@ -26,10 +27,10 @@
     role="checkbox"
     aria-checked={done}
     aria-label={done
-        ? `Mark "${title}" not done`
+        ? t('Mark ":title" not done', { title })
         : started
-          ? `Doing "${title}", mark done`
-          : `Mark "${title}" done`}
+          ? t('Doing ":title", mark done', { title })
+          : t('Mark ":title" done', { title })}
     class={`group/check relative flex size-[24px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition before:absolute before:-inset-[10px] before:content-[''] sm:size-[18px] sm:before:-inset-[13px] ${
         done
             ? 'border-success bg-success text-white'

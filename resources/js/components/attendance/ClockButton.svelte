@@ -16,6 +16,7 @@
     } from '../../lib/attendance';
     import type { MyAttendance, PunchKind } from '../../lib/attendance';
     import { clockTime } from '../../lib/dates';
+    import { digits, msg, t } from '../../lib/i18n';
     import Spinner from '../Spinner.svelte';
 
     /**
@@ -48,6 +49,13 @@
         outside: MapPin,
         unknown: MapPinOff,
     };
+    /** The note form's button: the same press, from where you are. */
+    const FROM_HERE: Record<PunchKind, string> = {
+        in: msg('Clock in from here'),
+        lunch_start: msg('Start lunch from here'),
+        lunch_end: msg('End lunch from here'),
+        out: msg('Clock out from here'),
+    };
 
     let wrapper = $state<HTMLElement | null>(null);
     let open = $state(false);
@@ -65,12 +73,15 @@
         }
 
         if (day.today.holiday) {
-            return `Holiday: ${day.today.holiday}`;
+            return t('Holiday: :name', { name: day.today.holiday });
         }
 
         return day.today.is_workday
-            ? `Hours today ${day.today.start} to ${day.today.end}`
-            : 'Not a working day';
+            ? t('Hours today :start to :end', {
+                  start: digits(day.today.start),
+                  end: digits(day.today.end),
+              })
+            : t('Not a working day');
     });
 
     /**
@@ -208,18 +219,18 @@
             onclick={press}
         >
             {#if busy && !open}
-                <Spinner size={14} class="text-current" label="Clocking" />
+                <Spinner size={14} class="text-current" label={t('Clocking')} />
             {:else}
                 <StateIcon
                     class={`h-3.5 w-3.5 ${day.state === 'in' || day.state === 'at_lunch' ? 'text-success' : ''}`}
                 />
             {/if}
             {#if day.state === 'not_in'}
-                {ACTION_LABELS.in}
+                {t(ACTION_LABELS.in)}
             {:else}
                 <span class="hidden sm:inline">{stateLabel(day)}</span>
                 <span class="font-mono tabular-nums sm:hidden"
-                    >{last ? clockTime(last.at) : ''}</span
+                    >{last ? digits(clockTime(last.at)) : ''}</span
                 >
                 <ChevronDown class="h-3.5 w-3.5 text-fg-faint" />
             {/if}
@@ -229,32 +240,33 @@
             <div
                 class="popover absolute top-full right-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] p-1"
                 role="dialog"
-                aria-label="Clock"
+                aria-label={t('Clock')}
             >
                 {#if pending}
                     <form onsubmit={sendNote} class="space-y-2 p-2">
                         <label class="label" for="clock-note"
-                            >Why are you away from the office?</label
+                            >{t('Why are you away from the office?')}</label
                         >
                         <input
                             id="clock-note"
                             class="input"
                             maxlength="500"
-                            placeholder="Meeting, field visit"
+                            placeholder={t('Meeting, field visit')}
                             bind:value={note}
                         />
                         {#if noteError}
                             <p class="text-xs text-danger">{noteError}</p>
                         {/if}
                         <p class="text-xs text-fg-muted">
-                            You're not on the office network or near the office.
-                            Your higher authority will see this.
+                            {t(
+                                "You're not on the office network or near the office. Your higher authority will see this.",
+                            )}
                         </p>
                         <div class="flex justify-end gap-1.5">
                             <button
                                 type="button"
                                 class="btn-ghost"
-                                onclick={cancelNote}>Cancel</button
+                                onclick={cancelNote}>{t('Cancel')}</button
                             >
                             <button
                                 type="submit"
@@ -264,9 +276,9 @@
                                 {#if busy}<Spinner
                                         size={14}
                                         class="text-current"
-                                        label="Clocking"
+                                        label={t('Clocking')}
                                     />{/if}
-                                {ACTION_LABELS[pending.kind]} from here
+                                {t(FROM_HERE[pending.kind])}
                             </button>
                         </div>
                     </form>
@@ -280,11 +292,11 @@
                             onclick={() => punch(kind)}
                         >
                             {#if busy === kind}
-                                <Spinner size={15} label="Clocking" />
+                                <Spinner size={15} label={t('Clocking')} />
                             {:else}
                                 <Icon class="h-[15px] w-[15px] text-fg-faint" />
                             {/if}
-                            {ACTION_LABELS[kind]}
+                            {t(ACTION_LABELS[kind])}
                         </button>
                     {/each}
                     {#if day.next.length > 0}
@@ -302,15 +314,19 @@
                                 {describePunch(last)}
                                 {#if last.note}
                                     <span class="block text-fg-faint"
-                                        >Note: {last.note}</span
+                                        >{t('Note: :note', {
+                                            note: last.note,
+                                        })}</span
                                     >
                                 {/if}
                             </span>
                         </div>
                     {/if}
                     <p class="px-2 py-1.5 text-xs text-fg-faint">
-                        {hours}. Your network and location are kept only when
-                        you press, never in between.
+                        {t(
+                            ':hours. Your network and location are kept only when you press, never in between.',
+                            { hours },
+                        )}
                     </p>
                 {/if}
             </div>

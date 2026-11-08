@@ -50,14 +50,14 @@ class QuickAddTaskRequest extends FormRequest
      */
     public function messages(): array
     {
-        return ['project_id.required' => 'Pick a project.'];
+        return ['project_id.required' => __('Pick a project.')];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
             if ($this->startsGeneral() && ! WorkspaceAccess::canStartGeneralProject($this->user())) {
-                $validator->errors()->add('project_id', 'Pick a project.');
+                $validator->errors()->add('project_id', __('Pick a project.'));
             }
         });
     }

@@ -160,22 +160,27 @@ the full available width and sit side by side from `xl` when both are present.
 Repository rows show the fixed `protected_branch` and warn when the forge's
 `default_branch` moved away from it, because work merged into the new default
 skips the tracker's rule.
-Documents: `Documents/Index` lists every document the viewer may open, newest
-first, with ownership/access/project/type/search filters, cursor-based Show
-more, creation/upload destination and trash. Show more uses the server-applied
-filters attached to its cursor and discards a response if an Inertia filter
-visit replaced the list while it loaded. `project/DocumentsView` is present
-only when the backend supplies a non-null payload and reuses the same
-`documents/{DocumentList,DocumentTrash,NewDocument}` components for one project.
-Rows show their home and view/edit/frozen state, open Share when allowed, move
-an owned personal document one way into a usable project, rename, download and
-load version history. `documents/ShareDialog` controls organization-wide
-view/edit and named-person shares. New blank files open directly in
-`Documents/Edit`; uploads stay on the list. The editor opens read-only or editable
-from the server's access level, loads ONLYOFFICE's `api.js`, hands it the signed
-config unchanged, reloads on `onRequestRefreshFile`, and offers the current
-download when the editor is unreachable. It also exposes Share where permitted.
-The session page is kept only in encrypted Inertia history, which sign-out clears.
+Documents: `Documents/Index` starts with one-click document tiles, then Recent,
+Personal, Shared with me and Projects tabs. Search appears from 9 visible
+documents (or an active query); unfiltered Projects shows `DocumentProjectCards`
+with counts/latest edits, linking to each project’s Documents tab. Cursor-based Show
+more uses the server-applied filters and ignores responses from a replaced list.
+`project/DocumentsView` appears for a non-null backend payload and shares
+`documents/{DocumentStart,DocumentList,DocumentTrash}`. `DocumentStart` creates
+an Untitled document per kind and opens its editor; Upload and page-wide drop
+validate kind/size and upload sequentially via fetch, keeping navigation usable.
+The workspace destination ("New ones go to") is remembered per user in
+localStorage; uploads stay on the list. `DocumentKindIcon` uses CSS-only
+`--ws-doc-docx|xlsx|pptx` and `-soft` tokens. Each document row has one editor
+link, home/access/last-editor information and hover Share; menus offer permitted
+move, rename, download, history and trash actions. `documents/ShareDialog`
+controls office-wide and named-person access.
+`Documents/Edit` opens read-only or editable from server access, loads ONLYOFFICE
+`api.js` with its signed config unchanged, reloads on `onRequestRefreshFile`,
+and offers download if unreachable. It has Share, Can view/frozen marks and
+click-to-rename title; `flash.created_document` selects the new title once and
+preserves its focus while the editor starts. Inertia history is encrypted and
+cleared on sign-out.
 Reports: `Reports/CodeActivity` offers today/week/last-week/month/custom periods,
 project/program/designation filters, ranking by commits/lines/tests/active days
 (or unranked name order), and compares up to four people. It shows
@@ -223,6 +228,19 @@ and supports add/start/done/undo/delete/edit/move-to-project. `mywork/TodoRow`
 is the same private item in the landing-page list; `mywork/MyWorkRow` and
 `RowMenu` handle task/subtask actions and personal assignment fields.
 
+## Languages
+
+`lib/i18n.ts` reads reactive Inertia `locale` and imports the shared `lang/ne.json`.
+Use `t`/`tc` for text/counts, `msg` for data-held keys, and `number`, `digits`,
+`timeAgo`, `formatDay` for localized values; Nepali dates lead with Bikram Sambat.
+`LanguageSwitch` posts `/locale` from the top bar, account menu and auth pages;
+`LanguageMark` draws क/A (the icon-rule exception). `app.ts` updates the HTML
+language on visits. Shell, sign-in, My work, Documents and their supporting
+components are translated; other pages retain English helpers until their round.
+Keep calls in markup or `$derived` so a switch updates existing UI. Missing
+keys fall back to English; `npm run i18n:check` validates literal keys and matching
+placeholders. The languages spec owns the glossary and remaining rounds.
+
 ## Theming
 
 `config/themes.php` holds exactly three themes: `system`, `light`, `dark`.
@@ -250,8 +268,8 @@ these identify people without implying task status.
 Hard rules (see conventions.md): semantic utilities only; no raw palette
 colors or `dark:` variants (sticky-note colors in `lib/noteColors.ts` are the
 one exception); no inverted black/white buttons; no colored status pills/dots;
-no `rounded-xl`/`shadow-*` outside `.popover`; Lucide icons only; no
-em-dashes; no mono-uppercase eyebrow labels.
+no `rounded-xl`/`shadow-*` outside `.popover`; Lucide icons only (except
+LanguageMark’s क/A); no em-dashes; no mono-uppercase eyebrow labels.
 
 ## Separate forge UI
 

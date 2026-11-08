@@ -4,6 +4,7 @@
     import { onDestroy, untrack } from 'svelte';
     import type { AppearanceProps, ThemeTokens } from '../lib/appearance';
     import { applyAppearance } from '../lib/applyTheme';
+    import { msg, t } from '../lib/i18n';
     import type { SharedProps } from '../lib/types';
 
     /**
@@ -44,9 +45,9 @@
     );
 
     const options = [
-        { key: 'system', label: 'System', icon: Monitor },
-        { key: 'light', label: 'Light', icon: Sun },
-        { key: 'dark', label: 'Dark', icon: Moon },
+        { key: 'system', label: msg('System'), icon: Monitor },
+        { key: 'light', label: msg('Light'), icon: Sun },
+        { key: 'dark', label: msg('Dark'), icon: Moon },
     ];
 
     function tokensFor(key: string): ThemeTokens | undefined {
@@ -183,11 +184,11 @@
 
 <div class="flex flex-col">
     <section class="flex flex-col gap-3 px-6 pt-5 pb-6">
-        <div class="label">Theme</div>
+        <div class="label">{t('Theme')}</div>
         <div
             class="grid grid-cols-3 gap-3"
             role="radiogroup"
-            aria-label="Theme"
+            aria-label={t('Theme')}
         >
             {#each options as option (option.key)}
                 {@const active = selectedKey === option.key}
@@ -229,7 +230,7 @@
                         }`}
                     >
                         <Icon class="h-4 w-4 shrink-0" />
-                        {option.label}
+                        {t(option.label)}
                         {#if active}
                             <Check class="ml-auto h-4 w-4 shrink-0" />
                         {/if}
@@ -241,19 +242,22 @@
 
     <section class="flex flex-col gap-4 border-t border-line px-6 py-5">
         <div>
-            <div class="label">Features</div>
+            <div class="label">{t('Features')}</div>
             <p class="mt-1 text-[13px] text-fg-muted">
-                Extra sections on every task. Turning one off hides it and keeps
-                what was written.
+                {t(
+                    'Extra sections on every task. Turning one off hides it and keeps what was written.',
+                )}
             </p>
         </div>
         <div class="flex items-start justify-between gap-4">
             <div>
                 <div id="pref-notes-label" class="text-sm font-medium text-fg">
-                    Task notes
+                    {t('Task notes')}
                 </div>
                 <p class="mt-1 text-[13px] text-fg-muted">
-                    A log of meetings, decisions and blockers on each task.
+                    {t(
+                        'A log of meetings, decisions and blockers on each task.',
+                    )}
                 </p>
             </div>
             {@render toggle(
@@ -268,10 +272,10 @@
                     id="pref-contacts-label"
                     class="text-sm font-medium text-fg"
                 >
-                    Contacts
+                    {t('Contacts')}
                 </div>
                 <p class="mt-1 text-[13px] text-fg-muted">
-                    People outside the team to reach about a task.
+                    {t('People outside the team to reach about a task.')}
                 </p>
             </div>
             {@render toggle(
@@ -290,7 +294,7 @@
             class="btn-ghost btn-lg"
             onclick={() => oncancel?.()}
         >
-            Cancel
+            {t('Cancel')}
         </button>
         <button
             type="button"
@@ -298,7 +302,7 @@
             disabled={saving || !dirty}
             class="btn-primary btn-lg"
         >
-            {saving ? 'Saving' : 'Save'}
+            {saving ? t('Saving') : t('Save')}
         </button>
     </div>
 </div>

@@ -28,7 +28,7 @@ class StartGeneralProjectService
         $manager = WorkspaceAccess::memberFor($user);
 
         if ($organizationId === null || $manager === null) {
-            return ServiceResult::failure('Pick a project.', 422);
+            return ServiceResult::failure(__('Pick a project.'), 422);
         }
 
         try {
@@ -37,7 +37,7 @@ class StartGeneralProjectService
                 Organization::query()->whereKey($organizationId)->lockForUpdate()->first();
 
                 if (! WorkspaceAccess::canStartGeneralProject($user)) {
-                    return ServiceResult::failure('Pick a project.', 422);
+                    return ServiceResult::failure(__('Pick a project.'), 422);
                 }
 
                 $general = $this->projects->execute([
@@ -56,7 +56,7 @@ class StartGeneralProjectService
                     throw new RuntimeException('The General project has no manager.');
                 }
 
-                return ServiceResult::success($project, 'Project created.');
+                return ServiceResult::success($project, __('Project created.'));
             });
         } catch (Throwable $e) {
             report($e);

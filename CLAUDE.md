@@ -906,8 +906,9 @@ Runbook: `docs/forgejo.md` section 14 (the runners), API: `docs/api.md`.
 ## Documents (ONLYOFFICE)
 
 Specs: `docs/superpowers/specs/2026-11-05-documents-design.md` (the editor,
-a project's documents) and `2026-11-06-documents-workspace-design.md` (the
-Documents page, personal documents, sharing). Runbook: `docs/onlyoffice.md`.
+a project's documents), `2026-11-06-documents-workspace-design.md` (the
+Documents page, personal documents, sharing) and
+`2026-11-07-documents-ui-design.md` (its tabs, rows and one-click start). Runbook: `docs/onlyoffice.md`.
 API: `docs/api.md` (Documents).
 
 - **The editor** is ONLYOFFICE Docs Community Edition at docs.sdoc.gov.np
@@ -956,14 +957,23 @@ API: `docs/api.md` (Documents).
   document: not admins, managers or super-admins while its owner is active.
   `Document::scopeVisibleTo` is `documentAccess`'s twin, checked against it
   over a matrix in `DocumentsAccessTest`; keep them in step.
-- **Reads**: `DocumentLibraryQuery` (the Documents page: filters `show`
-  `all|mine|shared|organization|projects`, `project`, `type`, `q`, 50 per
-  page by `updated_at, id` cursor, a super-admin's organization switch;
-  the trash), `ProjectDocumentsQuery` (a project's tab; one document's
+- **Reads**: `DocumentLibraryQuery` (the Documents page: the tab `show`
+  `recent|personal|shared|projects`, where Personal is the viewer's own
+  personal documents and Shared with me is shared with them by name plus
+  open to the whole office when they reach it no other way, not their own
+  and not in a project whose documents they use; the old names
+  `all|mine|organization` still map, `DocumentLibraryRequest::OLD_SHOWS`;
+  `project`, `type`, `q`, 50 per page by `updated_at, id` cursor, a
+  super-admin's organization switch; the Projects tab with no other filter
+  gives `project_cards` (`projectCards`, also the API's
+  `/documents/projects`) instead of rows; `total`, how many the viewer may
+  open; the trash), `ProjectDocumentsQuery` (a project's tab; one document's
   `show` with its `project` `{slug, title, label, can_open}`),
   `DocumentSharingQuery` and `DocumentShareCandidatesQuery` (the Share
   dialog). Rows through `DocumentResource::withViewer` (`access`, `frozen`,
-  `can_delete`, `can_share`, `can_move`), after
+  `can_delete`, `can_share`, `can_move`, `shares_count` for whoever may
+  share, counted from the eager-loaded `shares.member` by
+  `canShareDocumentWith`, and the project's `can_open`), after
   `WorkspaceAccess::preloadDocumentAccess` (the owners' people, the
   projects' teams and team membership, the viewer's shares, in a few
   queries; the same answers), so a list's queries don't grow with its rows
@@ -1012,12 +1022,22 @@ API: `docs/api.md` (Documents).
   editor's last user through `ProjectActivityRecorder`'s `actorId`).
   Personal documents write none.
 - **UI**: the sidebar's Documents (`mainLinks`, with `documentsEnabled`)
-  opens `pages/Documents/Index.svelte`; a project's Documents tab is
+  opens `pages/Documents/Index.svelte` (the start tiles, the four tabs,
+  search from 9 documents); a project's Documents tab is
   `project/DocumentsView.svelte` (shown when `documents` is not null); both
-  are built from `components/documents/` (`DocumentList`, `NewDocument`
-  with Where, `DocumentTrash`, `ShareDialog`). The editor page
+  are built from `components/documents/`: `DocumentStart` (a tile per kind
+  makes "Untitled ..." and opens it; Upload and a file dropped anywhere on
+  the page, one after another, checked for kind and `max_upload_mb` first;
+  on the Documents page "New ones go to", remembered per person in
+  `localStorage`), `DocumentList` (the kind's colour from
+  `DocumentKindIcon`, where it lives, who can see it, "You · 3 hours ago";
+  the whole row is its one link, Share shows on hover), `DocumentProjectCards`,
+  `DocumentTrash`, `ShareDialog`. The kind colours are CSS-only tokens
+  (`--ws-doc-docx|xlsx|pptx`, `-soft`), never status. The editor page
   (`pages/Documents/Edit.svelte`: loads `api.js` from the editor, mounts it
-  through an action) has Share and the Can view and frozen marks.
+  through an action) has Share, the Can view and frozen marks, and rename by
+  clicking the title (a document just made, the flash's `created_document`,
+  opens with it selected).
 
 ## Forms
 
@@ -1241,13 +1261,51 @@ Shared building blocks (reach for these before writing anything new):
   `COUNT_TTL_SECONDS` per organization and every full read refreshes it, so
   other pages run the checks at most once per TTL per organization.
 
+## Languages (English and Nepali)
+
+Spec: `docs/superpowers/specs/2026-11-07-languages-design.md` (rules, the
+glossary, the rounds). Each person reads the app in English or Nepali:
+`user_preferences.locale` (`User::locale()`), copied to a `locale` cookie
+for the sign-in pages; `App\Http\Middleware\SetLocale` (web and API groups,
+`App\Support\Locales::forRequest`: saved choice, else cookie, else English)
+sets each request's language, shared as `locale` and `locales`. The switch
+(`components/LanguageSwitch.svelte`, the top bar and the sign-in pages; the
+account menu too) is `POST /locale` (anyone; signed in it also saves);
+`PATCH /workspace/preferences` and `/api/v1/user/preferences` take `locale`,
+and `/api/v1/user` gives it.
+
+- **One dictionary, English text as the key**: `lang/ne.json`, for the
+  server's `__()`/`trans_choice()` and the browser's `t()`/`tc()`
+  (`resources/js/lib/i18n.ts`); Laravel's own messages in
+  `lang/ne/{validation,auth,passwords,pagination}.php`. A key with no
+  Nepali shows in English. Placeholders are `:name` (Nepali attaches
+  postpositions: `:nameले`); a number filled into one is written in the
+  language's digits (`Locales::number` on the server; `t` does it in the
+  browser; `trans_choice` fills `:count` with plain digits unless it is
+  given, so pass `'count' => Locales::number($n)`). In Nepali, digits are Devanagari and a date shown in both
+  calendars leads with Bikram Sambat.
+- **In a translated page or component** every visible text, `aria-label`,
+  `title` and `placeholder` goes through `t()` (`tc()` for counts,
+  `timeAgo`, `number`, `digits`, `formatDay` instead of the English
+  helpers), called in markup or `$derived`, never once at the top of a
+  script. A text kept in data is written `msg('...')` and drawn with
+  `t(value)`. A page not yet translated keeps the English helpers, so no
+  page mixes the two. Round 1 (the shell, sign-in, My work, Documents, the
+  server's messages and form errors) is translated; the spec lists the
+  rounds after it.
+- **The check**: `npm run i18n:check` (`scripts/i18n-check.mjs`, in CI's
+  lint workflow) fails on a key with no Nepali or different placeholders,
+  and on keys built with `${}`. Add the Nepali in the same change as the
+  English.
+
 ## Semantic theming layer (web UI)
 
 `config/themes.php` holds exactly three themes: `system` (follows the OS),
 `light` and `dark`. One visual language, two grounds: cool-neutral surfaces,
 three text tones, hairline borders, one calm blue accent, and green / amber /
 red reserved for status, deadlines and priority. Fonts are fixed: Geist (UI),
-Geist Mono (ids, dates, counts) and Mukta (Nepali, via `font-np`).
+Geist Mono (ids, dates, counts) and Mukta (Nepali, via `font-np`, and after
+Geist in the sans stack, so Nepali text renders in Mukta).
 
 `resources/css/app.css` defines the `--ws-*` custom properties, the Tailwind
 `@theme` block mapping color utilities to them (`bg-bg`, `bg-surface`,
@@ -1274,7 +1332,9 @@ Rules: semantic utilities only, never raw palette colours (`neutral-*`,
 `amber-*`) or `dark:` variants (the stickies in `lib/noteColors.ts` are the one
 exception), never black/white inverted buttons, never coloured status pills or
 dots, no `rounded-xl`/`shadow-*` outside `.popover`, no em-dashes in copy, no
-unicode glyph icons (Lucide only), no mono-uppercase eyebrow labels.
+unicode glyph icons (Lucide only; the one exception is the language switch's
+`LanguageMark`, क and A, since Lucide's "languages" shows a Chinese
+character), no mono-uppercase eyebrow labels.
 
 ## Conventions
 

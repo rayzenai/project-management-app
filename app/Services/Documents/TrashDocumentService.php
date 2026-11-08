@@ -22,6 +22,6 @@ class TrashDocumentService
             $document->delete();
         });
 
-        return ServiceResult::success(null, "Moved {$document->title} to the trash.");
+        return ServiceResult::success(null, __('Moved :title to the trash.', ['title' => $document->title]));
     }
 }

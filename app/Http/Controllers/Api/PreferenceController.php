@@ -52,6 +52,7 @@ class PreferenceController extends Controller
                 'email_weekly' => $emails['weekly'],
                 'task_notes_enabled' => $user->features()['task_notes'],
                 'contacts_enabled' => $user->features()['contacts'],
+                'locale' => $user->locale(),
                 'configured' => $user->preferences()->exists(),
                 'resolved_tokens' => $resolver->resolved($appearance['theme'], $appearance['font_override']),
             ],

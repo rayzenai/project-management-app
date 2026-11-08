@@ -1,23 +1,27 @@
 <script lang="ts">
-    import { inertia } from '@inertiajs/svelte';
+    import { inertia, page, router } from '@inertiajs/svelte';
     import { LogOut, Plus, Search, Settings } from '@lucide/svelte';
     import type { Snippet } from 'svelte';
+    import { locale, number, t } from '../../lib/i18n';
     import { currentHref } from '../../lib/navigation';
     import type { NavGroup, NavLink } from '../../lib/navigation';
+    import { QUIET } from '../../lib/toast.svelte';
     import type { OrganizationSwitch } from '../../lib/types';
     import Avatar from '../Avatar.svelte';
+    import LanguageMark from '../LanguageMark.svelte';
     import Popover from '../Popover.svelte';
     import OrganizationSwitcher from './OrganizationSwitcher.svelte';
 
     /**
      * Everything the sidebar doesn't carry: your notifications, emails and
-     * the guide, the office pages and reports you may open, Settings and
-     * Sign out. On a desktop it opens upward from the account button in a
-     * popover; on a phone (`sheet`) it rises from the bottom, under the
-     * Me tab, and also carries a super-admin's organization switch, New
-     * task, Search and the pages the bar has no tab for. The sheet is modal:
-     * focus moves into it, Tab stays inside, and closing hands focus back
-     * through `onclose`.
+     * the guide, the office pages and reports you may open, the other
+     * language (by its own name: on a phone the top bar's switch is only an
+     * icon), Settings and Sign out. On a desktop it opens upward from the
+     * account button in a popover; on a phone (`sheet`) it rises from the
+     * bottom, under the Me tab, and also carries a super-admin's
+     * organization switch, New task, Search and the pages the bar has no tab
+     * for. The sheet is modal: focus moves into it, Tab stays inside, and
+     * closing hands focus back through `onclose`.
      */
     let {
         variant,
@@ -92,6 +96,27 @@
         }
     }
 
+    // The language switch, as LanguageSwitch does it.
+    const otherLanguage = $derived(
+        (
+            (page.props as { locales?: { value: string; label: string }[] })
+                .locales ?? []
+        ).find((choice) => choice.value !== locale()) ?? null,
+    );
+
+    function switchLanguage(): void {
+        if (!otherLanguage) {
+            return;
+        }
+
+        router.post(
+            '/locale',
+            { locale: otherLanguage.value },
+            { preserveState: true, preserveScroll: true, headers: QUIET },
+        );
+        close();
+    }
+
     const iconClass = $derived(
         `shrink-0 ${sheet ? 'h-[18px] w-[18px]' : 'h-4 w-4'}`,
     );
@@ -148,11 +173,13 @@
         onclick={close}
     >
         <Icon class={iconClass} />
-        <span class="min-w-0 flex-1 truncate">{item.label}</span>
+        <span class="min-w-0 flex-1 truncate">{t(item.label)}</span>
         {#if (item.count ?? 0) > 0}
             <span
                 class={`text-xs tabular-nums ${active ? 'text-accent' : 'text-fg-faint'}`}
-                >{(item.count ?? 0) > 99 ? '99+' : item.count}</span
+                >{(item.count ?? 0) > 99
+                    ? `${number(99)}+`
+                    : number(item.count ?? 0)}</span
             >
         {/if}
     </a>
@@ -199,7 +226,7 @@
                         }}
                     >
                         <Plus class={`${iconClass} text-accent`} />
-                        <span class="flex-1">New task</span>
+                        <span class="flex-1">{t('New task')}</span>
                     </button>
                 {/if}
                 {#if onsearch}
@@ -213,7 +240,7 @@
                         }}
                     >
                         <Search class={iconClass} />
-                        <span class="flex-1">Search</span>
+                        <span class="flex-1">{t('Search')}</span>
                     </button>
                 {/if}
                 {#each extra as item (item.href)}
@@ -234,7 +261,7 @@
                     id={`account-${variant}-${i}`}
                     class={`px-2 pt-1.5 pb-1 font-medium text-fg-faint ${sheet ? 'text-[12.5px]' : 'text-xs'}`}
                 >
-                    {group.label}
+                    {t(group.label)}
                 </div>
                 {#each group.links as item (item.href)}
                     {@render link(item)}
@@ -243,6 +270,19 @@
         {/each}
 
         <div class="mt-1 border-t border-line-soft pt-1">
+            {#if otherLanguage}
+                <button
+                    type="button"
+                    data-popover-item
+                    class={itemClass(false)}
+                    onclick={switchLanguage}
+                >
+                    <LanguageMark class={iconClass} />
+                    <span class="flex-1" lang={otherLanguage.value}
+                        >{otherLanguage.label}</span
+                    >
+                </button>
+            {/if}
             <button
                 type="button"
                 data-popover-item
@@ -253,7 +293,7 @@
                 }}
             >
                 <Settings class={iconClass} />
-                <span class="flex-1">Settings</span>
+                <span class="flex-1">{t('Settings')}</span>
             </button>
             <button
                 type="button"
@@ -262,7 +302,7 @@
                 onclick={onlogout}
             >
                 <LogOut class={iconClass} />
-                <span class="flex-1">Sign out</span>
+                <span class="flex-1">{t('Sign out')}</span>
             </button>
         </div>
     </div>
@@ -283,7 +323,7 @@
     <div class="fixed inset-0 z-50 md:hidden">
         <button
             type="button"
-            aria-label="Close the menu"
+            aria-label={t('Close the menu')}
             class="absolute inset-0 cursor-default bg-black/40"
             onclick={close}
         ></button>
@@ -291,7 +331,7 @@
             bind:this={sheetPanel}
             role="dialog"
             aria-modal="true"
-            aria-label="Me"
+            aria-label={t('Me')}
             class="popover absolute inset-x-0 bottom-0 rounded-b-none pb-[env(safe-area-inset-bottom)]"
         >
             {@render body()}

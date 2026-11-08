@@ -22,7 +22,7 @@ class UpdateAssignmentService
 
             $assignment->save();
 
-            return ServiceResult::success($assignment->fresh('member'), 'Assignment updated.');
+            return ServiceResult::success($assignment->fresh('member'), __('Assignment updated.'));
         } catch (Throwable $e) {
             report($e);
 

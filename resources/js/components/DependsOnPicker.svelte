@@ -1,5 +1,6 @@
 <script lang="ts">
     import { X } from '@lucide/svelte';
+    import { t } from '../lib/i18n';
     import { taskCode } from '../lib/taskCode';
     import type { TaskOption } from '../lib/types';
     import StatusGlyph from './StatusGlyph.svelte';
@@ -74,7 +75,7 @@
 </script>
 
 <div class="flex flex-col gap-1">
-    <label for="{uid}-q" class="label">Depends on</label>
+    <label for="{uid}-q" class="label">{t('Depends on')}</label>
     {#if selected.length > 0}
         <div class="flex flex-wrap gap-1">
             {#each selected as option (option.id)}
@@ -83,7 +84,9 @@
                     <button
                         type="button"
                         class="text-fg-faint hover:text-fg"
-                        aria-label={`Stop waiting for ${option.title}`}
+                        aria-label={t('Stop waiting for :title', {
+                            title: option.title,
+                        })}
                         onclick={() => drop(option)}
                         ><X class="h-3 w-3" /></button
                     >
@@ -108,8 +111,8 @@
             }
         }}
         placeholder={projectSlug
-            ? 'Find a task in this project it waits for'
-            : 'Pick a project first'}
+            ? t('Find a task in this project it waits for')
+            : t('Pick a project first')}
         disabled={!projectSlug}
         class="input"
     />
@@ -131,10 +134,13 @@
             {/each}
         </ul>
     {:else if searched}
-        <p class="text-xs text-fg-muted">No task in this project matches.</p>
+        <p class="text-xs text-fg-muted">
+            {t('No task in this project matches.')}
+        </p>
     {/if}
     <p class="text-xs text-fg-faint">
-        It can start once these are done. On the board you can also drop a card
-        onto another.
+        {t(
+            'It can start once these are done. On the board you can also drop a card onto another.',
+        )}
     </p>
 </div>

@@ -34,7 +34,7 @@ class UpdatePersonalTodoService
 
             $todo->save();
 
-            return ServiceResult::success($todo->fresh(), 'To-do updated.');
+            return ServiceResult::success($todo->fresh(), __('To-do updated.'));
         } catch (Throwable $e) {
             report($e);
 

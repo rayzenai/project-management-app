@@ -34,12 +34,14 @@ class DocumentSharingService
         });
 
         $organizationId = WorkspaceAccess::documentOrganizationId($document);
-        $organization = $organizationId === null ? 'the organization' : (string) Organization::query()->whereKey($organizationId)->value('name');
+        $organization = $organizationId === null ? __('the organization') : (string) Organization::query()->whereKey($organizationId)->value('name');
+
+        $replace = ['organization' => $organization, 'title' => $document->title];
 
         return ServiceResult::success($document, match ($access) {
-            Document::ACCESS_EDIT => "Everyone in {$organization} can edit {$document->title}.",
-            Document::ACCESS_VIEW => "Everyone in {$organization} can view {$document->title}.",
-            default => "{$document->title} is no longer open to everyone in {$organization}.",
+            Document::ACCESS_EDIT => __('Everyone in :organization can edit :title.', $replace),
+            Document::ACCESS_VIEW => __('Everyone in :organization can view :title.', $replace),
+            default => __(':title is no longer open to everyone in :organization.', $replace),
         });
     }
 
@@ -65,7 +67,7 @@ class DocumentSharingService
             $recipient->notify(new DocumentShared($document, $user instanceof User ? $user->name : 'Someone', $permission));
         }
 
-        return ServiceResult::success($share->load('member.designation'), "Shared {$document->title} with {$member->name}.");
+        return ServiceResult::success($share->load('member.designation'), __('Shared :title with :name.', ['title' => $document->title, 'name' => $member->name]));
     }
 
     /**
@@ -87,15 +89,17 @@ class DocumentSharingService
         $share->permission = $permission;
         $share->save();
 
-        $can = $permission === Document::ACCESS_EDIT ? 'edit' : 'view';
+        $replace = ['name' => $share->member->name, 'title' => $share->document->title];
 
-        return ServiceResult::success($share->load('member.designation'), "{$share->member->name} can now {$can} {$share->document->title}.");
+        return ServiceResult::success($share->load('member.designation'), $permission === Document::ACCESS_EDIT
+            ? __(':name can now edit :title.', $replace)
+            : __(':name can now view :title.', $replace));
     }
 
     public function unshare(DocumentShare $share): ServiceResult
     {
         $share->delete();
 
-        return ServiceResult::success(null, "{$share->member->name} no longer has {$share->document->title}.");
+        return ServiceResult::success(null, __(':name no longer has :title.', ['name' => $share->member->name, 'title' => $share->document->title]));
     }
 }

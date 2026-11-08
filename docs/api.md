@@ -53,15 +53,15 @@ Emails are matched in any case: they are stored in lowercase, and `login`,
 | POST | `/forgot-password` | `email` | always `{ message: "If that email has a login here, a link to set a new password is on its way." }`, whether or not the email has a login (a deactivated person's gets no link either); the link (60 minutes, the web's `/workspace/reset-password/{token}?email=`) is mailed after the answer is sent. Five per email and thirty per address in 15 minutes, counted together with the web's form and before anyone is looked up (an invalid email is not counted): then 429 on `email` with `Too many tries. Wait a few minutes.` |
 | POST | `/set-password` | `kind` (`reset` or `invite`), `email`, `token` (from the emailed link), `password`, `password_confirmation` | `{ message: "Your password is set." }`, no token: sign in with `POST /login`. A wrong, used, expired or other-kind link, and a deactivated person's, all get 422 `{ message, errors: { token } }` with `This link has expired or was already used.` A link works once, and setting a password ends the person's other pending link too; reset links last 60 minutes, invite links 7 days. `password` must meet the server's `Password::defaults()` (one 422 message per rule it fails). Ten refused links a minute per address (a password that breaks the rules is not counted), checked before anything else: then 429 on `password` with `Too many tries. Wait a minute.` Ends the person's other web sessions and "remember me" cookies; their API tokens stay |
 | POST | `/logout` | — | `{ message }` (revokes the current token) |
-| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, is_super_admin, is_office_admin, led_team_ids, managed_program_ids, features, git_enabled, attendance_enabled, office, todo_count }`; `managed_program_ids` lists the programs the person manages (while active, in their own organization), the web's `managedProgramIds`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled`; `attendance_enabled` is true when the person may clock in (an active member of an organization with attendance on); `office` says which office pages they may open, the web's `office`: `{ organogram, attendance, attendance_settings, leave, team_work, my_work_member_id }`; `todo_count` is the number of the caller's open private to-dos (To do and Doing, not done), the web's `todoCount` |
+| GET | `/user` | — | the caller's workspace context: `{ id, name, email, member, organization, locale, is_super_admin, is_office_admin, led_team_ids, managed_program_ids, features, git_enabled, attendance_enabled, office, todo_count }`; `managed_program_ids` lists the programs the person manages (while active, in their own organization), the web's `managedProgramIds`; `features` is `{ task_notes, contacts }`, the optional features the person turned on (both start off; a client hides what is off); `git_enabled` is true when the person may use git somewhere (an organization with git that is theirs, or of a project whose team they are on; every one for a super-admin), the web's `gitEnabled`; `attendance_enabled` is true when the person may clock in (an active member of an organization with attendance on); `office` says which office pages they may open, the web's `office`: `{ organogram, attendance, attendance_settings, leave, team_work, my_work_member_id }`; `todo_count` is the number of the caller's open private to-dos (To do and Doing, not done), the web's `todoCount`; `locale` is the language they read the app in, `en` or `ne` (every answer's messages and errors come in it) |
 
 ## Appearance, preferences & themes
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | `/themes` | — | `{ data: { themes, font_allow_list } }` from `config/themes.php` |
-| GET | `/user/preferences` | — | `{ data: { theme, font_override, email_notifications, email_morning, email_weekly, task_notes_enabled, contacts_enabled, configured, resolved_tokens } }` |
-| PATCH | `/user/preferences` | `theme?`, `font_override?`, `email_notifications?`, `email_morning?`, `email_weekly?`, `task_notes_enabled?`, `contacts_enabled?` | same shape as GET |
+| GET | `/user/preferences` | — | `{ data: { theme, font_override, email_notifications, email_morning, email_weekly, task_notes_enabled, contacts_enabled, locale, configured, resolved_tokens } }` |
+| PATCH | `/user/preferences` | `theme?`, `font_override?`, `email_notifications?`, `email_morning?`, `email_weekly?`, `task_notes_enabled?`, `contacts_enabled?`, `locale?` (`en` or `ne`) | same shape as GET; a new `locale` applies from the next request (the web's switch is `POST /locale`) |
 
 The web app exposes a session twin at `PATCH /workspace/preferences`, and the
 page `/workspace/settings/emails` that uses it. The three email fields are
@@ -500,7 +500,8 @@ connection's webhook secret. See `docs/forgejo.md`, section 12.
 ## Documents *(documents on; what each person may do is their access level, below)*
 
 Word, Excel and PowerPoint files, edited together in ONLYOFFICE
-(`docs/onlyoffice.md`; design `docs/superpowers/specs/2026-11-06-documents-workspace-design.md`).
+(`docs/onlyoffice.md`; design `docs/superpowers/specs/2026-11-06-documents-workspace-design.md`,
+the page's tabs and rows `2026-11-07-documents-ui-design.md`).
 A document belongs to a project (`home: project`) or, personal, to the
 person who made it (`home: personal`). Every route answers 403 while
 documents are off (no editor configured).
@@ -526,12 +527,15 @@ personal document's owner's. Someone who owns personal documents, trashed
 ones included, can't be deleted: `DELETE /workspace/members/{id}` answers
 422 `They own personal documents; deactivate them instead.`
 
-A document is `{ id, title, file_type (docx|xlsx|pptx), kind
-(Document|Spreadsheet|Presentation), version, size, home (project|personal),
-project ({ slug, title, label } or null), owner ({ id, name } or null),
-organization_access, access, frozen, can_delete, can_share, can_move,
-created_by, updated_by, created_at, updated_at, deleted_at }` (people as
-`{ id, name }`); a version is `{ version, size, source
+A document is `{ id, title, file_type (docx|xlsx|pptx), kind (its kind's
+name to show, in the caller's language: Document, Spreadsheet, Presentation
+or their Nepali; check `file_type`, never `kind`), version, size, home (project|personal),
+project ({ slug, title, label, can_open } or null; `can_open`: the caller
+may open the project's Documents tab), owner ({ id, name } or null),
+organization_access, access, frozen, can_delete, can_share, shares_count,
+can_move, created_by, updated_by, created_at, updated_at, deleted_at }`
+(people as `{ id, name }`; `shares_count` is how many people it is shared
+with whose share gives access now, for whoever may share it, else null); a version is `{ version, size, source
 (created|uploaded|edited), user, created_at }`; a share is `{ id, member: {
 id, name, designation }, permission, effective }`. Every save from the
 editor is a new version; none is ever deleted, and the trash is never
@@ -539,7 +543,8 @@ emptied.
 
 | Method | Path | Body / notes |
 | --- | --- | --- |
-| GET | `/workspace/documents` | every document the caller may open, newest change first, 50 at a time: `{ data, next_cursor }` (pass `cursor` for the next). Query: `show` (`all`, `mine` (personal ones they own), `shared` (shared with them), `organization` (open to the organization), `projects`), `project` (a slug), `type`, `q` (in the title). The web renders the Documents page; its Show more is `GET /workspace/documents/list` |
+| GET | `/workspace/documents` | every document the caller may open, newest change first, 50 at a time: `{ data, next_cursor }` (pass `cursor` for the next). Query: `show`, the tab: `recent` (everything, the default), `personal` (personal ones they own), `shared` (shared with them by name, plus those open to the whole office that they don't own and don't reach through one of their projects), `projects` (those in projects); the earlier names `all`, `mine` and `organization` still work as `recent`, `personal` and `shared`. Also `project` (a slug), `type`, `q` (in the title). The web renders the Documents page (whose Projects tab with no other filter shows `project_cards` instead of rows, and `total`, how many the caller may open); its Show more is `GET /workspace/documents/list` |
+| GET | `/workspace/documents/projects` | the Projects tab: a card per active project whose documents the caller may use, `{ slug, title, label, documents_count, last_edited_at }`, the newest edit first, then those with none by title (API only; the web page carries them as `project_cards`) |
 | GET | `/workspace/documents/trash` | the trashed ones the caller may see, newest first (`project` narrows to one) |
 | POST | `/workspace/documents` | `title` (at most 200), `type` (`docx`, `xlsx` or `pptx`), optional `project` (a slug): a blank one in that project, or personal without one. A project whose documents the caller may not use is 422 `Choose one of your projects.` on `project`; a personal one needs an active person (403 otherwise). `Created {title}.`; the web opens it in the editor |
 | POST | `/workspace/documents/upload` | multipart `file` (a real `.docx`, `.xlsx` or `.pptx`, at most 50 MB; anything else is 422 `This file could not be read as a Word, Excel or PowerPoint file.` or `Upload a .docx, .xlsx or .pptx file.`), optional `title` (else the file name), optional `project` as above. `Uploaded {title}.` |

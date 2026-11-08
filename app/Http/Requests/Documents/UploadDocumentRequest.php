@@ -5,6 +5,7 @@ namespace App\Http\Requests\Documents;
 use App\Models\Document;
 use App\Rules\OfficeFile;
 use App\Support\Documents\DocumentTypes;
+use App\Support\Locales;
 
 /** An uploaded .docx, .xlsx or .pptx; the title defaults to its file name. */
 class UploadDocumentRequest extends CreateDocumentRequest
@@ -27,8 +28,8 @@ class UploadDocumentRequest extends CreateDocumentRequest
     public function messages(): array
     {
         return [
-            'file.extensions' => 'Upload a .docx, .xlsx or .pptx file.',
-            'file.max' => 'Files can be at most '.intdiv((int) config('documents.max_upload_kilobytes'), 1024).' MB.',
+            'file.extensions' => __('Upload a .docx, .xlsx or .pptx file.'),
+            'file.max' => __('Files can be at most :size MB.', ['size' => Locales::number(intdiv((int) config('documents.max_upload_kilobytes'), 1024))]),
         ];
     }
 }

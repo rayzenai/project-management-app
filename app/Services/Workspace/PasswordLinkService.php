@@ -44,7 +44,7 @@ final class PasswordLinkService
     {
         defer(fn () => $this->deliverReset($email));
 
-        return ServiceResult::success(null, self::RESET_ANSWER);
+        return ServiceResult::success(null, __('If that email has a login here, a link to set a new password is on its way.'));
     }
 
     /**
@@ -104,12 +104,14 @@ final class PasswordLinkService
             });
 
             if ($user === null) {
-                return ServiceResult::failure(self::LINK_REFUSED, 422, ['token' => self::LINK_REFUSED]);
+                $refused = __('This link has expired or was already used.');
+
+                return ServiceResult::failure($refused, 422, ['token' => $refused]);
             }
 
             $timebox->returnEarly();
 
-            return ServiceResult::success($user, 'Your password is set.');
+            return ServiceResult::success($user, __('Your password is set.'));
         }, self::REFUSAL_MICROSECONDS);
     }
 

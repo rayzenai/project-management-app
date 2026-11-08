@@ -70,11 +70,11 @@ class CreateDocumentService
         } catch (Throwable $e) {
             report($e);
 
-            return ServiceResult::failure("Couldn't save {$title}. Try again.", 500);
+            return ServiceResult::failure(__("Couldn't save :title. Try again.", ['title' => $title]), 500);
         }
 
-        $verb = $kind === DocumentVersion::SOURCE_UPLOADED ? 'Uploaded' : 'Created';
-
-        return ServiceResult::success($document, "{$verb} {$document->title}.");
+        return ServiceResult::success($document, $kind === DocumentVersion::SOURCE_UPLOADED
+            ? __('Uploaded :title.', ['title' => $document->title])
+            : __('Created :title.', ['title' => $document->title]));
     }
 }

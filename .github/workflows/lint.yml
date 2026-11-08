@@ -44,6 +44,9 @@ jobs:
       - name: Lint Frontend
         run: npm run lint
 
+      - name: Translations
+        run: npm run i18n:check
+
       # - name: Commit Changes
       #   uses: stefanzweifel/git-auto-commit-action@v7
       #   with:

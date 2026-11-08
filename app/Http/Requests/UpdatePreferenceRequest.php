@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Locales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -31,6 +32,7 @@ class UpdatePreferenceRequest extends FormRequest
             'email_weekly' => ['sometimes', 'boolean'],
             'task_notes_enabled' => ['sometimes', 'boolean'],
             'contacts_enabled' => ['sometimes', 'boolean'],
+            'locale' => ['sometimes', 'string', Rule::in(Locales::supported())],
         ];
     }
 }

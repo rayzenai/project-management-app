@@ -18,13 +18,13 @@ class RenameDocumentService
         $title = mb_substr(trim($title), 0, Document::TITLE_MAX);
 
         if ($title === '' || $title === $document->title) {
-            return ServiceResult::success($document, 'Nothing to change.');
+            return ServiceResult::success($document, __('Nothing to change.'));
         }
 
         $document->title = $title;
         $document->updated_by = (int) $user->getAuthIdentifier();
         $document->save();
 
-        return ServiceResult::success($document, "Renamed to {$title}.");
+        return ServiceResult::success($document, __('Renamed to :title.', ['title' => $title]));
     }
 }

@@ -831,6 +831,8 @@ export interface Flash {
     undo?: { label: string; url: string };
     /** The row quick add just made ("todo-12", "task-34"): My work shows it. */
     created_key?: string;
+    /** The document just made: its editor page offers the title to type over. */
+    created_document?: number;
 }
 
 export interface AuthUser extends User {
@@ -1053,7 +1055,13 @@ export interface DocumentItem {
     size: number;
     /** In a project, or personal: its owner's. */
     home: 'project' | 'personal';
-    project?: { slug: string; title: string; label: string } | null;
+    /** `can_open`: the viewer may open the project's Documents tab. */
+    project?: {
+        slug: string;
+        title: string;
+        label: string;
+        can_open: boolean;
+    } | null;
     owner?: { id: number; name: string } | null;
     /** Open to everyone in its organization, at this level. */
     organization_access: DocumentAccess | null;
@@ -1065,6 +1073,8 @@ export interface DocumentItem {
     can_delete: boolean;
     /** Open to the organization and give to people. */
     can_share: boolean;
+    /** People it is shared with now; null unless the viewer may share it. */
+    shares_count: number | null;
     /** Move a personal document into a project. */
     can_move: boolean;
     created_by?: { id: number; name: string } | null;
@@ -1100,17 +1110,33 @@ export interface ProjectChoice {
     label: string;
 }
 
+/** The Documents page's tabs (DocumentLibraryRequest::SHOWS). */
+export type DocumentTab = 'recent' | 'personal' | 'shared' | 'projects';
+
+/** A project on the Documents page's Projects tab. */
+export interface DocumentProjectCard {
+    slug: string;
+    title: string;
+    label: string;
+    documents_count: number;
+    last_edited_at: string | null;
+}
+
 /** The Documents page (DocumentLibraryQuery::page). */
 export interface DocumentLibrary {
     documents: DocumentItem[];
     /** Fetches the next 50 from /workspace/documents/list; null at the end. */
     next_cursor: string | null;
     filters: {
-        show: 'all' | 'mine' | 'shared' | 'organization' | 'projects';
+        show: DocumentTab;
         project: string | null;
         type: DocumentFileType | null;
         q: string | null;
     };
+    /** The Projects tab with no other filter: a card per project, no rows. */
+    project_cards: DocumentProjectCard[];
+    /** How many documents the viewer may open at all. */
+    total: number;
     projects: ProjectChoice[];
     /** The viewer's organization, for "Everyone in SDOC". */
     organization: { id: number; name: string } | null;

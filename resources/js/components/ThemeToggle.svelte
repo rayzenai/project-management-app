@@ -4,6 +4,7 @@
     import { MediaQuery } from 'svelte/reactivity';
     import type { AppearanceProps } from '../lib/appearance';
     import { applyAppearance } from '../lib/applyTheme';
+    import { t } from '../lib/i18n';
     import type { SharedProps } from '../lib/types';
 
     /**
@@ -27,7 +28,7 @@
     let pendingDark = $state<boolean | null>(null);
     const dark = $derived(pendingDark ?? savedDark);
     const label = $derived(
-        dark ? 'Switch to light theme' : 'Switch to dark theme',
+        dark ? t('Switch to light theme') : t('Switch to dark theme'),
     );
 
     let requestedDark: boolean | null = null;

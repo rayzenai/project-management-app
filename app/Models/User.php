@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Locales;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -43,6 +44,19 @@ class User extends Authenticatable
     public function preferences(): HasOne
     {
         return $this->hasOne(UserPreference::class);
+    }
+
+    /**
+     * The language they chose (App\Support\Locales), or $fallback while they
+     * have chosen none the app has.
+     */
+    public function locale(?string $fallback = Locales::DEFAULT): ?string
+    {
+        // Read, not cached on the user: every request asks it once, the same.
+        $preferences = $this->relationLoaded('preferences') ? $this->preferences : $this->preferences()->first(['locale']);
+        $saved = $preferences?->locale;
+
+        return Locales::isSupported($saved) ? $saved : $fallback;
     }
 
     /**

@@ -3,6 +3,7 @@
     import { tick, untrack } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { forgivingFilter } from '../lib/forgivingFilter';
+    import { msg, t } from '../lib/i18n';
     import { projectLabel } from '../lib/projectLabel';
     import type { Id, OrganizationOption, QuickAddProject } from '../lib/types';
     import Popover from './Popover.svelte';
@@ -28,7 +29,7 @@
         disabled = false,
         field = false,
         triggerClass,
-        placeholder = 'Project',
+        placeholder,
         onpick,
     }: {
         projects: QuickAddProject[];
@@ -52,7 +53,7 @@
         /** A form field (the dialog) rather than a chip (the add field). */
         field?: boolean;
         triggerClass: string;
-        /** The trigger's words while nothing is chosen. */
+        /** The trigger's words while nothing is chosen; "Project" by default. */
         placeholder?: string;
         /** After a pick, e.g. to put the caret back in the add field. */
         onpick?: (value: Id | 'general' | 'personal') => void;
@@ -67,16 +68,17 @@
         detail: string | null;
     };
 
+    // English in the data, drawn (and searched) through t().
     const PERSONAL_ROW: Row = {
         value: 'personal',
-        title: 'Just for me',
-        detail: 'A private to-do',
+        title: msg('Just for me'),
+        detail: msg('A private to-do'),
     };
 
     const GENERAL_ROW: Row = {
         value: 'general',
-        title: 'General (new)',
-        detail: "Your organization's first project",
+        title: msg('General (new)'),
+        detail: msg("Your organization's first project"),
     };
 
     // Tailwind's md: below it the picker rises from the bottom as a sheet.
@@ -114,7 +116,7 @@
 
     /** "Your projects", then your organization, then the rest by name. */
     const views = $derived<{ id: View; name: string }[]>([
-        { id: YOURS, name: 'Your projects' },
+        { id: YOURS, name: t('Your projects') },
         ...organizations.filter((o) => o.id === homeOrganizationId),
         ...organizations.filter((o) => o.id !== homeOrganizationId),
     ]);
@@ -133,10 +135,10 @@
         chosen
             ? projectLabel(chosen)
             : value === 'general'
-              ? GENERAL_ROW.title
+              ? t(GENERAL_ROW.title)
               : value === 'personal'
-                ? PERSONAL_ROW.title
-                : placeholder,
+                ? t(PERSONAL_ROW.title)
+                : (placeholder ?? t('Project')),
     );
 
     /**
@@ -182,19 +184,25 @@
         const offersGeneral =
             general &&
             (searching
-                ? forgivingFilter([GENERAL_ROW], query, (r) => r.title).length >
-                  0
+                ? forgivingFilter([GENERAL_ROW], query, (r) => t(r.title))
+                      .length > 0
                 : view === YOURS || view === homeOrganizationId);
         const offersPersonal =
             personal &&
             (searching
-                ? forgivingFilter([PERSONAL_ROW], query, (r) => r.title)
+                ? forgivingFilter([PERSONAL_ROW], query, (r) => t(r.title))
                       .length > 0
                 : view === YOURS);
 
+        const shown = (row: Row): Row => ({
+            ...row,
+            title: t(row.title),
+            detail: row.detail === null ? null : t(row.detail),
+        });
+
         return [
-            ...(offersPersonal ? [PERSONAL_ROW] : []),
-            ...(offersGeneral ? [GENERAL_ROW] : []),
+            ...(offersPersonal ? [shown(PERSONAL_ROW)] : []),
+            ...(offersGeneral ? [shown(GENERAL_ROW)] : []),
             ...listed.map((p) => ({
                 value: p.id,
                 title: p.title,
@@ -204,7 +212,7 @@
     });
 
     const viewName = $derived(
-        views.find((v) => v.id === view)?.name ?? 'Your projects',
+        views.find((v) => v.id === view)?.name ?? t('Your projects'),
     );
 
     // Closed, the picker gets ready to open where the chosen project is.
@@ -491,8 +499,8 @@
                     bind:this={searchEl}
                     type="text"
                     class="input pl-8"
-                    placeholder="Search projects"
-                    aria-label="Search projects"
+                    placeholder={t('Search projects')}
+                    aria-label={t('Search projects')}
                     role="combobox"
                     aria-expanded="true"
                     aria-autocomplete="list"
@@ -514,7 +522,7 @@
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={orgOpen}
-                    aria-label={`Show: ${viewName}`}
+                    aria-label={t('Show: :name', { name: viewName })}
                     class={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 font-medium text-fg transition hover:bg-hover ${sheet ? 'h-[40px] text-[15px]' : 'h-7 text-[13px]'}`}
                     onclick={() => (orgOpen ? (orgOpen = false) : openOrg())}
                     onkeydown={(e) => {
@@ -537,7 +545,7 @@
                         bind:this={orgMenu}
                         role="listbox"
                         tabindex="-1"
-                        aria-label="Organizations"
+                        aria-label={t('Organizations')}
                         class="popover fixed z-10 overflow-y-auto px-1"
                         style={orgPlacement}
                         onkeydown={onOrgKey}
@@ -576,7 +584,7 @@
         <ul
             id={`${uid}-list`}
             role="listbox"
-            aria-label="Projects"
+            aria-label={t('Projects')}
             class="min-h-0 flex-1 overflow-y-auto border-t border-line-soft px-1 pt-1"
         >
             {#each rows as row, i (row.value)}
@@ -622,8 +630,10 @@
             {:else}
                 <li class="px-2 py-3 text-[13px] text-fg-faint">
                     {searching
-                        ? `No project matches "${query.trim()}"`
-                        : 'No projects here yet.'}
+                        ? t('No project matches ":query"', {
+                              query: query.trim(),
+                          })
+                        : t('No projects here yet.')}
                 </li>
             {/each}
         </ul>
@@ -635,7 +645,7 @@
         <button
             type="button"
             disabled
-            aria-label={`Project: ${label}`}
+            aria-label={t('Project: :name', { name: label })}
             class={`${triggerClass} cursor-default opacity-60`}
         >
             {@render face()}
@@ -644,8 +654,8 @@
         <Popover
             bind:open
             role="dialog"
-            label="Choose a project"
-            triggerLabel={`Project: ${label}`}
+            label={t('Choose a project')}
+            triggerLabel={t('Project: :name', { name: label })}
             {triggerClass}
             wrapperClass={field ? 'w-full' : 'min-w-0 max-w-full'}
             panelClass="w-[340px] max-w-[calc(100vw-16px)]"
@@ -661,7 +671,7 @@
                 type="button"
                 aria-haspopup="dialog"
                 aria-expanded={open}
-                aria-label={`Project: ${label}`}
+                aria-label={t('Project: :name', { name: label })}
                 class={triggerClass}
                 onclick={() => (open = true)}
             >
@@ -672,7 +682,7 @@
             <div use:portal class="fixed inset-0 z-50">
                 <button
                     type="button"
-                    aria-label="Close the projects"
+                    aria-label={t('Close the projects')}
                     tabindex="-1"
                     class="absolute inset-0 cursor-default bg-black/40"
                     onclick={close}
@@ -681,7 +691,7 @@
                     bind:this={sheetEl}
                     role="dialog"
                     aria-modal="true"
-                    aria-label="Choose a project"
+                    aria-label={t('Choose a project')}
                     tabindex="-1"
                     class="popover absolute inset-x-0 bottom-0 rounded-b-none pb-[env(safe-area-inset-bottom)] focus:outline-none"
                     style={sheetHeight > 0

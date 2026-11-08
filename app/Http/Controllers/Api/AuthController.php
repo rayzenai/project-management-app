@@ -55,7 +55,7 @@ class AuthController extends Controller
 
         if (! WorkspaceAccess::canSignIn($user)) {
             throw ValidationException::withMessages([
-                'email' => [EnsureCanSignIn::DEACTIVATED],
+                'email' => [EnsureCanSignIn::deactivated()],
             ]);
         }
 
@@ -76,7 +76,7 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Logged out.']);
+        return response()->json(['message' => __('Logged out.')]);
     }
 
     /**
@@ -107,6 +107,7 @@ class AuthController extends Controller
                 'id' => $member->organization->id,
                 'name' => $member->organization->name,
             ],
+            'locale' => $user->locale(),
             'is_super_admin' => WorkspaceAccess::isSuperAdmin($user),
             'is_office_admin' => WorkspaceAccess::officeAdminOrganizationId($user) !== null,
             'led_team_ids' => WorkspaceAccess::ledTeamIds($user),
