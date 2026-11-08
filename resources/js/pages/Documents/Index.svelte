@@ -161,13 +161,13 @@
         recent: {
             title: msg('No documents yet.'),
             body: msg(
-                'Start a document, spreadsheet or presentation above, or drop a .docx, .xlsx or .pptx file anywhere on this page. One made for Just me is yours until you share it: with everyone in your office, or with chosen people. One in a project belongs to its team.',
+                'Start a document, spreadsheet or presentation above, or drop a .docx, .xlsx or .pptx file anywhere on this page. One made for Just for me is yours until you share it: with everyone in your office, or with chosen people. One in a project belongs to its team.',
             ),
         },
         personal: {
             title: msg('No personal documents yet.'),
             body: msg(
-                'Documents you make for Just me are kept here, and only you see them until you share them.',
+                'Documents you make for Just for me are kept here, and only you see them until you share them.',
             ),
         },
         shared: {
@@ -198,10 +198,10 @@
         <DocumentStart
             types={props.types}
             maxUploadMb={props.max_upload_mb}
-            places={props.projects}
+            places={props.places}
             canCreatePersonal={props.can_create_personal}
         />
-        {#if !props.can_create_personal && props.projects.length === 0}
+        {#if !props.can_create_personal && props.places.projects.length === 0}
             <p class="text-[13px] text-fg-muted">
                 {t(
                     "You can open the documents shared with you here. To make your own, you need a place in an office or on a project's team.",
@@ -261,7 +261,7 @@
                 <DocumentList
                     documents={rows}
                     showWhere
-                    moveTargets={props.projects}
+                    moveTargets={props.places}
                 />
                 {#if cursor !== null}
                     <div class="mt-3 flex items-center gap-3">

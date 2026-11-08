@@ -520,7 +520,8 @@ the organizational admin switch and the program and project manager pickers.
 
 - **Web** (`routes/web.php`, prefix `workspace`, names `workspace.*`):
   `ShareWorkspaceData` shares `statuses`, `completeStatus`, `quickAddContext`
-  (`projects` with `member_ids`, `organization_id` and `can_add_people` =
+  (`projects`, each `ProjectChoices::row` (`mine`: the caller is on its
+  team) plus `member_ids` and `can_add_people` =
   `canManageRosterOfProject`, no query per project; `organizations`, those
   projects' organizations by name in one query, for the add field's project
   picker (`components/ProjectPicker.svelte`: "Your projects" first, a
@@ -1028,8 +1029,9 @@ API: `docs/api.md` (Documents).
   are built from `components/documents/`: `DocumentStart` (a tile per kind
   makes "Untitled ..." and opens it; Upload and a file dropped anywhere on
   the page, one after another, checked for kind and `max_upload_mb` first;
-  on the Documents page "New ones go to", remembered per person in
-  `localStorage`), `DocumentList` (the kind's colour from
+  on the Documents page "New ones go to", the project picker with Just
+  for me, remembered per person in `localStorage`; the page's `places` is
+  `ProjectChoices`, also Move to project's), `DocumentList` (the kind's colour from
   `DocumentKindIcon`, where it lives, who can see it, "You · 3 hours ago";
   the whole row is its one link, Share shows on hover), `DocumentProjectCards`,
   `DocumentTrash`, `ShareDialog`. The kind colours are CSS-only tokens
@@ -1107,8 +1109,10 @@ default on), whether or not documents are.
   `components/forms/builder/`), `Forms/Fill`, `Forms/Responses`,
   `components/project/FormsView.svelte`. JSON calls go through
   `lib/forms/http.ts` (CSRF from the page's meta tag). A dialog opened from
-  the top bar uses `lib/forms/portal.ts` (the bar's blur makes it the box
-  fixed elements sit in).
+  the top bar uses `lib/portal.ts` (the bar's blur makes it the box
+  fixed elements sit in). New form, Make a copy and the Tasks tab choose
+  their project with `ProjectPicker` (`places`, and the builder's
+  `tasks.places`, are `ProjectChoices`).
 
 ## Structure, attendance and work reports
 
@@ -1320,7 +1324,16 @@ the single source of mode.
 
 Primitives: `StatusGlyph` (the status icon: ring / dashed ring / amber half
 disc / green check / red cross), `PriorityBars`, `Avatar` (squircle initials),
-`ProgressRing`. `Popover` portals its panel to `<body>` (`label` names
+`ProgressRing`. **Choosing a project is always `ProjectPicker`**, never a
+`<select>` of projects: its list comes from `App\Support\ProjectChoices`
+(`for($viewer, $projects)`: `{projects: [{id, slug, title, program,
+organization_id, mine}], organizations}`; which projects belong in a list
+stays with the list's query), and a caller that posts a slug maps the
+picked id back (`personal` offers Just for me, `personalDetail` says what
+it makes, `field` with no `triggerClass` looks like an `.input`). Moving an
+element to `<body>` is `lib/portal.ts` (`use:portal`), never a copy of it.
+A report's filter of projects and programs (Code activity's) is not a
+choice of where something goes and keeps its `<select>`. `Popover` portals its panel to `<body>` (`label` names
 it; a dialog needs one); a Popover opened
 inside another's panel registers its panel with the outer one (context),
 so a press in it doesn't close the outer, and a press on a toast

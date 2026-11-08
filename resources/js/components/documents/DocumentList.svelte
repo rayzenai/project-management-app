@@ -18,10 +18,12 @@
     import type {
         DocumentItem,
         DocumentVersionItem,
-        ProjectChoice,
+        ProjectChoices,
+        ProjectPick,
         SharedProps,
     } from '../../lib/types';
     import Popover from '../Popover.svelte';
+    import ProjectPicker from '../ProjectPicker.svelte';
     import Spinner from '../Spinner.svelte';
     import DocumentKindIcon from './DocumentKindIcon.svelte';
     import ShareDialog from './ShareDialog.svelte';
@@ -41,13 +43,13 @@
     let {
         documents,
         showWhere = false,
-        moveTargets = [],
+        moveTargets = { projects: [], organizations: [] },
     }: {
         documents: DocumentItem[];
         /** Say where each lives (the Documents page; the tab is one project). */
         showWhere?: boolean;
         /** Projects a personal document can move into. */
-        moveTargets?: ProjectChoice[];
+        moveTargets?: ProjectChoices;
     } = $props();
 
     const uid = $props.id();
@@ -92,7 +94,11 @@
     let renameTitle = $state('');
     let renameInput = $state<HTMLInputElement | null>(null);
     let movingId = $state<number | null>(null);
-    let moveTo = $state('');
+    let moveTo = $state<ProjectPick>(null);
+    const moveSlug = $derived(
+        moveTargets.projects.find((choice) => choice.id === moveTo)?.slug ??
+            null,
+    );
     let moveError = $state<string | null>(null);
     let sharing = $state<DocumentItem | null>(null);
     let shareOpen = $state(false);
@@ -214,7 +220,7 @@
     function startMove(document: DocumentItem) {
         menuFor = null;
         movingId = document.id;
-        moveTo = moveTargets[0]?.slug ?? '';
+        moveTo = null;
         moveError = null;
     }
 
@@ -222,7 +228,7 @@
         event.preventDefault();
         router.post(
             `${url(document)}/move`,
-            { project: moveTo },
+            { project: moveSlug },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -455,7 +461,7 @@
                             ><Users class="h-3.5 w-3.5" />{t('Share')}</button
                         >
                     {/if}
-                    {#if document.can_move && moveTargets.length > 0}
+                    {#if document.can_move && moveTargets.projects.length > 0}
                         <button
                             type="button"
                             data-popover-item
@@ -501,20 +507,20 @@
                     class="mb-2.5 ml-11 flex flex-wrap items-center gap-2"
                     onsubmit={(e) => move(e, document)}
                 >
-                    <label for="{uid}-move-{document.id}" class="sr-only"
-                        >{t('Project to move it to')}</label
-                    >
-                    <select
-                        id="{uid}-move-{document.id}"
-                        bind:value={moveTo}
-                        class="input h-8 w-auto max-w-full min-w-0 flex-1 lg:min-h-8"
-                    >
-                        {#each moveTargets as target (target.slug)}
-                            <option value={target.slug}>{target.label}</option>
-                        {/each}
-                    </select>
-                    <button type="submit" class="btn shrink-0"
-                        >{t('Move')}</button
+                    <span class="min-w-0 flex-1">
+                        <ProjectPicker
+                            projects={moveTargets.projects}
+                            organizations={moveTargets.organizations}
+                            bind:value={moveTo}
+                            field
+                            placeholder={t('Project to move it to')}
+                            triggerClass={`input flex h-8 items-center gap-2 text-left lg:min-h-8 ${moveTo === null ? 'text-fg-faint' : 'text-fg'}`}
+                        />
+                    </span>
+                    <button
+                        type="submit"
+                        class="btn shrink-0"
+                        disabled={moveSlug === null}>{t('Move')}</button
                     >
                     <button
                         type="button"

@@ -4,6 +4,7 @@
     import NewForm from '../../components/forms/NewForm.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
     import type { FormItem, FormTemplate } from '../../lib/forms/types';
+    import type { ProjectChoices } from '../../lib/types';
 
     /**
      * The Forms page: forms waiting for you (To fill), what you sent
@@ -14,7 +15,7 @@
         to_fill: FormItem[];
         filled: FormItem[];
         managing: FormItem[];
-        places: { slug: string; label: string }[];
+        places: ProjectChoices;
         templates: FormTemplate[];
     } = $props();
 

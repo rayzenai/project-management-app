@@ -10,6 +10,7 @@ use App\Queries\Structure\PersonRef;
 use App\Services\Forms\FormPublishChecks;
 use App\Support\Forms\FormSchema;
 use App\Support\Forms\FormTemplates;
+use App\Support\ProjectChoices;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -70,10 +71,9 @@ class FormBuilderQuery
                 'settings' => $tasks,
                 'project' => $taskProject === null ? null : ['slug' => $taskProject->slug, 'label' => $taskProject->label()],
                 'assignee' => $assignee === null ? null : PersonRef::of($assignee),
-                'projects' => array_values(Project::query()->active()->where('organization_id', $project->organization_id)->with('program')->orderBy('title')->limit(300)->get()
-                    ->filter(fn (Project $choice): bool => WorkspaceAccess::canSendFormTasksTo($viewer, $form, $choice))
-                    ->map(fn (Project $choice): array => ['slug' => $choice->slug, 'label' => $choice->label()])
-                    ->all()),
+                // Where its tasks may go, for the project picker.
+                'places' => ProjectChoices::for($viewer, Project::query()->active()->where('organization_id', $project->organization_id)->with('program')->orderBy('title')->limit(300)->get()
+                    ->filter(fn (Project $choice): bool => WorkspaceAccess::canSendFormTasksTo($viewer, $form, $choice))),
             ],
             'templates' => FormTemplates::all(),
             // Where a copy may go.

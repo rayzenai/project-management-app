@@ -602,9 +602,9 @@ Answers are keyed by question id; choices by option id.
 
 | Method | Path | Who | Notes |
 |---|---|---|---|
-| GET | `/workspace/forms` | anyone | `{to_fill, filled, managing, places, templates}` |
+| GET | `/workspace/forms` | anyone | `{to_fill, filled, managing, places, templates}`; `places`, the projects a new form may go in: `{ projects: [{ id, slug, title, program, organization_id, mine }], organizations: [{ id, name }] }` (`mine`: the caller is on its team; `organizations`: those projects' organizations by name), the one shape of every list of projects to choose from |
 | POST | `/workspace/forms` | may make forms in `project` | `{project, title, template?}` → 201 the form |
-| GET | `/workspace/forms/{id}` | `edit` | the builder's state: form, draft, problems, versions, respondents, tasks |
+| GET | `/workspace/forms/{id}` | `edit` | the builder's state: form, draft, problems, versions, respondents, tasks (its `places`: where its tasks may go), `places` (where a copy may go); both `places` in the shape of `/workspace/forms`' |
 | PUT | `/workspace/forms/{id}/draft` | `edit` | `{draft}` → `{draft, problems, changed, saved_at}`; 422 for a draft that can't be kept |
 | PATCH | `/workspace/forms/{id}` | `edit` | title, `opens_at`, `closes_at`, `response_limit`, `answering` (fixed once a response is in), `allow_edit`, `review_page`, `notify`, `stages` |
 | POST | `/workspace/forms/{id}/publish` | `edit` | `{notify?}`; 422 while a problem stands or nothing changed |

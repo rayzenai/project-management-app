@@ -3,12 +3,15 @@
     import { Upload } from '@lucide/svelte';
     import { onDestroy } from 'svelte';
     import { msg, t, tc } from '../../lib/i18n';
+    import { projectLabel } from '../../lib/projectLabel';
     import { toast } from '../../lib/toast.svelte';
     import type {
         DocumentFileType,
-        ProjectChoice,
+        ProjectChoices,
+        ProjectPick,
         SharedProps,
     } from '../../lib/types';
+    import ProjectPicker from '../ProjectPicker.svelte';
     import Spinner from '../Spinner.svelte';
     import DocumentKindIcon from './DocumentKindIcon.svelte';
 
@@ -18,25 +21,25 @@
      * title is ready to type over; Upload takes one or more files, and so
      * does dropping them anywhere on the page. On a project's tab the
      * project is fixed (`project`); on the Documents page they go where
-     * "New ones go to" says, Just me or one of `places`, remembered per
-     * person in this browser.
+     * "New ones go to" says (the project picker: Just for me or one of
+     * `places`), remembered per person in this browser.
      */
     let {
         types,
         maxUploadMb,
         project = null,
-        places = [],
+        places = { projects: [], organizations: [] },
         canCreatePersonal = false,
     }: {
         types: { value: DocumentFileType; label: string }[];
         maxUploadMb: number;
         /** The tab's project (its slug): no choice of place. */
         project?: string | null;
-        places?: ProjectChoice[];
+        places?: ProjectChoices;
         canCreatePersonal?: boolean;
     } = $props();
 
-    const uid = $props.id();
+    // Remembered as a project's slug, or this for Just for me.
     const PERSONAL = '';
     const EXTENSIONS = ['docx', 'xlsx', 'pptx'];
     const APPS: Record<DocumentFileType, string> = {
@@ -56,10 +59,8 @@
     );
     const choosing = $derived(project === null);
     const choices = $derived([
-        ...(canCreatePersonal
-            ? [{ value: PERSONAL, label: t('Just me') }]
-            : []),
-        ...places.map((place) => ({ value: place.slug, label: place.label })),
+        ...(canCreatePersonal ? [PERSONAL] : []),
+        ...places.projects.map((choice) => choice.slug),
     ]);
     const canMake = $derived(!choosing || choices.length > 0);
 
@@ -84,26 +85,32 @@
     );
     // The remembered place while it is still one of the choices.
     const place = $derived(
-        choices.some((choice) => choice.value === chosen)
-            ? (chosen as string)
-            : (choices[0]?.value ?? PERSONAL),
+        chosen !== null && choices.includes(chosen)
+            ? chosen
+            : (choices[0] ?? PERSONAL),
+    );
+    const placeProject = $derived(
+        places.projects.find((choice) => choice.slug === place) ?? null,
+    );
+    const pick = $derived<ProjectPick>(
+        placeProject?.id ?? (place === PERSONAL ? 'personal' : null),
     );
     const target = $derived(project ?? (place === PERSONAL ? null : place));
     const dropHint = $derived(
-        choosing
+        choosing && placeProject === null
             ? t(
-                  'To :place. Word, Excel or PowerPoint files of up to :max MB each.',
-                  {
-                      place:
-                          choices.find((choice) => choice.value === place)
-                              ?.label ?? t('Just me'),
-                      max: maxUploadMb,
-                  },
-              )
-            : t(
-                  'To this project. Word, Excel or PowerPoint files of up to :max MB each.',
+                  'To your personal documents. Word, Excel or PowerPoint files of up to :max MB each.',
                   { max: maxUploadMb },
-              ),
+              )
+            : choosing && placeProject !== null
+              ? t(
+                    'To :place. Word, Excel or PowerPoint files of up to :max MB each.',
+                    { place: projectLabel(placeProject), max: maxUploadMb },
+                )
+              : t(
+                    'To this project. Word, Excel or PowerPoint files of up to :max MB each.',
+                    { max: maxUploadMb },
+                ),
     );
 
     let creating = $state<DocumentFileType | null>(null);
@@ -117,9 +124,16 @@
     let problems = $state<string[]>([]);
     const busy = $derived(creating !== null || progress !== null);
 
-    function choose(value: string): void {
-        chosen = value;
-        remember(value);
+    function choose(next: ProjectPick): void {
+        const value =
+            next === 'personal'
+                ? PERSONAL
+                : places.projects.find((choice) => choice.id === next)?.slug;
+
+        if (value !== undefined) {
+            chosen = value;
+            remember(value);
+        }
     }
 
     function create(type: DocumentFileType): void {
@@ -482,17 +496,17 @@
             <div
                 class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted"
             >
-                <label for="{uid}-place">{t('New ones go to')}</label>
-                <select
-                    id="{uid}-place"
-                    value={place}
-                    onchange={(event) => choose(event.currentTarget.value)}
-                    class="input w-auto max-w-full min-w-0 py-1 lg:min-h-8 lg:text-[13px]"
-                >
-                    {#each choices as choice (choice.value)}
-                        <option value={choice.value}>{choice.label}</option>
-                    {/each}
-                </select>
+                <span>{t('New ones go to')}</span>
+                <ProjectPicker
+                    projects={places.projects}
+                    organizations={places.organizations}
+                    personal={canCreatePersonal}
+                    personalDetail={msg(
+                        'Only you see them until you share them.',
+                    )}
+                    bind:value={() => pick, choose}
+                    triggerClass="input flex w-auto max-w-full min-w-0 items-center gap-1.5 py-1 text-fg lg:min-h-8 lg:text-[13px]"
+                />
                 <span
                     >{place === PERSONAL
                         ? t('Only you see them until you share them.')

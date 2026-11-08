@@ -6,6 +6,7 @@
 <script lang="ts">
     import { getContext, setContext } from 'svelte';
     import type { Snippet } from 'svelte';
+    import { portal } from '../lib/portal';
 
     let {
         open = $bindable(false),
@@ -41,22 +42,11 @@
     const GAP = 4;
     const EDGE = 8;
 
-    /**
-     * The panel is moved to <body> and positioned in viewport coordinates.
-     * Absolute positioning inside the trigger's own stacking context looked
-     * right until a toolbar scrolled sideways: `overflow-x: auto` computes
-     * `overflow-y` to `auto` as well, so the menu was clipped to the strip it
-     * dropped out of. Nothing can clip a child of <body>.
-     */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-
-        return {
-            destroy() {
-                node.remove();
-            },
-        };
-    }
+    // The panel is moved to <body> (lib/portal) and positioned in viewport
+    // coordinates. Absolute positioning inside the trigger's own stacking
+    // context looked right until a toolbar scrolled sideways: `overflow-x:
+    // auto` computes `overflow-y` to `auto` as well, so the menu was clipped
+    // to the strip it dropped out of. Nothing can clip a child of <body>.
 
     /** Anchors the panel under the trigger, flipping up and clamping to fit. */
     function place() {

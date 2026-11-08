@@ -251,8 +251,6 @@
                     bind:open={moving}
                     projects={context.projects}
                     organizations={context.organizations ?? []}
-                    currentMemberId={context.currentMemberId}
-                    homeOrganizationId={shared.organization?.id ?? null}
                     triggerClass="sr-only"
                     onpick={moveTo}
                 />

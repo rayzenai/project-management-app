@@ -4,6 +4,7 @@
     import { tick } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { plural } from '../../lib/format';
+    import { portal } from '../../lib/portal';
     import { suggestProjectKey } from '../../lib/projectKey';
     import type {
         Id,
@@ -192,17 +193,6 @@
             e.stopPropagation();
             stopCreating();
         }
-    }
-
-    /** The sheet sits on <body>, so no container can clip or cover it. */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-
-        return {
-            destroy() {
-                node.remove();
-            },
-        };
     }
 </script>
 
@@ -394,7 +384,6 @@
                                 organizations={[notice.connection.organization]}
                                 homeOrganizationId={notice.connection
                                     .organization.id}
-                                currentMemberId={null}
                                 bind:value={
                                     () => picked[key] ?? null,
                                     (v) =>

@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Services\Git\ForgejoClient;
 use App\Services\Git\ForgejoException;
 use App\Services\Git\ForgeShapes;
+use App\Support\ProjectChoices;
 use App\Support\ProjectKeys;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -285,27 +286,19 @@ class UnlinkedRepositoriesQuery
 
     /**
      * The organization's active projects the viewer may link repositories
-     * to, shaped for the project picker.
+     * to, shaped for the project picker (ProjectChoices).
      *
-     * @return list<array{id: int, slug: string, title: string, program: ?string, organization_id: int}>
+     * @return list<array{id: int, slug: string, title: string, program: ?string, organization_id: int, mine: bool}>
      */
     private function linkableProjects(Authenticatable $user, int $organizationId): array
     {
-        return array_values(Project::query()
+        return ProjectChoices::for($user, Project::query()
             ->active()
             ->where('organization_id', $organizationId)
             ->with('program:id,name')
             ->orderBy('title')
             ->get()
-            ->filter(fn (Project $project): bool => WorkspaceAccess::canManageProjectRepositories($user, $project))
-            ->map(fn (Project $project): array => [
-                'id' => (int) $project->id,
-                'slug' => $project->slug,
-                'title' => $project->title,
-                'program' => $project->program?->name,
-                'organization_id' => (int) $project->organization_id,
-            ])
-            ->all());
+            ->filter(fn (Project $project): bool => WorkspaceAccess::canManageProjectRepositories($user, $project)))['projects'];
     }
 
     /**

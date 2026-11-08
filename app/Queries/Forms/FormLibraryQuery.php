@@ -6,6 +6,7 @@ use App\Models\Form;
 use App\Models\FormResponse;
 use App\Models\Project;
 use App\Support\Forms\FormTemplates;
+use App\Support\ProjectChoices;
 use App\Support\WorkspaceAccess;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\Collection;
 class FormLibraryQuery
 {
     /**
-     * @return array{to_fill: list<array<string, mixed>>, filled: list<array<string, mixed>>, managing: list<array<string, mixed>>, places: list<array{slug: string, label: string}>, templates: list<array{id: string, name: string, description: string}>}
+     * @return array{to_fill: list<array<string, mixed>>, filled: list<array<string, mixed>>, managing: list<array<string, mixed>>, places: array{projects: list<array{id: int, slug: string, title: string, program: ?string, organization_id: int, mine: bool}>, organizations: list<array{id: int, name: string}>}, templates: list<array{id: string, name: string, description: string}>}
      */
     public function for(Authenticatable $viewer): array
     {
@@ -99,14 +100,14 @@ class FormLibraryQuery
     }
 
     /**
-     * The projects the viewer may make a form in.
+     * The projects the viewer may make a form in, for the project picker.
      *
-     * @return list<array{slug: string, label: string}>
+     * @return array{projects: list<array{id: int, slug: string, title: string, program: ?string, organization_id: int, mine: bool}>, organizations: list<array{id: int, name: string}>}
      */
     public function places(Authenticatable $viewer): array
     {
         if (! config('forms.enabled')) {
-            return [];
+            return ProjectChoices::for($viewer, []);
         }
 
         $member = WorkspaceAccess::memberFor($viewer);
@@ -114,7 +115,7 @@ class FormLibraryQuery
 
         if (! WorkspaceAccess::isSuperAdmin($viewer)) {
             if ($member === null || ! $member->is_active) {
-                return [];
+                return ProjectChoices::for($viewer, []);
             }
 
             $adminOrganizationId = WorkspaceAccess::officeAdminOrganizationId($viewer);
@@ -132,8 +133,6 @@ class FormLibraryQuery
             });
         }
 
-        return array_values($query->orderBy('title')->limit(300)->get()
-            ->map(fn (Project $project): array => ['slug' => $project->slug, 'label' => $project->label()])
-            ->all());
+        return ProjectChoices::for($viewer, $query->orderBy('title')->limit(300)->get());
     }
 }

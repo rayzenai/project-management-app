@@ -6,6 +6,7 @@
     import DesignationsPanel from '../../components/organogram/DesignationsPanel.svelte';
     import OrganogramOutline from '../../components/organogram/OrganogramOutline.svelte';
     import OrgChart from '../../components/organogram/OrgChart.svelte';
+    import { portal } from '../../lib/portal';
     import { buildOrgTree } from '../../lib/structure';
     import type { Organogram } from '../../lib/structure';
     import type { Id, OrganizationOption } from '../../lib/types';
@@ -37,17 +38,6 @@
 
     function printChart() {
         window.print();
-    }
-
-    /** Moves the print-only chart to <body>, so printing can hide the rest. */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-
-        return {
-            destroy() {
-                node.remove();
-            },
-        };
     }
 </script>
 

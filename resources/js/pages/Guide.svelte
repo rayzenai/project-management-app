@@ -326,8 +326,8 @@
             'Documents in the sidebar has four tabs. Recent is every document you can open, the last edited first. Personal is your own. Shared with me is what people shared with you by name and what is open to your whole office. Projects has a card for each of your projects, which opens its Documents tab.',
         ],
         [
-            'Just me or a project',
-            "Click Document, Spreadsheet or Presentation and it opens at once, its title ready to type over. On the Documents page it goes where New ones go to says, and that choice is remembered. Just me makes a personal document: it is yours, and nobody else sees it until you share it. In a project, it belongs to the project: its team, its program's manager and the organizational admins can open and edit it, and it stays with them whoever made it leaves. Move to project puts a personal document into one of your projects, for good.",
+            'Just for me or a project',
+            "Click Document, Spreadsheet or Presentation and it opens at once, its title ready to type over. On the Documents page it goes where New ones go to says, and that choice is remembered. Just for me makes a personal document: it is yours, and nobody else sees it until you share it. In a project, it belongs to the project: its team, its program's manager and the organizational admins can open and edit it, and it stays with them whoever made it leaves. Move to project puts a personal document into one of your projects, for good.",
         ],
         [
             'Sharing',

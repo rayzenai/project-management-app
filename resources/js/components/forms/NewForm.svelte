@@ -1,8 +1,10 @@
 <script lang="ts">
     import { router } from '@inertiajs/svelte';
     import { Plus, X } from '@lucide/svelte';
-    import { portal } from '../../lib/forms/portal';
     import type { FormTemplate } from '../../lib/forms/types';
+    import { portal } from '../../lib/portal';
+    import type { ProjectChoices, ProjectPick } from '../../lib/types';
+    import ProjectPicker from '../ProjectPicker.svelte';
     import Spinner from '../Spinner.svelte';
 
     /**
@@ -12,26 +14,43 @@
     let {
         templates,
         project = null,
-        places = [],
+        places = { projects: [], organizations: [] },
     }: {
         templates: FormTemplate[];
         project?: string | null;
-        places?: { slug: string; label: string }[];
+        /** Where a new one may go (ProjectChoices), when no project is given. */
+        places?: ProjectChoices;
     } = $props();
 
     const uid = $props.id();
     let open = $state(false);
     let title = $state('');
     let template = $state('blank');
-    // svelte-ignore state_referenced_locally
-    let where = $state(project ?? places[0]?.slug ?? '');
+    let where = $state<ProjectPick>(firstChoice());
     let errors = $state<Record<string, string>>({});
     let creating = $state(false);
 
-    const canMake = $derived(project !== null || places.length > 0);
+    const canMake = $derived(project !== null || places.projects.length > 0);
+
+    /** The one project there is, else the one whose team you are on, else none. */
+    function firstChoice(): ProjectPick {
+        const yours = places.projects.filter((p) => p.mine);
+        const only = places.projects.length === 1 ? places.projects : yours;
+
+        return only.length === 1 ? only[0].id : null;
+    }
 
     function create(event: SubmitEvent) {
         event.preventDefault();
+        const target =
+            project ?? places.projects.find((p) => p.id === where)?.slug;
+
+        if (target === undefined) {
+            errors = { project: 'Pick a project.' };
+
+            return;
+        }
+
         creating = true;
         errors = {};
         router.post(
@@ -39,7 +58,7 @@
             {
                 title: title.trim() || 'Untitled form',
                 template,
-                project: project ?? where,
+                project: target,
             },
             {
                 onError: (e) => (errors = e),
@@ -100,18 +119,15 @@
                 </div>
                 {#if project === null}
                     <div>
-                        <label for="{uid}-where" class="label mb-1 block"
-                            >Project</label
-                        >
-                        <select
-                            id="{uid}-where"
-                            class="input"
+                        <span class="label mb-1 block">Project</span>
+                        <ProjectPicker
+                            projects={places.projects}
+                            organizations={places.organizations}
                             bind:value={where}
-                        >
-                            {#each places as place (place.slug)}<option
-                                    value={place.slug}>{place.label}</option
-                                >{/each}
-                        </select>
+                            field
+                            placeholder="Pick a project"
+                            onpick={() => (errors = {})}
+                        />
                         <p class="mt-1 text-xs text-fg-muted">
                             The form and its responses belong to this project's
                             office. Whoever runs the project can see them.

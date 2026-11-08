@@ -4,6 +4,7 @@
     import { tick, untrack } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { msg, number, t } from '../../lib/i18n';
+    import { portal } from '../../lib/portal';
     import { QUIET, toast } from '../../lib/toast.svelte';
     import type { Id, PersonalTodo, PersonalTodoLists } from '../../lib/types';
     import Popover from '../Popover.svelte';
@@ -398,17 +399,6 @@
                 items[0].focus();
             }
         }
-    }
-
-    /** The sheet sits on <body>: the top bar's blur would hold a fixed child. */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-
-        return {
-            destroy() {
-                node.remove();
-            },
-        };
     }
 
     const label = $derived(

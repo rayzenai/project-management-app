@@ -918,8 +918,6 @@
         bind:value={form.project_id}
         {projects}
         {organizations}
-        {currentMemberId}
-        homeOrganizationId={organizationId}
         general={startGeneral}
         personal={offersPersonal}
         {field}

@@ -7,6 +7,7 @@ import type {
     Schema,
     Stage,
 } from '../../../lib/forms/types';
+import type { ProjectChoices } from '../../../lib/types';
 
 /** What the builder page receives (App\Queries\Forms\FormBuilderQuery), and gets back after each change. */
 export interface BuilderData {
@@ -46,10 +47,12 @@ export interface BuilderData {
         } | null;
         project: { slug: string; label: string } | null;
         assignee: PersonRef | null;
-        projects: { slug: string; label: string }[];
+        /** Where its tasks may go. */
+        places: ProjectChoices;
     };
     templates: FormTemplate[];
-    places: { slug: string; label: string }[];
+    /** Where a copy may go. */
+    places: ProjectChoices;
     limits: { max_upload_mb: number; max_steps: number; max_blocks: number };
 }
 

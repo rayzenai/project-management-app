@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\Documents\DocumentTypes;
+use App\Support\ProjectChoices;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,7 +35,7 @@ class DocumentLibraryQuery
      * there are enough to search).
      *
      * @param  array{show: string, project: string|null, type: string|null, q: string|null}  $filters
-     * @return array{documents: list<array<string, mixed>>, next_cursor: string|null, project_cards: list<array{slug: string, title: string, label: string, documents_count: int, last_edited_at: string|null}>, total: int, filters: array{show: string, project: string|null, type: string|null, q: string|null}, projects: list<array{slug: string, title: string, label: string}>, organization: array{id: int, name: string}|null, types: list<array{value: string, label: string}>, max_upload_mb: int, can_create_personal: bool, trashed_count: int}
+     * @return array{documents: list<array<string, mixed>>, next_cursor: string|null, project_cards: list<array{slug: string, title: string, label: string, documents_count: int, last_edited_at: string|null}>, total: int, filters: array{show: string, project: string|null, type: string|null, q: string|null}, places: array{projects: list<array{id: int, slug: string, title: string, program: ?string, organization_id: int, mine: bool}>, organizations: list<array{id: int, name: string}>}, organization: array{id: int, name: string}|null, types: list<array{value: string, label: string}>, max_upload_mb: int, can_create_personal: bool, trashed_count: int}
      */
     public function page(User $viewer, array $filters, ?int $organizationId): array
     {
@@ -47,7 +48,7 @@ class DocumentLibraryQuery
             'project_cards' => $cards ? $this->projectCards($viewer, $organizationId) : [],
             'total' => $this->narrowed(Document::query()->visibleTo($viewer), $viewer, $organizationId)->count(),
             'filters' => $filters,
-            'projects' => $this->projects($viewer),
+            'places' => $this->places($viewer),
             'organization' => $organization === null ? null : ['id' => $organization->id, 'name' => $organization->name],
             'types' => array_map(fn (string $type): array => ['value' => $type, 'label' => DocumentTypes::label($type)], DocumentTypes::all()),
             'max_upload_mb' => intdiv((int) config('documents.max_upload_kilobytes'), 1024),
@@ -211,21 +212,19 @@ class DocumentLibraryQuery
     }
 
     /**
-     * Projects whose documents the viewer may use, active ones by title: the
-     * page's Where and project filter.
+     * Projects whose documents the viewer may use, active ones by title, for
+     * the project picker: where new documents go and where one may move.
      *
-     * @return list<array{slug: string, title: string, label: string}>
+     * @return array{projects: list<array{id: int, slug: string, title: string, program: ?string, organization_id: int, mine: bool}>, organizations: list<array{id: int, name: string}>}
      */
-    private function projects(User $viewer): array
+    private function places(User $viewer): array
     {
-        return array_values(Project::query()
+        return ProjectChoices::for($viewer, Project::query()
             ->documentsVisibleTo($viewer)
             ->active()
             ->with('program:id,name')
             ->orderBy('title')
-            ->get(['id', 'slug', 'title', 'program_id'])
-            ->map(fn (Project $project): array => ['slug' => $project->slug, 'title' => $project->title, 'label' => $project->label()])
-            ->all());
+            ->get(['id', 'slug', 'title', 'program_id', 'organization_id']));
     }
 
     /**

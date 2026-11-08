@@ -772,11 +772,30 @@ export interface CodeActivityCommit {
 }
 
 /** A project in the quick-add picker, carrying the ids of members assignable to it (its teams' members). */
-export interface QuickAddProject extends ProjectSummary {
+/** A project someone may choose (App\Support\ProjectChoices): a row of the project picker. */
+export interface ProjectOption extends ProjectSummary {
     /** Its program's name; tells apart several projects of one title. */
     program?: string | null;
-    member_ids?: Id[];
     organization_id?: Id;
+    /** The viewer is on its team: the picker's "Your projects". */
+    mine?: boolean;
+}
+
+/**
+ * What the project picker holds: a project's id, "general" for an
+ * organization's first project (quick add), "personal" for something in no
+ * project that only you see, or nothing yet.
+ */
+export type ProjectPick = Id | 'general' | 'personal' | null;
+
+/** Projects to choose from, with their organizations by name (ProjectChoices::for). */
+export interface ProjectChoices {
+    projects: ProjectOption[];
+    organizations: OrganizationOption[];
+}
+
+export interface QuickAddProject extends ProjectOption {
+    member_ids?: Id[];
     /** The viewer runs its team: they may assign people of its organization, who join it. */
     can_add_people?: boolean;
 }
@@ -801,7 +820,7 @@ export interface UnlinkedRepositories {
     unavailable: boolean;
     repositories: UnlinkedRepository[];
     /** The projects one may be linked to (the project picker's). */
-    projects: QuickAddProject[];
+    projects: ProjectOption[];
     /** The programs a new project for one may join. */
     programs: { id: Id; name: string }[];
 }
@@ -1104,12 +1123,6 @@ export interface ProjectDocuments {
 }
 
 /** A project a document can go into (the Where choice, the project filter). */
-export interface ProjectChoice {
-    slug: string;
-    title: string;
-    label: string;
-}
-
 /** The Documents page's tabs (DocumentLibraryRequest::SHOWS). */
 export type DocumentTab = 'recent' | 'personal' | 'shared' | 'projects';
 
@@ -1137,7 +1150,8 @@ export interface DocumentLibrary {
     project_cards: DocumentProjectCard[];
     /** How many documents the viewer may open at all. */
     total: number;
-    projects: ProjectChoice[];
+    /** Where new documents go and where one may move. */
+    places: ProjectChoices;
     /** The viewer's organization, for "Everyone in SDOC". */
     organization: { id: number; name: string } | null;
     types: { value: DocumentFileType; label: string }[];

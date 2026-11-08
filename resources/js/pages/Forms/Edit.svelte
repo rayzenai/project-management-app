@@ -26,6 +26,7 @@
     import TasksPanel from '../../components/forms/builder/TasksPanel.svelte';
     import TranslationInput from '../../components/forms/builder/TranslationInput.svelte';
     import PillGroup from '../../components/PillGroup.svelte';
+    import ProjectPicker from '../../components/ProjectPicker.svelte';
     import Spinner from '../../components/Spinner.svelte';
     import { PHASES, when } from '../../lib/forms/format';
     import { FormsHttpError, send } from '../../lib/forms/http';
@@ -39,6 +40,7 @@
     } from '../../lib/forms/types';
     import { isQuestion } from '../../lib/forms/types';
     import { toast } from '../../lib/toast.svelte';
+    import type { ProjectPick } from '../../lib/types';
 
     /**
      * The builder: steps and their blocks, saved as you work (only the
@@ -61,8 +63,15 @@
     let dirty = $state(false);
     let publishing = $state(false);
     let copyOpen = $state(false);
+    // A copy goes in the form's own project unless another is picked.
     // svelte-ignore state_referenced_locally
-    let copyTo = $state(props.places[0]?.slug ?? '');
+    let copyTo = $state<ProjectPick>(
+        props.places.projects.find((p) => p.slug === props.form.project?.slug)
+            ?.id ?? null,
+    );
+    const copySlug = $derived(
+        data.places.projects.find((p) => p.id === copyTo)?.slug ?? null,
+    );
     let timer: ReturnType<typeof setTimeout> | undefined;
     let loaded = false;
 
@@ -405,21 +414,24 @@
         {#if copyOpen}
             <div class="panel mb-4 flex flex-wrap items-end gap-2 p-3">
                 <div class="min-w-0 flex-1">
-                    <label for="copy-to" class="label mb-1 block"
-                        >Copy it as a new draft into</label
+                    <span class="label mb-1 block"
+                        >Copy it as a new draft into</span
                     >
-                    <select id="copy-to" class="input" bind:value={copyTo}
-                        >{#each data.places as p (p.slug)}<option value={p.slug}
-                                >{p.label}</option
-                            >{/each}</select
-                    >
+                    <ProjectPicker
+                        projects={data.places.projects}
+                        organizations={data.places.organizations}
+                        bind:value={copyTo}
+                        field
+                        placeholder="Pick a project"
+                    />
                 </div>
                 <button
                     type="button"
                     class="btn btn-primary"
+                    disabled={copySlug === null}
                     onclick={() =>
                         router.post(`/workspace/forms/${form.id}/duplicate`, {
-                            project: copyTo,
+                            project: copySlug,
                         })}>Make the copy</button
                 >
             </div>

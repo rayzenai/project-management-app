@@ -161,7 +161,7 @@ it('lists every document the viewer may open, newest first', function () {
             ->where('filters.show', 'recent')
             ->where('can_create_personal', true)
             ->where('organization.name', 'SDOC')
-            ->where('projects.0.slug', $this->project->slug)
+            ->where('places.projects.0.slug', $this->project->slug)
             ->where('next_cursor', null));
 
     expect(docsPageTitles($response))->toBe(['Project plan', 'Office circular', 'Shared with me', 'My notes']);

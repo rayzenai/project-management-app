@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use App\Http\Resources\NoteResource;
 use App\Http\Resources\WorkspaceNoteResource;
 use App\Models\Member;
-use App\Models\Organization;
 use App\Models\Program;
 use App\Models\Project;
 use App\Models\ProjectNote;
@@ -20,6 +19,7 @@ use App\Queries\Structure\PersonRef;
 use App\Services\ResolveThemeTokens;
 use App\Support\Git\GitAccess;
 use App\Support\OfficeLinks;
+use App\Support\ProjectChoices;
 use App\Support\WorkspaceAccess;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -93,10 +93,11 @@ class ShareWorkspaceData
             $organizationId = WorkspaceAccess::memberFor($user)?->organization_id;
             $startGeneral = WorkspaceAccess::canStartGeneralProject($user);
 
+            $viewerMemberId = WorkspaceAccess::memberFor($user)?->id;
             $projects = Project::query()->visibleTo($user)->active()->orderBy('title')
                 ->with(['program:id,name', 'teams.members' => fn ($q) => $q->where('is_active', true)])
                 ->get(['id', 'slug', 'title', 'organization_id', 'program_id'])
-                ->map(function (Project $p) use (&$organizationMemberIds, $user): array {
+                ->map(function (Project $p) use (&$organizationMemberIds, $user, $viewerMemberId): array {
                     // Members assignable within this project: its teams' active members,
                     // or its organization's when a public project has no teams. Mirrors
                     // Member::scopeAssignableFor so the picker only offers valid assignees.
@@ -106,12 +107,11 @@ class ShareWorkspaceData
                             ->pluck('id')->map(fn ($id): int => (int) $id)->all();
                     }
 
+                    // The project picker's row (ProjectChoices), and what
+                    // quick add needs beside it.
                     return [
-                        'id' => $p->id,
-                        'slug' => $p->slug,
-                        'title' => $p->title,
-                        'organization_id' => $p->organization_id,
-                        'program' => $p->program?->name,
+                        ...ProjectChoices::row($p, $viewerMemberId !== null
+                            && $p->teams->contains(fn ($team): bool => $team->members->contains('id', $viewerMemberId))),
                         'member_ids' => $p->teams->isEmpty()
                             ? $organizationMemberIds[$p->organization_id]
                             : $p->teams->flatMap(fn ($t) => $t->members->pluck('id'))->unique()->values()->all(),
@@ -135,10 +135,7 @@ class ShareWorkspaceData
 
             return [
                 'projects' => $projects->all(),
-                'organizations' => $organizationIds->isEmpty() ? [] : Organization::query()
-                    ->whereKey($organizationIds)->orderBy('name')->get(['id', 'name'])
-                    ->map(fn (Organization $organization): array => ['id' => $organization->id, 'name' => $organization->name])
-                    ->all(),
+                'organizations' => ProjectChoices::organizations($organizationIds),
                 'organizationPeople' => $addsPeople
                     ? Member::query()->active()->where('organization_id', $organizationId)->orderBy('name')
                         ->with('designation:id,name')

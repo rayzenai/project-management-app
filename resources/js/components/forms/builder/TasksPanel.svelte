@@ -5,6 +5,8 @@
     import type { PersonRef } from '../../../lib/forms/types';
     import { isQuestion } from '../../../lib/forms/types';
     import { toast } from '../../../lib/toast.svelte';
+    import type { ProjectPick } from '../../../lib/types';
+    import ProjectPicker from '../../ProjectPicker.svelte';
     import Spinner from '../../Spinner.svelte';
     import type { BuilderData } from './builderTypes';
     import PersonSearch from './PersonSearch.svelte';
@@ -23,8 +25,15 @@
     // svelte-ignore state_referenced_locally
     let enabled = $state(data.tasks.settings !== null);
     // svelte-ignore state_referenced_locally
-    let project = $state(
-        data.tasks.project?.slug ?? data.form.project?.slug ?? '',
+    let project = $state<ProjectPick>(
+        data.tasks.places.projects.find(
+            (p) =>
+                p.slug ===
+                (data.tasks.project?.slug ?? data.form.project?.slug),
+        )?.id ?? null,
+    );
+    const projectSlug = $derived(
+        data.tasks.places.projects.find((p) => p.id === project)?.slug ?? '',
     );
     // svelte-ignore state_referenced_locally
     let assignee = $state<PersonRef | null>(data.tasks.assignee);
@@ -60,7 +69,7 @@
                 enabled
                     ? {
                           enabled: true,
-                          project,
+                          project: projectSlug,
                           assignee_id: assignee?.id ?? null,
                           due_days:
                               dueDays.trim() === '' ? null : Number(dueDays),
@@ -86,26 +95,32 @@
         new response
     </label>
     {#if enabled}
-        {#if data.tasks.projects.length === 0}
+        {#if data.tasks.places.projects.length === 0}
             <p class="text-xs text-danger">
                 There is no project of {data.form.organization} you can add tasks
                 to.
             </p>
         {:else}
             <div>
-                <label for="{uid}-project" class="label mb-1 block"
-                    >In the project</label
-                >
-                <select
-                    id="{uid}-project"
-                    class="input"
-                    bind:value={project}
-                    onchange={() => (assignee = null)}
-                >
-                    {#each data.tasks.projects as p (p.slug)}<option
-                            value={p.slug}>{p.label}</option
-                        >{/each}
-                </select>
+                <span class="label mb-1 block">In the project</span>
+                <!-- Another project has other people: the one given the
+                     tasks is chosen again. -->
+                <ProjectPicker
+                    projects={data.tasks.places.projects}
+                    organizations={data.tasks.places.organizations}
+                    bind:value={
+                        () => project,
+                        (next) => {
+                            if (next !== project) {
+                                assignee = null;
+                            }
+
+                            project = next;
+                        }
+                    }
+                    field
+                    placeholder="Pick a project"
+                />
                 {#if errors.project}<p class="mt-1 text-xs text-danger">
                         {errors.project}
                     </p>{/if}
@@ -124,11 +139,11 @@
                         ></span
                     >
                 {:else}
-                    {#key project}
+                    {#key projectSlug}
                         <PersonSearch
                             url="/workspace/forms/{data.form
                                 .id}/tasks/assignees?project={encodeURIComponent(
-                                project,
+                                projectSlug,
                             )}"
                             label="Given to"
                             placeholder="Someone on the project"

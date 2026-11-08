@@ -1,58 +1,67 @@
 <script lang="ts">
+    import { page } from '@inertiajs/svelte';
     import { Check, ChevronDown, Folder, Lock, Search } from '@lucide/svelte';
     import { tick, untrack } from 'svelte';
     import { MediaQuery } from 'svelte/reactivity';
     import { forgivingFilter } from '../lib/forgivingFilter';
     import { msg, t } from '../lib/i18n';
+    import { portal } from '../lib/portal';
     import { projectLabel } from '../lib/projectLabel';
-    import type { Id, OrganizationOption, QuickAddProject } from '../lib/types';
+    import type {
+        Id,
+        OrganizationOption,
+        ProjectOption,
+        ProjectPick,
+    } from '../lib/types';
     import Popover from './Popover.svelte';
 
     /**
-     * Which project a new task goes in: the add field's Project chip and
-     * the New task dialog's Project field. It opens on "Your projects" (the
-     * teams you are on, else your organization's projects); when there is
-     * more to reach, a dropdown lists each organization's projects, and the
-     * search looks through every project you may add to. Where quick add
-     * may make one, "Just for me" comes first: a private to-do, in no
-     * project. A popover on a desktop, a bottom sheet on a phone.
+     * The one way to choose a project to put something in: a new task (the
+     * add field's chip, the New task dialog's field), a to-do moved into a
+     * project, a new form, a form's copy and its tasks, where new documents
+     * go, a document moved into a project, a repository linked to one. Its
+     * lists come from ProjectChoices on the server. It opens on "Your
+     * projects" (the teams you are on, else your organization's projects);
+     * when there is more to reach, a dropdown lists each organization's
+     * projects, and the search looks through every one offered. Where the
+     * caller allows it, "Just for me" comes first: something in no project
+     * that only you see. A popover on a desktop, a bottom sheet on a phone.
      */
     let {
         projects,
         organizations = [],
-        currentMemberId,
         value = $bindable(null),
         open = $bindable(false),
-        homeOrganizationId = null,
+        homeOrganizationId,
         general = false,
         personal = false,
+        personalDetail = msg('A private to-do'),
         disabled = false,
         field = false,
         triggerClass,
         placeholder,
         onpick,
     }: {
-        projects: QuickAddProject[];
+        /** `mine` marks the ones whose team you are on. */
+        projects: ProjectOption[];
         /** The organizations of `projects`, by name. */
         organizations?: OrganizationOption[];
-        currentMemberId: Id | null;
-        /**
-         * A project's id, "general" for the organization's first project, or
-         * "personal" for a private to-do.
-         */
-        value?: Id | 'general' | 'personal' | null;
+        value?: ProjectPick;
         /** Bound by a caller that opens the list itself (a to-do's "Move to a project"). */
         open?: boolean;
-        /** The viewer's own organization: listed first. */
+        /** The viewer's own organization, listed first; the signed-in person's unless given. */
         homeOrganizationId?: Id | null;
         /** Offer "General (new)": an organizational admin's first project. */
         general?: boolean;
-        /** Offer "Just for me": a private to-do instead of a task. */
+        /** Offer "Just for me": in no project, yours alone. */
         personal?: boolean;
+        /** What "Just for me" makes, in English (drawn through t()). */
+        personalDetail?: string;
         disabled?: boolean;
         /** A form field (the dialog) rather than a chip (the add field). */
         field?: boolean;
-        triggerClass: string;
+        /** The trigger's look; a form field's unless given. */
+        triggerClass?: string;
         /** The trigger's words while nothing is chosen; "Project" by default. */
         placeholder?: string;
         /** After a pick, e.g. to put the caret back in the add field. */
@@ -69,11 +78,11 @@
     };
 
     // English in the data, drawn (and searched) through t().
-    const PERSONAL_ROW: Row = {
+    const PERSONAL_ROW: Row = $derived({
         value: 'personal',
         title: msg('Just for me'),
-        detail: msg('A private to-do'),
-    };
+        detail: personalDetail,
+    });
 
     const GENERAL_ROW: Row = {
         value: 'general',
@@ -100,25 +109,32 @@
         new Map(organizations.map((o) => [o.id, o.name])),
     );
 
+    const home = $derived(
+        homeOrganizationId !== undefined
+            ? homeOrganizationId
+            : ((page.props as { organization?: { id: Id } | null }).organization
+                  ?.id ?? null),
+    );
+
     /** The teams you are on; with none, your organization's projects. */
     const yours = $derived.by(() => {
-        const onTeam =
-            currentMemberId === null
-                ? []
-                : projects.filter((p) =>
-                      p.member_ids?.includes(currentMemberId),
-                  );
+        const onTeam = projects.filter((p) => p.mine);
 
         return onTeam.length > 0
             ? onTeam
-            : projects.filter((p) => p.organization_id === homeOrganizationId);
+            : projects.filter((p) => p.organization_id === home);
     });
+
+    const triggerLook = $derived(
+        triggerClass ??
+            `input flex items-center gap-2 text-left ${value === null ? 'text-fg-faint' : 'text-fg'}`,
+    );
 
     /** "Your projects", then your organization, then the rest by name. */
     const views = $derived<{ id: View; name: string }[]>([
         { id: YOURS, name: t('Your projects') },
-        ...organizations.filter((o) => o.id === homeOrganizationId),
-        ...organizations.filter((o) => o.id !== homeOrganizationId),
+        ...organizations.filter((o) => o.id === home),
+        ...organizations.filter((o) => o.id !== home),
     ]);
 
     /** A dropdown only when it reaches something "Your projects" doesn't. */
@@ -156,13 +172,13 @@
 
     const searching = $derived(query.trim() !== '');
 
-    function detailOf(project: QuickAddProject): string | null {
+    function detailOf(project: ProjectOption): string | null {
         // Another organization's project says whose it is, where the list
         // mixes organizations.
         const organization =
             (searching || view === YOURS) &&
             organizations.length > 1 &&
-            project.organization_id !== homeOrganizationId
+            project.organization_id !== home
                 ? organizationName.get(project.organization_id ?? -1)
                 : null;
 
@@ -186,7 +202,7 @@
             (searching
                 ? forgivingFilter([GENERAL_ROW], query, (r) => t(r.title))
                       .length > 0
-                : view === YOURS || view === homeOrganizationId);
+                : view === YOURS || view === home);
         const offersPersonal =
             personal &&
             (searching
@@ -459,17 +475,6 @@
             }
         }
     }
-
-    /** The sheet sits on <body>, so no container can clip or cover it. */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-
-        return {
-            destroy() {
-                node.remove();
-            },
-        };
-    }
 </script>
 
 {#snippet face()}
@@ -646,7 +651,7 @@
             type="button"
             disabled
             aria-label={t('Project: :name', { name: label })}
-            class={`${triggerClass} cursor-default opacity-60`}
+            class={`${triggerLook} cursor-default opacity-60`}
         >
             {@render face()}
         </button>
@@ -656,7 +661,7 @@
             role="dialog"
             label={t('Choose a project')}
             triggerLabel={t('Project: :name', { name: label })}
-            {triggerClass}
+            triggerClass={triggerLook}
             wrapperClass={field ? 'w-full' : 'min-w-0 max-w-full'}
             panelClass="w-[340px] max-w-[calc(100vw-16px)]"
         >
@@ -672,7 +677,7 @@
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 aria-label={t('Project: :name', { name: label })}
-                class={triggerClass}
+                class={triggerLook}
                 onclick={() => (open = true)}
             >
                 {@render face()}

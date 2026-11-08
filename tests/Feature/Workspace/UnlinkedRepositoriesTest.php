@@ -313,9 +313,9 @@ it("gives Code activity the organization's unlinked repositories, with what a ne
             [...unlinkedRow(505, 'runner-smoke', '2026-10-01T10:00:00+05:45'), 'suggested_title' => 'Runner Smoke', 'suggested_key' => 'RS'],
         ],
         'projects' => [
-            ['id' => $lottery->id, 'slug' => $lottery->slug, 'title' => 'Lottery', 'program' => 'Revenue', 'organization_id' => $this->sdoc->id],
-            ['id' => $prize->id, 'slug' => $prize->slug, 'title' => 'Old Prize', 'program' => null, 'organization_id' => $this->sdoc->id],
-            ['id' => $this->tax->id, 'slug' => $this->tax->slug, 'title' => 'Tax Portal', 'program' => null, 'organization_id' => $this->sdoc->id],
+            ['id' => $lottery->id, 'slug' => $lottery->slug, 'title' => 'Lottery', 'program' => 'Revenue', 'organization_id' => $this->sdoc->id, 'mine' => false],
+            ['id' => $prize->id, 'slug' => $prize->slug, 'title' => 'Old Prize', 'program' => null, 'organization_id' => $this->sdoc->id, 'mine' => false],
+            ['id' => $this->tax->id, 'slug' => $this->tax->slug, 'title' => 'Tax Portal', 'program' => null, 'organization_id' => $this->sdoc->id, 'mine' => false],
         ],
         'programs' => [['id' => $this->revenue->id, 'name' => 'Revenue']],
     ]]);
