@@ -72,6 +72,10 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
   `documentAccess` and `Document::scopeVisibleTo` are predicate/query twins.
   Sharing stays inside `documentOrganizationId`, and a personal document whose
   owner is inactive is frozen rather than reassigned or deleted.
+- Forms keep authorization in `WorkspaceAccess`; `formAccess`/
+  `Form::scopeManagedBy` and `isFormRespondent`/`Form::scopeAnswerableBy` are
+  predicate/query twins. Keep schemas only through `FormSchema::clean` and
+  answers only through `FormAnswers`; published versions are immutable.
 
 ## Frontend
 
@@ -89,6 +93,9 @@ JSON is empty — rerun `php -d display_errors=stderr vendor/bin/pest > file 2>&
   Documents and server messages/errors. See the languages design spec for rounds.
 - Use `Locales::number` for server placeholders (including explicit `count`
   passed to `trans_choice`); Nepali uses Devanagari digits and BS-first dates.
+- Every project destination uses `ProjectPicker` fed by `ProjectChoices`; every
+  modal uses `Dialog`, every phone bottom sheet uses `Sheet`, every add-person
+  search uses `PersonSearch`, and body portals go through `lib/portal.ts`.
 
 ## Adding a feature (the pattern)
 

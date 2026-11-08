@@ -1,6 +1,6 @@
 # .assistants — project map
 
-- **generated-from:** `48496be508cdddb6b03cf4d419d1153afceb1122`
+- **generated-from:** `44febd09a4c3afeaa50a6ed543ca6caf2d6b13b5`
 
 Agent-readable map of this repo. Read alongside `CLAUDE.md` (binding rules);
 these files are orientation, not rules.
@@ -8,8 +8,8 @@ these files are orientation, not rules.
 **What this app is:** a standalone Laravel 13 + Inertia + Svelte 5
 multi-tenant project/task tracking workspace (organizations → programs/projects/teams →
 tasks → subtasks, members, notes, contacts, activity log, in-app notifications,
-100-point plan tracker) with a parallel Sanctum JSON API for
-external systems. The former
+documents, forms, attendance/work reports, 100-point plan tracker) with a
+parallel Sanctum JSON API for external systems. The former
 `rayzenai/project-management` package is retired; all code lives under `App\`.
 
 ## Modules

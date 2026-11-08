@@ -31,10 +31,11 @@ app/
                            # ProjectKeyAlias, GitConnection, OAuthClient (Passport),
                            # GitRepository/Branch/Commit/PullRequest, GitRepositoryGrant,
                            # TaskGitLink, GitWebhookDelivery; Designation, AttendanceSetting/Place/Network/Punch,
-                           # Holiday, LeaveRequest, Document/DocumentShare/DocumentVersion
+                           # Holiday, LeaveRequest, Document/DocumentShare/DocumentVersion,
+                           # Form/Version/Share/Response/Draft/ResponseEvent/File
   Notifications/           # TaskAssigned, TaskStatusChanged, MentionedInComment,
                            # TaskDeadlineDue, AddedToProjectTeam, MadeProjectManager, MadeProgramManager,
-                           # DocumentShared,
+                           # DocumentShared, FormOpened, FormReminder,
                            # Concerns/BuildsWorkspaceNotification
   Observers/               # activity writers + ProgramObserver (manager notification), document/share/version audit
   Providers/AppServiceProvider.php  # manage-workspace Gate, morph map, observer registry
@@ -47,9 +48,11 @@ app/
   Queries/Work/            # WorkActivity shared by WorkDay, PersonWork, TeamWork; WorkAttendance
   Queries/Maintenance/     # MaintenanceQuery (repair lists + cached sidebar count)
   Queries/Documents/       # workspace/project libraries, sharing/candidates, versions + editor config
+  Queries/Forms/           # library/builder/fill, respondents/sharing, responses/summary, project tab
   Services/Structure/      # designations, reports-to, MoveReportsUp on member move/deletion
   Services/Attendance/     # enable/settings, Punch, places/networks/holidays, leave writes
   Services/Documents/      # create/upload, rename/trash/move/share, keep editor saves as versions
+  Services/Forms/          # build/publish/close/duplicate/share/fill, response workflow/export/tasks
   Services/Workspace/      # action services returning ServiceResult (+ Concerns/NotifiesMentions)
                            # includes program CRUD + its General project, StartGeneralProject,
                            # UpdateMemberRoles, AddTeamMember, EnableGit, DisableGit, RemoveFromForge,
@@ -62,9 +65,11 @@ app/
                            # QuickAddParser, MentionParser, ApiResponser, ProjectKeys, Background,
                            # LoginThrottle (shared web/API credential limit), OrgChart, OfficeLinks,
                            # WorkspaceOrganization (super-admin switch), ActivityText (audit wording),
-                           # InvitePlan, BikramSambat, WorkingDays, MailFailure, FirstRefusals, Locales
+                           # InvitePlan, ProjectChoices, BikramSambat, WorkingDays, MailFailure,
+                           # FirstRefusals, Locales
   Support/Attendance/      # AttendanceCalendar, DaySchedule, PunchPlace
   Support/Documents/       # types/templates, immutable file writes/downloads, HS256 editor tokens
+  Support/Forms/           # schema/answer truth, rich text, templates, BS dates and Nepal places
   Support/Git/             # GitAccess, GitUsernames, TaskReferences, DiffStats, CommentSyntax,
                            # GeneratedFiles, Checks, Oidc/{IdentityEntity,IdentityRepository}
 routes/
@@ -85,6 +90,7 @@ config/
   themes.php               # system/light/dark token sets
   openid.php               # OIDC scopes/claims, identity repository, discovery + JWKS
   documents.php            # ONLYOFFICE enablement/JWT, file limits and documents disk
+  forms.php                # forms feature flag, upload/export caps and reminder cooldown
 database/
   migrations/              # all workspace tables (former package filenames preserved)
                            # including Nepal-time shift, tenancy backfill, task dependencies,
@@ -100,7 +106,7 @@ database/
                            # immutable task creator attribution, last-seen/email preferences and claims,
                            # separate invite tokens, lowercased emails, private personal to-dos,
                            # project/personal documents, sharing + immutable document versions,
-                           # user_preferences.locale
+                           # user_preferences.locale, forms/versions/shares/respondents/responses/drafts/files
   seeders/                 # WorkspaceDemoSeeder (idempotent demo), WorkspaceSuperadminSeeder
                            # SdocProjectsSeeder (fresh databases only per CLAUDE.md; never production)
 resources/
@@ -110,7 +116,8 @@ resources/
                            # Organizations/Index, Projects/{Index,Show,Progress}, Tasks/Show,
                            # Programs/Show, Team/Index (People directory), Reports/CodeActivity,
                            # Organogram/Index, Attendance/{Register,Leave,Settings},
-                           # Work/{Day,Person,Team}, Maintenance/Index, Documents/{Index,Edit}
+                           # Work/{Day,Person,Team}, Maintenance/Index, Documents/{Index,Edit},
+                           # Forms/{Index,Edit,Fill,Responses}
   js/components/           # shared UI (AppShell, ThemeToggle, AppearanceConfig,
                            # StatusGlyph, QuickAdd*, AutosaveStatus, CommandBlock, LanguageSwitch/Mark, ...)
                            # plus project/ views + ProjectTeamPanel, ProgressReport,
@@ -122,19 +129,23 @@ resources/
                            # mywork/, todos/, team/InviteDialog, attendance/ClockButton + settings/,
                            # organogram/, filters/, work/RangePicker, project/DocumentsView,
                            # documents/{DocumentStart,DocumentList,DocumentKindIcon,DocumentProjectCards,
-                           # DocumentTrash,ShareDialog}
+                           # DocumentTrash,ShareDialog}, Dialog, Sheet, PersonSearch, ProjectPicker,
+                           # forms/{builder/, fields, lists}
   js/lib/                  # applyTheme, clipboard, quickAdd, toast, peek, types, utils,
                            # dependencies (board ordering/links), schedule (Gantt planning),
                            # taskCode (stored project key + permanent task number),
                            # memberRoles (person-form role sets), projectLabel (title + program),
                            # navigation (main/account links), dates, format, reportVisit.svelte,
                            # structure, attendance, attendanceRegister, work, maintenance,
-                           # i18n (reactive translation, digits, relative time + dual-calendar dates)
+                           # i18n (reactive translation, digits, relative time + dual-calendar dates),
+                           # forms/{schema types, answer-validation twin, HTTP, BS dates, places}
+  data/                    # BS calendar and Nepal province/district/local-level/ward datasets for forms
   css/app.css              # --ws-* tokens, Tailwind @theme mapping, component classes
   views/app.blade.php      # single root view
   views/emails/            # HTML + text password-link, update and morning templates
   documents/               # blank docx/xlsx/pptx templates and their licence notice
 tests/
+  Feature/Forms/           # form schema/answer support + end-to-end web access/workflow tests
   Feature/Workspace/       # web-surface feature tests
   Feature/Workspace/Api/   # API-surface feature tests
   Unit/                    # parsers, calendars, mail-failure classification,
@@ -150,7 +161,8 @@ docs/forgejo.md            # forge bootstrap, OIDC, offboarding, backups, local 
                            # section 14: runners, protected main and checks
 docs/onlyoffice.md         # editor deployment, JWT boundary, RustFS storage and operations
 docs/superpowers/          # design specs + implementation plans (Programs, Git phases 0/1/2,
-                           # roles on people, structure/attendance/work, Documents/workspace/UI, languages)
+                           # roles on people, structure/attendance/work, Documents/workspace/UI,
+                           # Forms, languages)
 forgejo/                   # separate Dokploy app: Dockerfile, start.sh, .env.example;
                            # custom/ SDOC Git branding (templates, themes, fonts, logos),
                            # local.sh Homebrew/SQLite laptop runner; runner/ four runners sharing one bounded dind

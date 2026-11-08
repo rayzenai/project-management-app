@@ -15,6 +15,8 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
   `TeamRosterApiTest`, `MemberRolesApiTest`, `NotificationApiTest`, `RestoreApiTest`).
 - `tests/Feature/` root — cross-cutting (WorkspaceAccessTest, theme tokens,
   user preferences, api-token command, seeders).
+- `tests/Feature/Forms/` — form schema/answer support and the complete web
+  builder/respondent/response workflow.
 - `tests/Unit/` — parsers (MentionParser, TaskReferences), Bikram Sambat,
   mail-failure classification, DiffStats classification and ForgejoClient HTTP tests.
 - `ProjectProgressTest` covers both surfaces, access gates and legacy web
@@ -216,6 +218,18 @@ Pest 4 (+ pest-plugin-laravel). CI gate is `composer test`
 - `LanguageTest` covers default/saved/cookie locale precedence, guest switching,
   validation, translated errors/actions/sign-in refusals, web/API preference
   parity, and login adoption of a cookie only when no saved choice exists.
+- `Forms/FormSupportTest` covers BS/AD conversion and table agreement, Nepal
+  place nesting, safe TipTap JSON/embeds, schema cleaning/publish problems,
+  conditional visibility, every answer type, repeating groups, file ownership,
+  unchecked drafts and all publishable templates. `Forms/FormsTest` covers
+  create/publish/version immutability, project/maker/share access, predicate/query
+  twins, person/team/organization respondents, draft/submit/edit/close limits,
+  response stages/history/summary, privacy-preserving pending lists, files,
+  first-publish/reminder notifications, system-created tasks, XLSX/personal-
+  document export, deletion rules, disabled routes and the three library lists.
+  `Api/FormsApiTest` exercises the parallel build/publish/fill/read/export path
+  and outsider refusals. `ProjectChoicesTest` keeps every task/document/form
+  destination on the shared `ProjectChoices` shape and `mine` semantics.
 
 ## Running
 

@@ -14,6 +14,8 @@ Single Inertia entry `resources/js/app.ts`; single root view
 `Projects/Show` (list/board/people/code/documents views via `components/project/`),
 `Documents/Index` (the filterable workspace document library) and
 `Documents/Edit` (full-height embedded ONLYOFFICE editor),
+`Forms/Index` (To fill/Filled/Managing), `Forms/Edit` (builder),
+`Forms/Fill` (signed-in respondent flow) and `Forms/Responses` (review/export),
 `Tasks/Show`, `Team/Index` (organization-aware People directory),
 `Projects/Progress` (workload, Gantt, activity; polls every 15s while visible),
 `Programs/Show` (project summary, workload, Gantt and activity across active
@@ -28,7 +30,8 @@ programs, projects and the account button; `[` collapses it. Below `md`,
 `PhoneTabs` gives My work, Projects, Updates and Me. `AccountMenu` is a desktop
 popover/phone bottom sheet grouped as You, Office, Reports and Admin, with
 Appearance and Sign out; `lib/navigation.ts` owns all capability-filtered links.
-The main sidebar adds Documents while shared `documentsEnabled` is true.
+The main sidebar adds Documents while shared `documentsEnabled` is true and
+Forms while `formsEnabled` is true.
 When shared, `OrganizationSwitcher` is in the sidebar/account sheet and narrows
 sidebar projects plus My work, Projects, activity and Code activity; quick add
 and single project/program pages stay organization-wide.
@@ -36,6 +39,8 @@ and single project/program pages stay organization-wide.
 Tomorrow, Coming up, Later, You asked others, No date and Snoozed, with optional
 Done. Recently joined projects sit above the groups. A quick-added row opens its
 folded group, scrolls into view and glows once via `flash.created_key`.
+Open forms awaiting the viewer also appear above My work through
+`mywork/FormsToFill`.
 `Guide` (`/workspace/guide`, sidebar link for all signed-in
 users) explains the organization/program/project/team model, role routines, ministry title
 mapping, dependencies, overdue work and shortcuts. Its Code section appears
@@ -46,6 +51,8 @@ through repository creation/import, every change, runners, secrets, checks and
 the protected-branch merge rule. Its Documents section appears when shared
 `documentsEnabled` is true and explains collaborative editing, versions and
 access. Keep it aligned with changes to how people work.
+Its Forms section appears while `formsEnabled` is true and explains building,
+publishing, respondents, responses and tasks.
 
 ## Key components (`resources/js/components`)
 
@@ -56,6 +63,13 @@ Shell + chrome: `AppShell`, `CommandPalette`, `Popover`, `Toasts`, and
 uses `applyAppearance` for the immediate transition). `Popover` portals to
 `body`; nested popovers register with the outer panel so interacting with one
 does not close its parent, and presses on `[data-toasts]` close neither.
+`Dialog` is the single modal shell (focus return, scroll lock, safe backdrop
+press and Escape); `Sheet` is the single phone bottom sheet (focus trap/return,
+topmost Escape). Both portal through `lib/portal.ts`. `PersonSearch` is the one
+debounced `{data: [...]}` person picker used by rosters, document/form sharing
+and repository access. `ProjectPicker` is the one project chooser for tasks,
+documents, forms and repositories; its server shape always comes from
+`App\Support\ProjectChoices`.
 Quick-add: `QuickAddBar/Form/Overlay` + `lib/quickAdd.svelte.ts`,
 `lib/quickAddTokens.ts` (server twin: `App\Support\QuickAddParser`).
 `QuickAddForm` mirrors resolved `#project`/`@assignee` tokens, scopes picks to
@@ -181,6 +195,20 @@ and offers download if unreachable. It has Share, Can view/frozen marks and
 click-to-rename title; `flash.created_document` selects the new title once and
 preserves its focus while the editor starts. Inertia history is encrypted and
 cleared on sign-out.
+Forms: `Forms/Index` shows forms waiting for the viewer, submitted responses and
+forms they manage, and `forms/NewForm` starts one from a template through
+`ProjectPicker`. `Forms/Edit` autosaves the whole clean draft, publishes immutable
+versions, and splits Questions, Settings, Who fills it in, Sharing and Tasks.
+`forms/builder/` owns block/condition/options/content editors; TipTap powers rich
+text. `Forms/Fill` renders conditional steps, autosaves respondent drafts,
+supports English/Nepali form content, BS/AD dates, Nepal places, repeating groups
+and files, then reviews/submits or shows a receipt; builder tests use the same UI
+without keeping answers. `Forms/Responses` filters/paginates responses, opens
+answer/history detail, moves stages, adds notes, summarizes, reminds pending
+respondents and exports XLSX/ZIP or a personal spreadsheet Document. A project's
+`FormsView` lists that project's forms. `lib/forms/http.ts` owns JSON/CSRF calls;
+`lib/forms/answers.ts` mirrors server visibility and validation messages for
+quick feedback, while the server remains authoritative.
 Reports: `Reports/CodeActivity` offers today/week/last-week/month/custom periods,
 project/program/designation filters, ranking by commits/lines/tests/active days
 (or unranked name order), and compares up to four people. It shows

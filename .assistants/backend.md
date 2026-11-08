@@ -25,7 +25,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `appearance`, `features`, `themeCatalogue`, `unreadNotifications`, `flash`,
   `todoCount`, `isSuperAdmin`, `isOfficeAdmin`, `organization`, `ledTeamIds`,
   `managedProgramIds`, `managedPrograms` (`{slug, name}`), `gitEnabled`,
-  `documentsEnabled`,
+  `documentsEnabled`, `formsEnabled`,
   `office` (`OfficeLinks` capabilities/count), `clock` (`MyAttendanceQuery`),
   `organizationSwitch` (`OrganizationChoicesQuery::switcher`). Cross-cutting
   web context goes there. Status metadata includes `is_complete` and `is_closed`.
@@ -35,7 +35,7 @@ errors}` at `result->code`). Cheap ownership checks may `abort_unless` inline
   `POST login` → token; `Api\AuthController::userPayload` is the token-auth
   twin of `ShareWorkspaceData`; it includes organization and organizational-admin
   context plus `features: {task_notes, contacts}`, `managed_program_ids`,
-  `git_enabled`, `documents_enabled`, `office` (`OfficeLinks`) and `todo_count`. Cross-cutting API context
+  `git_enabled`, `documents_enabled`, `forms_enabled`, `office` (`OfficeLinks`) and `todo_count`. Cross-cutting API context
   goes there.
   External systems get tokens via `php artisan workspace:api-token`.
   Reference: `docs/api.md`.
@@ -167,6 +167,12 @@ task creator while they can still view its project),
 `documentOrganizationId`, `canCreatePersonalDocuments`, `canShareDocument`,
 `canShareDocumentWith` (query twin: `DocumentShareCandidatesQuery`),
 `isShareEffective`, `canDeleteDocument`, `canMoveDocument`.
+Forms add `canUseProjectForms`, `canCreateForm`, `formAccess` (query twin:
+`Form::scopeManagedBy`), `preloadFormAccess`, `canEditForm`,
+`canSeeFormResponses`, `isFormRespondent` (query twin:
+`Form::scopeAnswerableBy`), `canAnswerForm`, `canSeeForm`,
+`canAddFormOrganizations`, `canShareFormWith`, `isFormShareEffective`,
+`canSendFormTasksTo` and `canOpenFormFile`.
 `Project::scopeVisibleTo` and `Program::scopeVisibleTo` are query twins of their
 view predicates; `Team` and `Member` also expose `visibleTo`. Project/team/member
 scopes reach program projects through `Project::inPrograms`, checking both the
@@ -455,6 +461,59 @@ error-status saves with a warning, and advances the editor key when a session en
 failures tell the editor to retry; saved versions credit the editor's last user
 where known.
 
+## Forms
+
+Forms are available while `config('forms.enabled')` (independent of Documents).
+Every form belongs to a project and carries an editable JSON `draft`; Publish
+copies that draft into an immutable `FormVersion` and points
+`published_version_id` at the live schema. `FormSchema::clean` is the only draft
+shape kept, with permanent step/block/option ids; `FormAnswers` is the server
+truth for conditional visibility, unchecked autosaved drafts and final answer
+validation. `resources/js/lib/forms/answers.ts` mirrors it for immediate browser
+feedback. Rich text is sanitized TipTap JSON, BS dates use `BsCalendar`, and
+place answers are checked against the bundled Nepal hierarchy.
+
+`Form` is soft-deleted and has `draft|open|closed` status, open/close dates,
+response limits, `everyone|team|people` respondents and `person|organization`
+answering. `FormShare` gives one same-organization active member `edit` or
+`responses` access. A `FormResponse` is unique per form and `respondent_key`
+(`m:{member}` or `o:{organization}`), keeps the published version, sender
+snapshot, answers, stage and optional generated task. `FormDraft` autosaves by
+the same key; `FormResponseEvent` records submissions, edits, stage changes,
+notes and tasks. Content and answer `FormFile`s live immutably on the documents
+disk under `forms/`; `canOpenFormFile` separates live content, respondent-owned
+answers and response-manager access. The strict morph map names `form` and
+`form-response`.
+
+`formAccess` is the highest of running the project, making the form while still
+working on that project, or an effective share; ordinary team membership alone
+does not grant builder/response access. Respondents are active people selected
+from the project's office (everyone, team or named people), plus whole other
+organizations added only by an admin of the form's office. The latter are
+counted but their people are not named to the source office. The predicate/query
+pairs `formAccess`/`Form::managedBy` and
+`isFormRespondent`/`Form::answerableBy` must stay aligned.
+
+`Queries/Forms` owns the Forms library (To fill/Filled/Managing), builder and
+fill payloads, project tab, sharing/candidates, respondents/pending counts,
+responses, summaries and file references. `Services/Forms` owns every write:
+create/save settings/draft, publish/close/duplicate/delete, respondents/sharing,
+fill/clear/submit, files, response stages/notes/reminders, task settings and
+export. Tests use the same validation path as real submissions but keep no
+response. A form may be deleted only before real responses exist. Templates are
+ordinary fresh schemas: Blank, Data call, Staff survey, Event/training
+registration, Internship/volunteer application, Request and Complaint.
+
+First publish may send `FormOpened`; `RemindFormService` sends `FormReminder` to
+unanswered respondents no more than once per 24 hours. Both are database
+notifications and right-away-email kinds. Optional task settings create one
+system-authored task from each new response, copy only selected answers and
+never undo the response if task creation fails. `FormExportService` uses
+OpenSpout for filtered XLSX downloads; Open as spreadsheet always creates a
+personal Document snapshot, never a project document. Web and API route groups
+under `forms/{form}` cover the builder, fill, people/sharing/tasks, response
+workflow, exports and files; `/f/{code}` is the signed-in fill link.
+
 ## Languages
 
 `Support/Locales` defines English/Nepali and selects saved `User::locale()`
@@ -475,7 +534,8 @@ round 1 translates shell, sign-in, My work, Documents and server messages/errors
 
 `database` channel only, synchronous. `TaskAssigned`, `TaskStatusChanged`,
 `MentionedInComment`, `TaskDeadlineDue`, `AddedToProjectTeam`,
-`MadeProjectManager`, `MadeProgramManager` and `DocumentShared` share
+`MadeProjectManager`, `MadeProgramManager`, `DocumentShared`, `FormOpened` and
+`FormReminder` share
 `Concerns\BuildsWorkspaceNotification`; stable payload
 `{kind, title, action, body, task, actor, url}` (`action` short-form,
 `body` long sentence). Dispatched from observers (assignment created;
